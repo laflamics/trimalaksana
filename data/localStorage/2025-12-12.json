@@ -1,0 +1,33 @@
+{
+  "value": [
+    {
+      "id": "1765521356519",
+      "refType": "gt_quotations",
+      "refId": "gt_quotations",
+      "actorId": "system",
+      "action": "READ: Loaded from server",
+      "created": "2025-12-12T06:35:56.519Z",
+      "level": "success",
+      "details": {
+        "reason": "No local data found, fetching from server"
+      },
+      "timestamp": 1765521356519
+    },
+    {
+      "id": "1765521356447",
+      "refType": "gt_invoices",
+      "refId": "gt_invoices",
+      "actorId": "system",
+      "action": "READ: Loaded from local",
+      "created": "2025-12-12T06:35:56.447Z",
+      "level": "success",
+      "details": {
+        "dataSize": 1,
+        "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_invoices"
+      },
+      "timestamp": 1765521356447
+    }
+  ],
+  "timestamp": 1765871078114,
+  "_timestamp": 1765871078114
+}

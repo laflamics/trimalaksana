@@ -1,0 +1,156 @@
+{
+  "timestamp": "2025-12-26T00:31:29.895Z",
+  "totalFiles": 9,
+  "highRiskFiles": 6,
+  "mediumRiskFiles": 2,
+  "lowRiskFiles": 1,
+  "overallRiskScore": 821,
+  "avgRiskScore": 91.22222222222223,
+  "results": [
+    {
+      "file": "src/pages/GeneralTrading/Master/Products.tsx",
+      "riskLevel": "LOW",
+      "netRiskScore": 0,
+      "issues": {
+        "storageEventListeners": 1,
+        "setTimeoutUsage": 1,
+        "stateUpdateInEffect": 1,
+        "loadDataInEffect": 1
+      },
+      "goodPractices": {
+        "useCallbackUsage": 2,
+        "conditionalUpdates": 5,
+        "properDependencies": 2
+      }
+    },
+    {
+      "file": "src/pages/GeneralTrading/Master/Customers.tsx",
+      "riskLevel": "MEDIUM",
+      "netRiskScore": 6,
+      "issues": {
+        "useEffectEmptyDeps": 1,
+        "loadDataInEffect": 1,
+        "autoSavePatterns": 1,
+        "aggressivePolling": 2
+      },
+      "goodPractices": {
+        "useMemoUsage": 2,
+        "conditionalUpdates": 1
+      }
+    },
+    {
+      "file": "src/pages/GeneralTrading/Master/Suppliers.tsx",
+      "riskLevel": "MEDIUM",
+      "netRiskScore": 6,
+      "issues": {
+        "useEffectEmptyDeps": 1,
+        "loadDataInEffect": 1,
+        "autoSavePatterns": 1,
+        "aggressivePolling": 2
+      },
+      "goodPractices": {
+        "useMemoUsage": 2,
+        "conditionalUpdates": 1
+      }
+    },
+    {
+      "file": "src/pages/GeneralTrading/SalesOrders.tsx",
+      "riskLevel": "HIGH",
+      "netRiskScore": 19,
+      "issues": {
+        "useEffectWithoutDeps": 1,
+        "useEffectEmptyDeps": 1,
+        "setIntervalUsage": 1,
+        "setTimeoutUsage": 11,
+        "stateUpdateInEffect": 3,
+        "loadDataInEffect": 1,
+        "aggressivePolling": 11
+      },
+      "goodPractices": {
+        "useMemoUsage": 8,
+        "conditionalUpdates": 18
+      }
+    },
+    {
+      "file": "src/pages/GeneralTrading/Purchasing.tsx",
+      "riskLevel": "HIGH",
+      "netRiskScore": 66,
+      "issues": {
+        "useEffectWithoutDeps": 1,
+        "storageEventListeners": 1,
+        "setTimeoutUsage": 2,
+        "stateUpdateInEffect": 3,
+        "storageInEffect": 1,
+        "loadDataInEffect": 1,
+        "aggressivePolling": 27
+      },
+      "goodPractices": {
+        "useMemoUsage": 4,
+        "conditionalUpdates": 23
+      }
+    },
+    {
+      "file": "src/pages/GeneralTrading/DeliveryNote.tsx",
+      "riskLevel": "HIGH",
+      "netRiskScore": 58,
+      "issues": {
+        "setIntervalUsage": 1,
+        "setTimeoutUsage": 2,
+        "stateUpdateInEffect": 2,
+        "storageInEffect": 1,
+        "loadDataInEffect": 1,
+        "aggressivePolling": 22
+      },
+      "goodPractices": {
+        "useMemoUsage": 5,
+        "conditionalUpdates": 10
+      }
+    },
+    {
+      "file": "src/pages/GeneralTrading/Finance/invoices.tsx",
+      "riskLevel": "HIGH",
+      "netRiskScore": 143,
+      "issues": {
+        "setIntervalUsage": 1,
+        "setTimeoutUsage": 1,
+        "stateUpdateInEffect": 4,
+        "storageInEffect": 2,
+        "loadDataInEffect": 1,
+        "aggressivePolling": 49
+      },
+      "goodPractices": {
+        "useMemoUsage": 4,
+        "conditionalUpdates": 12,
+        "properDependencies": 1
+      }
+    },
+    {
+      "file": "src/pages/GeneralTrading/Finance/COA.tsx",
+      "riskLevel": "HIGH",
+      "netRiskScore": 429,
+      "issues": {
+        "useEffectEmptyDeps": 1,
+        "loadDataInEffect": 1,
+        "aggressivePolling": 143
+      },
+      "goodPractices": {
+        "useMemoUsage": 2,
+        "conditionalUpdates": 1
+      }
+    },
+    {
+      "file": "src/pages/GeneralTrading/Finance/GeneralLedger.tsx",
+      "riskLevel": "HIGH",
+      "netRiskScore": 94,
+      "issues": {
+        "useEffectEmptyDeps": 1,
+        "loadDataInEffect": 1,
+        "aggressivePolling": 32
+      },
+      "goodPractices": {
+        "useMemoUsage": 4,
+        "conditionalUpdates": 1
+      }
+    }
+  ]
+}

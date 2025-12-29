@@ -1,0 +1,558 @@
+{
+  "value": [
+    {
+      "Kode_Akun": "1-1110",
+      "Nama_Akun": "KAS PETTY CASH ",
+      "Debit": 11704801,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1112",
+      "Nama_Akun": "KAS MUSANTOSO",
+      "Debit": 560399.97,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1120",
+      "Nama_Akun": "BANK BCA",
+      "Debit": 1331688.47,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1121A",
+      "Nama_Akun": "BANK MANDIRI 2015 (CIKARANG)",
+      "Debit": 755716449.22,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1121B",
+      "Nama_Akun": "BANK MANDIRI 7273 (OUTWARD)",
+      "Debit": 22332.87,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1121C",
+      "Nama_Akun": "BANK MANDIRI 7265 ( INWARD)",
+      "Debit": 0,
+      "Kredit": 365160913.86
+    },
+    {
+      "Kode_Akun": "1-1129",
+      "Nama_Akun": "BANK BNI 1790095608",
+      "Debit": 649123146,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1130",
+      "Nama_Akun": "BANK BRI",
+      "Debit": 201950772.56,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1131",
+      "Nama_Akun": "BCA ALI AUDAH ",
+      "Debit": 24033015.49,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1140",
+      "Nama_Akun": "KAS BIAYA PROMOSI",
+      "Debit": 3066000,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1210",
+      "Nama_Akun": "PIUTANG USAHA",
+      "Debit": 4055256710.99,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1211",
+      "Nama_Akun": "PIUTANG KONSINYASI",
+      "Debit": 3600000,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1213",
+      "Nama_Akun": "PIUTANG REKA",
+      "Debit": 29413418,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1214",
+      "Nama_Akun": "PIUTANG TRIDAYA",
+      "Debit": 530141504,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1215",
+      "Nama_Akun": "PIUTANG LINTAS",
+      "Debit": 11876271315,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1216",
+      "Nama_Akun": "PIUTANG PEMILIK",
+      "Debit": 7002919874,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1217",
+      "Nama_Akun": "PIUTANG INDOPACK",
+      "Debit": 2319903258,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1218",
+      "Nama_Akun": "PIUTANG KARYAWAN",
+      "Debit": 556483800,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1219",
+      "Nama_Akun": "PIUTANG OPRASIONAL ",
+      "Debit": 141405,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1222",
+      "Nama_Akun": "PIUTANG NARA/PAK ALI",
+      "Debit": 239460340,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1223",
+      "Nama_Akun": "PIUTANG BIG",
+      "Debit": 0,
+      "Kredit": 727000
+    },
+    {
+      "Kode_Akun": "1-1320",
+      "Nama_Akun": "PPH PASAL 25",
+      "Debit": 20000000,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1330",
+      "Nama_Akun": "PPH PASAL 23",
+      "Debit": 374520,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-1410",
+      "Nama_Akun": "PPN MASUKAN",
+      "Debit": 5043429811.53,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-2010",
+      "Nama_Akun": "PERSEDIAAN BARANG",
+      "Debit": 80131133567.1,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-2030",
+      "Nama_Akun": "PERSEDIIAN BARANG DIJUAL",
+      "Debit": 524000,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-2390",
+      "Nama_Akun": "POTONGAN BELI DAN BIAYA LAIN",
+      "Debit": 843500.52,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-3010",
+      "Nama_Akun": "PERSEDIAAN BARANG DALAM PROSES",
+      "Debit": 39135300,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-5100",
+      "Nama_Akun": "TANAH",
+      "Debit": 10221420491,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-5200",
+      "Nama_Akun": "BANGUNAN",
+      "Debit": 1660343672,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-5300",
+      "Nama_Akun": "KENDARAAN",
+      "Debit": 661572760,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-5400",
+      "Nama_Akun": "PERALATAN",
+      "Debit": 1166113409,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-5401",
+      "Nama_Akun": "AKUMULASI PENYUSUTAN PERALATAN",
+      "Debit": 120000000,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-5500",
+      "Nama_Akun": "ASSET DALAM PROSES PENGERJAAN",
+      "Debit": 1425243560.27,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-5600",
+      "Nama_Akun": "KOMPUTER & SOFTWARE",
+      "Debit": 13648000,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-9100",
+      "Nama_Akun": "UANG MUKA PESANAN PEMBELIAN",
+      "Debit": 318540186.02,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "1-9101",
+      "Nama_Akun": "DANA DEPOSIT DI SUPLIER",
+      "Debit": 15850825,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "2-1101",
+      "Nama_Akun": "HUTANG USAHA",
+      "Debit": 0,
+      "Kredit": 3416649742.94
+    },
+    {
+      "Kode_Akun": "2-1102",
+      "Nama_Akun": "HUTANG TRIDAYA",
+      "Debit": 0,
+      "Kredit": 1120948478.96
+    },
+    {
+      "Kode_Akun": "2-1103",
+      "Nama_Akun": "HUTANG REKA/ORIX ",
+      "Debit": 0,
+      "Kredit": 233534000
+    },
+    {
+      "Kode_Akun": "2-1104",
+      "Nama_Akun": "HUTANG LINTAS",
+      "Debit": 0,
+      "Kredit": 680442727
+    },
+    {
+      "Kode_Akun": "2-1105",
+      "Nama_Akun": "HUTANG PEMILIK",
+      "Debit": 0,
+      "Kredit": 8518709550
+    },
+    {
+      "Kode_Akun": "2-1106",
+      "Nama_Akun": "HUTANG INDOPACK",
+      "Debit": 0,
+      "Kredit": 10700000
+    },
+    {
+      "Kode_Akun": "2-1107",
+      "Nama_Akun": "HUTANG LEASING  KENDARAAN ",
+      "Debit": 1651927047,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "2-1108",
+      "Nama_Akun": "HUTANG BRI",
+      "Debit": 754642,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "2-1109",
+      "Nama_Akun": "HUTANG TRIHAMAS",
+      "Debit": 0,
+      "Kredit": 42012500
+    },
+    {
+      "Kode_Akun": "2-1110",
+      "Nama_Akun": "HUTANG BNI ",
+      "Debit": 0,
+      "Kredit": 8896369311
+    },
+    {
+      "Kode_Akun": "2-1130",
+      "Nama_Akun": "HUTANG KARTU KREDIT",
+      "Debit": 450000,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "2-1140",
+      "Nama_Akun": "HUTANG KONSINYASI",
+      "Debit": 0,
+      "Kredit": 3600000
+    },
+    {
+      "Kode_Akun": "2-1200",
+      "Nama_Akun": "HUTANG GAJI",
+      "Debit": 7417510909,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "2-1201",
+      "Nama_Akun": "HUTANG BPJS KES DITANGGUNG KANTOR",
+      "Debit": 31512853,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "2-1202",
+      "Nama_Akun": "HUTANG BPJS KET DITANGGUNG KANTOR",
+      "Debit": 29351403,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "2-1300",
+      "Nama_Akun": "HUTANG SALES",
+      "Debit": 1000000,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "2-1510",
+      "Nama_Akun": "HUTANG BIAYA OVERHEAD PROSES PERAKITAN",
+      "Debit": 1000000,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "2-3100",
+      "Nama_Akun": "UANG MUKA PESANAN PENJUALAN",
+      "Debit": 0,
+      "Kredit": 212310582
+    },
+    {
+      "Kode_Akun": "2-3101",
+      "Nama_Akun": "DEPOSIT PELANGGAN",
+      "Debit": 0,
+      "Kredit": 3494830.44
+    },
+    {
+      "Kode_Akun": "2-4110",
+      "Nama_Akun": "PPN KELUARAN",
+      "Debit": 0,
+      "Kredit": 7240725183.52
+    },
+    {
+      "Kode_Akun": "2-4200",
+      "Nama_Akun": "HUTANG PPH PASAL 21",
+      "Debit": 5865700,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "2-4300",
+      "Nama_Akun": "HUTANG PPH PASAL 23",
+      "Debit": 8171971,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "3-1000",
+      "Nama_Akun": "MODAL",
+      "Debit": 0,
+      "Kredit": 552000000
+    },
+    {
+      "Kode_Akun": "3-2000",
+      "Nama_Akun": "LABA DITAHAN",
+      "Debit": 0,
+      "Kredit": 36127554326.71
+    },
+    {
+      "Kode_Akun": "3-3000",
+      "Nama_Akun": "LABA TAHUN BERJALAN",
+      "Debit": 0,
+      "Kredit": 69212006960.99
+    },
+    {
+      "Kode_Akun": "3-9000",
+      "Nama_Akun": "HISTORICAL BALANCING",
+      "Debit": 799842.73,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "4-1100",
+      "Nama_Akun": "PENDAPATAN JUAL",
+      "Debit": 0,
+      "Kredit": 2225919903
+    },
+    {
+      "Kode_Akun": "4-1500",
+      "Nama_Akun": "POTONGAN JUAL",
+      "Debit": 4980860.11,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "4-2000",
+      "Nama_Akun": "PENDAPATAN JASA",
+      "Debit": 0,
+      "Kredit": 204310500
+    },
+    {
+      "Kode_Akun": "5-1300",
+      "Nama_Akun": "HARGA POKOK PENJUALAN",
+      "Debit": 374556267.18,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "5-199X01",
+      "Nama_Akun": "POTONGAN PEMBELIAN",
+      "Debit": 0,
+      "Kredit": 125.14
+    },
+    {
+      "Kode_Akun": "5-2200",
+      "Nama_Akun": "PENGATURAN STOK",
+      "Debit": 201000,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "5-2201",
+      "Nama_Akun": "ITEM MASUK",
+      "Debit": 0,
+      "Kredit": 18159109
+    },
+    {
+      "Kode_Akun": "5-2202",
+      "Nama_Akun": "ITEM KELUAR",
+      "Debit": 17534488.69,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "6-1100",
+      "Nama_Akun": "BIAYA LISTRIK/AIR/TELEPON",
+      "Debit": 9138352,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "6-1102",
+      "Nama_Akun": "BIAYA ATK",
+      "Debit": 1984600,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "6-1104",
+      "Nama_Akun": "BIAYA INTERNET",
+      "Debit": 2387782,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "6-1105",
+      "Nama_Akun": "BIAYA PENGIRIMAN",
+      "Debit": 50217700,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "6-1106",
+      "Nama_Akun": "BIAYA RT KANTOR",
+      "Debit": 8262300,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "6-1107",
+      "Nama_Akun": "BIAYA TRANSPORT, TOL, PARKIR",
+      "Debit": 1074500,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "6-1108",
+      "Nama_Akun": "BIAYA SERVICE KENDARAAN ",
+      "Debit": 2300000,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "6-1109",
+      "Nama_Akun": "BIAYA MATERAI",
+      "Debit": 1050000,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "6-1110",
+      "Nama_Akun": "BIAYA PEMBELIAN SPARE PART",
+      "Debit": 12218200,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "6-1112",
+      "Nama_Akun": "BIAYA TIP / SUMBANGAN ",
+      "Debit": 70000,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "6-2002",
+      "Nama_Akun": "BIAYA ENTERTAINMENT",
+      "Debit": 2631100,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "6-2003",
+      "Nama_Akun": "BIAYA BANK",
+      "Debit": 441400,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "6-3002",
+      "Nama_Akun": "BIAYA PPH 21 KARYAWAN",
+      "Debit": 750000,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "6-3003",
+      "Nama_Akun": "BIAYA BPJS KES DITANGGUNG KANTOR",
+      "Debit": 6964638,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "6-3004",
+      "Nama_Akun": "BIAYA BPJS KET DITANGGUNG KANTOR",
+      "Debit": 8244791,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "6-3010",
+      "Nama_Akun": "BIAYA UPAH KERJA",
+      "Debit": 2870000,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "6-3020",
+      "Nama_Akun": "BIAYA KOMISI PENJUALAN",
+      "Debit": 275130049,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "6-4001",
+      "Nama_Akun": "BIAYA BELI BAHAN BAKU",
+      "Debit": 6219700,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "6-4002",
+      "Nama_Akun": "BIAYA OVERHEAD",
+      "Debit": 5723000,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "6-5002",
+      "Nama_Akun": "BIAYA PPH 23",
+      "Debit": 5552001,
+      "Kredit": 0
+    },
+    {
+      "Kode_Akun": "8-1000",
+      "Nama_Akun": "BIAYA LAIN",
+      "Debit": 88135000.5,
+      "Kredit": 0
+    }
+  ],
+  "timestamp": 1766549405882,
+  "_timestamp": 1766549405882
+}

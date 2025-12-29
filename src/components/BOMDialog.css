@@ -1,0 +1,66 @@
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialog-card {
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  background-color: var(--bg-primary);
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.bom-dialog {
+  min-width: 600px;
+  max-width: 800px;
+}
+
+.bom-dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.bom-add-section {
+  padding: 16px;
+  background-color: var(--bg-secondary);
+  border-radius: 4px;
+}
+
+.bom-list-section {
+  flex: 1;
+}
+
+.bom-table {
+  overflow-x: auto;
+}
+
+.bom-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.bom-table th {
+  background-color: var(--bg-secondary);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.bom-table td {
+  color: var(--text-primary);
+}
+
+.bom-table tr:hover {
+  background-color: var(--bg-secondary);
+}
+

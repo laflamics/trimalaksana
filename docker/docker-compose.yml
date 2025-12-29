@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  storage-server:
+    build: .
+    ports:
+      - "0.0.0.0:8888:8888"  # Bind to all interfaces (localhost + network)
+    volumes:
+      - ./data:/app/data
+      - ./updates:/app/updates
+    environment:
+      - PORT=8888
+    restart: unless-stopped
+    network_mode: bridge
+

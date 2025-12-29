@@ -1,0 +1,175 @@
+name: Build iOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'shareable'
+        type: choice
+        options:
+          - shareable
+          - development
+          - release
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'capacitor.config.json'
+      - '.github/workflows/build-ios.yml'
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  build-ios:
+    name: Build iOS App
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build React app
+        run: npm run build:renderer
+
+      - name: Setup CocoaPods
+        run: |
+          sudo gem install cocoapods
+          pod --version
+
+      - name: Add iOS platform (if not exists)
+        run: |
+          if [ ! -d "ios" ]; then
+            npm run cap:add:ios
+          fi
+
+      - name: Sync Capacitor iOS
+        run: npx cap sync ios
+
+      - name: Install CocoaPods dependencies
+        working-directory: ios/App
+        run: pod install
+
+      - name: Build iOS Archive (Shareable/Ad-Hoc)
+        if: github.event.inputs.build_type == 'shareable' || (github.event.inputs.build_type == '' && github.event_name == 'push')
+        run: |
+          xcodebuild -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -archivePath ./build/App.xcarchive \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
+        continue-on-error: true
+
+      - name: Export IPA (Shareable - Unsigned)
+        if: github.event.inputs.build_type == 'shareable' || (github.event.inputs.build_type == '' && github.event_name == 'push')
+        run: |
+          mkdir -p ./build/ipa
+          cd ./build/App.xcarchive/Products/Applications
+          zip -r ../../../ipa/TrimaLaksanaERP.ipa App.app
+          cd ../../..
+          echo "IPA created at: ./build/ipa/TrimaLaksanaERP.ipa"
+        continue-on-error: true
+
+      - name: Build iOS (Development)
+        if: github.event.inputs.build_type == 'development'
+        run: |
+          xcodebuild -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath ./build \
+            clean build
+        continue-on-error: true
+
+      - name: Build iOS Archive (Release)
+        if: github.event.inputs.build_type == 'release'
+        run: |
+          xcodebuild -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -archivePath ./build/App.xcarchive \
+            -destination 'generic/platform=iOS' \
+            archive
+        continue-on-error: true
+
+      - name: Export IPA (Release - Signed)
+        if: github.event.inputs.build_type == 'release'
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath ./build/App.xcarchive \
+            -exportPath ./build/ipa \
+            -exportOptionsPlist <(echo '<?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>development</string>
+            <key>teamID</key>
+            <string>${{ secrets.APPLE_TEAM_ID }}</string>
+          </dict>
+          </plist>')
+        continue-on-error: true
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build
+          path: |
+            build/ipa/
+            build/App.xcarchive/
+            ios/App/build/
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Create IPA download link
+        if: github.event.inputs.build_type == 'shareable' || (github.event.inputs.build_type == '' && github.event_name == 'push')
+        run: |
+          if [ -f "./build/ipa/TrimaLaksanaERP.ipa" ]; then
+            echo "✅ IPA file berhasil dibuat: TrimaLaksanaERP.ipa" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 📱 Cara Install:" >> $GITHUB_STEP_SUMMARY
+            echo "1. Download artifacts **ios-build** dari tab Actions" >> $GITHUB_STEP_SUMMARY
+            echo "2. Extract file **TrimaLaksanaERP.ipa**" >> $GITHUB_STEP_SUMMARY
+            echo "3. Install menggunakan salah satu tools:" >> $GITHUB_STEP_SUMMARY
+            echo "   - **Sideloadly** (Windows/Mac) - Paling mudah" >> $GITHUB_STEP_SUMMARY
+            echo "   - **AltStore** (butuh AltServer)" >> $GITHUB_STEP_SUMMARY
+            echo "   - **3uTools** (Windows/Mac)" >> $GITHUB_STEP_SUMMARY
+            echo "   - **Xcode** (kalau punya Mac)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "📖 Lihat BUILD_IOS.md untuk panduan lengkap" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Summary
+        run: |
+          echo "## 📱 iOS Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Type:** ${{ github.event.inputs.build_type || 'shareable' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **iOS Project:** ios/App/" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📥 Download Build:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Scroll ke bawah, klik **ios-build** artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "2. Download file **TrimaLaksanaERP.ipa**" >> $GITHUB_STEP_SUMMARY
+          echo "3. Install ke iPhone/iPad menggunakan tools (lihat BUILD_IOS.md)" >> $GITHUB_STEP_SUMMARY
+

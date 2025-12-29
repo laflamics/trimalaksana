@@ -1,0 +1,40 @@
+appId: com.trimalaksana.erp
+productName: PT.Trima Laksana Jaya Pratama
+directories:
+  output: release
+files:
+  - dist/**/*
+  - package.json
+  - "!node_modules/**/*"
+  - "!node_modules/@capacitor/**/*"
+  - "!android/**/*"
+  - "!test/**/*"
+  - "!scripts/**/*"
+  - "!*.md"
+  - "!*.config.js"
+  - "!*.config.ts"
+  - "!playwright.config.ts"
+  - "!vitest.config.ts"
+  - "!data/**/*"
+win:
+  target: nsis
+  icon: build/icon.ico
+mac:
+  target: dmg
+  icon: build/icon.icns
+linux:
+  target: AppImage
+  icon: build/icon.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  runAfterFinish: false
+publish:
+  provider: generic
+  url: "https://server-tljp.tail75a421.ts.net"  # Update server URL (Tailscale funnel)
+  # Note: This URL is used when publishing updates
+  # The app will check for updates at: {url}/api/updates/latest
+  # Set to null to generate latest.yml without actually publishing
+  # url: null
+

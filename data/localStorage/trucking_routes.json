@@ -1,0 +1,38 @@
+{
+  "value": [
+    {
+      "id": "1",
+      "no": 1,
+      "routeCode": "RT001",
+      "routeName": "Jakarta - Bandung",
+      "origin": "Jakarta",
+      "destination": "Bandung",
+      "distance": 150,
+      "distanceUnit": "KM",
+      "estimatedTime": 3,
+      "estimatedTimeUnit": "Hours",
+      "tollCost": 50000,
+      "fuelCost": 200000,
+      "status": "Active",
+      "notes": "Dummy route for testing"
+    },
+    {
+      "id": "2",
+      "no": 2,
+      "routeCode": "RT002",
+      "routeName": "Jakarta - Surabaya",
+      "origin": "Jakarta",
+      "destination": "Surabaya",
+      "distance": 700,
+      "distanceUnit": "KM",
+      "estimatedTime": 12,
+      "estimatedTimeUnit": "Hours",
+      "tollCost": 250000,
+      "fuelCost": 800000,
+      "status": "Active",
+      "notes": "Dummy route for testing"
+    }
+  ],
+  "timestamp": 1766043862384,
+  "_timestamp": 1766043862384
+}

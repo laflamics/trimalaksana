@@ -1,0 +1,40 @@
+{
+  "value": [
+    {
+      "id": "tax-inv-1766232080736",
+      "taxDate": "2025-12-20T12:01:20.736Z",
+      "reference": "INV-1766232080736",
+      "referenceType": "Invoice",
+      "taxType": "PPN Keluaran",
+      "coaCode": "2-4110",
+      "coaName": "PPN KELUARAN",
+      "baseAmount": 800000,
+      "taxPercent": 11,
+      "taxAmount": 88000,
+      "totalAmount": 0,
+      "customer": "CV. AGUNG MANDIRI METAL WORK",
+      "description": "PPN Keluaran dari Invoice INV-1766232080736 - CV. AGUNG MANDIRI METAL WORK",
+      "status": "Open",
+      "created": "2025-12-20T12:01:20.736Z"
+    },
+    {
+      "id": "tax-inv-1766394767197",
+      "taxDate": "2025-12-22T09:12:47.197Z",
+      "reference": "INV-1766394767196",
+      "referenceType": "Invoice",
+      "taxType": "PPN Keluaran",
+      "coaCode": "2-4110",
+      "coaName": "PPN KELUARAN",
+      "baseAmount": 800000,
+      "taxPercent": 11,
+      "taxAmount": 88000,
+      "totalAmount": 0,
+      "customer": "CV. AGUNG MANDIRI METAL WORK",
+      "description": "PPN Keluaran dari Invoice INV-1766394767196 - CV. AGUNG MANDIRI METAL WORK",
+      "status": "Open",
+      "created": "2025-12-22T09:12:47.197Z"
+    }
+  ],
+  "timestamp": 1766559329145,
+  "_timestamp": 1766559329145
+}

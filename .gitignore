@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+.nyc_output
+
+# Production
+dist/
+release/
+build/
+*.log
+
+# Misc
+.DS_Store
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Electron
+out/
+dist-electron/
+
+# Data bundle (generated from localStorage)
+data-bundle/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Android signing
+android/*.keystore
+android/keystore.properties
+android/local.properties
+
+# iOS build artifacts
+ios/App/build/
+ios/App/Pods/
+ios/App/*.xcworkspace/xcuserdata/
+ios/App/*.xcodeproj/xcuserdata/
+*.ipa
+*.xcarchive
+DerivedData/

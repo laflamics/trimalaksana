@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Base config: Allow cleartext for local development, trust system and user certs -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <!-- Trust system certificates -->
+            <certificates src="system" />
+            <!-- Trust user certificates (for self-signed certs like Tailscale) -->
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+    
+    <!-- Specific configuration for Tailscale domains (HTTPS with self-signed certs) -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">tail75a421.ts.net</domain>
+        <domain includeSubdomains="true">server-tljp.tail75a421.ts.net</domain>
+        <trust-anchors>
+            <!-- Trust system certificates -->
+            <certificates src="system" />
+            <!-- Trust user certificates (for Tailscale self-signed certs) -->
+            <certificates src="user" />
+        </trust-anchors>
+    </domain-config>
+    
+    <!-- Debug overrides: Allow all certificates in debug builds -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>
+

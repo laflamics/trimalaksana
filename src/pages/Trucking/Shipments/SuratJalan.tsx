@@ -1,0 +1,2070 @@
+import { useState, useEffect, useMemo, useRef } from 'react';
+import Card from '../../../components/Card';
+import Table from '../../../components/Table';
+import Button from '../../../components/Button';
+import Input from '../../../components/Input';
+import { storageService } from '../../../services/storage';
+import { generateSuratJalanHtml } from '../../../pdf/suratjalan-pdf-template';
+import { openPrintWindow } from '../../../utils/actions';
+import { loadLogoAsBase64 } from '../../../utils/logo-loader';
+import '../../../styles/common.css';
+import '../../../styles/compact.css';
+
+// Action Menu Component untuk compact actions
+const ActionMenu = ({ onReopen, onEdit, onViewPDF, onUploadSigned, onViewSigned, onDelete }: {
+  onReopen?: () => void;
+  onEdit: () => void;
+  onViewPDF: () => void;
+  onUploadSigned?: () => void;
+  onViewSigned?: () => void;
+  onDelete?: () => void;
+}) => {
+  const [showMenu, setShowMenu] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
+  const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node) &&
+          buttonRef.current && !buttonRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showMenu]);
+
+  useEffect(() => {
+    if (showMenu && buttonRef.current) {
+      const buttonRect = buttonRef.current.getBoundingClientRect();
+      setMenuPosition({
+        top: buttonRect.bottom + 4,
+        right: window.innerWidth - buttonRect.right,
+      });
+    }
+  }, [showMenu]);
+  
+  return (
+    <>
+      <div ref={buttonRef} style={{ position: 'relative', display: 'inline-block' }}>
+        <Button 
+          variant="secondary" 
+          onClick={() => setShowMenu(!showMenu)}
+          style={{ fontSize: '10px', padding: '3px 6px', minHeight: '24px' }}
+        >
+          ⋮
+        </Button>
+      </div>
+      {showMenu && (
+        <div 
+          ref={menuRef}
+          style={{
+            position: 'fixed',
+            top: `${menuPosition.top}px`,
+            right: `${menuPosition.right}px`,
+            backgroundColor: 'var(--bg-primary)',
+            border: '1px solid var(--border)',
+            borderRadius: '6px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            zIndex: 10000,
+            minWidth: '160px',
+            maxWidth: '220px',
+            padding: '4px',
+            display: 'flex',
+            flexDirection: 'column', // Ensure vertical layout
+          }}
+        >
+          {onReopen && (
+            <button
+              onClick={() => { onReopen(); setShowMenu(false); }}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                fontSize: '11px',
+                borderRadius: '4px',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              ↻ Reopen
+            </button>
+          )}
+          <button
+            onClick={() => { onEdit(); setShowMenu(false); }}
+            style={{
+              width: '100%',
+              textAlign: 'left',
+              padding: '6px 10px',
+              border: 'none',
+              background: 'transparent',
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+              fontSize: '11px',
+              borderRadius: '4px',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
+            ✏️ Edit
+          </button>
+          <button
+            onClick={() => { onViewPDF(); setShowMenu(false); }}
+            style={{
+              width: '100%',
+              textAlign: 'left',
+              padding: '6px 10px',
+              border: 'none',
+              background: 'transparent',
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+              fontSize: '11px',
+              borderRadius: '4px',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
+            📄 View PDF
+          </button>
+          {onUploadSigned && (
+            <button
+              onClick={() => { onUploadSigned(); setShowMenu(false); }}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                fontSize: '11px',
+                borderRadius: '4px',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              📤 Upload Signed SJ
+            </button>
+          )}
+          {onViewSigned && (
+            <button
+              onClick={() => { onViewSigned(); setShowMenu(false); }}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                fontSize: '11px',
+                borderRadius: '4px',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              👁️ View Signed SJ
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={() => { onDelete(); setShowMenu(false); }}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                border: 'none',
+                background: 'transparent',
+                color: '#EF4444',
+                cursor: 'pointer',
+                fontSize: '11px',
+                borderRadius: '4px',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              🗑️ Delete
+            </button>
+          )}
+        </div>
+      )}
+    </>
+  );
+};
+
+interface SuratJalanItem {
+  product: string;
+  qty: number;
+  unit: string;
+  description?: string;
+}
+
+interface SuratJalan {
+  id: string;
+  no: number;
+  sjNo: string;
+  doNo: string;
+  customerName: string;
+  customerAddress: string;
+  driverId: string;
+  driverName: string;
+  driverCode: string;
+  vehicleId: string;
+  vehicleNo: string;
+  routeId: string;
+  routeName: string;
+  items: SuratJalanItem[];
+  pettyCashRequestNo?: string;
+  transferProof?: string;
+  transferProofName?: string;
+  distributedDate?: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  signedDocument?: string; // Base64 untuk image, atau file:// path untuk PDF
+  signedDocumentPath?: string; // Path ke file PDF di file system
+  signedDocumentName?: string;
+  signedDocumentType?: 'pdf' | 'image'; // Tipe file: pdf atau image
+  departureDate?: string;
+  departureTime?: string;
+  arrivalDate?: string;
+  arrivalTime?: string;
+  status: 'Open' | 'Close';
+  notes?: string;
+  created: string;
+  lastUpdate?: string;
+  timestamp?: number;
+  _timestamp?: number;
+  receivedDate?: string;
+  receivedBy?: string;
+}
+
+const SuratJalan = () => {
+  const [suratJalan, setSuratJalan] = useState<SuratJalan[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [deliveryOrders, setDeliveryOrders] = useState<any[]>([]);
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [drivers, setDrivers] = useState<any[]>([]);
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [routes, setRoutes] = useState<any[]>([]);
+  const [showReceiptDateDialog, setShowReceiptDateDialog] = useState(false);
+  const [receiptDate, setReceiptDate] = useState('');
+  const [pendingUploadItem, setPendingUploadItem] = useState<SuratJalan | null>(null);
+  const [showNotifications, setShowNotifications] = useState(true);
+  const [showFormDialog, setShowFormDialog] = useState(false);
+  const [editingItem, setEditingItem] = useState<SuratJalan | null>(null);
+  const [notificationDialog, setNotificationDialog] = useState<{
+    show: boolean;
+    notif: any | null;
+  }>({
+    show: false,
+    notif: null,
+  });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'card' | 'table'>('table');
+  const [formData, setFormData] = useState<Partial<SuratJalan>>({
+    sjNo: '',
+    doNo: '',
+    customerName: '',
+    customerAddress: '',
+    driverId: '',
+    vehicleId: '',
+    routeId: '',
+    items: [],
+    scheduledDate: new Date().toISOString().split('T')[0],
+    scheduledTime: '08:00',
+    status: 'Open',
+    notes: '',
+  });
+  const [newItem, setNewItem] = useState({ product: '', qty: 0, unit: 'UNIT', description: '' });
+  const [viewPdfData, setViewPdfData] = useState<{ html: string; sjNo: string } | null>(null);
+
+  // Custom Dialog state
+  const [dialogState, setDialogState] = useState<{
+    show: boolean;
+    type: 'alert' | 'confirm' | null;
+    title: string;
+    message: string;
+    onConfirm?: () => void;
+    onCancel?: () => void;
+  }>({
+    show: false,
+    type: null,
+    title: '',
+    message: '',
+  });
+
+  const showAlert = (message: string, title: string = 'Information') => {
+    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
+      (window as any).setDialogOpen(true);
+    }
+    setDialogState({
+      show: true,
+      type: 'alert',
+      title,
+      message,
+    });
+  };
+
+  const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
+    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
+      (window as any).setDialogOpen(true);
+    }
+    setDialogState({
+      show: true,
+      type: 'confirm',
+      title,
+      message,
+      onConfirm,
+      onCancel,
+    });
+  };
+
+  const closeDialog = () => {
+    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
+      (window as any).setDialogOpen(false);
+    }
+    setDialogState({
+      show: false,
+      type: null,
+      title: '',
+      message: '',
+    });
+  };
+
+  useEffect(() => {
+    loadData();
+    // Auto-refresh setiap 5 detik
+    const interval = setInterval(loadData, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const loadData = async () => {
+    try {
+      // Initialize empty arrays in local storage first to prevent 404 errors
+      if (typeof window !== 'undefined') {
+        const localStorageKeys = [
+          'trucking/suratJalan',
+          'trucking_suratJalanNotifications'
+        ];
+        
+        for (const localStorageKey of localStorageKeys) {
+          const existing = localStorage.getItem(localStorageKey);
+          if (!existing) {
+            localStorage.setItem(localStorageKey, JSON.stringify({ value: [], timestamp: new Date().toISOString() }));
+          }
+        }
+      }
+
+      const [sjData, notifData, doData, schedulesData, driversData, vehiclesData, routesData] = await Promise.all([
+        storageService.get<SuratJalan[]>('trucking_suratJalan') || [],
+        storageService.get<any[]>('trucking_suratJalanNotifications') || [],
+        storageService.get<any[]>('trucking_delivery_orders') || [],
+        storageService.get<any[]>('trucking_unitSchedules') || [],
+        storageService.get<any[]>('trucking_drivers') || [],
+        storageService.get<any[]>('trucking_vehicles') || [],
+        storageService.get<any[]>('trucking_routes') || [],
+      ]);
+
+      // Filter out deleted items sebagai safety net (jaga-jaga kalau masih ada data yang ter-mark sebagai deleted)
+      const activeSJ = (sjData || []).filter((sj: any) => {
+        return !(sj?.deleted === true || sj?.deleted === 'true' || sj?.deletedAt);
+      });
+      
+      // Sort by created date (newest first), fallback to scheduledDate if created not available
+      const sortedSJ = activeSJ.sort((a, b) => {
+        const dateA = a.created ? new Date(a.created).getTime() : (a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0);
+        const dateB = b.created ? new Date(b.created).getTime() : (b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0);
+        return dateB - dateA; // Newest first
+      });
+      setSuratJalan(sortedSJ.map((sj, idx) => ({ ...sj, no: idx + 1 })));
+      
+      // Filter notifications: hanya yang belum dibuat SJ-nya dan DO-nya masih ada
+      // Hapus notification jika:
+      // 1. Sudah ada SJ untuk DO yang sama
+      // 2. DO-nya sudah di-delete (tombstone)
+      const originalNotifsCount = (notifData || []).length;
+      
+      // Filter out deleted items sebagai safety net (jaga-jaga kalau masih ada data yang ter-mark sebagai deleted)
+      const activeDOs = (doData || []).filter((doItem: any) => {
+        return !(doItem?.deleted === true || doItem?.deleted === 'true' || doItem?.deletedAt);
+      });
+      
+      const allNotifs = (notifData || []).filter((n: any) => {
+        // Keep notification jika belum dibuat SJ-nya
+        if (n.type === 'PETTY_CASH_DISTRIBUTED' && (n.status || 'Open') === 'Open') {
+          // Cek apakah DO-nya sudah di-delete
+          const doExists = activeDOs.some((doItem: any) => doItem.doNo === n.doNo);
+          if (!doExists && n.doNo) {
+            console.log(`🧹 [SuratJalan] Filtering out notification for DO ${n.doNo} - DO already deleted`);
+            return false; // Hapus notification jika DO-nya sudah di-delete
+          }
+          
+          // Cek apakah sudah ada SJ untuk DO ini
+          const hasSJ = activeSJ.some((sj: any) => {
+            const sjDoNo = sj.doNo;
+            const notifDoNo = n.doNo;
+            const match = sjDoNo === notifDoNo;
+            if (match) {
+              console.log(`🧹 [SuratJalan] Found matching SJ for notification: DO ${notifDoNo}, SJ ${sj.sjNo}`);
+            }
+            return match;
+          });
+          if (hasSJ) {
+            console.log(`🧹 [SuratJalan] Filtering out notification for DO ${n.doNo} - SJ already exists`);
+            return false; // Hapus notification yang sudah dibuat SJ-nya
+          }
+        }
+        return true; // Keep other notifications
+      });
+      
+      // SELALU update notifications di storage untuk memastikan data konsisten
+      // Hapus notification yang sudah tidak relevan (DO deleted atau sudah ada SJ)
+      // Update storage setiap kali ada perubahan atau jika ada notification yang perlu dihapus
+      const shouldUpdate = allNotifs.length !== originalNotifsCount || 
+        (notifData || []).some((n: any) => {
+          if (n.type === 'PETTY_CASH_DISTRIBUTED' && (n.status || 'Open') === 'Open') {
+            // Cek apakah DO sudah di-delete
+            const doExists = activeDOs.some((doItem: any) => doItem.doNo === n.doNo);
+            if (!doExists && n.doNo) {
+              return true; // Perlu update karena DO sudah di-delete
+            }
+            // Cek apakah sudah ada SJ
+            const hasSJ = activeSJ.some((sj: any) => sj.doNo === n.doNo);
+            return hasSJ;
+          }
+          return false;
+        });
+      
+      if (shouldUpdate) {
+        await storageService.set('trucking_suratJalanNotifications', allNotifs);
+        console.log(`🧹 [SuratJalan] Cleaned up ${originalNotifsCount - allNotifs.length} obsolete notifications (from ${originalNotifsCount} to ${allNotifs.length})`);
+      }
+      
+      // Filter untuk display: hanya yang PENDING, belum dibuat SJ-nya, dan DO-nya masih ada
+      const activeNotifs = allNotifs.filter((n: any) => {
+        if (n.type !== 'PETTY_CASH_DISTRIBUTED' || (n.status || 'Open') !== 'Open') {
+          return false;
+        }
+        // Double-check: pastikan DO-nya masih ada
+        const doExists = activeDOs.some((doItem: any) => doItem.doNo === n.doNo);
+        if (!doExists && n.doNo) {
+          console.log(`🧹 [SuratJalan] Filtering out notification for display: DO ${n.doNo} - DO already deleted`);
+          return false;
+        }
+        // Double-check: pastikan tidak ada SJ untuk DO ini
+        const hasSJ = activeSJ.some((sj: any) => sj.doNo === n.doNo);
+        if (hasSJ) {
+          console.log(`🧹 [SuratJalan] Filtering out notification for display: DO ${n.doNo} - SJ already exists`);
+          return false;
+        }
+        return true;
+      });
+      
+      console.log(`📊 [SuratJalan] Notifications: ${originalNotifsCount} original, ${allNotifs.length} after filter, ${activeNotifs.length} for display`);
+      setNotifications(activeNotifs);
+      setDeliveryOrders(doData || []);
+      setSchedules(schedulesData || []);
+      setDrivers(driversData || []);
+      setVehicles(vehiclesData || []);
+      setRoutes(routesData || []);
+    } catch (error: any) {
+      console.error('[SuratJalan] Error loading data:', error);
+    }
+  };
+
+  const generateSJNo = () => {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const random = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+    return `SJ-${year}${month}${day}-${random}`;
+  };
+
+  const handleCreateFromNotification = (notif: any) => {
+    console.log('[SuratJalan] handleCreateFromNotification called with:', notif);
+    setNotificationDialog({
+      show: true,
+      notif: notif,
+    });
+  };
+
+  const handleLoadFormFromNotification = (notif: any) => {
+    console.log('[SuratJalan] handleLoadFormFromNotification called with:', notif);
+    console.log('[SuratJalan] Available schedules:', schedules);
+    console.log('[SuratJalan] Available delivery orders:', deliveryOrders);
+    
+    try {
+      
+      // Prioritas 1: Cari schedule berdasarkan driverId (SPK delivery)
+      // Cari schedule yang paling baru atau yang statusnya SCHEDULED/IN_PROGRESS
+      let relatedSchedule = null;
+      if (notif.driverId) {
+        const matchingSchedules = schedules.filter((s: any) => 
+          s.driverId === notif.driverId
+        );
+        
+        // Prioritas: Open > Close
+        relatedSchedule = matchingSchedules.find((s: any) => s.status === 'Open') ||
+                         matchingSchedules[0]; // Ambil yang pertama jika ada
+        
+        console.log('[SuratJalan] Matching schedules:', matchingSchedules);
+        console.log('[SuratJalan] Selected schedule:', relatedSchedule);
+      }
+      
+      // Prioritas 2: Cari DO data dari doNo di notifikasi atau schedule
+      let doData = null;
+      const doNoToSearch = notif.doNo || relatedSchedule?.doNo || '';
+      if (doNoToSearch) {
+        doData = deliveryOrders.find((doItem: any) => doItem.doNo === doNoToSearch);
+        console.log('[SuratJalan] Searching DO with doNo:', doNoToSearch);
+        console.log('[SuratJalan] Found DO data:', doData);
+      }
+      
+      // Gunakan data dengan prioritas: Schedule > DO Data > Notification
+      // Schedule adalah sumber data utama karena itu adalah SPK delivery
+      const finalDoNo = relatedSchedule?.doNo || doData?.doNo || notif.doNo || '';
+      const finalCustomerName = relatedSchedule?.customerName || doData?.customerName || notif.customerName || '';
+      const finalCustomerAddress = relatedSchedule?.customerAddress || doData?.customerAddress || notif.customerAddress || '';
+      const finalVehicleId = relatedSchedule?.vehicleId || doData?.vehicleId || notif.vehicleId || '';
+      const finalVehicleNo = relatedSchedule?.vehicleNo || doData?.vehicleNo || notif.vehicleNo || '';
+      const finalRouteId = relatedSchedule?.routeId || doData?.routeId || notif.routeId || '';
+      const finalRouteName = relatedSchedule?.routeName || doData?.routeName || notif.routeName || '';
+      const finalScheduledDate = relatedSchedule?.scheduledDate || doData?.scheduledDate || notif.scheduledDate || new Date().toISOString().split('T')[0];
+      const finalScheduledTime = relatedSchedule?.scheduledTime || doData?.scheduledTime || notif.scheduledTime || '08:00';
+      
+      // Items dari DO data (prioritas tertinggi)
+      const finalItems = doData?.items ? [...(doData.items || [])] : [];
+      
+      console.log('[SuratJalan] Final form data:', {
+        doNo: finalDoNo,
+        customerName: finalCustomerName,
+        customerAddress: finalCustomerAddress,
+        vehicleId: finalVehicleId,
+        vehicleNo: finalVehicleNo,
+        routeId: finalRouteId,
+        routeName: finalRouteName,
+        scheduledDate: finalScheduledDate,
+        scheduledTime: finalScheduledTime,
+        itemsCount: finalItems.length,
+        driverId: notif.driverId || relatedSchedule?.driverId || '',
+        driverName: notif.driverName || relatedSchedule?.driverName || '',
+      });
+      
+      setFormData({
+        sjNo: generateSJNo(),
+        doNo: finalDoNo,
+        customerName: finalCustomerName,
+        customerAddress: finalCustomerAddress,
+        driverId: notif.driverId || relatedSchedule?.driverId || '',
+        driverName: notif.driverName || relatedSchedule?.driverName || '',
+        driverCode: notif.driverCode || relatedSchedule?.driverCode || '',
+        vehicleId: finalVehicleId,
+        vehicleNo: finalVehicleNo,
+        routeId: finalRouteId,
+        routeName: finalRouteName,
+        items: finalItems,
+        pettyCashRequestNo: notif.pettyCashRequestNo || '',
+        transferProof: notif.transferProof || '',
+        transferProofName: notif.transferProofName || '',
+        distributedDate: notif.distributedDate || '',
+        scheduledDate: finalScheduledDate,
+        scheduledTime: finalScheduledTime,
+        status: 'Open',
+        notes: notif.description || notif.purpose || relatedSchedule?.notes || '',
+      });
+      setNewItem({ product: '', qty: 0, unit: 'UNIT', description: '' });
+      setNotificationDialog({ show: false, notif: null });
+      setShowFormDialog(true);
+      console.log('[SuratJalan] Form opened successfully');
+    } catch (error: any) {
+      console.error('[SuratJalan] Error in handleCreateFromNotification:', error);
+      showAlert(`Error opening form: ${error.message}`, 'Error');
+    }
+  };
+
+  const handleAddItem = () => {
+    if (!newItem.product || newItem.qty <= 0) {
+      showAlert('Product dan Qty harus diisi', 'Information');
+      return;
+    }
+    setFormData({
+      ...formData,
+      items: [...(formData.items || []), { ...newItem }],
+    });
+    setNewItem({ product: '', qty: 0, unit: 'PCS', description: '' });
+  };
+
+  const handleRemoveItem = (index: number) => {
+    const items = [...(formData.items || [])];
+    items.splice(index, 1);
+    setFormData({ ...formData, items });
+  };
+
+  const handleSave = async () => {
+    try {
+      if (!formData.doNo || !formData.driverId || !formData.items || formData.items.length === 0) {
+        showAlert('DO No, Driver, dan Items harus diisi', 'Information');
+        return;
+      }
+
+      const driver = drivers.find(d => d.id === formData.driverId);
+      const vehicle = vehicles.find(v => v.id === formData.vehicleId);
+      const route = routes.find(r => r.id === formData.routeId);
+
+      if (editingItem) {
+        const now = new Date();
+        const updated = suratJalan.map(sj =>
+          sj.id === editingItem.id
+            ? {
+                ...formData,
+                id: editingItem.id,
+                no: editingItem.no,
+                sjNo: editingItem.sjNo,
+                driverName: driver?.name || formData.driverName || '',
+                driverCode: driver?.driverCode || formData.driverCode || '',
+                vehicleNo: vehicle?.vehicleNo || formData.vehicleNo || '',
+                routeName: route?.routeName || formData.routeName || '',
+                created: editingItem.created || now.toISOString(),
+                lastUpdate: now.toISOString(),
+                timestamp: now.getTime(),
+                _timestamp: now.getTime(),
+              } as SuratJalan
+            : sj
+        );
+        await storageService.set('trucking_suratJalan', updated);
+        // Sort by created date (newest first)
+        const sortedUpdated = updated.sort((a, b) => {
+          const dateA = a.created ? new Date(a.created).getTime() : (a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0);
+          const dateB = b.created ? new Date(b.created).getTime() : (b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0);
+          return dateB - dateA; // Newest first
+        });
+        setSuratJalan(sortedUpdated.map((sj, idx) => ({ ...sj, no: idx + 1 })));
+      } else {
+        const now = new Date();
+        const newSJ: SuratJalan = {
+          id: Date.now().toString(),
+          no: suratJalan.length + 1,
+          sjNo: formData.sjNo || generateSJNo(),
+          doNo: formData.doNo || '',
+          customerName: formData.customerName || '',
+          customerAddress: formData.customerAddress || '',
+          driverId: formData.driverId || '',
+          driverName: driver?.name || formData.driverName || '',
+          driverCode: driver?.driverCode || formData.driverCode || '',
+          vehicleId: formData.vehicleId || '',
+          vehicleNo: vehicle?.vehicleNo || formData.vehicleNo || '',
+          routeId: formData.routeId || '',
+          routeName: route?.routeName || formData.routeName || '',
+          items: formData.items || [],
+          pettyCashRequestNo: formData.pettyCashRequestNo || '',
+          transferProof: formData.transferProof || '',
+          transferProofName: formData.transferProofName || '',
+          distributedDate: formData.distributedDate || '',
+          scheduledDate: formData.scheduledDate || '',
+          scheduledTime: formData.scheduledTime || '',
+            status: formData.status || 'Open',
+          notes: formData.notes || '',
+          created: now.toISOString(),
+          lastUpdate: now.toISOString(),
+          timestamp: now.getTime(),
+          _timestamp: now.getTime(),
+        };
+        // Simpan ke storage
+        const allSJ = await storageService.get<SuratJalan[]>('trucking_suratJalan') || [];
+        const updated = [...allSJ, newSJ];
+        await storageService.set('trucking_suratJalan', updated);
+
+        // Hapus notification setelah dibuat (berdasarkan doNo, bukan hanya dari dialog)
+        const doNoToCheck = formData.doNo || notificationDialog.notif?.doNo;
+        if (doNoToCheck) {
+          const allNotifications = await storageService.get<any[]>('trucking_suratJalanNotifications') || [];
+          // Hapus notification yang memiliki doNo yang sama
+          const updatedNotifications = allNotifications.filter((n: any) => n.doNo !== doNoToCheck);
+          await storageService.set('trucking_suratJalanNotifications', updatedNotifications);
+          console.log(`✅ [SuratJalan] Removed notification for DO ${doNoToCheck}`);
+        }
+        
+        // Reload data untuk memastikan filter deleted items dan notification terhapus
+        await loadData();
+      }
+
+      setShowFormDialog(false);
+      setEditingItem(null);
+      setNotificationDialog({ show: false, notif: null });
+      setFormData({
+        sjNo: '',
+        doNo: '',
+        customerName: '',
+        customerAddress: '',
+        driverId: '',
+        vehicleId: '',
+        routeId: '',
+        items: [],
+        scheduledDate: new Date().toISOString().split('T')[0],
+        scheduledTime: '08:00',
+        status: 'Open',
+        notes: '',
+      });
+      showAlert('✅ Surat Jalan berhasil disimpan', 'Success');
+      loadData();
+    } catch (error: any) {
+      showAlert(`Error saving surat jalan: ${error.message}`, 'Error');
+    }
+  };
+
+  const handleEdit = (item: SuratJalan) => {
+    setEditingItem(item);
+    setFormData({
+      ...item,
+      items: item.items ? [...item.items] : [],
+    });
+    setNewItem({ product: '', qty: 0, unit: 'PCS', description: '' });
+    setNotificationDialog({ show: false, notif: null });
+    setShowFormDialog(true);
+  };
+
+  // Helper function untuk save tombstone ke audit log
+  const saveTombstoneToAuditLog = (item: any, refType: string) => {
+    try {
+      const timestamp = new Date().toISOString();
+      const itemId = item.id || item.sjNo || item.doNo || item.requestNo || item.memoNo || item.vehicleNo || item.driverCode || item.routeCode || item.kode || 'unknown';
+      const auditLog = {
+        id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        refType: refType,
+        refId: itemId,
+        actorId: 'user', // TODO: get from auth context
+        action: 'DELETE',
+        deleted: true,
+        deletedAt: timestamp,
+        data: item, // Simpan data lengkap untuk tombstone
+        createdAt: timestamp,
+      };
+      
+      // Simpan audit log
+      const auditKey = 'trucking/auditLogs';
+      const auditStr = localStorage.getItem(auditKey);
+      let auditLogs: any[] = [];
+      if (auditStr) {
+        const parsed = JSON.parse(auditStr);
+        auditLogs = Array.isArray(parsed?.value) ? parsed.value : (Array.isArray(parsed) ? parsed : []);
+      }
+      auditLogs.push(auditLog);
+      localStorage.setItem(auditKey, JSON.stringify({
+        value: auditLogs,
+        timestamp: new Date().toISOString(),
+        _timestamp: Date.now(),
+      }));
+      return true;
+    } catch (error) {
+      console.error('Error saving tombstone to audit log:', error);
+      return false;
+    }
+  };
+
+  const handleDelete = async (item: SuratJalan) => {
+    showConfirm(
+      `Are you sure you want to delete Surat Jalan "${item.sjNo}"?`,
+      async () => {
+        try {
+          // Simpan tombstone ke audit log sebelum menghapus
+          saveTombstoneToAuditLog(item, 'trucking_suratJalan');
+          
+          // Hapus data benar-benar dari array
+          const allSJ = await storageService.get<SuratJalan[]>('trucking_suratJalan') || [];
+          const updated = allSJ.filter(sj => sj.id !== item.id);
+          await storageService.set('trucking_suratJalan', updated);
+          
+          // Sort by created date (newest first)
+          const sortedUpdated = updated.sort((a, b) => {
+            const dateA = a.created ? new Date(a.created).getTime() : (a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0);
+            const dateB = b.created ? new Date(b.created).getTime() : (b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0);
+            return dateB - dateA; // Newest first
+          });
+          setSuratJalan(sortedUpdated.map((sj, idx) => ({ ...sj, no: idx + 1 })));
+          showAlert(`Surat Jalan "${item.sjNo}" deleted successfully`, 'Success');
+        } catch (error: any) {
+          showAlert(`Error deleting surat jalan: ${error.message}`, 'Error');
+        }
+      },
+      undefined,
+      'Confirm Delete'
+    );
+  };
+
+  const handleStatusChange = async (item: SuratJalan, newStatus: SuratJalan['status']) => {
+    try {
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0];
+      const timeStr = now.toTimeString().split(' ')[0].substring(0, 5);
+
+      const updated = suratJalan.map(sj =>
+        sj.id === item.id
+          ? {
+              ...sj,
+              status: newStatus,
+              departureDate: newStatus === 'Close' ? (sj.departureDate || dateStr) : sj.departureDate,
+              departureTime: newStatus === 'Close' ? (sj.departureTime || timeStr) : sj.departureTime,
+              arrivalDate: newStatus === 'Close' ? (sj.arrivalDate || dateStr) : sj.arrivalDate,
+              arrivalTime: newStatus === 'Close' ? (sj.arrivalTime || timeStr) : sj.arrivalTime,
+            }
+          : sj
+      );
+      await storageService.set('trucking_suratJalan', updated);
+      setSuratJalan(updated.map((sj, idx) => ({ ...sj, no: idx + 1 })));
+    } catch (error: any) {
+      showAlert(`Error updating status: ${error.message}`, 'Error');
+    }
+  };
+
+  const handleViewPDF = async (item: SuratJalan) => {
+    try {
+      // Cari DO data untuk mendapatkan items lengkap
+      const doData = deliveryOrders.find((doItem: any) => doItem.doNo === item.doNo);
+      
+      // Load logo dan company info
+      const logoBase64 = await loadLogoAsBase64();
+      const company = await storageService.get<{ companyName: string; address: string }>('company') || {
+        companyName: 'PT. Trimalaksana',
+        address: 'Jl. Raya Cikarang, Bekasi',
+      };
+
+      // Prepare items untuk template - convert ke format yang diharapkan template
+      const items = item.items || (doData?.items || []);
+      const soLines = items.map((it: any) => ({
+        itemSku: it.sku || it.productCode || '', // PRODUCT CODE hanya dari SKU/productCode, kosongkan jika tidak ada
+        qty: it.qty || 0,
+        productName: it.product || it.description || '', // ITEM dari product/description
+      }));
+
+      // Prepare data untuk template
+      const deliveryNoteData = {
+        soNo: item.doNo,
+        customer: item.customerName,
+        customerAddress: item.customerAddress,
+        items: items,
+        qty: items.reduce((sum: number, i: any) => sum + (i.qty || 0), 0),
+        qtyProduced: items.reduce((sum: number, i: any) => sum + (i.qty || 0), 0),
+        specNote: item.notes || '',
+        soLines: soLines,
+      };
+
+      const sjData = {
+        sjNo: item.sjNo,
+        sjDate: item.scheduledDate || new Date().toISOString().split('T')[0],
+        driver: item.driverName || '',
+        vehicleNo: item.vehicleNo || '',
+      };
+
+      const html = generateSuratJalanHtml({
+        logo: logoBase64,
+        company,
+        item: deliveryNoteData,
+        sjData,
+        products: [], // Products tidak diperlukan untuk trucking
+      });
+
+      setViewPdfData({ html, sjNo: item.sjNo });
+    } catch (error: any) {
+      showAlert(`Error generating PDF preview: ${error.message}`, 'Error');
+    }
+  };
+
+  const handleSaveToPDF = async () => {
+    if (!viewPdfData) return;
+
+    try {
+      const electronAPI = (window as any).electronAPI;
+      const fileName = `${viewPdfData.sjNo}.pdf`;
+
+      if (electronAPI && typeof electronAPI.savePdf === 'function') {
+        const result = await electronAPI.savePdf(viewPdfData.html, fileName);
+        if (result.success) {
+          showAlert(`PDF saved successfully to:\n${result.path}`, 'Success');
+          setViewPdfData(null);
+        } else if (!result.canceled) {
+          showAlert(`Error saving PDF: ${result.error || 'Unknown error'}`, 'Error');
+        }
+      } else {
+        openPrintWindow(viewPdfData.html, { autoPrint: false });
+      }
+    } catch (error: any) {
+      showAlert(`Error saving PDF: ${error.message}`, 'Error');
+    }
+  };
+
+  const handleUploadSignedDocument = async (item: SuratJalan) => {
+    // Show dialog untuk input tanggal receipt dulu
+    setPendingUploadItem(item);
+    setReceiptDate(new Date().toISOString().split('T')[0]);
+    setShowReceiptDateDialog(true);
+  };
+
+  const handleConfirmReceiptDate = () => {
+    if (!receiptDate || !pendingUploadItem) {
+      showAlert('Tanggal receipt harus diisi', 'Validation Error');
+      return;
+    }
+    setShowReceiptDateDialog(false);
+    // Lanjutkan upload setelah tanggal receipt diisi
+    const item = pendingUploadItem;
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*,.pdf';
+    fileInput.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) {
+        setPendingUploadItem(null);
+        return;
+      }
+
+      try {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          const base64 = e.target?.result as string;
+          
+          // Deteksi tipe file
+          const isPDF = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+          const fileType: 'pdf' | 'image' = isPDF ? 'pdf' : 'image';
+          
+          // Untuk PDF, simpan sebagai file di file system (karena terlalu besar untuk localStorage)
+          // Untuk image, tetap simpan sebagai base64 (lebih kecil)
+          let signedDocument: string;
+          let signedDocumentPath: string | undefined;
+          
+          if (isPDF) {
+            // PDF: Simpan sebagai file dan simpan path-nya saja
+            const electronAPI = (window as any).electronAPI;
+            
+            // Cek apakah Electron API tersedia
+            if (!electronAPI) {
+              throw new Error('⚠️ Electron API tidak tersedia.\n\nPastikan aplikasi berjalan di Electron app, bukan di browser.\n\nJika sudah di Electron, silakan:\n1. Tutup aplikasi Electron\n2. Buka kembali aplikasi Electron\n3. Coba upload lagi');
+            }
+            
+            if (typeof electronAPI.saveUploadedFile !== 'function') {
+              throw new Error('⚠️ Fungsi saveUploadedFile tidak tersedia.\n\nSilakan:\n1. Tutup aplikasi Electron\n2. Buka kembali aplikasi Electron\n3. Coba upload lagi');
+            }
+            
+            try {
+              const result = await electronAPI.saveUploadedFile(base64, file.name, 'pdf');
+              if (result && result.success) {
+                signedDocumentPath = result.path;
+                // Simpan path sebagai reference, bukan base64
+                signedDocument = `file://${result.path}`;
+              } else {
+                throw new Error(result?.error || 'Failed to save PDF file');
+              }
+            } catch (fileError: any) {
+              const errorMessage = fileError.message || String(fileError);
+              if (errorMessage.includes('No handler registered') || 
+                  errorMessage.includes('handler registered') ||
+                  errorMessage.includes('Error invoking remote method')) {
+                throw new Error('⚠️ Handler Electron belum terdaftar.\n\nSilakan:\n1. Tutup aplikasi Electron (tutup semua window)\n2. Buka kembali aplikasi Electron dari shortcut/start menu\n3. Tunggu aplikasi selesai loading\n4. Coba upload PDF lagi\n\nJika masih error, hubungi administrator.');
+              }
+              throw new Error(`❌ Gagal menyimpan PDF ke file system.\n\nError: ${errorMessage}\n\nSilakan:\n1. Restart aplikasi Electron\n2. Pastikan folder data/uploads bisa diakses\n3. Coba upload lagi`);
+            }
+          } else {
+            // Image: Simpan sebagai base64 (biasanya lebih kecil)
+            signedDocument = base64;
+            signedDocumentPath = undefined;
+          }
+          
+          const updated = suratJalan.map(sj =>
+            sj.id === item.id
+              ? {
+                  ...sj,
+                  // Jika PDF sudah disimpan di file system, jangan simpan base64 di storage
+                  signedDocument: signedDocumentPath ? undefined : signedDocument, 
+                  signedDocumentPath: signedDocumentPath, // Simpan path untuk PDF
+                  signedDocumentName: file.name,
+                  signedDocumentType: fileType, // Simpan tipe file
+                  receivedDate: receiptDate,
+                  status: 'Close' as const, // Otomatis close setelah upload signed document
+                }
+              : sj
+          );
+          
+          // Save ke local storage
+          try {
+            await storageService.set('trucking_suratJalan', updated);
+          } catch (storageError: any) {
+            // Jika save ke storage gagal karena quota, coba handle khusus
+            if (storageError.message?.includes('quota') || storageError.message?.includes('exceeded')) {
+              // Jika PDF sudah disimpan di file system, kita bisa skip signedDocument di storage
+              if (signedDocumentPath) {
+                // Simpan tanpa signedDocument (hanya path)
+                const updatedWithoutBase64 = suratJalan.map(sj =>
+                  sj.id === item.id
+                    ? {
+                        ...sj,
+                        signedDocument: undefined, // Hapus base64 jika ada
+                        signedDocumentPath: signedDocumentPath,
+                        signedDocumentName: file.name,
+                        signedDocumentType: fileType,
+                        receivedDate: receiptDate,
+                        status: 'Close' as const,
+                      }
+                    : sj
+                );
+                await storageService.set('trucking_suratJalan', updatedWithoutBase64);
+                // Sort by created date (newest first)
+                const sortedUpdated = updatedWithoutBase64.sort((a, b) => {
+                  const dateA = a.created ? new Date(a.created).getTime() : (a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0);
+                  const dateB = b.created ? new Date(b.created).getTime() : (b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0);
+                  return dateB - dateA; // Newest first
+                });
+                setSuratJalan(sortedUpdated.map((sj, idx) => ({ ...sj, no: idx + 1 })));
+                setPendingUploadItem(null);
+                return; // Exit early
+              } else {
+                throw new Error('Storage quota exceeded. Silakan hapus beberapa data lama atau hubungi administrator.');
+              }
+            }
+            throw storageError; // Re-throw error lainnya
+          }
+          // Sort by created date (newest first)
+          const sortedUpdated = updated.sort((a, b) => {
+            const dateA = a.created ? new Date(a.created).getTime() : (a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0);
+            const dateB = b.created ? new Date(b.created).getTime() : (b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0);
+            return dateB - dateA; // Newest first
+          });
+          setSuratJalan(sortedUpdated.map((sj, idx) => ({ ...sj, no: idx + 1 })));
+          
+          // Close DO yang terkait setelah upload signed document
+          try {
+            const storageKey = 'trucking/trucking_delivery_orders';
+            const doList = await storageService.get<any[]>(storageKey) || [];
+            const relatedDO = doList.find((doItem: any) => doItem.doNo === item.doNo);
+            if (relatedDO && relatedDO.status === 'Open') {
+              const updatedDOs = doList.map((doItem: any) =>
+                doItem.doNo === item.doNo
+                  ? { ...doItem, status: 'Close' as const }
+                  : doItem
+              );
+              await storageService.set(storageKey, updatedDOs);
+              console.log(`✅ [SuratJalan] Closed DO ${item.doNo} after signed document upload`);
+            }
+          } catch (error: any) {
+            console.error('Error closing DO:', error);
+          }
+          
+          // Kirim notifikasi ke Invoice setelah upload signed document
+          try {
+            const invoiceNotifications = await storageService.get<any[]>('trucking_invoiceNotifications') || [];
+            const existingNotif = invoiceNotifications.find((n: any) => 
+              n.sjNo === item.sjNo && n.type === 'CUSTOMER_INVOICE'
+            );
+            
+            if (!existingNotif) {
+              const now = new Date();
+              const newInvoiceNotification = {
+                id: `invoice-${Date.now()}-${item.sjNo}`,
+                type: 'CUSTOMER_INVOICE',
+                sjNo: item.sjNo,
+                doNo: item.doNo,
+                customer: item.customerName,
+                customerAddress: item.customerAddress,
+                items: item.items || [],
+                totalQty: (item.items || []).reduce((sum: number, itm: any) => sum + (itm.qty || 0), 0),
+                status: 'PENDING',
+                created: now.toISOString(),
+                lastUpdate: now.toISOString(),
+                timestamp: now.getTime(),
+                _timestamp: now.getTime(),
+              };
+              await storageService.set('trucking_invoiceNotifications', [...invoiceNotifications, newInvoiceNotification]);
+              console.log(`✅ [SuratJalan] Created invoice notification for SJ ${item.sjNo}`);
+              showAlert(`✅ Signed document uploaded successfully for ${item.sjNo}\n\n✅ Status updated to CLOSE\n✅ DO ${item.doNo} closed\n📧 Notification sent to Invoice module`, 'Success');
+            } else {
+              showAlert(`✅ Signed document uploaded successfully for ${item.sjNo}\n\n✅ Status updated to CLOSE\n✅ DO ${item.doNo} closed`, 'Success');
+            }
+          } catch (error: any) {
+            console.error('Error creating invoice notification:', error);
+            showAlert(`✅ Signed document uploaded successfully for ${item.sjNo}\n\n✅ Status updated to CLOSE\n✅ DO ${item.doNo} closed`, 'Success');
+          }
+          setPendingUploadItem(null);
+        };
+        reader.readAsDataURL(file);
+      } catch (error: any) {
+        showAlert(`Error uploading signed document: ${error.message}`, 'Error');
+        setPendingUploadItem(null);
+      }
+    };
+    fileInput.click();
+  };
+
+  const handleViewSignedDocument = async (item: SuratJalan) => {
+    if (!item.signedDocument && !item.signedDocumentPath) {
+      showAlert('No signed document available for this Surat Jalan', 'Information');
+      return;
+    }
+
+    try {
+      const fileName = item.signedDocumentName || '';
+      let signedDocument = item.signedDocument || '';
+      
+      // Jika file disimpan sebagai path (PDF yang besar), load dari file system
+      if (item.signedDocumentPath) {
+        const electronAPI = (window as any).electronAPI;
+        if (electronAPI && typeof electronAPI.loadUploadedFile === 'function') {
+          try {
+            const result = await electronAPI.loadUploadedFile(item.signedDocumentPath);
+            if (result && result.success) {
+              signedDocument = result.data || '';
+            } else {
+              throw new Error(result?.error || 'Failed to load file from file system');
+            }
+          } catch (loadError: any) {
+            showAlert('Error', `Gagal memuat file: ${loadError.message}`);
+            return;
+          }
+        } else {
+          showAlert('Error', 'File disimpan sebagai file system, tetapi Electron API tidak tersedia.');
+          return;
+        }
+      }
+      
+      if (!signedDocument) {
+        showAlert('Error', 'No document data available');
+        return;
+      }
+      
+      // Deteksi tipe file
+      const isPDF = fileName.toLowerCase().endsWith('.pdf') || 
+                    signedDocument.startsWith('data:application/pdf') ||
+                    item.signedDocumentType === 'pdf' ||
+                    (signedDocument.length > 100 && signedDocument.substring(0, 100).includes('JVBERi0')); // PDF magic bytes
+      
+      // Normalize data URI format
+      if (!signedDocument.startsWith('data:')) {
+        // Assume it's base64, need to determine MIME type
+        if (isPDF) {
+          signedDocument = `data:application/pdf;base64,${signedDocument}`;
+        } else {
+          // Assume image
+          signedDocument = `data:image/jpeg;base64,${signedDocument}`;
+        }
+      }
+      
+      // Untuk PDF, langsung download saja (lebih reliable)
+      if (isPDF) {
+        // Langsung trigger download
+        handleDownloadSignedDocument(item);
+        return;
+      } else {
+        // Untuk image, buka di new window
+        const newWindow = window.open();
+        if (!newWindow) {
+          showAlert('Error', 'Popup blocked. Please allow popups to view document.');
+          return;
+        }
+        newWindow.document.write(`
+          <html>
+            <head>
+              <title>${item.signedDocumentName || 'Signed Document'}</title>
+              <style>
+                body { 
+                  margin: 0; 
+                  padding: 20px; 
+                  display: flex; 
+                  justify-content: center; 
+                  align-items: center; 
+                  min-height: 100vh;
+                  background: #f5f5f5;
+                }
+                img { 
+                  max-width: 100%; 
+                  max-height: 100vh; 
+                  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+                }
+              </style>
+            </head>
+            <body>
+            <img src="${signedDocument}" alt="${item.signedDocumentName || 'Signed Document'}" 
+                 onerror="this.parentElement.innerHTML='<div style=\\'padding:20px;text-align:center;\\'><p>Error loading image</p><p>Document length: ${signedDocument.length} chars</p></div>';" />
+            </body>
+          </html>
+        `);
+        newWindow.document.close();
+      }
+    } catch (error: any) {
+      showAlert('Error', `Error viewing document: ${error.message}`);
+    }
+  };
+  
+  const handleDownloadSignedDocument = async (item: SuratJalan) => {
+    if (!item.signedDocument && !item.signedDocumentPath) {
+      showAlert('Error', 'No signed document available');
+      return;
+    }
+
+    try {
+      // Priority 1: Load dari local file system jika ada
+      let signedDocument = item.signedDocument || '';
+      
+      if (item.signedDocumentPath) {
+        const electronAPI = (window as any).electronAPI;
+        if (electronAPI && typeof electronAPI.loadUploadedFile === 'function') {
+          try {
+            const result = await electronAPI.loadUploadedFile(item.signedDocumentPath);
+            if (result && result.success) {
+              signedDocument = result.data || '';
+            } else {
+              throw new Error(result?.error || 'Failed to load file from file system');
+            }
+          } catch (loadError: any) {
+            showAlert('Error', `Gagal memuat file: ${loadError.message}`);
+            return;
+          }
+        } else {
+          showAlert('Error', 'File disimpan sebagai file system, tetapi Electron API tidak tersedia.');
+          return;
+        }
+      }
+      
+      if (!signedDocument) {
+        showAlert('Error', 'No document data available');
+        return;
+      }
+      
+      // Deteksi tipe file
+      const isPDF = item.signedDocumentName?.toLowerCase().endsWith('.pdf') || 
+                    signedDocument.startsWith('data:application/pdf') ||
+                    item.signedDocumentType === 'pdf';
+      
+      // Extract base64 data (remove data URL prefix jika ada)
+      let base64Data = signedDocument;
+      let mimeType = 'image/png';
+      
+      if (base64Data && base64Data.includes(',')) {
+        // Ada data URL prefix (data:image/png;base64,... atau data:application/pdf;base64,...)
+        const parts = base64Data.split(',');
+        base64Data = parts[1] || '';
+        const mimeMatch = parts[0].match(/data:([^;]+)/);
+        if (mimeMatch) {
+          mimeType = mimeMatch[1];
+        }
+      }
+      
+      if (!base64Data) {
+        showAlert('Error', 'No document data available');
+        return;
+      }
+      
+      // Convert base64 to blob
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: mimeType });
+      
+      // Create download link
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Determine file extension
+      let extension = 'png';
+      if (isPDF || mimeType.includes('pdf')) {
+        extension = 'pdf';
+      } else if (mimeType.includes('jpeg') || mimeType.includes('jpg')) {
+        extension = 'jpg';
+      } else if (mimeType.includes('png')) {
+        extension = 'png';
+      }
+      
+      link.download = item.signedDocumentName || `SJ-${item.sjNo}-signed.${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      showAlert('Error', `Error downloading document: ${error.message}`);
+    }
+  };
+
+  const filteredSuratJalan = useMemo(() => {
+    const filtered = (suratJalan || []).filter(sj => {
+      if (!sj) return false;
+      if (!searchQuery) return true;
+      const query = searchQuery.toLowerCase();
+      return (
+        (sj.sjNo || '').toLowerCase().includes(query) ||
+        (sj.doNo || '').toLowerCase().includes(query) ||
+        (sj.customerName || '').toLowerCase().includes(query) ||
+        (sj.driverName || '').toLowerCase().includes(query) ||
+        (sj.vehicleNo || '').toLowerCase().includes(query) ||
+        (sj.status || '').toLowerCase().includes(query)
+      );
+    });
+    // Sort by created date (newest first)
+    return filtered.sort((a, b) => {
+      const dateA = a.created ? new Date(a.created).getTime() : (a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0);
+      const dateB = b.created ? new Date(b.created).getTime() : (b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0);
+      return dateB - dateA; // Newest first
+    });
+  }, [suratJalan, searchQuery]);
+
+  const columns = [
+    { key: 'no', header: 'No' },
+    { key: 'sjNo', header: 'SJ No' },
+    { key: 'doNo', header: 'DO No' },
+    { key: 'customerName', header: 'Customer' },
+    { key: 'driverName', header: 'Driver' },
+    { key: 'vehicleNo', header: 'Vehicle' },
+    { key: 'routeName', header: 'Route' },
+    { key: 'scheduledDate', header: 'Scheduled Date' },
+    {
+      key: 'receivedDate',
+      header: 'SJ Kembali',
+      render: (item: SuratJalan) => (
+        item.receivedDate ? (
+          <span style={{ fontSize: '12px' }}>{new Date(item.receivedDate).toLocaleDateString('id-ID')}</span>
+        ) : (
+          <span style={{ color: '#999', fontSize: '12px' }}>-</span>
+        )
+      ),
+    },
+    {
+      key: 'signedDocument',
+      header: 'Signed Document',
+      render: (item: SuratJalan) => (
+        item.signedDocument ? (
+          <span style={{ color: '#4CAF50', fontSize: '12px' }}>✓ Uploaded</span>
+        ) : (
+          <span style={{ color: '#999', fontSize: '12px' }}>-</span>
+        )
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (item: SuratJalan) => (
+        <span className={`status-badge status-${item.status?.toLowerCase().replace('_', '-')}`}>
+          {item.status}
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      render: (item: SuratJalan) => (
+        <ActionMenu
+          onReopen={item.status === 'Close' ? () => handleStatusChange(item, 'Open') : undefined}
+          onEdit={() => handleEdit(item)}
+          onViewPDF={() => handleViewPDF(item)}
+          onUploadSigned={!item.signedDocument ? () => handleUploadSignedDocument(item) : undefined}
+          onViewSigned={item.signedDocument ? () => handleViewSignedDocument(item) : undefined}
+          onDelete={item.status === 'Open' ? () => handleDelete(item) : undefined}
+        />
+      ),
+    },
+  ];
+
+  return (
+    <div className="module-compact">
+      <Card>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '12px', flexWrap: 'wrap' }}>
+          <h2>Surat Jalan</h2>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            {notifications.length > 0 && (
+              <Button
+                variant="secondary"
+                onClick={() => setShowNotifications((prev) => !prev)}
+                style={{ padding: '6px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <span role="img" aria-label="bell">🔔</span>
+                {notifications.length}
+                {showNotifications ? ' Hide' : ' Show'}
+              </Button>
+            )}
+            <Button onClick={() => {
+              setEditingItem(null);
+              setFormData({ 
+                sjNo: '', 
+                doNo: '', 
+                customerName: '', 
+                customerAddress: '', 
+                driverId: '',
+                vehicleId: '',
+                routeId: '',
+                items: [], 
+                scheduledDate: new Date().toISOString().split('T')[0], 
+                scheduledTime: '08:00', 
+                status: 'Open', 
+                notes: '' 
+              });
+              setNewItem({ product: '', qty: 0, unit: 'UNIT', description: '' });
+              setShowFormDialog(true);
+            }}>
+              + Create Surat Jalan
+            </Button>
+          </div>
+        </div>
+
+        {/* Notifications Panel */}
+        {notifications.length > 0 && showNotifications && (
+          <Card className="mb-4" style={{ 
+            backgroundColor: document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(33, 150, 243, 0.1)' : 'rgba(33, 150, 243, 0.15)', 
+            border: '2px solid #2196F3',
+            padding: '12px 16px', 
+            borderRadius: '6px',
+            pointerEvents: 'auto',
+            position: 'relative',
+            zIndex: 1,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '10px' }}>
+              <div>
+                <strong>📄 Petty Cash Distributed Notifications ({notifications.length})</strong>
+                <div style={{ fontSize: '13px', opacity: '0.9' }}>Klik untuk langsung buat Surat Jalan</div>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={() => setShowNotifications(false)}
+                style={{ 
+                  padding: '6px 12px', 
+                  color: document.documentElement.getAttribute('data-theme') === 'light' ? '#1a1a1a' : '#1b1b1b', 
+                  backgroundColor: document.documentElement.getAttribute('data-theme') === 'light' ? '#ffffff' : '#ffffff', 
+                  border: 'none' 
+                }}
+              >
+                Hide
+              </Button>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', pointerEvents: 'auto', position: 'relative', zIndex: 2 }}>
+              {notifications.map((notif: any) => (
+                <button
+                  key={notif.id}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('[SuratJalan] Notification clicked:', notif.id);
+                    handleCreateFromNotification(notif);
+                  }}
+                  style={{
+                    flex: '0 1 280px',
+                    minWidth: '240px',
+                    maxWidth: '320px',
+                    padding: '12px',
+                    backgroundColor: document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.08)',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                    cursor: 'pointer',
+                    border: `1px solid ${document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(33, 150, 243, 0.3)' : 'rgba(33, 150, 243, 0.35)'}`,
+                    transition: 'all 0.2s ease',
+                    pointerEvents: 'auto',
+                    position: 'relative',
+                    zIndex: 10,
+                    userSelect: 'none',
+                    textAlign: 'left',
+                    width: '100%',
+                    color: 'var(--text-primary)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.15)';
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.3)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.08)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+                  }}
+                >
+                  <div style={{ fontWeight: 600, marginBottom: '6px', color: '#2196F3', fontSize: '14px' }}>
+                    💰 PC {notif.pettyCashRequestNo}
+                  </div>
+                  <div style={{ marginBottom: '4px' }}>DO: <strong>{notif.doNo}</strong></div>
+                  <div style={{ marginBottom: '4px' }}>Driver: <strong>{notif.driverName}</strong></div>
+                  <div style={{ marginBottom: '4px' }}>Amount: <strong>Rp {(notif.amount || 0).toLocaleString('id-ID')}</strong></div>
+                  <div style={{ marginBottom: '4px', fontSize: '11px', opacity: 0.9 }}>
+                    Scheduled: {notif.scheduledDate} {notif.scheduledTime || ''}
+                  </div>
+                  {notif.vehicleNo && <div style={{ fontSize: '11px' }}>Vehicle: {notif.vehicleNo}</div>}
+                  <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.2)' }}>
+                    Click to create SJ →
+                  </div>
+                </button>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* Notification Dialog */}
+        {notificationDialog.show && notificationDialog.notif && (
+          <div className="dialog-overlay" onClick={() => setNotificationDialog({ show: false, notif: null })}>
+            <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%' }}>
+              <Card className="dialog-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                  <h2>📄 Create Surat Jalan</h2>
+                  <Button variant="secondary" onClick={() => setNotificationDialog({ show: false, notif: null })} style={{ padding: '6px 12px' }}>✕</Button>
+                </div>
+                
+                <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px' }}>
+                  <div style={{ marginBottom: '8px' }}><strong>Petty Cash Request:</strong> {notificationDialog.notif.pettyCashRequestNo}</div>
+                  <div style={{ marginBottom: '8px' }}><strong>Amount:</strong> Rp {(notificationDialog.notif.amount || 0).toLocaleString('id-ID')}</div>
+                  <div style={{ marginBottom: '8px' }}><strong>Driver:</strong> {notificationDialog.notif.driverName} ({notificationDialog.notif.driverCode})</div>
+                  <div style={{ marginBottom: '8px' }}><strong>DO No:</strong> {notificationDialog.notif.doNo || '-'}</div>
+                  <div><strong>Distributed Date:</strong> {notificationDialog.notif.distributedDate || '-'}</div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                  <Button variant="secondary" onClick={() => setNotificationDialog({ show: false, notif: null })}>
+                    Cancel
+                  </Button>
+                  <Button variant="primary" onClick={() => handleLoadFormFromNotification(notificationDialog.notif)}>
+                    Create Surat Jalan
+                  </Button>
+                </div>
+              </Card>
+            </div>
+          </div>
+        )}
+
+        {/* Form Dialog */}
+        {showFormDialog && (
+          <div className="dialog-overlay" onClick={() => {
+            setShowFormDialog(false);
+            setEditingItem(null);
+            setNotificationDialog({ show: false, notif: null });
+            setFormData({ 
+              sjNo: '', 
+              doNo: '', 
+              customerName: '', 
+              customerAddress: '', 
+              driverId: '',
+              vehicleId: '',
+              routeId: '',
+              items: [], 
+              scheduledDate: new Date().toISOString().split('T')[0], 
+              scheduledTime: '08:00', 
+              status: 'Open', 
+              notes: '' 
+            });
+            setNewItem({ product: '', qty: 0, unit: 'UNIT', description: '' });
+          }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px', width: '95%', maxHeight: '90vh', overflowY: 'auto' }}>
+              <Card className="dialog-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                  <h2>{editingItem ? '✏️ Edit Surat Jalan' : '📄 Create Surat Jalan'}</h2>
+                  <Button variant="secondary" onClick={() => {
+                    setShowFormDialog(false);
+                    setEditingItem(null);
+                    setNotificationDialog({ show: false, notif: null });
+                    setFormData({ 
+                      sjNo: '', 
+                      doNo: '', 
+                      customerName: '', 
+                      customerAddress: '', 
+                      driverId: '',
+                      vehicleId: '',
+                      routeId: '',
+                      items: [], 
+                      scheduledDate: new Date().toISOString().split('T')[0], 
+                      scheduledTime: '08:00', 
+                      status: 'Open', 
+                      notes: '' 
+                    });
+                    setNewItem({ product: '', qty: 0, unit: 'UNIT', description: '' });
+                  }} style={{ padding: '6px 12px' }}>✕</Button>
+                </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <Input
+                label="SJ No"
+                value={formData.sjNo || ''}
+                onChange={(v) => setFormData({ ...formData, sjNo: v })}
+                placeholder="Auto-generated if empty"
+              />
+              <Input
+                label="DO No"
+                value={formData.doNo || ''}
+                onChange={(v) => setFormData({ ...formData, doNo: v })}
+                disabled={false}
+                placeholder="Enter DO No"
+              />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <Input
+                label="Customer Name"
+                value={formData.customerName || ''}
+                onChange={(v) => setFormData({ ...formData, customerName: v })}
+                disabled={false}
+                placeholder="Enter Customer Name"
+              />
+              <Input
+                label="Scheduled Date"
+                type="date"
+                value={formData.scheduledDate || ''}
+                onChange={(v) => setFormData({ ...formData, scheduledDate: v })}
+              />
+            </div>
+            <Input
+              label="Customer Address"
+              value={formData.customerAddress || ''}
+              onChange={(v) => setFormData({ ...formData, customerAddress: v })}
+              disabled={false}
+              placeholder="Enter Customer Address"
+            />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  Driver *
+                </label>
+                <select
+                  value={formData.driverId || ''}
+                  onChange={(e) => {
+                    const driver = drivers.find(d => d.id === e.target.value);
+                    setFormData({ 
+                      ...formData, 
+                      driverId: e.target.value,
+                      driverName: driver?.name || '',
+                      driverCode: driver?.driverCode || '',
+                    });
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
+                  disabled={false}
+                >
+                  <option value="">-- Pilih Driver --</option>
+                  {drivers.filter(d => d.status === 'Active').map(d => (
+                    <option key={d.id} value={d.id}>
+                      {d.driverCode} - {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  Vehicle
+                </label>
+                <select
+                  value={formData.vehicleId || ''}
+                  onChange={(e) => {
+                    const vehicle = vehicles.find(v => v.id === e.target.value);
+                    setFormData({ 
+                      ...formData, 
+                      vehicleId: e.target.value,
+                      vehicleNo: vehicle?.vehicleNo || '',
+                    });
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
+                  disabled={false}
+                >
+                  <option value="">-- Pilih Vehicle --</option>
+                  {vehicles.filter(v => v.status === 'Active').map(v => (
+                    <option key={v.id} value={v.id}>
+                      {v.vehicleNo} - {v.licensePlate}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Input
+                label="Scheduled Time"
+                type="time"
+                value={formData.scheduledTime || ''}
+                onChange={(v) => setFormData({ ...formData, scheduledTime: v })}
+              />
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                Route
+              </label>
+              <select
+                value={formData.routeId || ''}
+                onChange={(e) => {
+                  const route = routes.find(r => r.id === e.target.value);
+                  setFormData({ 
+                    ...formData, 
+                    routeId: e.target.value,
+                    routeName: route?.routeName || '',
+                  });
+                }}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '14px',
+                  }}
+                  disabled={false}
+                >
+                  <option value="">-- Pilih Route --</option>
+                {routes.filter(r => r.status === 'Active').map(r => (
+                  <option key={r.id} value={r.id}>
+                    {r.routeName} ({r.origin} - {r.destination})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ marginTop: '24px', marginBottom: '16px' }}>
+              <h3 style={{ marginBottom: '12px', color: 'var(--text-primary)' }}>Items</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: '8px', marginBottom: '8px', alignItems: 'end' }}>
+                <div>
+                  <Input
+                    value={newItem.product}
+                    onChange={(v) => setNewItem({ ...newItem, product: v })}
+                    placeholder="Product/Description"
+                  />
+                </div>
+                <div>
+                  <Input
+                    type="number"
+                    value={String(newItem.qty || 0)}
+                    onChange={(v) => setNewItem({ ...newItem, qty: Number(v) || 0 })}
+                    placeholder="Qty"
+                  />
+                </div>
+                <div>
+                  <select
+                    value={newItem.unit}
+                    onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid var(--border)',
+                      borderRadius: '4px',
+                      backgroundColor: 'var(--bg-primary)',
+                      color: 'var(--text-primary)',
+                      fontSize: '14px',
+                    }}
+                  >
+                    <option value="UNIT">UNIT</option>
+                    <option value="PCS">PCS</option>
+                    <option value="KG">KG</option>
+                    <option value="TON">TON</option>
+                    <option value="M3">M3</option>
+                    <option value="BOX">BOX</option>
+                  </select>
+                </div>
+                <div>
+                  <Input
+                    value={newItem.description || ''}
+                    onChange={(v) => setNewItem({ ...newItem, description: v })}
+                    placeholder="Notes"
+                  />
+                </div>
+                <div>
+                  <Button onClick={handleAddItem} style={{ whiteSpace: 'nowrap' }}>Add</Button>
+                </div>
+              </div>
+              {formData.items && formData.items.length > 0 && (
+                <div style={{ border: '1px solid var(--border)', borderRadius: '4px', padding: '12px', marginTop: '12px' }}>
+                  <div style={{ marginBottom: '8px', fontWeight: '600', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    Items ({formData.items.length})
+                  </div>
+                  {formData.items.map((item, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', borderBottom: idx < formData.items!.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                      <span style={{ fontSize: '13px' }}>{item.product || 'N/A'} - {item.qty || 0} {item.unit || 'UNIT'} {item.description ? `(${item.description})` : ''}</span>
+                      <Button variant="danger" onClick={() => handleRemoveItem(idx)} style={{ padding: '4px 8px', fontSize: '12px' }}>Remove</Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {(!formData.items || formData.items.length === 0) && (
+                <div style={{ padding: '12px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px', border: '1px dashed var(--border)', borderRadius: '4px' }}>
+                  No items added yet. Fill in the fields above and click "Add" to add items.
+                </div>
+              )}
+            </div>
+
+            <Input
+              label="Notes"
+              value={formData.notes || ''}
+              onChange={(v) => setFormData({ ...formData, notes: v })}
+            />
+            <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
+              <Button onClick={() => { 
+                setShowFormDialog(false); 
+                setEditingItem(null); 
+                setNotificationDialog({ show: false, notif: null });
+                setFormData({ 
+                  sjNo: '', 
+                  doNo: '', 
+                  customerName: '', 
+                  customerAddress: '', 
+                  driverId: '',
+                  vehicleId: '',
+                  routeId: '',
+                  items: [], 
+                  scheduledDate: new Date().toISOString().split('T')[0], 
+                  scheduledTime: '08:00', 
+                  status: 'Open', 
+                  notes: '' 
+                });
+                setNewItem({ product: '', qty: 0, unit: 'UNIT', description: '' });
+              }} variant="secondary">
+                Cancel
+              </Button>
+              <Button onClick={handleSave} variant="primary">
+                {editingItem ? 'Update Surat Jalan' : 'Save Surat Jalan'}
+              </Button>
+            </div>
+              </Card>
+            </div>
+          </div>
+        )}
+
+        {/* View Toggle & Search */}
+        <Card>
+          <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by SJ No, DO No, Customer, Driver, Vehicle, Status..."
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                background: 'var(--bg-tertiary)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '6px',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+                fontFamily: 'inherit',
+              }}
+            />
+            <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-secondary)', padding: '4px', borderRadius: '6px' }}>
+              <button
+                onClick={() => setViewMode('card')}
+                style={{
+                  padding: '6px 12px',
+                  border: 'none',
+                  borderRadius: '4px',
+                  background: viewMode === 'card' ? 'var(--accent-color)' : 'transparent',
+                  color: viewMode === 'card' ? 'white' : 'var(--text-primary)',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: viewMode === 'card' ? '600' : '400',
+                }}
+              >
+                🎴 Card
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                style={{
+                  padding: '6px 12px',
+                  border: 'none',
+                  borderRadius: '4px',
+                  background: viewMode === 'table' ? 'var(--accent-color)' : 'transparent',
+                  color: viewMode === 'table' ? 'white' : 'var(--text-primary)',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: viewMode === 'table' ? '600' : '400',
+                }}
+              >
+                📊 Table
+              </button>
+            </div>
+          </div>
+
+          {/* Card View */}
+          {viewMode === 'card' && (
+            <>
+              {filteredSuratJalan.length > 0 ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '16px' }}>
+                  {filteredSuratJalan.map((item) => (
+                    <Card key={item.id} style={{ padding: '16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                        <div>
+                          <div style={{ fontSize: '18px', fontWeight: 600, marginBottom: '4px' }}>{item.sjNo}</div>
+                          <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{item.customerName}</div>
+                        </div>
+                        <span className={`status-badge status-${item.status?.toLowerCase().replace('_', '-')}`}>
+                          {item.status}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div>📋 DO No: {item.doNo || '-'}</div>
+                        <div>👤 Driver: {item.driverName || '-'}</div>
+                        <div>🚛 Vehicle: {item.vehicleNo || '-'}</div>
+                        <div>🚚 Route: {item.routeName || '-'}</div>
+                        <div>📅 Scheduled: {item.scheduledDate || '-'} {item.scheduledTime || ''}</div>
+                        {item.signedDocument && (
+                          <div style={{ color: '#4CAF50', fontWeight: 600 }}>✓ Signed Document Uploaded</div>
+                        )}
+                      </div>
+                      {item.items && item.items.length > 0 && (
+                        <div style={{ fontSize: '12px', background: 'var(--bg-secondary)', padding: '8px', borderRadius: '6px', marginBottom: '12px' }}>
+                          <div style={{ fontWeight: 600, marginBottom: '4px' }}>Items ({item.items.length})</div>
+                          {item.items.slice(0, 3).map((itm, idx) => (
+                            <div key={idx}>• {itm.product} ({itm.qty} {itm.unit || 'UNIT'})</div>
+                          ))}
+                          {item.items.length > 3 && <div style={{ opacity: 0.7 }}>... and {item.items.length - 3} more</div>}
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        {item.status === 'Close' && (
+                          <Button variant="secondary" onClick={() => handleStatusChange(item, 'Open')} style={{ fontSize: '11px', padding: '4px 8px' }}>
+                            Reopen
+                          </Button>
+                        )}
+                        <Button variant="secondary" onClick={() => handleEdit(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>Edit</Button>
+                        <Button variant="primary" onClick={() => handleViewPDF(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>View PDF</Button>
+                        {!item.signedDocument ? (
+                          <Button variant="success" onClick={() => handleUploadSignedDocument(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>
+                            📤 Upload Signed SJ
+                          </Button>
+                        ) : (
+                          <Button variant="secondary" onClick={() => handleViewSignedDocument(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>
+                            👁️ View Signed SJ
+                          </Button>
+                        )}
+                        {item.status === 'Open' && (
+                          <Button variant="danger" onClick={() => handleDelete(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>Delete</Button>
+                        )}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                  {searchQuery ? "No surat jalan found matching your search" : "No surat jalan data"}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Table View */}
+          {viewMode === 'table' && (
+            <Table columns={columns} data={filteredSuratJalan} emptyMessage={searchQuery ? "No surat jalan found matching your search" : "No surat jalan data"} />
+          )}
+        </Card>
+
+        {/* Custom Dialog */}
+        {dialogState.show && (
+          <div className="dialog-overlay" onClick={closeDialog}>
+            <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
+              <Card className="dialog-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h2>{dialogState.title}</h2>
+                  <Button variant="secondary" onClick={closeDialog} style={{ padding: '6px 12px' }}>✕</Button>
+                </div>
+                <p style={{ marginBottom: '20px', whiteSpace: 'pre-wrap' }}>{dialogState.message}</p>
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                  {dialogState.type === 'confirm' && (
+                    <Button variant="secondary" onClick={closeDialog}>Cancel</Button>
+                  )}
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      if (dialogState.onConfirm) dialogState.onConfirm();
+                      closeDialog();
+                    }}
+                  >
+                    {dialogState.type === 'confirm' ? 'Confirm' : 'OK'}
+                  </Button>
+                </div>
+              </Card>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* Receipt Date Dialog */}
+      {showReceiptDateDialog && (
+        <div className="dialog-overlay" onClick={() => { setShowReceiptDateDialog(false); setPendingUploadItem(null); }} style={{ zIndex: 10000 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
+            <Card className="dialog-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h2>Input Tanggal Receipt SJ</h2>
+                <Button variant="secondary" onClick={() => { setShowReceiptDateDialog(false); setPendingUploadItem(null); }} style={{ padding: '6px 12px' }}>✕</Button>
+              </div>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
+                  Tanggal Receipt SJ *
+                </label>
+                <input
+                  type="date"
+                  value={receiptDate}
+                  onChange={(e) => setReceiptDate(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <Button variant="secondary" onClick={() => { setShowReceiptDateDialog(false); setPendingUploadItem(null); }} style={{ padding: '8px 16px' }}>
+                  Cancel
+                </Button>
+                <Button variant="primary" onClick={handleConfirmReceiptDate} style={{ padding: '8px 16px' }}>
+                  Confirm
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* PDF Preview Dialog */}
+      {viewPdfData && (
+        <div className="dialog-overlay" onClick={() => setViewPdfData(null)} style={{ zIndex: 10000 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90%', width: '90%', maxHeight: '90vh', overflow: 'auto' }}>
+            <Card className="dialog-card" style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h2>Surat Jalan Preview - {viewPdfData.sjNo}</h2>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <Button variant="primary" onClick={handleSaveToPDF} style={{ padding: '6px 12px' }}>
+                    💾 Save to PDF
+                  </Button>
+                  <Button variant="secondary" onClick={() => setViewPdfData(null)} style={{ padding: '6px 12px' }}>✕</Button>
+                </div>
+              </div>
+              <div style={{ flex: 1, overflow: 'auto', border: '1px solid var(--border)', borderRadius: '4px' }}>
+                <iframe
+                  srcDoc={viewPdfData.html}
+                  style={{
+                    width: '100%',
+                    height: '80vh',
+                    border: 'none',
+                    minHeight: '600px'
+                  }}
+                  title="Surat Jalan Preview"
+                />
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default SuratJalan;
+

@@ -1,0 +1,10 @@
+/* Custom styles untuk Purchasing GT table */
+.purchasing-table .table td[colspan] {
+  text-align: left !important;
+}
+
+.purchasing-table .table td[colspan] > div {
+  justify-content: flex-start !important;
+  text-align: left !important;
+}
+

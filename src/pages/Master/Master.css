@@ -1,0 +1,150 @@
+/* Compact styles untuk Master dan semua module */
+.master-compact .table,
+.module-compact .table {
+  font-size: 11px !important;
+}
+
+.master-compact .table th,
+.module-compact .table th {
+  padding: 6px 8px !important;
+  font-size: 10px !important;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.master-compact .table td,
+.module-compact .table td {
+  padding: 6px 8px !important;
+  font-size: 11px !important;
+}
+
+.master-compact .card,
+.module-compact .card {
+  padding: 0;
+}
+
+.master-compact .card-content,
+.module-compact .card-content {
+  padding: 12px !important;
+}
+
+.master-compact .card-header,
+.module-compact .card-header {
+  padding: 10px 12px !important;
+}
+
+.master-compact .card-title,
+.module-compact .card-title {
+  font-size: 14px !important;
+}
+
+.master-compact .page-header,
+.module-compact .page-header {
+  padding: 12px 16px !important;
+}
+
+.master-compact .page-header h1,
+.module-compact .page-header h1 {
+  font-size: 20px !important;
+  margin: 0;
+}
+
+.master-compact button,
+.master-compact .button,
+.master-compact .btn,
+.module-compact button,
+.module-compact .button,
+.module-compact .btn {
+  font-size: 12px !important;
+  padding: 6px 12px !important;
+  min-height: 32px;
+  border: 0.5px solid var(--text-primary) !important;
+  border-radius: 4px !important;
+  transition: transform 0.2s ease !important;
+  opacity: 0.7;
+}
+
+.master-compact button:hover,
+.master-compact .button:hover,
+.master-compact .btn:hover:not(:disabled),
+.module-compact button:hover,
+.module-compact .button:hover,
+.module-compact .btn:hover:not(:disabled) {
+  transform: scale(1.02) !important;
+  border-color: var(--text-primary) !important;
+  border-width: 0.5px !important;
+  opacity: 1;
+}
+
+.master-compact .table-empty,
+.module-compact .table-empty {
+  padding: 20px !important;
+  font-size: 11px !important;
+}
+
+.master-compact .table-container,
+.module-compact .table-container {
+  max-height: calc(100vh - 250px);
+}
+
+.master-compact input,
+.master-compact select,
+.module-compact input,
+.module-compact select {
+  font-size: 12px !important;
+  padding: 6px 10px !important;
+}
+
+.master-compact label,
+.module-compact label {
+  font-size: 12px !important;
+  margin-bottom: 4px !important;
+}
+
+.master-compact .tab-container,
+.module-compact .tab-container {
+  padding: 8px 12px !important;
+}
+
+.master-compact .tab-button,
+.module-compact .tab-button {
+  font-size: 12px !important;
+  padding: 6px 12px !important;
+  border: 0.5px solid var(--text-primary) !important;
+  border-radius: 4px !important;
+  transition: transform 0.2s ease !important;
+  opacity: 0.7;
+}
+
+.master-compact .tab-button:hover,
+.module-compact .tab-button:hover {
+  transform: scale(1.02) !important;
+  border-color: var(--text-primary) !important;
+  border-width: 0.5px !important;
+  opacity: 1;
+}
+
+.master-compact .tab-button.active,
+.module-compact .tab-button.active {
+  border-color: var(--text-primary) !important;
+  border-width: 0.5px !important;
+  opacity: 1;
+}
+
+.master-compact .input-wrapper,
+.module-compact .input-wrapper {
+  margin-bottom: 12px !important;
+}
+
+.master-compact .input-wrapper label,
+.module-compact .input-wrapper label {
+  font-size: 12px !important;
+  margin-bottom: 4px !important;
+}
+
+.master-compact .input-wrapper input,
+.module-compact .input-wrapper input {
+  font-size: 12px !important;
+  padding: 6px 10px !important;
+}
+

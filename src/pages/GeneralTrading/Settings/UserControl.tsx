@@ -1,0 +1,1171 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Card from '../../../components/Card';
+import Button from '../../../components/Button';
+import Input from '../../../components/Input';
+import Table from '../../../components/Table';
+import { storageService, BusinessType } from '../../../services/storage';
+import '../../../styles/common.css';
+import '../../../styles/compact.css';
+
+type BusinessId = BusinessType;
+
+interface MenuItemConfig {
+  id: string;
+  label: string;
+  path: string;
+}
+
+interface MenuSectionConfig {
+  id: string;
+  title: string;
+  items: MenuItemConfig[];
+}
+
+interface BusinessMenuConfig {
+  id: BusinessId;
+  label: string;
+  description: string;
+  icon: string;
+  accent: string;
+  sections: MenuSectionConfig[];
+}
+
+const BUSINESS_MENU_CONFIG: BusinessMenuConfig[] = [
+  {
+    id: 'packaging',
+    label: 'Packaging',
+    description: 'Manufacturing & packaging ERP module',
+    icon: '📦',
+    accent: '#ff9800',
+    sections: [
+      {
+        id: 'packaging-master',
+        title: 'Master Data',
+        items: [
+          { id: '/packaging/master/products', label: 'Products', path: '/packaging/master/products' },
+          { id: '/packaging/master/customers', label: 'Customers', path: '/packaging/master/customers' },
+          { id: '/packaging/master/suppliers', label: 'Suppliers', path: '/packaging/master/suppliers' },
+          { id: '/packaging/master/inventory', label: 'Inventory', path: '/packaging/master/inventory' },
+        ],
+      },
+      {
+        id: 'packaging-ops',
+        title: 'Operations',
+        items: [
+          { id: '/packaging/workflow', label: 'Workflow', path: '/packaging/workflow' },
+          { id: '/packaging/sales-orders', label: 'Sales Orders', path: '/packaging/sales-orders' },
+          { id: '/packaging/ppic', label: 'PPIC', path: '/packaging/ppic' },
+          { id: '/packaging/purchasing', label: 'Purchasing', path: '/packaging/purchasing' },
+          { id: '/packaging/production', label: 'Production', path: '/packaging/production' },
+          { id: '/packaging/qa-qc', label: 'QA/QC', path: '/packaging/qa-qc' },
+          { id: '/packaging/delivery-note', label: 'WH & Delivery', path: '/packaging/delivery-note' },
+          { id: '/packaging/return', label: 'Return', path: '/packaging/return' },
+        ],
+      },
+      {
+        id: 'packaging-finance',
+        title: 'Finance & Accounting',
+        items: [
+          { id: '/packaging/finance/ledger', label: 'General Ledger', path: '/packaging/finance/ledger' },
+          { id: '/packaging/finance/reports', label: 'Financial Reports', path: '/packaging/finance/reports' },
+          { id: '/packaging/finance/invoices', label: 'Invoices', path: '/packaging/finance/invoices' },
+          { id: '/packaging/finance/accounting', label: 'Accounting', path: '/packaging/finance/accounting' },
+          { id: '/packaging/finance/ar', label: 'Accounts Receivable', path: '/packaging/finance/ar' },
+          { id: '/packaging/finance/ap', label: 'Accounts Payable', path: '/packaging/finance/ap' },
+          { id: '/packaging/finance/payments', label: 'Payments', path: '/packaging/finance/payments' },
+          { id: '/packaging/finance/tax-management', label: 'Tax Management', path: '/packaging/finance/tax-management' },
+          { id: '/packaging/finance/cost-analysis', label: 'Cost Analysis', path: '/packaging/finance/cost-analysis' },
+          { id: '/packaging/finance/all-business-reports', label: 'All Business Reports', path: '/packaging/finance/all-business-reports' },
+          { id: '/packaging/finance/coa', label: 'Chart of Accounts', path: '/packaging/finance/coa' },
+        ],
+      },
+      {
+        id: 'packaging-hr',
+        title: 'HR & People',
+        items: [
+          { id: '/packaging/hr', label: 'HRD', path: '/packaging/hr' },
+        ],
+      },
+      {
+        id: 'packaging-settings',
+        title: 'Settings & Tools',
+        items: [
+          { id: '/packaging/settings', label: 'Company Settings', path: '/packaging/settings' },
+          { id: '/packaging/settings/report', label: 'Report Center', path: '/packaging/settings/report' },
+          { id: '/packaging/settings/db-activity', label: 'DB Activity', path: '/packaging/settings/db-activity' },
+          { id: '/packaging/settings/test-automation', label: 'Test Automation', path: '/packaging/settings/test-automation' },
+          { id: '/packaging/settings/user-control', label: 'User Control', path: '/packaging/settings/user-control' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'general-trading',
+    label: 'General Trading',
+    description: 'Trading & distribution business unit',
+    icon: '🏢',
+    accent: '#2563eb',
+    sections: [
+      {
+        id: 'gt-dashboard',
+        title: 'Overview',
+        items: [
+          { id: '/general-trading/dashboard', label: 'Dashboard', path: '/general-trading/dashboard' },
+        ],
+      },
+      {
+        id: 'gt-master',
+        title: 'Master Data',
+        items: [
+          { id: '/general-trading/master/products', label: 'Products', path: '/general-trading/master/products' },
+          { id: '/general-trading/master/customers', label: 'Customers', path: '/general-trading/master/customers' },
+          { id: '/general-trading/master/suppliers', label: 'Suppliers', path: '/general-trading/master/suppliers' },
+          { id: '/general-trading/master/inventory', label: 'Inventory', path: '/general-trading/master/inventory' },
+        ],
+      },
+      {
+        id: 'gt-orders',
+        title: 'Orders & Sales',
+        items: [
+          { id: '/general-trading/orders/sales', label: 'Sales Orders', path: '/general-trading/orders/sales' },
+          { id: '/general-trading/orders/purchase', label: 'Purchase Orders', path: '/general-trading/orders/purchase' },
+          { id: '/general-trading/sales/quotations', label: 'Quotations', path: '/general-trading/sales/quotations' },
+          { id: '/general-trading/sales/invoices', label: 'Invoices', path: '/general-trading/sales/invoices' },
+        ],
+      },
+      {
+        id: 'gt-production',
+        title: 'Production & QA',
+        items: [
+          { id: '/general-trading/ppic', label: 'PPIC', path: '/general-trading/ppic' },
+          { id: '/general-trading/production', label: 'Production', path: '/general-trading/production' },
+          { id: '/general-trading/qa-qc', label: 'QA/QC', path: '/general-trading/qa-qc' },
+        ],
+      },
+      {
+        id: 'gt-purchasing',
+        title: 'Purchasing & Warehouse',
+        items: [
+          { id: '/general-trading/purchasing/pr', label: 'Purchase Requisition', path: '/general-trading/purchasing/pr' },
+          { id: '/general-trading/purchasing/po', label: 'PO Management', path: '/general-trading/purchasing/po' },
+          { id: '/general-trading/purchasing', label: 'Purchasing', path: '/general-trading/purchasing' },
+          { id: '/general-trading/warehouse/stock', label: 'Stock Management', path: '/general-trading/warehouse/stock' },
+          { id: '/general-trading/warehouse/receiving', label: 'Receiving', path: '/general-trading/warehouse/receiving' },
+          { id: '/general-trading/warehouse/shipping', label: 'Shipping', path: '/general-trading/warehouse/shipping' },
+          { id: '/general-trading/delivery-note', label: 'WH & Delivery', path: '/general-trading/delivery-note' },
+          { id: '/general-trading/return', label: 'Return', path: '/general-trading/return' },
+          { id: '/general-trading/workflow', label: 'Workflow', path: '/general-trading/workflow' },
+        ],
+      },
+      {
+        id: 'gt-finance',
+        title: 'Finance & Accounting',
+        items: [
+          { id: '/general-trading/finance/ledger', label: 'General Ledger', path: '/general-trading/finance/ledger' },
+          { id: '/general-trading/finance/reports', label: 'Financial Reports', path: '/general-trading/finance/reports' },
+          { id: '/general-trading/finance/accounting', label: 'Accounting', path: '/general-trading/finance/accounting' },
+          { id: '/general-trading/finance/ar', label: 'Accounts Receivable', path: '/general-trading/finance/ar' },
+          { id: '/general-trading/finance/ap', label: 'Accounts Payable', path: '/general-trading/finance/ap' },
+          { id: '/general-trading/finance/payments', label: 'Payments', path: '/general-trading/finance/payments' },
+          { id: '/general-trading/finance/invoices', label: 'Invoices', path: '/general-trading/finance/invoices' },
+          { id: '/general-trading/finance/tax-management', label: 'Tax Management', path: '/general-trading/finance/tax-management' },
+          { id: '/general-trading/finance/cost-analysis', label: 'Cost Analysis', path: '/general-trading/finance/cost-analysis' },
+          { id: '/general-trading/finance/coa', label: 'Chart of Accounts', path: '/general-trading/finance/coa' },
+        ],
+      },
+      {
+        id: 'gt-settings',
+        title: 'Settings',
+        items: [
+          { id: '/general-trading/settings', label: 'Settings', path: '/general-trading/settings' },
+          { id: '/general-trading/settings/report', label: 'Report Center', path: '/general-trading/settings/report' },
+          { id: '/general-trading/settings/db-activity', label: 'DB Activity', path: '/general-trading/settings/db-activity' },
+          { id: '/general-trading/settings/user-control', label: 'User Control', path: '/general-trading/settings/user-control' },
+          { id: '/general-trading/settings/flow-test', label: 'Flow Test', path: '/general-trading/settings/flow-test' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'trucking',
+    label: 'Trucking',
+    description: 'Fleet, delivery & expedition unit',
+    icon: '🚚',
+    accent: '#10b981',
+    sections: [
+      {
+        id: 'trucking-dashboard',
+        title: 'Overview',
+        items: [
+          { id: '/trucking/dashboard', label: 'Dashboard', path: '/trucking/dashboard' },
+        ],
+      },
+      {
+        id: 'trucking-master',
+        title: 'Master Data',
+        items: [
+          { id: '/trucking/master/vehicles', label: 'Vehicles', path: '/trucking/master/vehicles' },
+          { id: '/trucking/master/drivers', label: 'Drivers', path: '/trucking/master/drivers' },
+          { id: '/trucking/master/routes', label: 'Routes', path: '/trucking/master/routes' },
+          { id: '/trucking/master/customers', label: 'Customers', path: '/trucking/master/customers' },
+        ],
+      },
+      {
+        id: 'trucking-shipments',
+        title: 'Shipments & Tracking',
+        items: [
+          { id: '/trucking/shipments/delivery-orders', label: 'Delivery Orders', path: '/trucking/shipments/delivery-orders' },
+          { id: '/trucking/shipments/tracking', label: 'Shipment Tracking', path: '/trucking/shipments/tracking' },
+          { id: '/trucking/tracking/realtime', label: 'Real-time Location', path: '/trucking/tracking/realtime' },
+          { id: '/trucking/tracking/status', label: 'Status Updates', path: '/trucking/tracking/status' },
+        ],
+      },
+      {
+        id: 'tracking-schedules',
+        title: 'Schedules',
+        items: [
+          { id: '/tracking/schedules/route-planning', label: 'Route Planning', path: '/tracking/schedules/route-planning' },
+          { id: '/tracking/schedules/delivery', label: 'Delivery Schedules', path: '/tracking/schedules/delivery' },
+        ],
+      },
+      {
+        id: 'tracking-finance',
+        title: 'Finance',
+        items: [
+          { id: '/tracking/finance/billing', label: 'Billing', path: '/tracking/finance/billing' },
+          { id: '/tracking/finance/payments', label: 'Payments', path: '/tracking/finance/payments' },
+          { id: '/tracking/finance/pettycash', label: 'Petty Cash', path: '/tracking/finance/pettycash' },
+        ],
+      },
+      {
+        id: 'tracking-settings',
+        title: 'Settings',
+        items: [
+          { id: '/tracking/settings', label: 'Settings', path: '/tracking/settings' },
+        ],
+      },
+    ],
+  },
+];
+
+const BUSINESS_MENU_MAP = BUSINESS_MENU_CONFIG.reduce<Record<BusinessId, BusinessMenuConfig>>((acc, config) => {
+  acc[config.id] = config;
+  return acc;
+}, {} as Record<BusinessId, BusinessMenuConfig>);
+
+const MENU_LOOKUP = BUSINESS_MENU_CONFIG.reduce<Record<string, { label: string; businessId: BusinessId; section: string }>>((lookup, business) => {
+  business.sections.forEach((section) => {
+    section.items.forEach((item) => {
+      lookup[item.id] = {
+        label: item.label,
+        businessId: business.id,
+        section: section.title,
+      };
+    });
+  });
+  return lookup;
+}, {});
+
+const getAllMenuIds = (businessId: BusinessId) =>
+  BUSINESS_MENU_MAP[businessId]?.sections.flatMap((section) => section.items.map((item) => item.id)) || [];
+
+interface UserAccess {
+  id: string;
+  fullName: string;
+  username: string;
+  email?: string;
+  phone?: string;
+  role?: string;
+  accessCode?: string;
+  isActive: boolean;
+  businessUnits: BusinessId[];
+  defaultBusiness?: BusinessId;
+  menuAccess: Record<BusinessId, string[]>;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface UserFormState {
+  id?: string;
+  fullName: string;
+  username: string;
+  email: string;
+  phone: string;
+  role: string;
+  accessCode: string;
+  isActive: boolean;
+  businessUnits: BusinessId[];
+  defaultBusiness: BusinessId | '';
+  menuAccess: Record<BusinessId, string[]>;
+  notes: string;
+}
+
+const createEmptyForm = (): UserFormState => ({
+  fullName: '',
+  username: '',
+  email: '',
+  phone: '',
+  role: '',
+  accessCode: '',
+  isActive: true,
+  businessUnits: [],
+  defaultBusiness: '',
+  menuAccess: {
+    packaging: [],
+    'general-trading': [],
+    trucking: [],
+  },
+  notes: '',
+});
+
+const formatDateTime = (value?: string) => {
+  if (!value) return '-';
+  try {
+    return new Date(value).toLocaleString('id-ID', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+  } catch {
+    return value;
+  }
+};
+
+const getMenuCount = (menuAccess: Record<BusinessId, string[]>) =>
+  Object.values(menuAccess || {}).reduce((sum, items) => sum + (items?.length || 0), 0);
+
+const UserControl = () => {
+  const [users, setUsers] = useState<UserAccess[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  // Custom Dialog state
+  const [dialogState, setDialogState] = useState<{
+    show: boolean;
+    type: 'alert' | 'confirm' | null;
+    title: string;
+    message: string;
+    onConfirm?: () => void;
+    onCancel?: () => void;
+  }>({
+    show: false,
+    type: null,
+    title: '',
+    message: '',
+  });
+
+  // Helper functions untuk dialog
+  const showAlert = (message: string, title: string = 'Information') => {
+    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
+      (window as any).setDialogOpen(true);
+    }
+    setDialogState({
+      show: true,
+      type: 'alert',
+      title,
+      message,
+    });
+  };
+
+  const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
+    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
+      (window as any).setDialogOpen(true);
+    }
+    setDialogState({
+      show: true,
+      type: 'confirm',
+      title,
+      message,
+      onConfirm,
+      onCancel,
+    });
+  };
+
+  const closeDialog = () => {
+    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
+      (window as any).setDialogOpen(false);
+    }
+    setDialogState({
+      show: false,
+      type: null,
+      title: '',
+      message: '',
+    });
+  };
+
+  const [selectedUser, setSelectedUser] = useState<UserAccess | null>(null);
+  const [formState, setFormState] = useState<UserFormState>(createEmptyForm());
+  const [formVisible, setFormVisible] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const loadUsers = useCallback(async () => {
+    // FIXED: Use unified storage key 'userAccessControl' (without business prefix)
+    // User access control is global/shared across business units
+    const storageKey = 'userAccessControl';
+    
+    // Migration: Merge data from old business-specific keys if they exist
+    const oldGTKey = 'general-trading_userAccessControl';
+    const oldTruckingKey = 'trucking_userAccessControl';
+    const oldGTData = (await storageService.get<UserAccess[]>(oldGTKey)) || [];
+    const oldTruckingData = (await storageService.get<UserAccess[]>(oldTruckingKey)) || [];
+    const currentData = (await storageService.get<UserAccess[]>(storageKey)) || [];
+    
+    // Merge: Combine data from old keys and current key, deduplicate by ID
+    const mergedUsers = new Map<string, UserAccess>();
+    
+    // Add current data first (priority)
+    currentData.forEach(user => {
+      if (user && user.id && !user.deleted) {
+        mergedUsers.set(user.id, user);
+      }
+    });
+    
+    // Add old GT data if not already exists
+    oldGTData.forEach(user => {
+      if (user && user.id && !user.deleted && !mergedUsers.has(user.id)) {
+        mergedUsers.set(user.id, user);
+      }
+    });
+    
+    // Add old Trucking data if not already exists
+    oldTruckingData.forEach(user => {
+      if (user && user.id && !user.deleted && !mergedUsers.has(user.id)) {
+        mergedUsers.set(user.id, user);
+      }
+    });
+    
+    const stored = Array.from(mergedUsers.values());
+    
+    // If we merged data, save it back to unified key
+    const totalOldData = oldGTData.length + oldTruckingData.length;
+    if (totalOldData > 0 && stored.length > currentData.length) {
+      await storageService.set(storageKey, stored);
+      console.log(`[UserControl] Migrated ${totalOldData} users from old keys to ${storageKey}`);
+    }
+    
+    // Filter out deleted users for display
+    const activeUsers = stored.filter(u => !u.deleted && u.deleted !== true);
+    setUsers(activeUsers);
+    setSelectedUser((prev) => {
+      if (!prev) {
+        return activeUsers[0] || null;
+      }
+      return activeUsers.find((user) => user.id === prev.id) || activeUsers[0] || null;
+    });
+  }, []);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ key?: string }>).detail;
+      const storageKey = detail?.key?.split('/').pop();
+      // Listen for both GT and Trucking storage keys
+      if (storageKey === 'userAccessControl' || storageKey === 'general-trading_userAccessControl' || storageKey === 'trucking_userAccessControl' || storageKey === 'packaging_userAccessControl') {
+        loadUsers();
+      }
+    };
+
+    window.addEventListener('app-storage-changed', handler as EventListener);
+    return () => {
+      window.removeEventListener('app-storage-changed', handler as EventListener);
+    };
+  }, [loadUsers]);
+
+  const filteredUsers = useMemo(() => {
+    if (!searchQuery) return users;
+    const query = searchQuery.toLowerCase();
+    return users.filter((user) => {
+      return (
+        user.fullName.toLowerCase().includes(query) ||
+        (user.username || '').toLowerCase().includes(query) ||
+        (user.role || '').toLowerCase().includes(query) ||
+        user.businessUnits.some((unit) => BUSINESS_MENU_MAP[unit]?.label.toLowerCase().includes(query))
+      );
+    });
+  }, [users, searchQuery]);
+
+  useEffect(() => {
+    if (!selectedUser && filteredUsers.length > 0) {
+      setSelectedUser(filteredUsers[0]);
+    }
+  }, [filteredUsers, selectedUser]);
+
+  const handleSelectUser = (user: UserAccess) => {
+    setSelectedUser(user);
+  };
+
+  const handleStartCreate = () => {
+    setFormState(createEmptyForm());
+    setFormVisible(true);
+  };
+
+  const handleEditUser = (user: UserAccess) => {
+    setFormState({
+      id: user.id,
+      fullName: user.fullName,
+      username: user.username,
+      email: user.email || '',
+      phone: user.phone || '',
+      role: user.role || '',
+      accessCode: user.accessCode || '',
+      isActive: user.isActive,
+      businessUnits: user.businessUnits,
+      defaultBusiness: user.defaultBusiness || user.businessUnits[0] || '',
+      menuAccess: user.menuAccess || {},
+      notes: user.notes || '',
+    });
+    setFormVisible(true);
+  };
+
+  const handleDeleteUser = async (user: UserAccess) => {
+    showConfirm(
+      `Hapus akses untuk ${user.fullName}?`,
+      async () => {
+        // FIXED: Use unified storage key 'userAccessControl' (without business prefix)
+        const storageKey = 'userAccessControl';
+        
+        // Use safe deletion pattern to prevent resurrection
+        const allUsers = (await storageService.get<UserAccess[]>(storageKey)) || [];
+        const updated = allUsers.map(u => 
+          u.id === user.id 
+            ? { ...u, deleted: true, deletedAt: new Date().toISOString(), deletedTimestamp: Date.now() }
+            : u
+        );
+        
+        await storageService.set(storageKey, updated);
+        
+        // Filter active users for display
+        const activeUsers = updated.filter(u => !u.deleted);
+        setUsers(activeUsers);
+        
+        setSelectedUser((prev) => {
+          if (!prev || prev.id === user.id) {
+            return activeUsers[0] || null;
+          }
+          return prev;
+        });
+        
+        console.log(`[UserControl-${businessContext.toUpperCase()}] Safely deleted user ${user.fullName} (ID: ${user.id}) using tombstone pattern`);
+      },
+      undefined,
+      'Confirm Delete'
+    );
+  };
+
+  const handleBusinessToggle = (businessId: BusinessId) => {
+    setFormState((prev) => {
+      const exists = prev.businessUnits.includes(businessId);
+      const nextUnits = exists
+        ? prev.businessUnits.filter((id) => id !== businessId)
+        : [...prev.businessUnits, businessId];
+
+      const nextMenuAccess = { ...prev.menuAccess };
+      if (!exists) {
+        nextMenuAccess[businessId] = nextMenuAccess[businessId] || [];
+      } else {
+        delete nextMenuAccess[businessId];
+      }
+
+      const newDefault =
+        nextUnits.length === 0
+          ? ''
+          : nextUnits.includes(prev.defaultBusiness as BusinessId)
+          ? prev.defaultBusiness
+          : nextUnits[0];
+
+      return {
+        ...prev,
+        businessUnits: nextUnits,
+        menuAccess: nextMenuAccess,
+        defaultBusiness: newDefault,
+      };
+    });
+  };
+
+  const handleMenuToggle = (businessId: BusinessId, menuId: string) => {
+    setFormState((prev) => {
+      const current = new Set(prev.menuAccess[businessId] || []);
+      if (current.has(menuId)) {
+        current.delete(menuId);
+      } else {
+        current.add(menuId);
+      }
+      return {
+        ...prev,
+        menuAccess: {
+          ...prev.menuAccess,
+          [businessId]: Array.from(current),
+        },
+      };
+    });
+  };
+
+  const handleSelectAllMenus = (businessId: BusinessId) => {
+    const allMenus = getAllMenuIds(businessId);
+    setFormState((prev) => ({
+      ...prev,
+      menuAccess: {
+        ...prev.menuAccess,
+        [businessId]: allMenus,
+      },
+    }));
+  };
+
+  const handleClearMenus = (businessId: BusinessId) => {
+    setFormState((prev) => ({
+      ...prev,
+      menuAccess: {
+        ...prev.menuAccess,
+        [businessId]: [],
+      },
+    }));
+  };
+
+  const sanitizeMenuAccess = (businessUnits: BusinessId[], access: Record<BusinessId, string[]>) => {
+    return businessUnits.reduce<Record<BusinessId, string[]>>((acc, unit) => {
+      const allowed = new Set(getAllMenuIds(unit));
+      const selected = access[unit] || [];
+      acc[unit] = selected.filter((menuId) => allowed.has(menuId));
+      return acc;
+    }, {} as Record<BusinessId, string[]>);
+  };
+
+  const handleSaveUser = async () => {
+    if (!formState.fullName.trim()) {
+      showAlert('Nama lengkap wajib diisi.', 'Information');
+      return;
+    }
+    if (!formState.username.trim()) {
+      showAlert('Username wajib diisi.', 'Information');
+      return;
+    }
+    if (formState.businessUnits.length === 0) {
+      showAlert('Pilih minimal satu unit bisnis.', 'Information');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const timestamp = new Date().toISOString();
+      const sanitizedAccess = sanitizeMenuAccess(formState.businessUnits, formState.menuAccess);
+      const defaultBusiness = formState.defaultBusiness && formState.businessUnits.includes(formState.defaultBusiness as BusinessId)
+        ? (formState.defaultBusiness as BusinessId)
+        : formState.businessUnits[0];
+
+      const payload: UserAccess = {
+        id:
+          formState.id ||
+          `usr-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+        fullName: formState.fullName.trim(),
+        username: formState.username.trim(),
+        email: formState.email.trim() || undefined,
+        phone: formState.phone.trim() || undefined,
+        role: formState.role.trim() || undefined,
+        accessCode: formState.accessCode.trim() || undefined,
+        isActive: formState.isActive,
+        businessUnits: formState.businessUnits,
+        defaultBusiness,
+        menuAccess: sanitizedAccess,
+        notes: formState.notes.trim() || undefined,
+        createdAt: formState.id
+          ? users.find((u) => u.id === formState.id)?.createdAt || timestamp
+          : timestamp,
+        updatedAt: timestamp,
+      };
+
+      const updatedList = formState.id
+        ? users.map((user) => (user.id === payload.id ? payload : user))
+        : [...users, payload];
+
+      // FIXED: Use unified storage key 'userAccessControl' (without business prefix)
+      const storageKey = 'userAccessControl';
+      await storageService.set(storageKey, updatedList);
+      setUsers(updatedList);
+      setSelectedUser(payload);
+      setFormState(createEmptyForm());
+      setFormVisible(false);
+      showAlert('User access tersimpan ✅', 'Success');
+    } catch (error: any) {
+      console.error(error);
+      showAlert(`Gagal menyimpan user: ${error.message || error}`, 'Error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancelForm = () => {
+    setFormState(createEmptyForm());
+    setFormVisible(false);
+  };
+
+  const userColumns = [
+    {
+      key: 'fullName',
+      header: 'User',
+      render: (user: UserAccess) => (
+        <div className="user-cell">
+          <strong>{user.fullName}</strong>
+          <span className="muted-text">@{user.username}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'businessUnits',
+      header: 'Units',
+      render: (user: UserAccess) => (
+        <div className="chip-row">
+          {user.businessUnits.map((unit) => (
+            <span key={unit} className="access-chip">
+              {BUSINESS_MENU_MAP[unit]?.icon} {BUSINESS_MENU_MAP[unit]?.label}
+            </span>
+          ))}
+        </div>
+      ),
+    },
+    {
+      key: 'menuAccess',
+      header: 'Menus',
+      render: (user: UserAccess) => (
+        <div className="muted-text">{getMenuCount(user.menuAccess)} menu</div>
+      ),
+    },
+    {
+      key: 'role',
+      header: 'Role',
+      render: (user: UserAccess) => user.role || '-',
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (user: UserAccess) => (
+        <span className={`status-chip ${user.isActive ? 'active' : 'inactive'}`}>
+          {user.isActive ? 'ACTIVE' : 'INACTIVE'}
+        </span>
+      ),
+    },
+    {
+      key: 'updatedAt',
+      header: 'Last Update',
+      render: (user: UserAccess) => (
+        <span className="muted-text">{formatDateTime(user.updatedAt)}</span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      render: (user: UserAccess) => (
+        <div className="table-actions">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              handleEditUser(user);
+            }}
+          >
+            Edit
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => {
+              handleDeleteUser(user);
+            }}
+          >
+            Delete
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  const stats = useMemo(() => {
+    const total = users.length;
+    const active = users.filter((u) => u.isActive).length;
+    const businessUsage = BUSINESS_MENU_CONFIG.map((config) => ({
+      ...config,
+      count: users.filter((u) => u.businessUnits.includes(config.id)).length,
+    }));
+    return { total, active, businessUsage };
+  }, [users]);
+
+  return (
+    <div className="module-compact user-control-page">
+      <div className="page-header">
+        <div>
+          <h1>User Control</h1>
+          <p>Kelola akses menu & unit bisnis per user</p>
+        </div>
+        <Button onClick={handleStartCreate}>+ Tambah User</Button>
+      </div>
+
+      {/* Daftar User - Paling Atas */}
+      <Card
+        title="Daftar User"
+        actions={
+          <div className="user-list-actions">
+            <Input
+              placeholder="Cari nama, username, role..."
+              value={searchQuery}
+              onChange={setSearchQuery}
+              className="search-input"
+            />
+          </div>
+        }
+      >
+        <Table
+          columns={userColumns}
+          data={filteredUsers}
+          onRowClick={handleSelectUser}
+          emptyMessage="Belum ada data user. Tambahkan user pertama."
+          getRowStyle={(user) => ({
+            backgroundColor:
+              selectedUser?.id === user.id ? 'rgba(33, 150, 243, 0.08)' : undefined,
+          })}
+        />
+      </Card>
+
+      <div className="user-control-grid">
+        <div className="user-control-left">
+          <Card title="Distribusi Akses">
+            <div className="stats-grid">
+              <div className="stat-card">
+                <div className="stat-label">Total User</div>
+                <div className="stat-value">{stats.total}</div>
+                <div className="stat-desc">{stats.active} aktif</div>
+              </div>
+              {stats.businessUsage.map((business) => (
+                <div key={business.id} className="stat-card small">
+                  <div className="stat-label">
+                    {business.icon} {business.label}
+                  </div>
+                  <div className="stat-value">{business.count}</div>
+                  <div className="stat-desc">user</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+
+        <div className="user-control-right">
+          {!formVisible && (
+            <Card title="Akses Terpilih">
+              {selectedUser ? (
+                <div className="selected-detail">
+                  <div className="selected-header">
+                    <div>
+                      <h2>{selectedUser.fullName}</h2>
+                      <p>@{selectedUser.username}</p>
+                    </div>
+                    <span className={`status-chip ${selectedUser.isActive ? 'active' : 'inactive'}`}>
+                      {selectedUser.isActive ? 'ACTIVE' : 'INACTIVE'}
+                    </span>
+                  </div>
+                  <div className="selected-meta">
+                    <div>
+                      <label>Role</label>
+                      <strong>{selectedUser.role || '-'}</strong>
+                    </div>
+                    <div>
+                      <label>Default Unit</label>
+                      <strong>
+                        {selectedUser.defaultBusiness
+                          ? BUSINESS_MENU_MAP[selectedUser.defaultBusiness]?.label
+                          : '-'}
+                      </strong>
+                    </div>
+                    <div>
+                      <label>Total Menu</label>
+                      <strong>{getMenuCount(selectedUser.menuAccess)}</strong>
+                    </div>
+                  </div>
+
+                  <div className="chip-row">
+                    {selectedUser.businessUnits.map((unit) => (
+                      <span key={unit} className="access-chip large">
+                        {BUSINESS_MENU_MAP[unit]?.icon} {BUSINESS_MENU_MAP[unit]?.label}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="menu-preview">
+                    {selectedUser.businessUnits.map((unit) => {
+                      const menus = selectedUser.menuAccess[unit] || [];
+                      return (
+                        <div key={unit} className="menu-preview-section">
+                          <div className="menu-section-title">
+                            {BUSINESS_MENU_MAP[unit]?.label} ({menus.length} menu)
+                          </div>
+                          {menus.length === 0 ? (
+                            <p className="muted-text">Belum ada menu yang dipilih.</p>
+                          ) : (
+                            <div className="menu-pill-grid">
+                              {menus.map((menuId) => (
+                                <span key={menuId} className="menu-pill">
+                                  {MENU_LOOKUP[menuId]?.label || menuId}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {selectedUser.notes && (
+                    <div className="notes-box">
+                      <label>Catatan</label>
+                      <p>{selectedUser.notes}</p>
+                    </div>
+                  )}
+
+                  <div className="selected-footer">
+                    <span>Created: {formatDateTime(selectedUser.createdAt)}</span>
+                    <span>Updated: {formatDateTime(selectedUser.updatedAt)}</span>
+                  </div>
+
+                  <div className="selected-actions">
+                    <Button onClick={() => handleEditUser(selectedUser)}>Edit Access</Button>
+                    <Button variant="secondary" onClick={handleStartCreate}>
+                      Tambah Baru
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="muted-text">Pilih user untuk melihat detail akses.</p>
+              )}
+            </Card>
+          )}
+        </div>
+      </div>
+
+      {/* Form Modal Dialog */}
+      {formVisible && (
+        <div className="dialog-overlay" onClick={handleCancelForm} style={{ zIndex: 10000 }}>
+          <div className="dialog-card user-form-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-header">
+              <h3>{formState.id ? 'Edit User Access' : 'Tambah User Access'}</h3>
+              <button className="dialog-close" onClick={handleCancelForm}>×</button>
+            </div>
+
+            <div className="dialog-content">
+              <div className="form-grid">
+                <Input
+                  label="Nama Lengkap"
+                  value={formState.fullName}
+                  onChange={(value) => setFormState((prev) => ({ ...prev, fullName: value }))}
+                  placeholder="e.g., Andi Saputra"
+                />
+                <Input
+                  label="Username"
+                  value={formState.username}
+                  onChange={(value) => setFormState((prev) => ({ ...prev, username: value }))}
+                  placeholder="andi.saputra"
+                />
+                <Input
+                  label="Role / Jabatan"
+                  value={formState.role}
+                  onChange={(value) => setFormState((prev) => ({ ...prev, role: value }))}
+                  placeholder="PPIC Supervisor"
+                />
+                <Input
+                  label="Access Code / PIN"
+                  value={formState.accessCode}
+                  onChange={(value) => setFormState((prev) => ({ ...prev, accessCode: value }))}
+                  placeholder="Opsional, contoh: 1234"
+                />
+                <Input
+                  label="Email"
+                  value={formState.email}
+                  onChange={(value) => setFormState((prev) => ({ ...prev, email: value }))}
+                  placeholder="user@company.com"
+                />
+                <Input
+                  label="No. HP"
+                  value={formState.phone}
+                  onChange={(value) => setFormState((prev) => ({ ...prev, phone: value }))}
+                  placeholder="08xxxxxxxxxx"
+                />
+                <label className="toggle-field">
+                  <span>Aktifkan User</span>
+                  <input
+                    type="checkbox"
+                    checked={formState.isActive}
+                    onChange={(e) =>
+                      setFormState((prev) => ({ ...prev, isActive: e.target.checked }))
+                    }
+                  />
+                </label>
+              </div>
+
+              <div className="section-divider" />
+
+              <div className="section-header">
+                <div>
+                  <h3>Unit Bisnis</h3>
+                  <p>Pilih bisnis yang boleh diakses</p>
+                </div>
+              </div>
+
+              <div className="business-grid-compact">
+                {BUSINESS_MENU_CONFIG.map((business) => {
+                  const selected = formState.businessUnits.includes(business.id);
+                  return (
+                    <label
+                      key={business.id}
+                      className={`business-card-compact ${selected ? 'selected' : ''}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => handleBusinessToggle(business.id)}
+                      />
+                      <span className="business-icon-compact">{business.icon}</span>
+                      <span className="business-label-compact">{business.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              {formState.businessUnits.length > 0 && (
+                <>
+                  <div className="default-business">
+                    <label>Default unit ketika login:</label>
+                    <div className="radio-row">
+                      {formState.businessUnits.map((unit) => (
+                        <label key={unit} className="radio-option">
+                          <input
+                            type="radio"
+                            value={unit}
+                            checked={formState.defaultBusiness === unit}
+                            onChange={() =>
+                              setFormState((prev) => ({ ...prev, defaultBusiness: unit }))
+                            }
+                          />
+                          {BUSINESS_MENU_MAP[unit]?.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="section-divider" />
+
+                  <div className="section-header">
+                    <div>
+                      <h3>Akses Menu</h3>
+                      <p>Checklist menu yang boleh digunakan per unit</p>
+                    </div>
+                  </div>
+
+                  <div className="menu-access-list">
+                    {formState.businessUnits.map((unit) => {
+                      const config = BUSINESS_MENU_MAP[unit];
+                      const allMenus = getAllMenuIds(unit);
+                      const selectedMenus = formState.menuAccess[unit] || [];
+
+                      return (
+                        <div key={unit} className="menu-access-card">
+                          <div className="menu-access-header">
+                            <div>
+                              <h4>{config.label}</h4>
+                              <span className="muted-text">
+                                {selectedMenus.length}/{allMenus.length} menu
+                              </span>
+                            </div>
+                            <div className="menu-actions">
+                              <Button
+                                variant="secondary"
+                                onClick={() => handleSelectAllMenus(unit)}
+                              >
+                                Pilih Semua
+                              </Button>
+                              <Button variant="secondary" onClick={() => handleClearMenus(unit)}>
+                                Bersihkan
+                              </Button>
+                            </div>
+                          </div>
+                          {config.sections.map((section) => (
+                            <div key={section.id} className="menu-section">
+                              <div className="menu-section-title">{section.title}</div>
+                              <div className="menu-checkbox-grid">
+                                {section.items.map((item) => {
+                                  const checked = selectedMenus.includes(item.id);
+                                  return (
+                                    <label key={item.id} className="checkbox-option">
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={() => handleMenuToggle(unit, item.id)}
+                                      />
+                                      <span>{item.label}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              <label className="notes-field">
+                <span>Catatan Opsional</span>
+                <textarea
+                  value={formState.notes}
+                  onChange={(e) =>
+                    setFormState((prev) => ({ ...prev, notes: e.target.value }))
+                  }
+                  placeholder="Tambahkan catatan akses atau batasan khusus..."
+                />
+              </label>
+            </div>
+
+            <div className="form-actions">
+              <Button variant="primary" onClick={handleSaveUser} disabled={saving}>
+                {saving ? 'Menyimpan...' : formState.id ? 'Update Access' : 'Simpan User'}
+              </Button>
+              <Button variant="secondary" onClick={handleCancelForm}>
+                Batal
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Custom Dialog */}
+      {dialogState.show && (
+        <div className="dialog-overlay" onClick={closeDialog}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
+            <Card className="dialog-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h2>{dialogState.title}</h2>
+                <Button variant="secondary" onClick={closeDialog} style={{ padding: '6px 12px' }}>✕</Button>
+              </div>
+              <p style={{ marginBottom: '20px', whiteSpace: 'pre-wrap' }}>{dialogState.message}</p>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                {dialogState.type === 'confirm' && (
+                  <Button variant="secondary" onClick={closeDialog}>Cancel</Button>
+                )}
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    if (dialogState.onConfirm) dialogState.onConfirm();
+                    closeDialog();
+                  }}
+                >
+                  {dialogState.type === 'confirm' ? 'Confirm' : 'OK'}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+};
+
+export default UserControl;
+

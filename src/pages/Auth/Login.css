@@ -1,0 +1,264 @@
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  padding: 40px;
+  background: radial-gradient(circle at top, rgba(33, 150, 243, 0.25), transparent),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0.6));
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  width: 100%;
+  position: relative;
+}
+
+.login-hero {
+  max-width: 450px;
+  min-width: 280px;
+  width: 100%;
+  color: #fff;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.login-hero h1 {
+  margin: 0 0 12px;
+  font-size: 32px;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.login-hero p {
+  margin: 0 0 20px;
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.5;
+}
+
+.login-hero ul {
+  padding-left: 24px;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.8;
+  margin: 0;
+}
+
+.login-hero ul li {
+  margin-bottom: 8px;
+}
+
+.login-card {
+  width: 400px;
+  min-width: 320px;
+  max-width: 400px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.login-error {
+  color: var(--error, #e53935);
+  font-size: 13px;
+  background: rgba(229, 57, 53, 0.12);
+  border: 1px solid rgba(229, 57, 53, 0.3);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.login-hint {
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.login-hint code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+/* Tablet */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .login-page {
+    flex-direction: row;
+    padding: 30px;
+    gap: 30px;
+    align-items: center;
+  }
+
+  .login-hero {
+    max-width: 380px;
+    min-width: 280px;
+  }
+
+  .login-hero h1 {
+    font-size: 28px;
+    margin: 0 0 10px;
+  }
+
+  .login-hero p {
+    font-size: 15px;
+    margin: 0 0 16px;
+  }
+
+  .login-hero ul {
+    font-size: 14px;
+    padding-left: 20px;
+    line-height: 1.6;
+  }
+
+  .login-card {
+    width: 360px;
+    min-width: 300px;
+    max-width: 360px;
+  }
+}
+
+/* Small screens */
+@media (max-width: 768px) {
+  .login-page {
+    flex-direction: column;
+    padding: 20px;
+    gap: 24px;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+  }
+
+  .login-hero {
+    max-width: 100%;
+    min-width: 100%;
+    text-align: center;
+  }
+
+  .login-hero h1 {
+    font-size: 24px;
+    margin: 0 0 8px;
+  }
+
+  .login-hero p {
+    font-size: 14px;
+    margin: 0 0 16px;
+  }
+
+  .login-hero ul {
+    font-size: 13px;
+    padding-left: 20px;
+    line-height: 1.6;
+    margin: 0;
+    text-align: left;
+    display: inline-block;
+  }
+
+  .login-hero ul li {
+    margin-bottom: 6px;
+  }
+
+  .login-card {
+    width: 100%;
+    min-width: 280px;
+    max-width: 400px;
+  }
+}
+
+/* Very small screens */
+@media (max-width: 480px) {
+  .login-page {
+    padding: 20px;
+    gap: 20px;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+  }
+
+  .login-hero h1 {
+    font-size: 20px;
+    margin: 0 0 8px;
+  }
+
+  .login-hero p {
+    font-size: 13px;
+    margin: 0 0 12px;
+  }
+
+  .login-hero ul {
+    font-size: 12px;
+    padding-left: 18px;
+    line-height: 1.5;
+  }
+
+  .login-card {
+    width: 100%;
+    min-width: 260px;
+    max-width: 100%;
+  }
+}
+
+/* Short screens */
+@media (max-height: 700px) {
+  .login-page {
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  
+  .login-hero {
+    max-width: 400px;
+  }
+  
+  .login-hero h1 {
+    font-size: 24px;
+    margin: 0 0 8px;
+  }
+  
+  .login-hero p {
+    font-size: 14px;
+    margin: 0 0 12px;
+  }
+  
+  .login-hero ul {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  
+  .login-hero ul li {
+    margin-bottom: 4px;
+  }
+}
+
+/* Large screens */
+@media (min-width: 1400px) {
+  .login-page {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 60px 40px;
+  }
+  
+  .login-hero {
+    max-width: 500px;
+  }
+  
+  .login-hero h1 {
+    font-size: 36px;
+  }
+  
+  .login-hero p {
+    font-size: 18px;
+  }
+  
+  .login-card {
+    width: 420px;
+    max-width: 420px;
+  }
+}
+

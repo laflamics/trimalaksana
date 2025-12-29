@@ -1,0 +1,494 @@
+{
+  "timestamp": "2025-12-26T00:56:02.100Z",
+  "totalFiles": 17,
+  "packagingSpecificFiles": 16,
+  "filesWithTimestamp": 12,
+  "filesWithHandleSave": 12,
+  "timestampCoverage": 71,
+  "handleSaveCoverage": 71,
+  "packagingTimestampCoverage": 69,
+  "overallScore": 71,
+  "workflowFiles": 0,
+  "materialAllocatorFiles": 2,
+  "results": [
+    {
+      "file": "src/pages/Packaging/SalesOrders.tsx",
+      "exists": true,
+      "handleSaveFunctions": 2,
+      "timestampImplementations": 3,
+      "storageServiceCalls": 8,
+      "dateNowUsage": 5,
+      "dateISOUsage": 5,
+      "workflowUsage": 0,
+      "materialAllocatorUsage": 0,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "lastUpdate: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "const handleSave = async () => {",
+          "handleSave = async () => {"
+        ]
+      }
+    },
+    {
+      "file": "src/pages/Packaging/PPIC.tsx",
+      "exists": true,
+      "handleSaveFunctions": 7,
+      "timestampImplementations": 25,
+      "storageServiceCalls": 55,
+      "dateNowUsage": 35,
+      "dateISOUsage": 73,
+      "workflowUsage": 0,
+      "materialAllocatorUsage": 3,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "handleSaveScheduleAndSPK = async (scheduleInfo: any, bomData: any) => {",
+          "handleSaveSchedule = async (data: any) => {",
+          "handleSaveSPKBOMOverride = async (overrideData: { [materialId: string]: number }) => {",
+          "handleSavePRToPDF = async () => {",
+          "handleSaveBOM = async (bomItems: any[]) => {",
+          "handleSaveDeliverySchedule = async (data: any) => {",
+          "handleSaveBOMProduct = async (bomItems: any[]) => {"
+        ]
+      }
+    },
+    {
+      "file": "src/pages/Packaging/Purchasing.tsx",
+      "exists": true,
+      "handleSaveFunctions": 5,
+      "timestampImplementations": 8,
+      "storageServiceCalls": 20,
+      "dateNowUsage": 12,
+      "dateISOUsage": 14,
+      "workflowUsage": 0,
+      "materialAllocatorUsage": 0,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "const handleSave = async () => {",
+          "handleSave = async () => {",
+          "handleSaveToPDF = async () => {",
+          "handleSaveReceipt = async (receiptData: { qtyReceived: number; receivedDate: string; notes?: string; suratJalan?: string; suratJalanName?: string; invoiceNo?: string; invoiceFile?: string; invoiceFileName?: string }) => {",
+          "handleSavePRToPDF = async () => {"
+        ]
+      }
+    },
+    {
+      "file": "src/pages/Packaging/Production.tsx",
+      "exists": true,
+      "handleSaveFunctions": 2,
+      "timestampImplementations": 5,
+      "storageServiceCalls": 16,
+      "dateNowUsage": 10,
+      "dateISOUsage": 20,
+      "workflowUsage": 0,
+      "materialAllocatorUsage": 3,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "handleSaveSchedule = async (data: any) => {",
+          "handleSaveProductionResult = async (data: any) => {"
+        ]
+      }
+    },
+    {
+      "file": "src/pages/Packaging/QAQC.tsx",
+      "exists": true,
+      "handleSaveFunctions": 1,
+      "timestampImplementations": 3,
+      "storageServiceCalls": 11,
+      "dateNowUsage": 3,
+      "dateISOUsage": 7,
+      "workflowUsage": 0,
+      "materialAllocatorUsage": 0,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "lastUpdate: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "handleSaveQCCheck = async (data: any) => {"
+        ]
+      }
+    },
+    {
+      "file": "src/pages/Packaging/DeliveryNote.tsx",
+      "exists": true,
+      "handleSaveFunctions": 5,
+      "timestampImplementations": 44,
+      "storageServiceCalls": 16,
+      "dateNowUsage": 28,
+      "dateISOUsage": 24,
+      "workflowUsage": 0,
+      "materialAllocatorUsage": 0,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "const handleSave = async () => {",
+          "const handleSave = async () => {",
+          "handleSave = async () => {",
+          "handleSaveToPDF = async () => {",
+          "handleSave = async () => {"
+        ]
+      }
+    },
+    {
+      "file": "src/pages/Packaging/Return.tsx",
+      "exists": true,
+      "handleSaveFunctions": 3,
+      "timestampImplementations": 3,
+      "storageServiceCalls": 3,
+      "dateNowUsage": 2,
+      "dateISOUsage": 3,
+      "workflowUsage": 0,
+      "materialAllocatorUsage": 0,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()",
+          "created: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "const handleSave = async () => {",
+          "handleSave = async () => {",
+          "handleSaveToPDF = async () => {"
+        ]
+      }
+    },
+    {
+      "file": "src/pages/Packaging/Workflow.tsx",
+      "exists": true,
+      "handleSaveFunctions": 0,
+      "timestampImplementations": 0,
+      "storageServiceCalls": 0,
+      "dateNowUsage": 0,
+      "dateISOUsage": 0,
+      "workflowUsage": 0,
+      "materialAllocatorUsage": 0,
+      "hasProperTimestamp": false,
+      "details": {
+        "timestamps": [],
+        "handleSaves": []
+      }
+    },
+    {
+      "file": "src/pages/Packaging/Finance/Accounting.tsx",
+      "exists": true,
+      "handleSaveFunctions": 2,
+      "timestampImplementations": 8,
+      "storageServiceCalls": 6,
+      "dateNowUsage": 6,
+      "dateISOUsage": 13,
+      "workflowUsage": 0,
+      "materialAllocatorUsage": 0,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "const handleSave = async () => {",
+          "handleSave = async () => {"
+        ]
+      }
+    },
+    {
+      "file": "src/pages/Packaging/Finance/AccountsPayable.tsx",
+      "exists": true,
+      "handleSaveFunctions": 0,
+      "timestampImplementations": 0,
+      "storageServiceCalls": 2,
+      "dateNowUsage": 0,
+      "dateISOUsage": 2,
+      "workflowUsage": 0,
+      "materialAllocatorUsage": 0,
+      "hasProperTimestamp": false,
+      "details": {
+        "timestamps": [],
+        "handleSaves": []
+      }
+    },
+    {
+      "file": "src/pages/Packaging/Finance/AccountsReceivable.tsx",
+      "exists": true,
+      "handleSaveFunctions": 0,
+      "timestampImplementations": 0,
+      "storageServiceCalls": 0,
+      "dateNowUsage": 0,
+      "dateISOUsage": 1,
+      "workflowUsage": 0,
+      "materialAllocatorUsage": 0,
+      "hasProperTimestamp": false,
+      "details": {
+        "timestamps": [],
+        "handleSaves": []
+      }
+    },
+    {
+      "file": "src/pages/Packaging/Finance/CostAnalysis.tsx",
+      "exists": true,
+      "handleSaveFunctions": 0,
+      "timestampImplementations": 0,
+      "storageServiceCalls": 0,
+      "dateNowUsage": 0,
+      "dateISOUsage": 1,
+      "workflowUsage": 0,
+      "materialAllocatorUsage": 0,
+      "hasProperTimestamp": false,
+      "details": {
+        "timestamps": [],
+        "handleSaves": []
+      }
+    },
+    {
+      "file": "src/pages/Packaging/Finance/FinancialReports.tsx",
+      "exists": true,
+      "handleSaveFunctions": 0,
+      "timestampImplementations": 0,
+      "storageServiceCalls": 1,
+      "dateNowUsage": 0,
+      "dateISOUsage": 1,
+      "workflowUsage": 0,
+      "materialAllocatorUsage": 0,
+      "hasProperTimestamp": false,
+      "details": {
+        "timestamps": [],
+        "handleSaves": []
+      }
+    },
+    {
+      "file": "src/pages/Packaging/Finance/GeneralLedger.tsx",
+      "exists": true,
+      "handleSaveFunctions": 2,
+      "timestampImplementations": 8,
+      "storageServiceCalls": 6,
+      "dateNowUsage": 6,
+      "dateISOUsage": 11,
+      "workflowUsage": 0,
+      "materialAllocatorUsage": 0,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "const handleSave = async () => {",
+          "handleSave = async () => {"
+        ]
+      }
+    },
+    {
+      "file": "src/pages/Packaging/Finance/Payments.tsx",
+      "exists": true,
+      "handleSaveFunctions": 2,
+      "timestampImplementations": 8,
+      "storageServiceCalls": 9,
+      "dateNowUsage": 8,
+      "dateISOUsage": 12,
+      "workflowUsage": 0,
+      "materialAllocatorUsage": 0,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "const handleSave = async () => {",
+          "handleSave = async () => {"
+        ]
+      }
+    },
+    {
+      "file": "src/pages/Packaging/Finance/TaxManagement.tsx",
+      "exists": true,
+      "handleSaveFunctions": 2,
+      "timestampImplementations": 1,
+      "storageServiceCalls": 4,
+      "dateNowUsage": 1,
+      "dateISOUsage": 11,
+      "workflowUsage": 0,
+      "materialAllocatorUsage": 0,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "created: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "const handleSave = async () => {",
+          "handleSave = async () => {"
+        ]
+      }
+    },
+    {
+      "file": "src/pages/Finance/COA.tsx",
+      "exists": true,
+      "handleSaveFunctions": 2,
+      "timestampImplementations": 8,
+      "storageServiceCalls": 6,
+      "dateNowUsage": 4,
+      "dateISOUsage": 3,
+      "workflowUsage": 0,
+      "materialAllocatorUsage": 0,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "const handleSave = async () => {",
+          "handleSave = async () => {"
+        ]
+      }
+    },
+    {
+      "file": "src/pages/Finance/GeneralLedger.tsx",
+      "exists": false,
+      "error": "File not found"
+    },
+    {
+      "file": "src/pages/Finance/Invoices.tsx",
+      "exists": false,
+      "error": "File not found"
+    }
+  ],
+  "filesWithoutTimestamp": [
+    "src/pages/Packaging/Workflow.tsx",
+    "src/pages/Packaging/Finance/AccountsPayable.tsx",
+    "src/pages/Packaging/Finance/AccountsReceivable.tsx",
+    "src/pages/Packaging/Finance/CostAnalysis.tsx",
+    "src/pages/Packaging/Finance/FinancialReports.tsx"
+  ],
+  "filesWithoutHandleSave": [
+    "src/pages/Packaging/Workflow.tsx",
+    "src/pages/Packaging/Finance/AccountsPayable.tsx",
+    "src/pages/Packaging/Finance/AccountsReceivable.tsx",
+    "src/pages/Packaging/Finance/CostAnalysis.tsx",
+    "src/pages/Packaging/Finance/FinancialReports.tsx"
+  ]
+}

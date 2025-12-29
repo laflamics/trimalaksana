@@ -1,0 +1,21 @@
+{
+  "value": [
+    {
+      "id": "1766041890214",
+      "returnNo": "RET-251218-CWO6I",
+      "sourceType": "SO",
+      "sourceNo": "YU838377",
+      "productId": "TRM1412",
+      "productName": "AC ADAPTOR 12V 3A DVR/CCTV",
+      "productKode": "TRM1412",
+      "qty": 1,
+      "unit": "SET",
+      "reason": "rusak di jalan",
+      "notes": "",
+      "status": "CONFIRMED",
+      "created": "2025-12-18T07:11:30.214Z"
+    }
+  ],
+  "timestamp": 1766041890221,
+  "_timestamp": 1766041890221
+}

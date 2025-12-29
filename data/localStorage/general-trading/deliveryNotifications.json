@@ -1,0 +1,83 @@
+{
+  "value": [
+    {
+      "id": "1765565357741mut5oh75x",
+      "type": "DELIVERY_SCHEDULE",
+      "soNo": "OLD9883",
+      "customer": "PT. KAWASAKI MOTOR INDONESIA",
+      "spkNo": "SPK/251212/UTCCE",
+      "sjGroupId": "sj-group-1",
+      "product": "CARTON BOX CB 24-C (K3110-0007)",
+      "productId": "",
+      "qty": 200,
+      "deliveryBatches": [
+        {
+          "id": "1765540608875ux53yvv6f",
+          "batchNo": "A",
+          "qty": 200,
+          "deliveryDate": "2025-12-12T00:00:00.000Z",
+          "productId": "FG-KMI-00033",
+          "createSJ": true,
+          "sjGroupId": "sj-group-1"
+        }
+      ],
+      "status": "WAITING_PRODUCTION",
+      "created": "2025-12-12T18:49:17.741Z",
+      "updated": "2025-12-12T18:49:21.500Z"
+    },
+    {
+      "id": "17655653228445g8hle9wx",
+      "type": "DELIVERY_SCHEDULE",
+      "soNo": "OLD9883",
+      "customer": "PT. KAWASAKI MOTOR INDONESIA",
+      "spkNo": "SPK/251212/4AD8B",
+      "sjGroupId": "sj-group-5",
+      "product": "BIG CARTON BOX LX230 STD (K3120-0022)",
+      "productId": "",
+      "qty": 50,
+      "deliveryBatches": [
+        {
+          "id": "1765543659727p6g1ygmst",
+          "batchNo": "A",
+          "qty": 50,
+          "deliveryDate": "2025-12-13T00:00:00.000Z",
+          "productId": "FG-KMI-00003",
+          "createSJ": true,
+          "sjGroupId": "sj-group-5"
+        }
+      ],
+      "status": "DELIVERY_CREATED",
+      "created": "2025-12-12T18:48:42.845Z",
+      "stockFulfilled": true,
+      "updated": "2025-12-12T18:49:21.500Z"
+    },
+    {
+      "id": "1765565322845up8wtnd88",
+      "type": "DELIVERY_SCHEDULE",
+      "soNo": "OLD9883",
+      "customer": "PT. KAWASAKI MOTOR INDONESIA",
+      "spkNo": "SPK/251212/4AD8B",
+      "sjGroupId": "sj-group-6",
+      "product": "BIG CARTON BOX LX230 STD (K3120-0022)",
+      "productId": "",
+      "qty": 50,
+      "deliveryBatches": [
+        {
+          "id": "1765543669447jeexc8z1h",
+          "batchNo": "B",
+          "qty": 50,
+          "deliveryDate": "2025-12-16T00:00:00.000Z",
+          "productId": "FG-KMI-00003",
+          "createSJ": true,
+          "sjGroupId": "sj-group-6"
+        }
+      ],
+      "status": "READY_TO_SHIP",
+      "created": "2025-12-12T18:48:42.845Z",
+      "stockFulfilled": true,
+      "updated": "2025-12-12T18:49:21.500Z"
+    }
+  ],
+  "timestamp": 1765680699377,
+  "_timestamp": 1765680699377
+}

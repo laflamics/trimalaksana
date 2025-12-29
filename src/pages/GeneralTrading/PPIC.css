@@ -1,0 +1,25 @@
+/* Custom styles untuk PPIC GT table */
+.ppic-spk-table .table {
+  table-layout: fixed;
+}
+
+.ppic-spk-table .table th:nth-child(1),
+.ppic-spk-table .table td:nth-child(1) {
+  width: 120px;
+  min-width: 120px;
+  max-width: 120px;
+}
+
+.ppic-spk-table .table th:nth-child(2),
+.ppic-spk-table .table td:nth-child(2) {
+  width: 200px;
+  min-width: 200px;
+  max-width: 200px;
+}
+
+.ppic-spk-table .table th:nth-child(3),
+.ppic-spk-table .table td:nth-child(3) {
+  width: auto;
+  min-width: 400px;
+}
+

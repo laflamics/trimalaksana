@@ -1,0 +1,136 @@
+.workflow-visual-container {
+  width: 100%;
+  overflow-x: auto;
+  padding: 20px 10px;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border-radius: 8px;
+  min-height: 400px;
+  max-height: 400px;
+  position: relative;
+}
+
+.workflow-visual-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(circle at 20% 50%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 50%, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
+  pointer-events: none;
+  border-radius: 8px;
+}
+
+.workflow-visual-container svg {
+  display: block;
+  width: 100%;
+  min-width: 1200px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Pulse animation untuk glow effect */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 5px currentColor);
+  }
+  50% {
+    filter: drop-shadow(0 0 15px currentColor);
+  }
+}
+
+.workflow-legend {
+  display: flex;
+  gap: 16px;
+  padding: 12px;
+  border-top: 1px solid var(--border-color);
+  margin-top: 12px;
+  flex-wrap: wrap;
+  background: var(--bg-primary);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  transition: transform 0.2s ease;
+}
+
+.legend-item:hover {
+  transform: translateY(-2px);
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 0 8px currentColor;
+  transition: all 0.2s ease;
+}
+
+.legend-color:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 12px currentColor;
+}
+
+.workflow-description {
+  padding: 12px;
+  border-top: 1px solid var(--border-color);
+  margin-top: 12px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+}
+
+.workflow-description h3 {
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.workflow-description ol {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.workflow-description ol li {
+  margin-bottom: 2px;
+  transition: color 0.2s ease;
+}
+
+.workflow-description ol li:hover {
+  color: var(--text-primary);
+}
+
+.workflow-description ol li strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .workflow-visual-container {
+    padding: 20px 10px;
+  }
+  
+  .workflow-visual-container svg {
+    min-width: 1200px;
+  }
+}

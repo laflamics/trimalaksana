@@ -1,0 +1,21 @@
+{
+  "value": {
+    "storageType": "local",
+    "taxRate": 0.1,
+    "taxDisplayMode": "include_hide",
+    "currency": "IDR",
+    "companyName": "Noxtiz Culinary Lab",
+    "voidPin": "",
+    "licenseCode": "admin@noxtiz.com",
+    "licenseToken": "admin@noxtiz.com",
+    "licenseType": "trial",
+    "licenseStatus": "trial",
+    "licenseExpiresAt": "2025-12-05T02:25:11.730Z",
+    "licenseDeviceId": "ba84bc0f-0ca4-47f7-a5a8-b727406544c3",
+    "licenseMessage": "Trial aktif.",
+    "licensePendingSync": false,
+    "licenseLastSyncedAt": "2025-11-28T02:25:11.799Z"
+  },
+  "timestamp": 1765321993827,
+  "_timestamp": 1765321993827
+}

@@ -1,0 +1,23 @@
+/* Inventory specific styles */
+.inventory-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.inventory-table th {
+  background: var(--bg-tertiary);
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.inventory-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.inventory-table tbody tr:hover {
+  background: var(--hover-bg);
+}
+

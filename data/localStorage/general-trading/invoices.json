@@ -1,0 +1,41 @@
+{
+  "value": [
+    {
+      "id": "1765530092117",
+      "invoiceNo": "INV-2025000001",
+      "soNo": "OLD9883",
+      "soId": "1765525785362",
+      "sjNo": "SJ-251212-O2SVL",
+      "customer": "PT. KAWASAKI MOTOR INDONESIA",
+      "lines": [
+        {
+          "itemSku": "FG-KMI-00032",
+          "qty": 200,
+          "price": 23000
+        }
+      ],
+      "bom": {
+        "subtotal": 4600000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 0,
+        "taxPercent": 0,
+        "biayaLain": 0,
+        "total": 4600000,
+        "paymentTerms": "TOP",
+        "poData": {
+          "topDays": 30
+        },
+        "sjNo": "SJ-251212-O2SVL",
+        "soNo": "OLD9883",
+        "soId": "1765525785362"
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2025-12-12T09:01:32.117Z"
+    }
+  ],
+  "timestamp": 1765530092117,
+  "_timestamp": 1765530092117
+}

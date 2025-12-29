@@ -1,0 +1,616 @@
+[
+  {
+    "id": "usr-1766550441903-0",
+    "fullName": "ALI",
+    "username": "ALI",
+    "role": "Owner",
+    "accessCode": "1234",
+    "isActive": true,
+    "businessUnits": [
+      "packaging",
+      "general-trading",
+      "tracking"
+    ],
+    "defaultBusiness": "packaging",
+    "menuAccess": {
+      "packaging": [
+        "/packaging/master/products",
+        "/packaging/master/materials",
+        "/packaging/master/customers",
+        "/packaging/master/suppliers",
+        "/packaging/master/inventory",
+        "/packaging/workflow",
+        "/packaging/sales-orders",
+        "/packaging/ppic",
+        "/packaging/purchasing",
+        "/packaging/production",
+        "/packaging/qa-qc",
+        "/packaging/delivery-note",
+        "/packaging/finance/ledger",
+        "/packaging/finance/reports",
+        "/packaging/finance/invoices",
+        "/packaging/finance/accounting",
+        "/packaging/finance/ar",
+        "/packaging/finance/ap",
+        "/packaging/finance/payments",
+        "/packaging/finance/tax-management",
+        "/packaging/finance/cost-analysis",
+        "/packaging/finance/all-business-reports",
+        "/packaging/finance/coa",
+        "/packaging/hr",
+        "/packaging/settings",
+        "/packaging/settings/report",
+        "/packaging/settings/db-activity",
+        "/packaging/settings/test-automation",
+        "/packaging/settings/user-control"
+      ],
+      "general-trading": [
+        "/general-trading/dashboard",
+        "/general-trading/master/products",
+        "/general-trading/master/customers",
+        "/general-trading/master/suppliers",
+        "/general-trading/master/inventory",
+        "/general-trading/orders/sales",
+        "/general-trading/orders/purchase",
+        "/general-trading/ppic",
+        "/general-trading/production",
+        "/general-trading/qa-qc",
+        "/general-trading/sales/quotations",
+        "/general-trading/sales/invoices",
+        "/general-trading/purchasing/pr",
+        "/general-trading/purchasing/po",
+        "/general-trading/purchasing",
+        "/general-trading/warehouse/stock",
+        "/general-trading/warehouse/receiving",
+        "/general-trading/warehouse/shipping",
+        "/general-trading/delivery-note",
+        "/general-trading/finance/ledger",
+        "/general-trading/finance/reports",
+        "/general-trading/finance/accounting",
+        "/general-trading/finance/ar",
+        "/general-trading/finance/ap",
+        "/general-trading/finance/payments",
+        "/general-trading/finance/coa",
+        "/general-trading/settings"
+      ],
+      "tracking": [
+        "/tracking/dashboard",
+        "/tracking/master/vehicles",
+        "/tracking/master/drivers",
+        "/tracking/master/routes",
+        "/tracking/master/customers",
+        "/tracking/shipments/delivery-orders",
+        "/tracking/shipments/tracking",
+        "/tracking/tracking/realtime",
+        "/tracking/tracking/status",
+        "/tracking/schedules/route-planning",
+        "/tracking/schedules/delivery",
+        "/tracking/finance/billing",
+        "/tracking/finance/payments",
+        "/tracking/finance/pettycash",
+        "/tracking/settings"
+      ]
+    },
+    "createdAt": "2025-12-24T04:27:21.903Z",
+    "updatedAt": "2025-12-24T04:27:21.903Z"
+  },
+  {
+    "id": "usr-1766550441903-1",
+    "fullName": "RATMO",
+    "username": "RATMO",
+    "role": "Ops",
+    "accessCode": "1234",
+    "isActive": true,
+    "businessUnits": [
+      "packaging"
+    ],
+    "defaultBusiness": "packaging",
+    "menuAccess": {
+      "packaging": [
+        "/packaging/master/products",
+        "/packaging/master/materials",
+        "/packaging/master/customers",
+        "/packaging/master/suppliers",
+        "/packaging/master/inventory",
+        "/packaging/workflow",
+        "/packaging/sales-orders",
+        "/packaging/ppic",
+        "/packaging/purchasing",
+        "/packaging/production",
+        "/packaging/qa-qc",
+        "/packaging/delivery-note",
+        "/packaging/finance/ledger",
+        "/packaging/finance/reports",
+        "/packaging/finance/invoices",
+        "/packaging/finance/accounting",
+        "/packaging/finance/ar",
+        "/packaging/finance/ap",
+        "/packaging/finance/payments",
+        "/packaging/finance/tax-management",
+        "/packaging/finance/cost-analysis",
+        "/packaging/finance/all-business-reports",
+        "/packaging/finance/coa",
+        "/packaging/hr",
+        "/packaging/settings",
+        "/packaging/settings/report",
+        "/packaging/settings/db-activity",
+        "/packaging/settings/test-automation",
+        "/packaging/settings/user-control"
+      ]
+    },
+    "createdAt": "2025-12-24T04:27:21.903Z",
+    "updatedAt": "2025-12-24T04:27:21.903Z"
+  },
+  {
+    "id": "usr-1766550441903-2",
+    "fullName": "DANI",
+    "username": "DANI",
+    "role": "Ops",
+    "accessCode": "1234",
+    "isActive": true,
+    "businessUnits": [
+      "packaging"
+    ],
+    "defaultBusiness": "packaging",
+    "menuAccess": {
+      "packaging": [
+        "/packaging/master/products",
+        "/packaging/master/materials",
+        "/packaging/master/customers",
+        "/packaging/master/suppliers",
+        "/packaging/master/inventory",
+        "/packaging/workflow",
+        "/packaging/sales-orders",
+        "/packaging/ppic",
+        "/packaging/purchasing",
+        "/packaging/production",
+        "/packaging/qa-qc",
+        "/packaging/delivery-note",
+        "/packaging/finance/ledger",
+        "/packaging/finance/reports",
+        "/packaging/finance/invoices",
+        "/packaging/finance/accounting",
+        "/packaging/finance/ar",
+        "/packaging/finance/ap",
+        "/packaging/finance/payments",
+        "/packaging/finance/tax-management",
+        "/packaging/finance/cost-analysis",
+        "/packaging/finance/all-business-reports",
+        "/packaging/finance/coa",
+        "/packaging/hr",
+        "/packaging/settings",
+        "/packaging/settings/report",
+        "/packaging/settings/db-activity",
+        "/packaging/settings/test-automation",
+        "/packaging/settings/user-control"
+      ]
+    },
+    "createdAt": "2025-12-24T04:27:21.903Z",
+    "updatedAt": "2025-12-24T04:27:21.903Z"
+  },
+  {
+    "id": "usr-1766550441903-3",
+    "fullName": "LINA",
+    "username": "LINA",
+    "role": "Sales Admin",
+    "accessCode": "1234",
+    "isActive": true,
+    "businessUnits": [
+      "packaging"
+    ],
+    "defaultBusiness": "packaging",
+    "menuAccess": {
+      "packaging": [
+        "/packaging/sales-orders",
+        "/packaging/settings"
+      ]
+    },
+    "createdAt": "2025-12-24T04:27:21.903Z",
+    "updatedAt": "2025-12-24T04:27:21.903Z"
+  },
+  {
+    "id": "usr-1766550441903-4",
+    "fullName": "DWI",
+    "username": "DWI",
+    "role": "PPIC",
+    "accessCode": "1234",
+    "isActive": true,
+    "businessUnits": [
+      "packaging"
+    ],
+    "defaultBusiness": "packaging",
+    "menuAccess": {
+      "packaging": [
+        "/packaging/ppic",
+        "/packaging/settings"
+      ]
+    },
+    "createdAt": "2025-12-24T04:27:21.903Z",
+    "updatedAt": "2025-12-24T04:27:21.903Z"
+  },
+  {
+    "id": "usr-1766550441903-5",
+    "fullName": "HARYATI",
+    "username": "HARYATI",
+    "role": "Purchasing",
+    "accessCode": "1234",
+    "isActive": true,
+    "businessUnits": [
+      "packaging"
+    ],
+    "defaultBusiness": "packaging",
+    "menuAccess": {
+      "packaging": [
+        "/packaging/purchasing",
+        "/packaging/settings"
+      ]
+    },
+    "createdAt": "2025-12-24T04:27:21.903Z",
+    "updatedAt": "2025-12-24T04:27:21.903Z"
+  },
+  {
+    "id": "usr-1766550441903-6",
+    "fullName": "NOVI",
+    "username": "NOVI",
+    "role": "HRD",
+    "accessCode": "1234",
+    "isActive": true,
+    "businessUnits": [
+      "packaging"
+    ],
+    "defaultBusiness": "packaging",
+    "menuAccess": {
+      "packaging": [
+        "/packaging/hr",
+        "/packaging/settings"
+      ]
+    },
+    "createdAt": "2025-12-24T04:27:21.903Z",
+    "updatedAt": "2025-12-24T04:27:21.903Z"
+  },
+  {
+    "id": "usr-1766550441903-7",
+    "fullName": "ZIDANE",
+    "username": "ZIDANE",
+    "role": "WH",
+    "accessCode": "1234",
+    "isActive": true,
+    "businessUnits": [
+      "packaging"
+    ],
+    "defaultBusiness": "packaging",
+    "menuAccess": {
+      "packaging": [
+        "/packaging/delivery-note",
+        "/packaging/settings"
+      ]
+    },
+    "createdAt": "2025-12-24T04:27:21.903Z",
+    "updatedAt": "2025-12-24T04:27:21.903Z"
+  },
+  {
+    "id": "usr-1766550441903-8",
+    "fullName": "SYAKILA",
+    "username": "SYAKILA",
+    "role": "QC",
+    "accessCode": "1234",
+    "isActive": true,
+    "businessUnits": [
+      "packaging"
+    ],
+    "defaultBusiness": "packaging",
+    "menuAccess": {
+      "packaging": [
+        "/packaging/qa-qc",
+        "/packaging/settings"
+      ]
+    },
+    "createdAt": "2025-12-24T04:27:21.903Z",
+    "updatedAt": "2025-12-24T04:27:21.903Z"
+  },
+  {
+    "id": "usr-1766550441903-9",
+    "fullName": "ROFIK",
+    "username": "ROFIK",
+    "role": "Production H",
+    "accessCode": "1234",
+    "isActive": true,
+    "businessUnits": [
+      "packaging"
+    ],
+    "defaultBusiness": "packaging",
+    "menuAccess": {
+      "packaging": [
+        "/packaging/production",
+        "/packaging/settings"
+      ]
+    },
+    "createdAt": "2025-12-24T04:27:21.903Z",
+    "updatedAt": "2025-12-24T04:27:21.903Z"
+  },
+  {
+    "id": "usr-1766550441904-10",
+    "fullName": "ULFAH",
+    "username": "ULFAH",
+    "role": "Finance",
+    "accessCode": "1234",
+    "isActive": true,
+    "businessUnits": [
+      "packaging"
+    ],
+    "defaultBusiness": "packaging",
+    "menuAccess": {
+      "packaging": [
+        "/packaging/finance/ledger",
+        "/packaging/finance/reports",
+        "/packaging/finance/invoices",
+        "/packaging/finance/accounting",
+        "/packaging/finance/ar",
+        "/packaging/finance/ap",
+        "/packaging/finance/payments",
+        "/packaging/finance/tax-management",
+        "/packaging/finance/cost-analysis",
+        "/packaging/finance/all-business-reports",
+        "/packaging/finance/coa",
+        "/packaging/settings"
+      ]
+    },
+    "createdAt": "2025-12-24T04:27:21.903Z",
+    "updatedAt": "2025-12-24T04:27:21.903Z"
+  },
+  {
+    "id": "usr-1766550441904-11",
+    "fullName": "SYIFA",
+    "username": "SYIFA",
+    "role": "Accounting",
+    "accessCode": "1234",
+    "isActive": true,
+    "businessUnits": [
+      "packaging"
+    ],
+    "defaultBusiness": "packaging",
+    "menuAccess": {
+      "packaging": [
+        "/packaging/finance/ledger",
+        "/packaging/finance/reports",
+        "/packaging/finance/invoices",
+        "/packaging/finance/accounting",
+        "/packaging/finance/ar",
+        "/packaging/finance/ap",
+        "/packaging/finance/payments",
+        "/packaging/finance/tax-management",
+        "/packaging/finance/cost-analysis",
+        "/packaging/finance/all-business-reports",
+        "/packaging/finance/coa",
+        "/packaging/settings"
+      ]
+    },
+    "createdAt": "2025-12-24T04:27:21.903Z",
+    "updatedAt": "2025-12-24T04:27:21.903Z"
+  },
+  {
+    "id": "usr-1766550441904-12",
+    "fullName": "SEPULOH",
+    "username": "SEPULOH",
+    "role": "Admin GT",
+    "accessCode": "1234",
+    "isActive": true,
+    "businessUnits": [
+      "general-trading"
+    ],
+    "defaultBusiness": "general-trading",
+    "menuAccess": {
+      "general-trading": [
+        "/general-trading/dashboard",
+        "/general-trading/master/products",
+        "/general-trading/master/customers",
+        "/general-trading/master/suppliers",
+        "/general-trading/master/inventory",
+        "/general-trading/orders/sales",
+        "/general-trading/orders/purchase",
+        "/general-trading/ppic",
+        "/general-trading/production",
+        "/general-trading/qa-qc",
+        "/general-trading/sales/quotations",
+        "/general-trading/sales/invoices",
+        "/general-trading/purchasing/pr",
+        "/general-trading/purchasing/po",
+        "/general-trading/purchasing",
+        "/general-trading/warehouse/stock",
+        "/general-trading/warehouse/receiving",
+        "/general-trading/warehouse/shipping",
+        "/general-trading/delivery-note",
+        "/general-trading/finance/ledger",
+        "/general-trading/finance/reports",
+        "/general-trading/finance/accounting",
+        "/general-trading/finance/ar",
+        "/general-trading/finance/ap",
+        "/general-trading/finance/payments",
+        "/general-trading/finance/coa",
+        "/general-trading/settings"
+      ]
+    },
+    "createdAt": "2025-12-24T04:27:21.903Z",
+    "updatedAt": "2025-12-24T04:27:21.903Z"
+  },
+  {
+    "id": "usr-1766550441904-13",
+    "fullName": "AGUNG",
+    "username": "AGUNG",
+    "role": "Purchasing",
+    "accessCode": "1234",
+    "isActive": true,
+    "businessUnits": [
+      "general-trading"
+    ],
+    "defaultBusiness": "general-trading",
+    "menuAccess": {
+      "general-trading": [
+        "/general-trading/purchasing",
+        "/general-trading/settings"
+      ]
+    },
+    "createdAt": "2025-12-24T04:27:21.903Z",
+    "updatedAt": "2025-12-24T04:27:21.903Z"
+  },
+  {
+    "id": "usr-1766550441904-14",
+    "fullName": "DEDI",
+    "username": "DEDI",
+    "role": "WH Ops",
+    "accessCode": "1234",
+    "isActive": true,
+    "businessUnits": [
+      "general-trading"
+    ],
+    "defaultBusiness": "general-trading",
+    "menuAccess": {
+      "general-trading": [
+        "/general-trading/delivery-note",
+        "/general-trading/settings"
+      ]
+    },
+    "createdAt": "2025-12-24T04:27:21.903Z",
+    "updatedAt": "2025-12-24T04:27:21.903Z"
+  },
+  {
+    "id": "usr-1766550441904-15",
+    "fullName": "LIN-LIN",
+    "username": "LIN-LIN",
+    "role": "Accounting & Finance",
+    "accessCode": "1234",
+    "isActive": true,
+    "businessUnits": [
+      "general-trading"
+    ],
+    "defaultBusiness": "general-trading",
+    "menuAccess": {
+      "general-trading": [
+        "/general-trading/finance/ledger",
+        "/general-trading/finance/reports",
+        "/general-trading/finance/accounting",
+        "/general-trading/finance/ar",
+        "/general-trading/finance/ap",
+        "/general-trading/finance/payments",
+        "/general-trading/finance/coa",
+        "/general-trading/settings"
+      ]
+    },
+    "createdAt": "2025-12-24T04:27:21.903Z",
+    "updatedAt": "2025-12-24T04:27:21.903Z"
+  },
+  {
+    "id": "usr-1766550441904-16",
+    "fullName": "PRASETIO",
+    "username": "PRASETIO",
+    "role": "Operational Head",
+    "accessCode": "1234",
+    "isActive": true,
+    "businessUnits": [
+      "tracking"
+    ],
+    "defaultBusiness": "tracking",
+    "menuAccess": {
+      "tracking": [
+        "/tracking/dashboard",
+        "/tracking/master/vehicles",
+        "/tracking/master/drivers",
+        "/tracking/master/routes",
+        "/tracking/master/customers",
+        "/tracking/shipments/delivery-orders",
+        "/tracking/shipments/tracking",
+        "/tracking/tracking/realtime",
+        "/tracking/tracking/status",
+        "/tracking/schedules/route-planning",
+        "/tracking/schedules/delivery",
+        "/tracking/finance/billing",
+        "/tracking/finance/payments",
+        "/tracking/finance/pettycash",
+        "/tracking/settings"
+      ]
+    },
+    "createdAt": "2025-12-24T04:27:21.903Z",
+    "updatedAt": "2025-12-24T04:27:21.903Z"
+  },
+  {
+    "id": "usr-1766550441904-17",
+    "fullName": "NIA",
+    "username": "NIA",
+    "role": "admin trucking",
+    "accessCode": "1234",
+    "isActive": true,
+    "businessUnits": [
+      "tracking"
+    ],
+    "defaultBusiness": "tracking",
+    "menuAccess": {
+      "tracking": [
+        "/tracking/dashboard",
+        "/tracking/master/vehicles",
+        "/tracking/master/drivers",
+        "/tracking/master/routes",
+        "/tracking/master/customers",
+        "/tracking/shipments/delivery-orders",
+        "/tracking/shipments/tracking",
+        "/tracking/tracking/realtime",
+        "/tracking/tracking/status",
+        "/tracking/schedules/route-planning",
+        "/tracking/schedules/delivery",
+        "/tracking/finance/billing",
+        "/tracking/finance/payments",
+        "/tracking/finance/pettycash",
+        "/tracking/settings"
+      ]
+    },
+    "createdAt": "2025-12-24T04:27:21.903Z",
+    "updatedAt": "2025-12-24T04:27:21.903Z"
+  },
+  {
+    "id": "usr-1766550441904-18",
+    "fullName": "SUMAR",
+    "username": "SUMAR",
+    "role": "Ka. Keuangan (Head of Finance)",
+    "accessCode": "1234",
+    "isActive": true,
+    "businessUnits": [
+      "packaging",
+      "general-trading",
+      "tracking"
+    ],
+    "defaultBusiness": "packaging",
+    "menuAccess": {
+      "packaging": [
+        "/packaging/finance/ledger",
+        "/packaging/finance/reports",
+        "/packaging/finance/invoices",
+        "/packaging/finance/accounting",
+        "/packaging/finance/ar",
+        "/packaging/finance/ap",
+        "/packaging/finance/payments",
+        "/packaging/finance/tax-management",
+        "/packaging/finance/cost-analysis",
+        "/packaging/finance/all-business-reports",
+        "/packaging/finance/coa",
+        "/packaging/settings"
+      ],
+      "general-trading": [
+        "/general-trading/finance/ledger",
+        "/general-trading/finance/reports",
+        "/general-trading/finance/accounting",
+        "/general-trading/finance/ar",
+        "/general-trading/finance/ap",
+        "/general-trading/finance/payments",
+        "/general-trading/finance/coa",
+        "/general-trading/settings"
+      ],
+      "tracking": [
+        "/tracking/finance/billing",
+        "/tracking/finance/payments",
+        "/tracking/finance/pettycash",
+        "/tracking/settings"
+      ]
+    },
+    "createdAt": "2025-12-24T04:27:21.903Z",
+    "updatedAt": "2025-12-24T04:27:21.903Z"
+  }
+]

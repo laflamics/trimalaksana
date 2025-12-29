@@ -1,0 +1,219 @@
+/* Compact styles untuk semua module (Master, Packaging, Finance, Settings, dll) */
+.module-compact .table {
+  font-size: 11px !important;
+  table-layout: auto;
+}
+
+.module-compact .table th {
+  padding: 6px 8px !important;
+  font-size: 10px !important;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.module-compact .table td {
+  padding: 6px 8px !important;
+  font-size: 11px !important;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  border-bottom: 1px solid var(--border-color) !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+
+/* Override inline styles dari Table component */
+.module-compact .table td[style*="paddingBottom"] {
+  padding-bottom: 6px !important;
+}
+
+.module-compact .table td[style*="paddingTop"] {
+  padding-top: 6px !important;
+}
+
+/* Override borderBottom: none dari Table component - pastikan ada border */
+.module-compact .table td {
+  border-bottom: 1px solid var(--border-color) !important;
+}
+
+/* Zebra striping untuk table rows - selang seling warna */
+.module-compact .table tbody tr:nth-child(even) {
+  background-color: var(--bg-tertiary) !important;
+}
+
+.module-compact .table tbody tr:nth-child(even) td {
+  background-color: var(--bg-tertiary) !important;
+}
+
+.module-compact .table tbody tr:nth-child(odd) {
+  background-color: var(--bg-secondary) !important;
+}
+
+.module-compact .table tbody tr:nth-child(odd) td {
+  background-color: var(--bg-secondary) !important;
+}
+
+.module-compact .table tbody tr:hover {
+  background-color: var(--hover-bg) !important;
+}
+
+.module-compact .table tbody tr:hover td {
+  background-color: var(--hover-bg) !important;
+}
+
+/* Border antara rows */
+.module-compact .table tbody tr {
+  border-bottom: 1px solid var(--border-color) !important;
+}
+
+.module-compact .table tbody tr:last-child td {
+  border-bottom: none !important;
+}
+
+/* Pastikan td di row terakhir juga tidak ada border */
+.module-compact .table tbody tr:last-child td[style*="borderBottom"] {
+  border-bottom: none !important;
+}
+
+.module-compact .card {
+  padding: 0;
+}
+
+.module-compact .card-content {
+  padding: 12px !important;
+}
+
+.module-compact .card-header {
+  padding: 10px 12px !important;
+}
+
+.module-compact .card-title {
+  font-size: 14px !important;
+}
+
+.module-compact .page-header {
+  padding: 0 !important;
+  margin-bottom: 8px !important;
+}
+
+.module-compact .page-header h1 {
+  font-size: 18px !important;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.module-compact button,
+.module-compact .button,
+.module-compact .btn {
+  font-size: 12px !important;
+  padding: 6px 12px !important;
+  min-height: 32px;
+  border: 0.5px solid var(--text-primary) !important;
+  border-radius: 4px !important;
+  transition: transform 0.2s ease !important;
+  opacity: 0.7;
+}
+
+.module-compact button[style*="borderWidth"],
+.module-compact .button[style*="borderWidth"],
+.module-compact .btn[style*="borderWidth"] {
+  border-width: 0.5px !important;
+}
+
+.module-compact button:hover,
+.module-compact .button:hover,
+.module-compact .btn:hover:not(:disabled) {
+  transform: scale(1.02) !important;
+  border-color: var(--text-primary) !important;
+  border-width: 0.5px !important;
+  opacity: 1;
+}
+
+.module-compact .table-empty {
+  padding: 20px !important;
+  font-size: 11px !important;
+}
+
+.module-compact .table-container {
+  max-height: calc(100vh - 250px);
+}
+
+.module-compact input,
+.module-compact select {
+  font-size: 12px !important;
+  padding: 6px 10px !important;
+}
+
+.module-compact label {
+  font-size: 12px !important;
+  margin-bottom: 4px !important;
+}
+
+/* Tab container compact */
+.module-compact .tab-container {
+  padding: 8px 12px !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: var(--border-color) transparent !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+.module-compact .tab-container::-webkit-scrollbar {
+  height: 6px !important;
+}
+
+.module-compact .tab-container::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.module-compact .tab-container::-webkit-scrollbar-thumb {
+  background-color: var(--border-color) !important;
+  border-radius: 3px !important;
+}
+
+.module-compact .tab-container::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-secondary) !important;
+}
+
+.module-compact .tab-button {
+  font-size: 12px !important;
+  padding: 6px 12px !important;
+  border: 0.5px solid var(--text-primary) !important;
+  border-radius: 4px !important;
+  transition: transform 0.2s ease !important;
+  opacity: 0.7;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
+
+.module-compact .tab-button:hover {
+  transform: scale(1.02) !important;
+  border-color: var(--text-primary) !important;
+  border-width: 0.5px !important;
+  opacity: 1;
+}
+
+.module-compact .tab-button.active {
+  border-color: var(--text-primary) !important;
+  border-width: 0.5px !important;
+  opacity: 1;
+}
+
+/* Input compact */
+.module-compact .input-wrapper {
+  margin-bottom: 12px !important;
+}
+
+.module-compact .input-wrapper label {
+  font-size: 12px !important;
+  margin-bottom: 4px !important;
+}
+
+.module-compact .input-wrapper input {
+  font-size: 12px !important;
+  padding: 6px 10px !important;
+}
+

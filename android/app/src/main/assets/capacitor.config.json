@@ -1,0 +1,8 @@
+{
+	"appId": "com.trimalaksana.erp",
+	"appName": "Trima Laksana ERP",
+	"webDir": "dist/renderer",
+	"server": {
+		"androidScheme": "https"
+	}
+}

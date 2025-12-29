@@ -1,0 +1,74 @@
+.schedule-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.schedule-dialog {
+  max-width: 600px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.schedule-dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.schedule-info {
+  background: var(--bg-tertiary);
+  padding: 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.info-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.info-value {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.schedule-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.progress-info {
+  background: var(--bg-tertiary);
+  padding: 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.schedule-dialog-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+

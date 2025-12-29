@@ -1,0 +1,26 @@
+{
+  "value": [
+    {
+      "id": "cat-1",
+      "name": "Makanan",
+      "color": "#FF6B6B"
+    },
+    {
+      "id": "cat-2",
+      "name": "Minuman",
+      "color": "#4ECDC4"
+    },
+    {
+      "id": "cat-3",
+      "name": "Dessert",
+      "color": "#FFE66D"
+    },
+    {
+      "id": "cat-4",
+      "name": "Snack",
+      "color": "#95E1D3"
+    }
+  ],
+  "timestamp": 1765320458184,
+  "_timestamp": 1765320458184
+}

@@ -1,0 +1,123 @@
+{
+  "name": "trima-laksana-erp",
+  "version": "1.0.6",
+  "description": "PT.Trima Laksana Jaya Pratama - Enterprise Resource Planning System",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "npm run build:main && concurrently -k -n \"VITE,TS,WATCH\" -c \"cyan,yellow,green\" \"npm run dev:react\" \"npm run watch:main\" \"npm run dev:electron\"",
+    "dev:react": "vite",
+    "dev:electron": "wait-on http://localhost:3000 && electron .",
+    "build": "npm run build:all",
+    "build:all": "npm run build:main && npm run build:renderer",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:renderer": "vite build",
+    "build:app": "node scripts/pre-build-cleanup.js && node scripts/ensure-previous-version.js && npm run build:all && electron-builder && node scripts/generate-latest-yml.js",
+    "uninstall": "node scripts/find-uninstaller.js",
+    "watch:main": "tsc -p tsconfig.main.json --watch",
+    "preview": "vite preview",
+    "electron": "electron .",
+    "start": "npm run build:all && electron .",
+    "prod": "cross-env NODE_ENV=production npm run build:all && cross-env NODE_ENV=production electron .",
+    "seed": "node scripts/seed.js",
+    "seed:gt": "node scripts/seedgt.js",
+    "seed:trucking": "node scripts/seedtrucking.js",
+    "update-bundle": "node scripts/update-bundle.js",
+    "generate:gradle-wrapper": "node scripts/generate-gradle-wrapper.js",
+    "generate:android-keystore": "node scripts/generate-android-keystore.js",
+    "build:android": "npm run build:renderer && npx cap sync android && node scripts/generate-gradle-wrapper.js && cd android && .\\gradlew.bat assembleRelease",
+    "build:android:debug": "npm run build:renderer && npx cap sync android && node scripts/generate-gradle-wrapper.js && cd android && .\\gradlew.bat assembleDebug",
+    "cap:add:ios": "npx cap add ios",
+    "cap:sync:ios": "npm run build:renderer && npx cap sync ios",
+    "build:ios": "npm run build:renderer && npx cap sync ios && npx cap open ios",
+    "build:ios:release": "npm run build:renderer && npx cap sync ios",
+    "build:ios:shareable": "npm run build:renderer && npx cap sync ios"
+  },
+  "keywords": [
+    "trima-laksana",
+    "erp",
+    "enterprise-resource-planning",
+    "electron"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.1",
+    "@capacitor/ios": "^6.2.1",
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.8",
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.1",
+    "axios": "^1.6.2",
+    "electron-updater": "^6.6.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.21.1",
+    "recharts": "^3.4.1",
+    "xlsx": "^0.18.5",
+    "zustand": "^4.4.7"
+  },
+  "build": {
+    "appId": "com.trimalaksana.erp",
+    "productName": "PT.Trima Laksana Jaya Pratama",
+    "directories": {
+      "output": "release-build"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "data",
+        "to": "data",
+        "filter": [
+          "**/*",
+          "!localStorage/**"
+        ]
+      },
+      {
+        "from": "docker",
+        "to": "docker",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/noxtiz.ico",
+      "sign": null
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PT.Trima Laksana Jaya Pratama",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": false,
+      "warningsAsErrors": false,
+      "include": "build/installer.nsh",
+      "perMachine": false,
+      "differentialPackage": true
+    }
+  }
+}

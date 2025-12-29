@@ -1,0 +1,242 @@
+.schedule-container {
+  width: 100%;
+  overflow: auto;
+}
+
+.schedule-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+}
+
+.filter-btn {
+  padding: 6px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+  min-height: 33px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.filter-btn:hover {
+  background: var(--hover-bg);
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+.filter-btn.active {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+  color: var(--bg-primary);
+}
+
+.schedule-table-wrapper {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 300px);
+  max-width: 100%;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.schedule-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+  min-width: 2000px;
+}
+
+.schedule-table thead {
+  background: var(--bg-tertiary);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  display: table-header-group;
+}
+
+.schedule-table th {
+  padding: 8px 6px;
+  text-align: center;
+  font-weight: 600;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  white-space: nowrap;
+  font-size: 11px;
+  text-transform: uppercase;
+  background: var(--bg-tertiary) !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: top;
+  position: sticky;
+  top: 0;
+  z-index: 1001;
+  box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Freeze kolom: SCHEDULE DELIVERY (index 1) - tetap di kiri */
+.schedule-table th:nth-child(1),
+.schedule-table td:nth-child(1) {
+  position: sticky;
+  left: 0;
+  z-index: 22;
+  box-shadow: 2px 0 4px -1px rgba(0, 0, 0, 0.1);
+}
+
+.schedule-table thead th:nth-child(1) {
+  background: var(--bg-tertiary) !important;
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 1002;
+}
+
+/* Freeze kolom: CUSTOMER (index 5) - berdampingan dengan SCHEDULE DELIVERY */
+/* Perhitungan: 120 (SCHEDULE DELIVERY width) = 120px */
+.schedule-table th:nth-child(5),
+.schedule-table td:nth-child(5) {
+  position: sticky;
+  left: 120px;
+  z-index: 22;
+  box-shadow: 2px 0 4px -1px rgba(0, 0, 0, 0.1);
+}
+
+.schedule-table thead th:nth-child(5) {
+  background: var(--bg-tertiary) !important;
+  position: sticky;
+  top: 0;
+  left: 120px;
+  z-index: 1002;
+}
+
+/* Freeze kolom: SPK NO (index 7) - berdampingan dengan CUSTOMER */
+/* Perhitungan: 120 (SCHEDULE DELIVERY) + 150 (CUSTOMER width) = 270px */
+.schedule-table th:nth-child(7),
+.schedule-table td:nth-child(7) {
+  position: sticky;
+  left: 270px;
+  z-index: 22;
+  box-shadow: 2px 0 4px -1px rgba(0, 0, 0, 0.1);
+}
+
+.schedule-table thead th:nth-child(7) {
+  background: var(--bg-tertiary) !important;
+  position: sticky;
+  top: 0;
+  left: 270px;
+  z-index: 1002;
+}
+
+
+.day-header {
+  min-width: 40px;
+  font-size: 10px;
+}
+
+.schedule-table tbody tr {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.schedule-row {
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.schedule-row:hover {
+  background: var(--hover-bg);
+}
+
+.plan-row {
+  background: var(--bg-secondary);
+}
+
+.actual-row {
+  background: var(--bg-tertiary);
+}
+
+.schedule-table td {
+  padding: 6px 6px;
+  text-align: center;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+/* Pastikan background row tetap terlihat di kolom yang di-freeze */
+.schedule-table tbody tr.plan-row td:nth-child(1),
+.schedule-table tbody tr.plan-row td:nth-child(5),
+.schedule-table tbody tr.plan-row td:nth-child(7) {
+  background: var(--bg-secondary) !important;
+}
+
+.schedule-table tbody tr.actual-row td:nth-child(1),
+.schedule-table tbody tr.actual-row td:nth-child(5),
+.schedule-table tbody tr.actual-row td:nth-child(7) {
+  background: var(--bg-tertiary) !important;
+}
+
+/* Untuk row dengan background dinamis (dari inline style) */
+.schedule-table tbody tr[style*="background"] td:nth-child(1),
+.schedule-table tbody tr[style*="background"] td:nth-child(5),
+.schedule-table tbody tr[style*="background"] td:nth-child(7) {
+  background: inherit !important;
+}
+
+.week-label {
+  background: var(--bg-tertiary);
+}
+
+.week-label-cell {
+  padding: 8px 12px !important;
+  text-align: left !important;
+  font-weight: 600;
+  color: var(--accent-color);
+  font-size: 13px;
+}
+
+.unschedule-label {
+  color: var(--warning) !important;
+}
+
+.day-cell {
+  min-width: 40px;
+  position: relative;
+}
+
+.day-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+
+.dot-red {
+  background: #d32f2f;
+}
+
+.dot-yellow {
+  background: #fbc02d;
+}
+
+.dot-green {
+  background: #388e3c;
+}
+
+.week-label-cell {
+  background: rgba(128, 128, 128, 0.2) !important;
+}
+

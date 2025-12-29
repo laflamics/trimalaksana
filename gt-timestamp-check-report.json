@@ -1,0 +1,253 @@
+{
+  "timestamp": "2025-12-26T00:20:48.728Z",
+  "totalFiles": 9,
+  "filesWithTimestamp": 9,
+  "filesWithHandleSave": 9,
+  "timestampCoverage": 100,
+  "handleSaveCoverage": 100,
+  "overallScore": 100,
+  "results": [
+    {
+      "file": "src/pages/GeneralTrading/Master/Products.tsx",
+      "exists": true,
+      "handleSaveFunctions": 2,
+      "timestampImplementations": 10,
+      "storageServiceCalls": 4,
+      "dateNowUsage": 6,
+      "dateISOUsage": 5,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "const handleSave = async () => {",
+          "handleSave = async () => {"
+        ]
+      }
+    },
+    {
+      "file": "src/pages/GeneralTrading/Master/Customers.tsx",
+      "exists": true,
+      "handleSaveFunctions": 2,
+      "timestampImplementations": 8,
+      "storageServiceCalls": 4,
+      "dateNowUsage": 6,
+      "dateISOUsage": 3,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "const handleSave = async () => {",
+          "handleSave = async () => {"
+        ]
+      }
+    },
+    {
+      "file": "src/pages/GeneralTrading/Master/Suppliers.tsx",
+      "exists": true,
+      "handleSaveFunctions": 2,
+      "timestampImplementations": 8,
+      "storageServiceCalls": 4,
+      "dateNowUsage": 6,
+      "dateISOUsage": 3,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "const handleSave = async () => {",
+          "handleSave = async () => {"
+        ]
+      }
+    },
+    {
+      "file": "src/pages/GeneralTrading/SalesOrders.tsx",
+      "exists": true,
+      "handleSaveFunctions": 4,
+      "timestampImplementations": 14,
+      "storageServiceCalls": 14,
+      "dateNowUsage": 14,
+      "dateISOUsage": 12,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "const handleSave = async () => {",
+          "handleSaveQuotationToPDF = async () => {",
+          "handleSaveSOToPDF = async () => {",
+          "handleSave = async () => {"
+        ]
+      }
+    },
+    {
+      "file": "src/pages/GeneralTrading/Purchasing.tsx",
+      "exists": true,
+      "handleSaveFunctions": 4,
+      "timestampImplementations": 7,
+      "storageServiceCalls": 24,
+      "dateNowUsage": 13,
+      "dateISOUsage": 13,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "const handleSave = async () => {",
+          "handleSave = async () => {",
+          "handleSaveToPDF = async () => {",
+          "handleSaveReceipt = async (receiptData: { qtyReceived: number; receivedDate: string; notes?: string; suratJalan?: string; suratJalanName?: string; invoiceNo?: string; invoiceFile?: string; invoiceFileName?: string }) => {"
+        ]
+      }
+    },
+    {
+      "file": "src/pages/GeneralTrading/DeliveryNote.tsx",
+      "exists": true,
+      "handleSaveFunctions": 5,
+      "timestampImplementations": 4,
+      "storageServiceCalls": 14,
+      "dateNowUsage": 7,
+      "dateISOUsage": 9,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "lastUpdate: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "const handleSave = async () => {",
+          "const handleSave = async () => {",
+          "handleSave = async () => {",
+          "handleSaveToPDF = async () => {",
+          "handleSave = async () => {"
+        ]
+      }
+    },
+    {
+      "file": "src/pages/GeneralTrading/Finance/invoices.tsx",
+      "exists": true,
+      "handleSaveFunctions": 3,
+      "timestampImplementations": 3,
+      "storageServiceCalls": 15,
+      "dateNowUsage": 7,
+      "dateISOUsage": 8,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()",
+          "created: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "const handleSave = async () => {",
+          "handleSaveToPDF = async () => {",
+          "handleSave = async () => {"
+        ]
+      }
+    },
+    {
+      "file": "src/pages/GeneralTrading/Finance/COA.tsx",
+      "exists": true,
+      "handleSaveFunctions": 2,
+      "timestampImplementations": 8,
+      "storageServiceCalls": 6,
+      "dateNowUsage": 4,
+      "dateISOUsage": 3,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "const handleSave = async () => {",
+          "handleSave = async () => {"
+        ]
+      }
+    },
+    {
+      "file": "src/pages/GeneralTrading/Finance/GeneralLedger.tsx",
+      "exists": true,
+      "handleSaveFunctions": 2,
+      "timestampImplementations": 8,
+      "storageServiceCalls": 6,
+      "dateNowUsage": 6,
+      "dateISOUsage": 11,
+      "hasProperTimestamp": true,
+      "details": {
+        "timestamps": [
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "_timestamp: Date.now()",
+          "lastUpdate: new Date().toISOString()",
+          "lastUpdate: new Date().toISOString()"
+        ],
+        "handleSaves": [
+          "const handleSave = async () => {",
+          "handleSave = async () => {"
+        ]
+      }
+    }
+  ],
+  "filesWithoutTimestamp": [],
+  "filesWithoutHandleSave": []
+}

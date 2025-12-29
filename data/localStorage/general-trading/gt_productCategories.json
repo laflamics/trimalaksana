@@ -1,0 +1,780 @@
+{
+  "value": [
+    {
+      "id": "1766322053236-xzvdrehyy",
+      "nama": "ADVANEX",
+      "name": "ADVANEX",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-nd2kuq0ap",
+      "nama": "ALT",
+      "name": "ALT",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-06f4nhgx1",
+      "nama": "ARD",
+      "name": "ARD",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-j74uhl51j",
+      "nama": "ASAHI",
+      "name": "ASAHI",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-te93qwyya",
+      "nama": "CAC",
+      "name": "CAC",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-3lrlqf5jj",
+      "nama": "DEHEUS",
+      "name": "DEHEUS",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-7qo754zt3",
+      "nama": "EI",
+      "name": "EI",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-n7vsxz1ti",
+      "nama": "EVP",
+      "name": "EVP",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-janj7s9kc",
+      "nama": "FJA",
+      "name": "FJA",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-xthp7pq39",
+      "nama": "FK",
+      "name": "FK",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-bdyt3caow",
+      "nama": "HKB",
+      "name": "HKB",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-q0b1g0x6t",
+      "nama": "KAWASAKI",
+      "name": "KAWASAKI",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-lnhgon4os",
+      "nama": "KI",
+      "name": "KI",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-bu4ed6wqf",
+      "nama": "KWT",
+      "name": "KWT",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-v7bjsw7jr",
+      "nama": "MCM",
+      "name": "MCM",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-bi841xpvb",
+      "nama": "MDA",
+      "name": "MDA",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-fudebr72d",
+      "nama": "MDH",
+      "name": "MDH",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-s6brup7pu",
+      "nama": "MI",
+      "name": "MI",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-d2z7tla5a",
+      "nama": "NOMOS",
+      "name": "NOMOS",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-1843t0pl9",
+      "nama": "OPI",
+      "name": "OPI",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-vqyvun8zy",
+      "nama": "PAT",
+      "name": "PAT",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-02391cp09",
+      "nama": "PI",
+      "name": "PI",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-cdh83zu2z",
+      "nama": "PPR",
+      "name": "PPR",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-f4bboqcsm",
+      "nama": "PRC",
+      "name": "PRC",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-92ki94vez",
+      "nama": "PWI",
+      "name": "PWI",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-utb6ar83n",
+      "nama": "SAI",
+      "name": "SAI",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-8oj9ufluk",
+      "nama": "SANOH",
+      "name": "SANOH",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-36yo15rs3",
+      "nama": "SBM",
+      "name": "SBM",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-0lfqklkm0",
+      "nama": "SD",
+      "name": "SD",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-59az5m8kx",
+      "nama": "SDJA",
+      "name": "SDJA",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-o8bxtljcb",
+      "nama": "SEI",
+      "name": "SEI",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-8c09o2ry9",
+      "nama": "SHI",
+      "name": "SHI",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-vh70a2j00",
+      "nama": "SHINDENGEN",
+      "name": "SHINDENGEN",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-nhqzibqa2",
+      "nama": "SHR",
+      "name": "SHR",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-k066vzhe7",
+      "nama": "SM",
+      "name": "SM",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-1zpuv2yf5",
+      "nama": "SNH",
+      "name": "SNH",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-pxsseld78",
+      "nama": "SRO",
+      "name": "SRO",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-cp1buje5q",
+      "nama": "ST",
+      "name": "ST",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-jm2hrhtit",
+      "nama": "TBINA",
+      "name": "TBINA",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-pmnickbpz",
+      "nama": "TRMS",
+      "name": "TRMS",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-blqu48j7x",
+      "nama": "UNI",
+      "name": "UNI",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-mayxtj9nm",
+      "nama": "VLM",
+      "name": "VLM",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1766322053236-7zo5hkemh",
+      "nama": "VTC",
+      "name": "VTC",
+      "created": "2025-12-21T13:00:53.236Z"
+    },
+    {
+      "id": "1765872867226-zbpvgl85j",
+      "nama": "ADVANEX",
+      "name": "ADVANEX",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-77ezsvbwx",
+      "nama": "ALT",
+      "name": "ALT",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-q4xlh76xb",
+      "nama": "ARD",
+      "name": "ARD",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-m9el1wf81",
+      "nama": "ASAHI",
+      "name": "ASAHI",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-eij21o9wm",
+      "nama": "CAC",
+      "name": "CAC",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-29wf3ju93",
+      "nama": "DEHEUS",
+      "name": "DEHEUS",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-xnbbj56dh",
+      "nama": "EI",
+      "name": "EI",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-zp1ldyns4",
+      "nama": "EVP",
+      "name": "EVP",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-r89dfth9j",
+      "nama": "FJA",
+      "name": "FJA",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-vh0y5ki0h",
+      "nama": "FK",
+      "name": "FK",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-hk83tgqqq",
+      "nama": "HKB",
+      "name": "HKB",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-nqehihklq",
+      "nama": "KAWASAKI",
+      "name": "KAWASAKI",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-7eijqxs63",
+      "nama": "KI",
+      "name": "KI",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-lnbasj8o2",
+      "nama": "KWT",
+      "name": "KWT",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-2o9g5lov0",
+      "nama": "MCM",
+      "name": "MCM",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-r2c62q7ai",
+      "nama": "MDA",
+      "name": "MDA",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-zulqy515v",
+      "nama": "MDH",
+      "name": "MDH",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-fq20vtn00",
+      "nama": "MI",
+      "name": "MI",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-eykafhe9r",
+      "nama": "NOMOS",
+      "name": "NOMOS",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-1ba7xcgqy",
+      "nama": "OPI",
+      "name": "OPI",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-fb7tcb9wg",
+      "nama": "PAT",
+      "name": "PAT",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-g4pdg84b0",
+      "nama": "PI",
+      "name": "PI",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-bhctode4q",
+      "nama": "PPR",
+      "name": "PPR",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-f8hn06v2t",
+      "nama": "PRC",
+      "name": "PRC",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-scrcnx2xe",
+      "nama": "PWI",
+      "name": "PWI",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-2bx6eudd8",
+      "nama": "SAI",
+      "name": "SAI",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-09bzm0wnp",
+      "nama": "SANOH",
+      "name": "SANOH",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-i8un91ulg",
+      "nama": "SBM",
+      "name": "SBM",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-9hld2hodn",
+      "nama": "SD",
+      "name": "SD",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-3ks67sytk",
+      "nama": "SDJA",
+      "name": "SDJA",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-7liw3pxl9",
+      "nama": "SEI",
+      "name": "SEI",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-j6ovj70go",
+      "nama": "SHI",
+      "name": "SHI",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-dun7965jp",
+      "nama": "SHINDENGEN",
+      "name": "SHINDENGEN",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-yzfkyonhl",
+      "nama": "SHR",
+      "name": "SHR",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-fru7t5zq1",
+      "nama": "SM",
+      "name": "SM",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-fx7jgzdg3",
+      "nama": "SNH",
+      "name": "SNH",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-efwm1inkz",
+      "nama": "SRO",
+      "name": "SRO",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-qsrf5gkc6",
+      "nama": "ST",
+      "name": "ST",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-29ma9emk7",
+      "nama": "TBINA",
+      "name": "TBINA",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-bbzhyoi7d",
+      "nama": "TRMS",
+      "name": "TRMS",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-2ltvtgdu3",
+      "nama": "UNI",
+      "name": "UNI",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-r0gt6moe5",
+      "nama": "VLM",
+      "name": "VLM",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872867226-hfaxa2g5c",
+      "nama": "VTC",
+      "name": "VTC",
+      "created": "2025-12-16T08:14:27.226Z"
+    },
+    {
+      "id": "1765872494468-a7oh5vkh5",
+      "nama": "ADVANEX",
+      "name": "ADVANEX",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-7zj2mjgqu",
+      "nama": "ALT",
+      "name": "ALT",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-aceyeyivi",
+      "nama": "ARD",
+      "name": "ARD",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-b4lim3jak",
+      "nama": "ASAHI",
+      "name": "ASAHI",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-wj91mlipb",
+      "nama": "CAC",
+      "name": "CAC",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-sbsqxzv63",
+      "nama": "DEHEUS",
+      "name": "DEHEUS",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-7ob3wo0ee",
+      "nama": "EI",
+      "name": "EI",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-s1u9cugor",
+      "nama": "EVP",
+      "name": "EVP",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-ns9ni12eh",
+      "nama": "FJA",
+      "name": "FJA",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-8uz3bg7co",
+      "nama": "FK",
+      "name": "FK",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-6i4x6rth3",
+      "nama": "HKB",
+      "name": "HKB",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-63xjbq7yr",
+      "nama": "KAWASAKI",
+      "name": "KAWASAKI",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-yhttlpxad",
+      "nama": "KI",
+      "name": "KI",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-np50blghm",
+      "nama": "KWT",
+      "name": "KWT",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-7driq9eqr",
+      "nama": "MCM",
+      "name": "MCM",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-ff6gpkhmh",
+      "nama": "MDA",
+      "name": "MDA",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-5rdqmgrbx",
+      "nama": "MDH",
+      "name": "MDH",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-sh1wgl0ds",
+      "nama": "MI",
+      "name": "MI",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-0iic14rs1",
+      "nama": "NOMOS",
+      "name": "NOMOS",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-zv82v1h2y",
+      "nama": "OPI",
+      "name": "OPI",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-558fqbq46",
+      "nama": "PAT",
+      "name": "PAT",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-9xjiyapky",
+      "nama": "PI",
+      "name": "PI",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-mnj1mu6ic",
+      "nama": "PPR",
+      "name": "PPR",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-cdo5ssr7k",
+      "nama": "PRC",
+      "name": "PRC",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-pohu81nrc",
+      "nama": "PWI",
+      "name": "PWI",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-wsdx0drwp",
+      "nama": "SAI",
+      "name": "SAI",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-4b5qngr52",
+      "nama": "SANOH",
+      "name": "SANOH",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-5fzl1ms33",
+      "nama": "SBM",
+      "name": "SBM",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-j4ie5iyav",
+      "nama": "SD",
+      "name": "SD",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-m8dq6eulu",
+      "nama": "SDJA",
+      "name": "SDJA",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-5cui4lto1",
+      "nama": "SEI",
+      "name": "SEI",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-o3wqnvf8a",
+      "nama": "SHI",
+      "name": "SHI",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-wtlxvbtsm",
+      "nama": "SHINDENGEN",
+      "name": "SHINDENGEN",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-ggmmi6d88",
+      "nama": "SHR",
+      "name": "SHR",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-9h4kt54u4",
+      "nama": "SM",
+      "name": "SM",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-l50cwxxft",
+      "nama": "SNH",
+      "name": "SNH",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-2gxs5nzc2",
+      "nama": "SRO",
+      "name": "SRO",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-e3s6m9hug",
+      "nama": "ST",
+      "name": "ST",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-moxhw9uya",
+      "nama": "TBINA",
+      "name": "TBINA",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-ygetze0zs",
+      "nama": "TRMS",
+      "name": "TRMS",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-ujc6n7mts",
+      "nama": "UNI",
+      "name": "UNI",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-twsjdf0he",
+      "nama": "VLM",
+      "name": "VLM",
+      "created": "2025-12-16T08:08:14.468Z"
+    },
+    {
+      "id": "1765872494468-xrdky6lw2",
+      "nama": "VTC",
+      "name": "VTC",
+      "created": "2025-12-16T08:08:14.468Z"
+    }
+  ],
+  "timestamp": 1766322053401,
+  "_timestamp": 1766322053401
+}

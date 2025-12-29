@@ -1,0 +1,975 @@
+/* ============================================
+   MOBILE RESPONSIVE STYLES
+   Untuk semua module - tidak mengganggu desktop
+   ============================================ */
+
+/* Breakpoint: Mobile (max-width: 768px) */
+@media (max-width: 768px) {
+  
+  /* ============================================
+     LAYOUT - Sidebar & Main Content
+     ============================================ */
+  
+  .layout {
+    flex-direction: column;
+    height: 100vh;
+  }
+  
+  .sidebar {
+    width: 220px;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1000;
+    transform: translateX(0); /* Selalu visible di mobile */
+    transition: width 0.3s ease;
+    border-right: 1px solid var(--border-color);
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
+  }
+  
+  /* Sidebar collapsed di mobile - hanya icon (40px) */
+  .sidebar.closed {
+    width: 40px !important;
+    transform: translateX(0) !important; /* Tetap visible saat collapsed */
+  }
+  
+  /* Sidebar expanded di mobile - full menu (220px) */
+  .sidebar:not(.closed) {
+    width: 220px !important;
+    transform: translateX(0) !important;
+  }
+  
+  .sidebar-header {
+    padding: 8px 12px;
+    min-height: 40px;
+  }
+  
+  .sidebar-header h2 {
+    font-size: 12px;
+  }
+  
+  .sidebar.closed .sidebar-header h2 {
+    display: none !important;
+  }
+  
+  .nav-item {
+    padding: 8px 12px;
+    font-size: 11px;
+  }
+  
+  .nav-icon {
+    font-size: 14px;
+    margin-right: 8px;
+  }
+  
+  /* Sidebar collapsed - icon centered, no margin */
+  .sidebar.closed .nav-icon {
+    margin-right: 0 !important;
+    font-size: 14px;
+  }
+  
+  .sidebar.closed .nav-text {
+    display: none !important;
+  }
+  
+  /* Sidebar collapsed - nav item centered */
+  .sidebar.closed .nav-item {
+    justify-content: center;
+    padding: 8px 4px !important;
+  }
+  
+  /* Sidebar collapsed - header centered */
+  .sidebar.closed .sidebar-header {
+    justify-content: center;
+    padding: 8px 4px !important;
+  }
+  
+  .nav-section-title {
+    padding: 6px 12px !important;
+    font-size: 9px !important;
+  }
+  
+  .nav-section {
+    margin-bottom: 12px !important;
+  }
+  
+  /* Sidebar collapsed - hide title text */
+  .sidebar.closed .sidebar-header > div:first-child {
+    display: none !important;
+  }
+  
+  /* Sidebar collapsed - toggle button centered */
+  .sidebar.closed .sidebar-toggle {
+    margin: 0 auto;
+  }
+  
+  .main-content {
+    padding: 12px;
+    width: 100%;
+    overflow-x: hidden;
+    margin-left: 0; /* Reset margin */
+  }
+  
+  /* Main content adjust saat sidebar collapsed - ada space untuk sidebar */
+  .sidebar.closed ~ .main-content {
+    margin-left: 40px; /* Space untuk sidebar collapsed (40px) */
+    padding-left: 12px;
+    width: calc(100% - 40px); /* Width dikurangi sidebar */
+  }
+  
+  /* Main content adjust saat sidebar expanded - ada space untuk sidebar */
+  .sidebar:not(.closed) ~ .main-content {
+    margin-left: 220px; /* Space untuk sidebar expanded (220px) */
+    padding-left: 12px;
+    width: calc(100% - 220px); /* Width dikurangi sidebar */
+  }
+  
+  /* Mobile Menu Toggle Button - Z-index lebih tinggi */
+  .mobile-menu-toggle {
+    display: block !important;
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    z-index: 1002 !important; /* Lebih tinggi dari sidebar */
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    min-width: 32px;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  /* Sidebar toggle button - z-index lebih rendah, posisi aman */
+  .sidebar-toggle {
+    z-index: 1;
+    position: relative;
+  }
+  
+  /* Sidebar collapsed - toggle button tetap accessible */
+  .sidebar.closed .sidebar-toggle {
+    z-index: 1;
+    position: relative;
+  }
+  
+  .mobile-menu-toggle:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--accent-color);
+  }
+  
+  .mobile-menu-toggle:active {
+    opacity: 0.7;
+  }
+  
+  /* Mobile Sidebar Overlay */
+  .mobile-sidebar-overlay {
+    display: block;
+  }
+  
+  .mobile-sidebar-overlay.active {
+    display: block;
+  }
+  
+  /* ============================================
+     PAGE HEADER - Tengah (Lebih Kecil)
+     ============================================ */
+  
+  .page-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    padding: 0;
+  }
+  
+  .page-header h1 {
+    font-size: 14px;
+    line-height: 1.2;
+    margin: 0;
+    text-align: center;
+  }
+  
+  .page-subtitle {
+    font-size: 9px;
+    margin-top: 2px;
+    text-align: center;
+  }
+  
+  /* ============================================
+     CARDS (Lebih Kecil)
+     ============================================ */
+  
+  .card {
+    margin-bottom: 8px;
+    border-radius: 4px;
+  }
+  
+  .card-content {
+    padding: 8px !important;
+  }
+  
+  .card-header {
+    padding: 6px 8px !important;
+  }
+  
+  .card-title {
+    font-size: 11px !important;
+  }
+  
+  /* ============================================
+     TABLES - Mobile Optimized (Lebih Kecil)
+     ============================================ */
+  
+  .table-container {
+    max-height: calc(100vh - 250px);
+    border-radius: 6px;
+    overflow-x: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .table {
+    font-size: 9px;
+    min-width: 500px; /* Force horizontal scroll untuk table besar */
+  }
+  
+  .table th {
+    padding: 4px 4px;
+    font-size: 8px;
+    white-space: nowrap;
+  }
+  
+  .table td {
+    padding: 4px 4px;
+    font-size: 9px;
+  }
+  
+  /* Table wrapper untuk better scrolling */
+  .table-wrapper {
+    position: relative;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* ============================================
+     TABS
+     ============================================ */
+  
+  .tab-container {
+    padding: 0 8px;
+    margin-bottom: 8px;
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .tab-button {
+    padding: 6px 10px;
+    font-size: 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  
+  .tab-content {
+    padding: 0 8px 8px;
+  }
+  
+  /* ============================================
+     BUTTONS - Touch Friendly (Lebih Kecil)
+     ============================================ */
+  
+  button,
+  .button,
+  .btn {
+    min-height: 32px;
+    padding: 4px 8px;
+    font-size: 10px;
+    border-radius: 4px;
+  }
+  
+  /* Button groups - stack vertical */
+  .button-group,
+  .btn-group {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+  }
+  
+  .button-group button,
+  .btn-group button {
+    width: 100%;
+  }
+  
+  /* ============================================
+     FORMS & INPUTS (Lebih Kecil)
+     ============================================ */
+  
+  .form-group,
+  .input-group {
+    margin-bottom: 8px;
+  }
+  
+  label {
+    font-size: 9px;
+    margin-bottom: 3px;
+    display: block;
+  }
+  
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="password"],
+  input[type="date"],
+  input[type="time"],
+  textarea,
+  select {
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 12px;
+    border-radius: 4px;
+    min-height: 32px;
+  }
+  
+  /* Form grid - stack vertical */
+  .form-grid,
+  .grid-form {
+    grid-template-columns: 1fr !important;
+    gap: 16px;
+  }
+  
+  /* Form row - stack vertical */
+  .form-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .form-row > * {
+    width: 100%;
+  }
+  
+  /* ============================================
+     DIALOGS - Mobile Full Screen
+     ============================================ */
+  
+  .dialog-overlay {
+    padding: 0;
+    align-items: flex-start;
+  }
+  
+  .dialog-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 100vh !important;
+    margin: 0;
+    border-radius: 0;
+    padding: 16px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Dialog header - sticky */
+  .dialog-header {
+    position: sticky;
+    top: 0;
+    background: var(--bg-secondary);
+    padding: 12px 0;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+    z-index: 10;
+  }
+  
+  .dialog-header h2,
+  .dialog-header h3 {
+    font-size: 18px;
+    margin: 0;
+  }
+  
+  /* Dialog actions - stack vertical */
+  .dialog-actions {
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+  }
+  
+  .dialog-actions button {
+    width: 100%;
+  }
+  
+  /* ============================================
+     NOTIFICATIONS & ALERTS
+     ============================================ */
+  
+  .notification-panel,
+  .notifications-container {
+    padding: 12px;
+  }
+  
+  .notification-card {
+    padding: 12px;
+    margin-bottom: 12px;
+    font-size: 13px;
+  }
+  
+  /* ============================================
+     SEARCH & FILTER
+     ============================================ */
+  
+  .search-container,
+  .filter-container {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .search-container input,
+  .filter-container input {
+    width: 100%;
+  }
+  
+  /* ============================================
+     STATUS BADGES
+     ============================================ */
+  
+  .status-badge {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+  
+  /* ============================================
+     GRID LAYOUTS - Stack to Single Column
+     ============================================ */
+  
+  .grid-2,
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: 1fr !important;
+    gap: 16px;
+  }
+  
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .stat-card {
+    padding: 16px;
+  }
+  
+  .stat-value {
+    font-size: 36px;
+  }
+  
+  .stat-label {
+    font-size: 12px;
+  }
+  
+  /* ============================================
+     COMPACT MODULE - Mobile Adjustments
+     ============================================ */
+  
+  .module-compact .page-header h1 {
+    font-size: 20px !important;
+  }
+  
+  .module-compact .table {
+    font-size: 11px;
+  }
+  
+  .module-compact .table th {
+    font-size: 9px;
+    padding: 8px 6px;
+  }
+  
+  .module-compact .table td {
+    font-size: 10px;
+    padding: 8px 6px;
+  }
+  
+  .module-compact button,
+  .module-compact .button {
+    min-height: 40px;
+    font-size: 13px;
+    padding: 8px 14px;
+  }
+  
+  /* ============================================
+     PRODUCTION SPECIFIC - Mobile Cards
+     ============================================ */
+  
+  /* Production details card - stack vertical */
+  .production-details-card {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+  
+  /* Batch list - wrap */
+  .batch-list {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .batch-item {
+    width: 100%;
+  }
+  
+  /* ============================================
+     SCHEDULE TABLE - Mobile View
+     ============================================ */
+  
+  .schedule-table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* ============================================
+     UTILITIES
+     ============================================ */
+  
+  /* Hide on mobile */
+  .hide-mobile {
+    display: none !important;
+  }
+  
+  /* Show only on mobile */
+  .show-mobile {
+    display: block !important;
+  }
+  
+  /* Full width on mobile */
+  .mobile-full-width {
+    width: 100% !important;
+  }
+  
+  /* Stack flex items */
+  .mobile-stack {
+    flex-direction: column !important;
+  }
+  
+  /* No margin on mobile */
+  .mobile-no-margin {
+    margin: 0 !important;
+  }
+  
+  /* Smaller padding on mobile */
+  .mobile-padding {
+    padding: 12px !important;
+  }
+  
+}
+
+/* ============================================
+   SMALL MOBILE (max-width: 480px)
+   ============================================ */
+
+@media (max-width: 480px) {
+  
+  .main-content {
+    padding: 8px;
+  }
+  
+  .page-header h1 {
+    font-size: 12px;
+  }
+  
+  .card-content {
+    padding: 8px !important;
+  }
+  
+  .table {
+    font-size: 8px;
+    min-width: 500px;
+  }
+  
+  .table th {
+    padding: 3px 4px;
+    font-size: 7px;
+  }
+  
+  .table td {
+    padding: 3px 4px;
+    font-size: 8px;
+  }
+  
+  .tab-button {
+    padding: 4px 8px;
+    font-size: 9px;
+  }
+  
+  button,
+  .button,
+  .btn {
+    min-height: 28px;
+    padding: 4px 8px;
+    font-size: 9px;
+  }
+  
+  .dialog-card {
+    padding: 8px;
+  }
+  
+  .stat-value {
+    font-size: 24px;
+  }
+  
+}
+
+/* ============================================
+   LANDSCAPE MOBILE (max-width: 768px and orientation: landscape)
+   ============================================ */
+
+@media (max-width: 768px) and (orientation: landscape) {
+  
+  .sidebar {
+    max-height: 60vh;
+  }
+  
+  .table-container {
+    max-height: calc(100vh - 250px);
+  }
+  
+  .dialog-card {
+    max-height: 90vh;
+  }
+  
+}
+
+/* ============================================
+   TOUCH DEVICE OPTIMIZATIONS
+   ============================================ */
+
+@media (hover: none) and (pointer: coarse) {
+  
+  /* Larger touch targets */
+  .nav-item {
+    min-height: 48px;
+  }
+  
+  button,
+  .button,
+  .btn,
+  a.button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Remove hover effects on touch devices */
+  button:hover,
+  .button:hover,
+  .btn:hover {
+    transform: none;
+  }
+  
+  /* Better tap feedback */
+  button:active,
+  .button:active,
+  .btn:active {
+    opacity: 0.7;
+    transform: scale(0.98);
+  }
+  
+}
+
+/* ============================================
+   REPORT & FINANCIAL REPORTS - Mobile Layout
+   Chart di atas, Data di bawah, Card 2 grid
+   ============================================ */
+
+@media (max-width: 768px) {
+  
+  /* Report Module - Summary Tab: Charts & Financial Section - Stack vertical */
+  /* Target div dengan grid 2 kolom di dalam tab-content */
+  .module-compact .tab-content > div > div[style*="display: grid"][style*="gridTemplateColumns: '1fr 1fr'"],
+  .module-compact .tab-content > div > div[style*="display: grid"][style*="gridTemplateColumns: \"1fr 1fr\""] {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+  
+  /* Override inline style untuk grid */
+  .module-compact .tab-content > div > div[style*="gridTemplateColumns: '1fr 1fr'"] {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+  
+  /* Chart Card - Order 1 (di atas) - Card pertama dalam grid */
+  .module-compact .tab-content > div > div[style*="gridTemplateColumns: '1fr 1fr'"] > .card:nth-child(1),
+  .module-compact .tab-content > div > div[style*="gridTemplateColumns"] > .card:nth-child(1) {
+    order: 1 !important;
+    width: 100% !important;
+  }
+  
+  /* Data Card - Order 2 (di bawah) - Card kedua dalam grid */
+  .module-compact .tab-content > div > div[style*="gridTemplateColumns: '1fr 1fr'"] > .card:nth-child(2),
+  .module-compact .tab-content > div > div[style*="gridTemplateColumns"] > .card:nth-child(2) {
+    order: 2 !important;
+    width: 100% !important;
+  }
+  
+  /* Financial Reports - Balance Sheet Grid: Chart di atas, Data di bawah */
+  .module-compact .tab-content > div[style*="padding: '8px'"] > div[style*="gridTemplateColumns: '1fr 1fr'"],
+  .module-compact .tab-content > div[style*="padding: '8px'"] > div[style*="display: grid"][style*="gridTemplateColumns: '1fr 1fr'"] {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+  
+  /* Financial Reports - Chart Card di atas */
+  .module-compact .tab-content > div[style*="padding: '8px'"] > div[style*="gridTemplateColumns: '1fr 1fr'"] > .card:nth-child(1),
+  .module-compact .tab-content > div[style*="padding: '8px'"] > div[style*="gridTemplateColumns: '1fr 1fr'"] > div:nth-child(1) > .card {
+    order: 1 !important;
+    width: 100% !important;
+  }
+  
+  /* Financial Reports - Data Card di bawah */
+  .module-compact .tab-content > div[style*="padding: '8px'"] > div[style*="gridTemplateColumns: '1fr 1fr'"] > .card:nth-child(2),
+  .module-compact .tab-content > div[style*="padding: '8px'"] > div[style*="gridTemplateColumns: '1fr 1fr'"] > div:nth-child(2) > .card {
+    order: 2 !important;
+    width: 100% !important;
+  }
+  
+  /* Operational Summary Cards - 2 grid (dari 4 grid) */
+  .module-compact .tab-content > div > div[style*="gridTemplateColumns: 'repeat(4, 1fr)'"],
+  .module-compact .tab-content > div > div[style*="gridTemplateColumns: repeat(4, 1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+  }
+  
+  /* Report - Summary Cards 3 grid jadi 2 grid */
+  .module-compact .tab-content > div > div[style*="gridTemplateColumns: 'repeat(3, 1fr)'"],
+  .module-compact .tab-content > div > div[style*="gridTemplateColumns: repeat(3, 1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+  }
+  
+  /* Financial Reports - Balance Sheet Cards (Assets & Liabilities) - Stack vertical */
+  .module-compact .card > div[style*="gridTemplateColumns: '1fr 1fr'"],
+  .module-compact .card > div[style*="display: grid"][style*="gridTemplateColumns: '1fr 1fr'"] {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  
+  /* Report - Charts Section dengan class */
+  .module-compact .report-charts-section {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+  
+  .module-compact .report-charts-section > .card:nth-child(1) {
+    order: 1 !important;
+    width: 100% !important;
+  }
+  
+  .module-compact .report-charts-section > .card:nth-child(2) {
+    order: 2 !important;
+    width: 100% !important;
+  }
+  
+  /* Report - Summary Cards dengan class */
+  .module-compact .report-summary-cards {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+  }
+  
+  /* Financial Reports - Grid dengan class */
+  .module-compact .financial-reports-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+  
+  .module-compact .financial-reports-grid > .card:nth-child(1),
+  .module-compact .financial-reports-grid > div:nth-child(1) > .card {
+    order: 1 !important;
+    width: 100% !important;
+  }
+  
+  .module-compact .financial-reports-grid > .card:nth-child(2),
+  .module-compact .financial-reports-grid > div:nth-child(2) > .card {
+    order: 2 !important;
+    width: 100% !important;
+  }
+  
+  /* General override: Semua div dengan grid 2 kolom jadi flex column */
+  .module-compact div[style*="gridTemplateColumns: '1fr 1fr'"] {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+  
+  /* General override: Semua grid 4 kolom jadi 2 kolom */
+  .module-compact div[style*="gridTemplateColumns: 'repeat(4, 1fr)'"],
+  .module-compact div[style*="gridTemplateColumns: repeat(4, 1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+  }
+  
+  /* ============================================
+     NOTIFICATIONS - Mobile Compact (Lebih Kecil)
+     ============================================ */
+  
+  /* Notifications Panel - Lebih Kecil */
+  .card .mb-4 > div[style*="backgroundColor: '#2e7d32'"],
+  .card > div[style*="backgroundColor: '#2e7d32'"] {
+    padding: 8px !important;
+  }
+  
+  .card .mb-4 > div[style*="backgroundColor: '#2e7d32'"] h3,
+  .card > div[style*="backgroundColor: '#2e7d32'"] h3 {
+    font-size: 12px !important;
+    margin: 0 !important;
+    line-height: 1.3;
+  }
+  
+  .card .mb-4 > div[style*="backgroundColor: '#2e7d32'"] > div > div,
+  .card > div[style*="backgroundColor: '#2e7d32'"] > div > div {
+    font-size: 10px !important;
+    opacity: 0.9;
+  }
+  
+  /* Notification Cards - Lebih Kecil & Full Width */
+  .card .mb-4 > div[style*="backgroundColor: '#2e7d32'"] > div[style*="display: flex"][style*="flexWrap: wrap"] > div,
+  .card > div[style*="backgroundColor: '#2e7d32'"] > div[style*="display: flex"][style*="flexWrap: wrap"] > div {
+    flex: 0 1 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    padding: 6px !important;
+    font-size: 9px !important;
+    margin-bottom: 6px;
+  }
+  
+  .card .mb-4 > div[style*="backgroundColor: '#2e7d32'"] > div[style*="display: flex"][style*="flexWrap: wrap"] > div > div,
+  .card > div[style*="backgroundColor: '#2e7d32'"] > div[style*="display: flex"][style*="flexWrap: wrap"] > div > div {
+    font-size: 9px !important;
+    margin-bottom: 2px;
+    line-height: 1.2;
+  }
+  
+  /* Notification Button - Lebih Kecil */
+  .card .mb-4 > div[style*="backgroundColor: '#2e7d32'"] button,
+  .card > div[style*="backgroundColor: '#2e7d32'"] button {
+    padding: 4px 8px !important;
+    font-size: 9px !important;
+    min-height: 28px !important;
+  }
+  
+  /* Notification Status Badge - Lebih Kecil */
+  .card .mb-4 > div[style*="backgroundColor: '#2e7d32'"] > div[style*="display: flex"][style*="flexWrap: wrap"] > div > div[style*="marginTop"],
+  .card > div[style*="backgroundColor: '#2e7d32'"] > div[style*="display: flex"][style*="flexWrap: wrap"] > div > div[style*="marginTop"] {
+    padding: 3px 5px !important;
+    font-size: 8px !important;
+    margin-top: 4px !important;
+  }
+  
+  /* Start Production Button - Lebih Kecil */
+  .card .mb-4 > div[style*="backgroundColor: '#2e7d32'"] > div[style*="display: flex"][style*="flexWrap: wrap"] > div button,
+  .card > div[style*="backgroundColor: '#2e7d32'"] > div[style*="display: flex"][style*="flexWrap: wrap"] > div button {
+    margin-top: 4px !important;
+    padding: 4px 8px !important;
+    font-size: 9px !important;
+    min-height: 28px !important;
+  }
+  
+  /* ============================================
+     MODULE COMPACT - Semua Lebih Kecil
+     ============================================ */
+  
+  /* General: Semua font size lebih kecil */
+  .module-compact {
+    font-size: 11px;
+  }
+  
+  .module-compact .page-header h1 {
+    font-size: 16px !important;
+  }
+  
+  .module-compact .card-content {
+    padding: 8px !important;
+  }
+  
+  .module-compact button,
+  .module-compact .button {
+    font-size: 11px !important;
+    padding: 6px 10px !important;
+    min-height: 32px !important;
+  }
+  
+  /* Input lebih kecil */
+  .module-compact input,
+  .module-compact select {
+    font-size: 12px !important;
+    padding: 6px 8px !important;
+    min-height: 32px !important;
+  }
+  
+  /* Table lebih kecil */
+  .module-compact .table {
+    font-size: 9px !important;
+  }
+  
+  .module-compact .table th {
+    font-size: 8px !important;
+    padding: 4px 4px !important;
+  }
+  
+  .module-compact .table td {
+    font-size: 9px !important;
+    padding: 4px 4px !important;
+  }
+  
+  /* Status badge lebih kecil */
+  .module-compact .status-badge {
+    font-size: 8px !important;
+    padding: 2px 6px !important;
+  }
+  
+  /* Spacing lebih kecil */
+  .module-compact .mb-4 {
+    margin-bottom: 12px !important;
+  }
+  
+  .module-compact > * {
+    margin-bottom: 8px;
+  }
+  
+  /* Override Tab - Lebih Kecil */
+  .tab-container {
+    padding: 0 8px !important;
+    margin-bottom: 12px !important;
+  }
+  
+  .tab-button {
+    padding: 8px 12px !important;
+    font-size: 11px !important;
+  }
+  
+  .tab-content {
+    padding: 0 8px 12px !important;
+  }
+  
+  /* Override Main Content - Lebih Kecil */
+  .main-content {
+    padding: 12px !important;
+  }
+  
+  /* Override Card - Lebih Kecil */
+  .card {
+    margin-bottom: 10px !important;
+  }
+  
+  .card-content {
+    padding: 10px !important;
+  }
+  
+}
+
