@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { storageService, type SyncStatus } from '../../services/storage';
+import { packagingSync, type SyncStatus } from '../../services/packaging-sync';
 import { getTheme, applyTheme, type Theme } from '../../utils/theme';
 import { loadIconAsBase64 } from '../../utils/icon-loader';
 import '../../components/Layout.css';
@@ -31,13 +31,13 @@ const PackagingLayout = ({ children }: LayoutProps) => {
     const currentTheme = getTheme();
     setTheme(currentTheme);
     
-    // Subscribe to sync status changes
-    const unsubscribe = storageService.onSyncStatusChange((status) => {
+    // Subscribe to sync status changes dari packagingSync
+    const unsubscribe = packagingSync.onSyncStatusChange((status) => {
       setSyncStatus(status);
     });
     
     // Set initial sync status
-    setSyncStatus(storageService.getSyncStatus());
+    setSyncStatus(packagingSync.getSyncStatus());
     
     return () => {
       unsubscribe();

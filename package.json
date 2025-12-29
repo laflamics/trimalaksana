@@ -24,6 +24,7 @@
     "update-bundle": "node scripts/update-bundle.js",
     "generate:gradle-wrapper": "node scripts/generate-gradle-wrapper.js",
     "generate:android-keystore": "node scripts/generate-android-keystore.js",
+    "generate:ios-icons": "node scripts/generate-ios-icons.js",
     "build:android": "npm run build:renderer && npx cap sync android && node scripts/generate-gradle-wrapper.js && cd android && .\\gradlew.bat assembleRelease",
     "build:android:debug": "npm run build:renderer && npx cap sync android && node scripts/generate-gradle-wrapper.js && cd android && .\\gradlew.bat assembleDebug",
     "cap:add:ios": "npx cap add ios",
@@ -51,6 +52,7 @@
     "cross-env": "^7.0.3",
     "electron": "^28.0.0",
     "electron-builder": "^24.9.1",
+    "sharp": "^0.34.5",
     "typescript": "^5.3.3",
     "vite": "^5.0.8",
     "wait-on": "^7.2.0"

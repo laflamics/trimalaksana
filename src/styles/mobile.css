@@ -966,6 +966,82 @@
   .card {
     margin-bottom: 10px !important;
   }
+
+}
+
+/* ============================================
+   iOS DESKTOP-LIKE VIEW (Compact seperti Desktop)
+   Untuk iOS - tampilan lebih compact
+   ============================================ */
+
+/* Deteksi iOS dan force desktop-like view */
+@supports (-webkit-touch-callout: none) {
+  /* iOS-specific styles */
+  
+  /* Force desktop-like width untuk tampilan compact */
+  body {
+    zoom: 0.8; /* Scale down 20% untuk lebih compact */
+    -webkit-text-size-adjust: 100%;
+  }
+  
+  /* Override mobile styles untuk iOS - tampil seperti desktop */
+  @media (max-width: 768px) {
+    .main-content {
+      padding: 16px !important; /* Lebih compact dari mobile default */
+    }
+    
+    .page-header h1 {
+      font-size: 18px !important; /* Lebih kecil dari mobile */
+    }
+    
+    .card-content {
+      padding: 12px !important; /* Lebih compact */
+    }
+    
+    .table {
+      font-size: 11px !important; /* Lebih kecil dari mobile */
+    }
+    
+    .table th {
+      font-size: 10px !important;
+      padding: 6px 6px !important;
+    }
+    
+    .table td {
+      font-size: 11px !important;
+      padding: 6px 6px !important;
+    }
+    
+    button,
+    .button,
+    .btn {
+      min-height: 36px !important; /* Lebih kecil dari mobile default */
+      padding: 6px 12px !important;
+      font-size: 12px !important;
+    }
+    
+    .sidebar {
+      width: 200px !important; /* Lebih kecil dari mobile default */
+    }
+    
+    .sidebar.closed {
+      width: 50px !important; /* Sedikit lebih besar untuk touch */
+    }
+  }
+  
+  /* Untuk iPad dan device lebih besar - tampil seperti desktop penuh */
+  @media (min-width: 769px) and (max-width: 1024px) {
+    body {
+      zoom: 1; /* Normal scale untuk iPad */
+    }
+  }
+  
+  /* Untuk device lebih besar dari iPad - normal desktop view */
+  @media (min-width: 1025px) {
+    body {
+      zoom: 1;
+    }
+  }
   
   .card-content {
     padding: 10px !important;

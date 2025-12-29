@@ -299,6 +299,17 @@ class PackagingSync {
   }
 
   /**
+   * Subscribe to sync status changes (compatible with storageService API)
+   */
+  onSyncStatusChange(callback: (status: SyncStatus) => void): () => void {
+    this.addEventListener('status', callback);
+    // Return unsubscribe function
+    return () => {
+      this.removeEventListener('status', callback);
+    };
+  }
+
+  /**
    * Get queue status
    */
   getQueueStatus() {

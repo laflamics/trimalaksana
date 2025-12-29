@@ -89,7 +89,10 @@ Setelah dapat file `.ipa` dari GitHub Actions, install ke iPhone pakai salah sat
 6. **Pilih device** (iPhone kamu)
 7. **Masukkan Apple ID** (bisa pakai Apple ID gratis)
 8. Klik **Start** dan tunggu selesai
-9. **Di iPhone**: Settings > General > VPN & Device Management > Trust developer
+9. **Di iPhone** (WAJIB untuk iOS 16+):
+   - **Aktifkan Developer Mode**: Settings > Privacy & Security > Developer Mode > ON
+   - Restart iPhone (akan muncul popup setelah restart)
+   - **Trust Developer**: Settings > General > VPN & Device Management > Trust developer certificate
 10. App siap dipakai! ✅
 
 **Catatan:**
@@ -192,9 +195,88 @@ Setelah dapat file `.ipa` dari GitHub Actions, install ke iPhone pakai salah sat
 - Tap developer certificate
 - Tap **Trust**
 
+**Error: App tidak bisa dibuka / "Developer Mode is disabled" (iOS 16+)**
+- **WAJIB aktifkan Developer Mode** untuk iOS 16 ke atas
+- Settings > Privacy & Security > Developer Mode > ON
+- Restart iPhone (akan muncul popup konfirmasi setelah restart)
+- Setelah restart, akan muncul popup "Turn On Developer Mode?" → Tap **Turn On**
+- Masukkan passcode iPhone
+- Developer Mode aktif! ✅
+- App sekarang bisa dibuka
+
 **Error: "App cannot be installed"**
 - Pastikan iOS version compatible
 - Coba pakai tools lain (Sideloadly biasanya paling reliable)
+
+**Error: "Guru Meditation b4822c@2355:8a63ba Can't listdir a file"**
+- Error ini biasanya terjadi karena **struktur IPA file tidak benar**
+- IPA file yang benar harus punya struktur:
+  ```
+  Payload/
+    App.app/
+  ```
+- **Solusi cepat**: Pakai script untuk memperbaiki IPA yang ada:
+  ```bash
+  node scripts/fix-ipa-structure.js E:/TrimaLaksanaERP.ipa
+  ```
+  Script akan membuat file baru dengan nama `TrimaLaksanaERP_fixed.ipa` yang strukturnya sudah benar
+- **Solusi permanen**: Rebuild IPA dari GitHub Actions (workflow sudah diperbaiki)
+  - Push code terbaru ke GitHub
+  - Jalankan workflow Build iOS dengan type "shareable"
+  - Download IPA baru dari artifacts
+
+**Error: "HTTPSConnectionPool(host='gsa.apple.com', port=443): Max retries exceeded"**
+- Error ini terjadi karena **koneksi ke server Apple gagal** (network timeout)
+- Sideloadly butuh koneksi ke `gsa.apple.com` untuk authentication
+- **Solusi step-by-step:**
+  1. **Cek Internet Connection:**
+     - Pastikan internet stabil dan tidak ada masalah
+     - Coba buka https://gsa.apple.com di browser (harus bisa akses)
+  
+  2. **Disable Firewall/Antivirus Sementara:**
+     - Matikan Windows Firewall sementara
+     - Matikan antivirus (Windows Defender atau antivirus lain)
+     - Coba install lagi
+  
+  3. **Allow Sideloadly di Firewall:**
+     - Windows Settings > Update & Security > Windows Security > Firewall & network protection
+     - Allow an app through firewall
+     - Tambahkan Sideloadly dan allow untuk Private & Public networks
+  
+  4. **Cek Proxy/VPN:**
+     - Matikan VPN jika sedang aktif
+     - Cek proxy settings di Windows
+     - Settings > Network & Internet > Proxy
+     - Pastikan "Automatically detect settings" ON
+  
+  5. **Restart Network Services:**
+     ```powershell
+     # Buka PowerShell as Administrator
+     ipconfig /flushdns
+     netsh winsock reset
+     netsh int ip reset
+     # Restart komputer setelah ini
+     ```
+  
+  6. **Coba Tools Alternatif:**
+     - **3uTools** (https://www.3u.com/) - Lebih reliable untuk network issues
+     - **AltStore** (https://altstore.io/) - Pakai AltServer yang lebih stabil
+     - **iMazing** (berbayar tapi sangat reliable)
+  
+  7. **Update Sideloadly:**
+     - Download versi terbaru dari https://sideloadly.io/
+     - Versi lama mungkin punya bug network
+  
+  8. **Coba di Waktu Berbeda:**
+     - Server Apple kadang overload di jam sibuk
+     - Coba lagi nanti atau besok
+  
+  9. **Ganti DNS:**
+     - Settings > Network & Internet > Change adapter options
+     - Klik kanan network adapter > Properties
+     - Internet Protocol Version 4 (TCP/IPv4) > Properties
+     - Use following DNS: 8.8.8.8 dan 8.8.4.4 (Google DNS)
+     - Atau 1.1.1.1 dan 1.0.0.1 (Cloudflare DNS)
 
 **App expired setelah 7 hari:**
 - Install ulang file IPA
@@ -287,7 +369,12 @@ npx cap open ios
 5. Xcode akan generate **Provisioning Profile** otomatis
 
 #### b. Setup App Icons & Launch Screen:
-- Icon: `ios/App/App/Assets.xcassets/AppIcon.appiconset/`
+- **Generate iOS Icons** (dari `noxtiz.png`):
+  ```bash
+  npm run generate:ios-icons
+  ```
+  Script ini akan generate semua ukuran icon yang diperlukan dari `public/noxtiz.png`
+- Icon location: `ios/App/App/Assets.xcassets/AppIcon.appiconset/`
 - Launch Screen: `ios/App/App/Assets.xcassets/LaunchImage.imageset/`
 
 #### c. Build Archive:

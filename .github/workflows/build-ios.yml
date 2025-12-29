@@ -58,6 +58,21 @@ jobs:
             npm run cap:add:ios
           fi
 
+      - name: Generate iOS Icons
+        run: npm run generate:ios-icons
+        continue-on-error: true
+
+      - name: Copy iOS Icons (if generated)
+        run: |
+          if [ -d "ios-icons-temp/AppIcon.appiconset" ]; then
+            mkdir -p ios/App/App/Assets.xcassets
+            cp -r ios-icons-temp/AppIcon.appiconset ios/App/App/Assets.xcassets/
+            echo "✅ iOS icons copied to Assets.xcassets"
+          else
+            echo "⚠️  iOS icons not found in ios-icons-temp, skipping copy"
+          fi
+        continue-on-error: true
+
       - name: Sync Capacitor iOS
         run: npx cap sync ios
 
@@ -82,10 +97,11 @@ jobs:
       - name: Export IPA (Shareable - Unsigned)
         if: github.event.inputs.build_type == 'shareable' || (github.event.inputs.build_type == '' && github.event_name == 'push')
         run: |
-          mkdir -p ./build/ipa
-          cd ./build/App.xcarchive/Products/Applications
-          zip -r ../../../ipa/TrimaLaksanaERP.ipa App.app
-          cd ../../..
+          mkdir -p ./build/ipa/Payload
+          cp -r ./build/App.xcarchive/Products/Applications/App.app ./build/ipa/Payload/
+          cd ./build/ipa
+          zip -r TrimaLaksanaERP.ipa Payload
+          cd ../..
           echo "IPA created at: ./build/ipa/TrimaLaksanaERP.ipa"
         continue-on-error: true
 
