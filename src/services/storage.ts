@@ -286,7 +286,33 @@ class StorageService {
           if (result.success && result.data !== null) {
             const data = result.data;
             // Extract value if wrapped with timestamp or value wrapper
-            const finalData = (data.value !== undefined) ? data.value : data;
+            let finalData = (data.value !== undefined) ? data.value : data;
+            
+            // Normalize data untuk ensure padCode selalu ter-include
+            // IMPORTANT: BOM objects tidak perlu padCode, hanya products dan inventory items
+            if (Array.isArray(finalData)) {
+              finalData = finalData.map((item: any) => {
+                if (item && typeof item === 'object') {
+                  // Skip normalization untuk BOM objects (tidak punya padCode field)
+                  // BOM objects hanya punya: id, product_id, material_id, ratio
+                  const isBOMObject = item.product_id !== undefined && item.material_id !== undefined && 
+                                     !('padCode' in item) && !('nama' in item) && !('kode' in item) && 
+                                     !('harga' in item) && !('hargaFg' in item) && !('hargaSales' in item);
+                  
+                  if (isBOMObject) {
+                    // BOM object - jangan tambahkan padCode
+                    return item;
+                  }
+                  
+                  // Ensure padCode is always present (even if empty string) untuk products dan inventory items
+                  if (!('padCode' in item)) {
+                    return { ...item, padCode: '' };
+                  }
+                }
+                return item;
+              });
+            }
+            
             // Reduced logging untuk performa - hanya log jika DEBUG mode
             this.log(`[Storage.get] Loaded ${key} (${storageKey}) from file: ${Array.isArray(finalData) ? finalData.length : 'object'} items`);
             return finalData;
@@ -324,7 +350,32 @@ class StorageService {
         try {
           const parsed = JSON.parse(value);
           // Extract value if wrapped with timestamp
-          const finalData = (parsed.value !== undefined) ? parsed.value : parsed;
+          let finalData = (parsed.value !== undefined) ? parsed.value : parsed;
+          
+          // Normalize data untuk ensure padCode selalu ter-include
+          // IMPORTANT: BOM objects tidak perlu padCode, hanya products dan inventory items
+          if (Array.isArray(finalData)) {
+            finalData = finalData.map((item: any) => {
+              if (item && typeof item === 'object') {
+                // Skip normalization untuk BOM objects (tidak punya padCode field)
+                const isBOMObject = item.product_id !== undefined && item.material_id !== undefined && 
+                                   !('padCode' in item) && !('nama' in item) && !('kode' in item) && 
+                                   !('harga' in item) && !('hargaFg' in item) && !('hargaSales' in item);
+                
+                if (isBOMObject) {
+                  // BOM object - jangan tambahkan padCode
+                  return item;
+                }
+                
+                // Ensure padCode is always present (even if empty string) untuk products dan inventory items
+                if (!('padCode' in item)) {
+                  return { ...item, padCode: '' };
+                }
+              }
+              return item;
+            });
+          }
+          
           // Reduced logging untuk performa
           this.log(`[Storage.get] Loaded ${key} (${storageKey}) from localStorage: ${Array.isArray(finalData) ? finalData.length : 'object'} items`);
           return finalData;
@@ -395,7 +446,40 @@ class StorageService {
         
         // Compare data (exclude timestamp fields)
         const existingValue = parsed.value;
-        if (JSON.stringify(existingValue) === JSON.stringify(value)) {
+        
+        // Normalize data untuk comparison - ensure padCode is always included
+        // IMPORTANT: BOM objects tidak perlu padCode, hanya products dan inventory items
+        const normalizeForComparison = (data: any): any => {
+          if (Array.isArray(data)) {
+            return data.map(item => {
+              if (item && typeof item === 'object') {
+                // Skip normalization untuk BOM objects (tidak punya padCode field)
+                const isBOMObject = item.product_id !== undefined && item.material_id !== undefined && 
+                                   !('padCode' in item) && !('nama' in item) && !('kode' in item) && 
+                                   !('harga' in item) && !('hargaFg' in item) && !('hargaSales' in item);
+                
+                if (isBOMObject) {
+                  // BOM object - jangan tambahkan padCode
+                  return item;
+                }
+                
+                // Ensure padCode is always present (even if empty string) untuk products dan inventory items
+                const normalized = { ...item };
+                if (!('padCode' in normalized)) {
+                  normalized.padCode = '';
+                }
+                return normalized;
+              }
+              return item;
+            });
+          }
+          return data;
+        };
+        
+        const normalizedExisting = normalizeForComparison(existingValue);
+        const normalizedNew = normalizeForComparison(value);
+        
+        if (JSON.stringify(normalizedExisting) === JSON.stringify(normalizedNew)) {
           // Data tidak berubah, gunakan timestamp yang lama
           dataChanged = false;
         }
@@ -408,9 +492,41 @@ class StorageService {
     // Hanya generate timestamp baru jika data benar-benar berubah
     const timestamp = dataChanged ? Date.now() : (existingTimestamp || Date.now());
     
+    // Normalize value untuk ensure padCode selalu ter-include
+    // IMPORTANT: BOM objects tidak perlu padCode, hanya products dan inventory items
+    const normalizeValue = (val: any): any => {
+      if (Array.isArray(val)) {
+        return val.map(item => {
+          if (item && typeof item === 'object') {
+            // Skip normalization untuk BOM objects (tidak punya padCode field)
+            // BOM objects hanya punya: id, product_id, material_id, ratio
+            const isBOMObject = item.product_id !== undefined && item.material_id !== undefined && 
+                               !('padCode' in item) && !('nama' in item) && !('kode' in item) && 
+                               !('harga' in item) && !('hargaFg' in item) && !('hargaSales' in item);
+            
+            if (isBOMObject) {
+              // BOM object - jangan tambahkan padCode
+              return item;
+            }
+            
+            // Ensure padCode is always present (even if empty string) untuk products dan inventory items
+            const normalized = { ...item };
+            if (!('padCode' in normalized)) {
+              normalized.padCode = '';
+            }
+            return normalized;
+          }
+          return item;
+        });
+      }
+      return val;
+    };
+    
+    const normalizedValue = normalizeValue(value);
+    
     // Prepare data with timestamp
     const dataWithTimestamp = {
-      value,
+      value: normalizedValue,
       timestamp,
       _timestamp: timestamp, // Backward compatibility
     };
@@ -1197,6 +1313,43 @@ class StorageService {
           
           const serverTimestamp = serverTimestamps[key] || 0;
           
+          // CRITICAL: Handle case where server sends deleted key (deleted: true, value: null)
+          // Server mengirim format: {deleted: true, value: null, timestamp: ...}
+          // Atau server mengirim langsung null jika key sudah di-delete
+          if (serverValue === null || (serverValue && typeof serverValue === 'object' && serverValue.deleted === true && serverValue.value === null)) {
+            // Key sudah di-delete di server, hapus dari local storage
+            this.log(`[Storage] Server indicates key ${key} is deleted, removing from local storage`);
+            localStorage.removeItem(key);
+            const business = this.getBusinessContext();
+            if (business !== 'packaging') {
+              const prefixedKey = `${business}/${key}`;
+              localStorage.removeItem(prefixedKey);
+            }
+            
+            // Also remove from file storage if Electron
+            const electronAPI = (window as any).electronAPI;
+            if (electronAPI && electronAPI.deleteStorage) {
+              try {
+                await electronAPI.deleteStorage(key);
+                if (business !== 'packaging') {
+                  await electronAPI.deleteStorage(`${business}/${key}`);
+                }
+              } catch (error) {
+                // Ignore file storage errors
+              }
+            }
+            
+            synced++;
+            continue; // Skip to next key
+          }
+          
+          // Extract value if serverValue is a wrapper object
+          let actualServerValue = serverValue;
+          if (serverValue && typeof serverValue === 'object' && 'value' in serverValue && !Array.isArray(serverValue)) {
+            // Server mengirim wrapper object {value: ..., timestamp: ...}
+            actualServerValue = serverValue.value;
+          }
+          
           // Get local value - check file storage first (Electron), then localStorage
           let localValue = null;
           let localTimestamp = 0;
@@ -1290,7 +1443,7 @@ class StorageService {
           
           // Merge data dengan conflict resolution - LAST WRITE WINS
           // IMPORTANT: Handle tombstone pattern - item yang sudah di-delete di local tidak boleh di-overwrite oleh server
-          let finalValue: any = serverValue;
+          let finalValue: any = actualServerValue;
           let finalTimestamp = serverTimestamp;
           
           if (localValue && localTimestamp > 0) {
@@ -1300,7 +1453,7 @@ class StorageService {
             
             if (localTimestamp > serverTimestamp) {
               // Local is newer - LAST WRITE WINS: use local as base, merge server changes only if timestamp very close
-              finalValue = this.mergeData(localValue, serverValue, localTimestamp, serverTimestamp);
+              finalValue = this.mergeData(localValue, actualServerValue, localTimestamp, serverTimestamp);
               finalTimestamp = localTimestamp;
               if (Math.abs(localTimestamp - serverTimestamp) > 1000) {
                 conflicts++;
@@ -1316,7 +1469,7 @@ class StorageService {
               
               // SPECIAL CASE: For GT products, if local data has complete price info (harga beli AND harga jual),
               // prioritize local data even if server timestamp is newer (to preserve CSV seed updates)
-              if (key === 'gt_products' && Array.isArray(localValue) && Array.isArray(serverValue)) {
+              if (key === 'gt_products' && Array.isArray(localValue) && Array.isArray(actualServerValue)) {
                 const localHasCompletePrice = localValue.some((item: any) => {
                   const hasHargaBeli = item.harga && item.harga > 0;
                   const hasHargaJual = (item.hargaSales || item.hargaFg) && (item.hargaSales || item.hargaFg || 0) > 0;
@@ -1326,16 +1479,16 @@ class StorageService {
                 if (localHasCompletePrice) {
                   // Local has complete price data - merge but prioritize local price data
                   this.log(`[Storage] GT Products: Local has complete price data, preserving local prices even though server is newer`);
-                  finalValue = this.mergeGTProductsWithPricePriority(localValue, serverValue);
+                  finalValue = this.mergeGTProductsWithPricePriority(localValue, actualServerValue);
                   finalTimestamp = localTimestamp; // Use local timestamp to prevent overwrite
                   conflicts++;
                   localChangesToPush[key] = { value: finalValue, timestamp: finalTimestamp };
                 } else {
-                  finalValue = this.mergeData(serverValue, localValue, serverTimestamp, localTimestamp);
+                  finalValue = this.mergeData(actualServerValue, localValue, serverTimestamp, localTimestamp);
                   finalTimestamp = serverTimestamp;
                 }
               } else {
-                finalValue = this.mergeData(serverValue, localValue, serverTimestamp, localTimestamp);
+                finalValue = this.mergeData(actualServerValue, localValue, serverTimestamp, localTimestamp);
                 finalTimestamp = serverTimestamp;
               }
               
@@ -1385,7 +1538,7 @@ class StorageService {
               }
             } else {
               // Timestamps equal, merge both
-              finalValue = this.mergeData(serverValue, localValue, serverTimestamp, localTimestamp);
+              finalValue = this.mergeData(actualServerValue, localValue, serverTimestamp, localTimestamp);
               finalTimestamp = serverTimestamp;
               merged++;
             }
@@ -1395,9 +1548,40 @@ class StorageService {
           // Tapi tetap simpan di storage untuk tombstone pattern
           // Filter akan dilakukan di loadDeliveries di DeliveryNote.tsx
           
+          // Normalize finalValue untuk ensure padCode selalu ter-include
+          // IMPORTANT: BOM objects tidak perlu padCode, hanya products dan inventory items
+          const normalizeValue = (val: any): any => {
+            if (Array.isArray(val)) {
+              return val.map(item => {
+                if (item && typeof item === 'object') {
+                  // Skip normalization untuk BOM objects (tidak punya padCode field)
+                  const isBOMObject = item.product_id !== undefined && item.material_id !== undefined && 
+                                     !('padCode' in item) && !('nama' in item) && !('kode' in item) && 
+                                     !('harga' in item) && !('hargaFg' in item) && !('hargaSales' in item);
+                  
+                  if (isBOMObject) {
+                    // BOM object - jangan tambahkan padCode
+                    return item;
+                  }
+                  
+                  // Ensure padCode is always present (even if empty string) untuk products dan inventory items
+                  const normalized = { ...item };
+                  if (!('padCode' in normalized)) {
+                    normalized.padCode = '';
+                  }
+                  return normalized;
+                }
+                return item;
+              });
+            }
+            return val;
+          };
+          
+          const normalizedFinalValue = normalizeValue(finalValue);
+          
           // Save merged result to the correct key (use localKey if found, otherwise use normalized key)
           const dataToSave = {
-            value: finalValue,
+            value: normalizedFinalValue,
             timestamp: finalTimestamp,
             _timestamp: finalTimestamp,
           };
@@ -1636,13 +1820,17 @@ class StorageService {
               harga: localItem.harga,
               hargaSales: localItem.hargaSales || localItem.hargaFg || serverItem.hargaSales || serverItem.hargaFg,
               hargaFg: localItem.hargaSales || localItem.hargaFg || serverItem.hargaSales || serverItem.hargaFg,
+              padCode: localItem.padCode || serverItem.padCode || '', // Preserve padCode from local
               lastUpdate: localItem.lastUpdate, // Keep local lastUpdate
               timestamp: localItem.timestamp || localItem._timestamp || Date.now(),
               _timestamp: localItem.timestamp || localItem._timestamp || Date.now(),
             };
           } else {
-            // Local doesn't have complete price, use server data
-            merged[localIndex] = serverItem;
+            // Local doesn't have complete price, use server data but preserve padCode from local
+            merged[localIndex] = {
+              ...serverItem,
+              padCode: localItem.padCode || serverItem.padCode || '', // Preserve padCode from local if server doesn't have it
+            };
           }
         }
       }
@@ -1677,10 +1865,19 @@ class StorageService {
         // IMPORTANT: Skip item dari server yang sudah di-delete di local
         const merged: any[] = [];
         const seenIds = new Set<string | number>();
+        const localItemsMap = new Map<string | number, any>();
+        
+        // Create map of local items by ID for quick lookup
+        olderData.forEach((item: any) => {
+          const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
+          if (id !== undefined && id !== null) {
+            localItemsMap.set(id, item);
+          }
+        });
         
         // Add newer items first (skip yang sudah di-delete di local)
         newerData.forEach((item: any) => {
-          const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo;
+          const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
           // Skip jika item ini sudah di-delete di local
           if (id !== undefined && id !== null && deletedIds.has(id)) {
             this.log(`[Storage] Skipping server item ${id} - already deleted locally (tombstone)`);
@@ -1688,13 +1885,18 @@ class StorageService {
           }
           if (id !== undefined && id !== null) {
             seenIds.add(id);
+            // IMPORTANT: Preserve padCode from local if server doesn't have it
+            const localItem = localItemsMap.get(id);
+            if (localItem && localItem.padCode && !item.padCode) {
+              item = { ...item, padCode: localItem.padCode };
+            }
           }
           merged.push(item);
         });
         
         // Add older items that don't exist in newer (termasuk yang sudah di-delete untuk tombstone)
         olderData.forEach((item: any) => {
-          const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo;
+          const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
           if (id === undefined || id === null || !seenIds.has(id)) {
             merged.push(item); // Include deleted items untuk tombstone pattern
           }
@@ -1708,7 +1910,7 @@ class StorageService {
         if (deletedIds.size > 0) {
           // Filter out item dari server yang sudah di-delete di local
           const filteredNewer = newerData.filter((item: any) => {
-            const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo;
+            const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
             if (id !== undefined && id !== null && deletedIds.has(id)) {
               this.log(`[Storage] Filtering out server item ${id} - already deleted locally (tombstone)`);
               return false; // Filter out item ini
@@ -1716,11 +1918,31 @@ class StorageService {
             return true;
           });
           
+          // Create map of local items by ID for quick lookup
+          const localItemsMap = new Map<string | number, any>();
+          olderData.forEach((item: any) => {
+            const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
+            if (id !== undefined && id !== null) {
+              localItemsMap.set(id, item);
+            }
+          });
+          
           // Merge dengan olderData (local) yang mungkin punya deleted items
-          const merged: any[] = [...filteredNewer];
+          // IMPORTANT: Preserve padCode from local if server doesn't have it
+          const merged: any[] = filteredNewer.map((item: any) => {
+            const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
+            if (id !== undefined && id !== null) {
+              const localItem = localItemsMap.get(id);
+              if (localItem && localItem.padCode && !item.padCode) {
+                return { ...item, padCode: localItem.padCode };
+              }
+            }
+            return item;
+          });
+          
           const seenIds = new Set<string | number>();
-          filteredNewer.forEach((item: any) => {
-            const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo;
+          merged.forEach((item: any) => {
+            const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
             if (id !== undefined && id !== null) {
               seenIds.add(id);
             }
@@ -1728,7 +1950,7 @@ class StorageService {
           
           // Add older items (local) yang tidak ada di newer (termasuk deleted items)
           olderData.forEach((item: any) => {
-            const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo;
+            const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
             if (id === undefined || id === null || !seenIds.has(id)) {
               merged.push(item); // Include deleted items untuk tombstone pattern
             }
@@ -1737,9 +1959,29 @@ class StorageService {
           this.log(`[Storage] Array conflict: newer timestamp ${newerTimestamp} vs older ${olderTimestamp}, merged with tombstone protection (${merged.length} items, ${deletedIds.size} deleted items preserved)`);
           return merged;
         } else {
-          // Tidak ada deleted items, gunakan array yang lebih baru sepenuhnya
-          this.log(`[Storage] Array conflict: newer timestamp ${newerTimestamp} vs older ${olderTimestamp}, using newer array (${newerData.length} items)`);
-          return newerData;
+          // Tidak ada deleted items, tapi tetap preserve padCode dari local jika server tidak punya
+          const localItemsMap = new Map<string | number, any>();
+          olderData.forEach((item: any) => {
+            const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
+            if (id !== undefined && id !== null) {
+              localItemsMap.set(id, item);
+            }
+          });
+          
+          // Preserve padCode from local if server doesn't have it
+          const preservedData = newerData.map((item: any) => {
+            const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
+            if (id !== undefined && id !== null) {
+              const localItem = localItemsMap.get(id);
+              if (localItem && localItem.padCode && !item.padCode) {
+                return { ...item, padCode: localItem.padCode };
+              }
+            }
+            return item;
+          });
+          
+          this.log(`[Storage] Array conflict: newer timestamp ${newerTimestamp} vs older ${olderTimestamp}, using newer array with padCode preservation (${preservedData.length} items)`);
+          return preservedData;
         }
       }
     }
@@ -1796,7 +2038,6 @@ class StorageService {
             
             // Skip BOM for GT (General Trading doesn't use BOM)
             if (normalizedKey === 'bom' || normalizedKey === 'gt_bom') {
-              console.log(`⏭️ Skipping ${normalizedKey} (not used in General Trading)`);
               continue;
             }
             

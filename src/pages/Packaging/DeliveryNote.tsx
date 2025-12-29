@@ -49,6 +49,7 @@ interface DeliveryNote {
   vehicleNo?: string;
   spkNo?: string; // Deprecated - use items instead
   deliveryDate?: string; // Delivery date from schedule
+  productCodeDisplay?: 'padCode' | 'productId'; // Pilihan untuk menampilkan Pad Code atau Product ID di template SJ (default: 'padCode')
   deleted?: boolean; // Tombstone flag for soft delete
   deletedAt?: string; // Timestamp when deleted
   // Timestamp fields untuk sync dan tracking
@@ -2782,10 +2783,15 @@ const DeliveryNote = () => {
     };
 
     // Generate HTML using template
+    // Pass productCodeDisplay dari delivery note ke template
+    const itemWithDisplay = {
+      ...suratJalanItem,
+      productCodeDisplay: item.productCodeDisplay || 'padCode',
+    };
     return generateSuratJalanHtml({
       logo,
       company,
-      item: suratJalanItem,
+      item: itemWithDisplay,
       sjData,
       products,
     });
@@ -3927,6 +3933,7 @@ const DeliveryNote = () => {
             items: deliveryItems, // Items dengan semua SPK dan products
             status: 'OPEN' as const,
             deliveryDate: deliveryDate || undefined,
+            productCodeDisplay: 'padCode', // Default untuk create dari notification
           };
           
           // Load all deliveries from storage (including deleted ones)
@@ -4583,16 +4590,52 @@ const DeliveryNote = () => {
           const items = item.items;
           return (
             <div>
-              {items.map((itm: any, idx: number) => (
-                <div key={idx} style={{ marginBottom: idx < items.length - 1 ? '4px' : '0' }}>
-                  {itm.product} ({itm.qty} {itm.unit || 'PCS'})
-                </div>
-              ))}
+              {items.map((itm: any, idx: number) => {
+                // Get padCode from product
+                const productId = itm.productCode || itm.productId || '';
+                const masterProduct = products.find(p => 
+                  (p.product_id || p.kode) === productId
+                );
+                const padCode = masterProduct?.padCode || '';
+                return (
+                  <div key={idx} style={{ marginBottom: idx < items.length - 1 ? '4px' : '0' }}>
+                    {itm.product} ({itm.qty} {itm.unit || 'PCS'})
+                    {padCode && <span style={{ fontSize: '11px', color: 'var(--primary)', marginLeft: '8px' }}>PAD: {padCode}</span>}
+                  </div>
+                );
+              })}
             </div>
           );
         }
         // Fallback untuk old format
         return <div>{item.product || '-'} ({item.qty || 0} PCS)</div>;
+      },
+    },
+    {
+      key: 'padCode',
+      header: 'Pad Code',
+      render: (item: DeliveryNote) => {
+        if (item.items && Array.isArray(item.items) && item.items.length > 0) {
+          const padCodes = item.items.map((itm: any) => {
+            const productId = itm.productCode || itm.productId || '';
+            const masterProduct = products.find(p => 
+              (p.product_id || p.kode) === productId
+            );
+            return masterProduct?.padCode || '';
+          }).filter((code: string) => code);
+          
+          if (padCodes.length === 0) return <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>-</span>;
+          return (
+            <div>
+              {padCodes.map((code: string, idx: number) => (
+                <div key={idx} style={{ fontSize: '12px', color: 'var(--primary)' }}>
+                  {code}
+                </div>
+              ))}
+            </div>
+          );
+        }
+        return <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>-</span>;
       },
     },
     {
@@ -4743,6 +4786,7 @@ const DeliveryNote = () => {
                   items: allItems,
                   status: 'OPEN' as const,
                   deliveryDate: data.manualData.deliveryDate || undefined,
+                  productCodeDisplay: data.manualData.productCodeDisplay || 'padCode',
                   created: new Date().toISOString(),
                   lastUpdate: new Date().toISOString(),
                   timestamp: Date.now(),
@@ -4799,6 +4843,7 @@ const DeliveryNote = () => {
                   items: allItems,
                   status: 'OPEN' as const,
                   deliveryDate: data.manualData.deliveryDate || undefined,
+                  productCodeDisplay: data.manualData.productCodeDisplay || 'padCode',
                   created: new Date().toISOString(),
                   lastUpdate: new Date().toISOString(),
                   timestamp: Date.now(),
@@ -4848,6 +4893,7 @@ const DeliveryNote = () => {
                   items: allItems,
                   status: 'OPEN' as const,
                   deliveryDate: data.manualData.deliveryDate || undefined,
+                  productCodeDisplay: data.manualData.productCodeDisplay || 'padCode',
                   created: new Date().toISOString(),
                   lastUpdate: new Date().toISOString(),
                   timestamp: Date.now(),
@@ -4886,6 +4932,7 @@ const DeliveryNote = () => {
                   items,
                   status: 'OPEN' as const,
                   deliveryDate: data.manualData.deliveryDate || undefined,
+                  productCodeDisplay: data.manualData.productCodeDisplay || 'padCode',
                   created: new Date().toISOString(),
                   lastUpdate: new Date().toISOString(),
                   timestamp: Date.now(),
@@ -6174,6 +6221,7 @@ const EditSJDialog = ({ delivery, onClose, onSave }: { delivery: DeliveryNote; o
   const [customerInputValue, setCustomerInputValue] = useState(delivery.customer || '');
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [soNo, setSoNo] = useState(delivery.soNo || '');
+  const [productCodeDisplay, setProductCodeDisplay] = useState<'padCode' | 'productId'>(delivery.productCodeDisplay || 'padCode');
   const [items, setItems] = useState<DeliveryNoteItem[]>(delivery.items && delivery.items.length > 0 ? delivery.items : (delivery.product ? [{ product: delivery.product, qty: delivery.qty || 0, unit: 'PCS', spkNo: delivery.spkNo, soNo: delivery.soNo }] : []));
   const [signedFile, setSignedFile] = useState<File | null>(null);
   const [products, setProducts] = useState<any[]>([]);
@@ -6333,6 +6381,7 @@ const EditSJDialog = ({ delivery, onClose, onSave }: { delivery: DeliveryNote; o
       deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : undefined,
       customer,
       soNo,
+      productCodeDisplay: productCodeDisplay,
       items: items.length > 0 ? items : undefined,
       // Update deprecated fields for backward compatibility
       product: items.length > 0 ? items[0].product : delivery.product,
@@ -6500,6 +6549,31 @@ const EditSJDialog = ({ delivery, onClose, onSave }: { delivery: DeliveryNote; o
               onChange={setSoNo}
               placeholder="Enter SO number"
             />
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+              Product Code Display (Template SJ)
+            </label>
+            <select
+              value={productCodeDisplay}
+              onChange={(e) => setProductCodeDisplay(e.target.value as 'padCode' | 'productId')}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-tertiary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            >
+              <option value="padCode">Pad Code (default, fallback ke Product ID jika tidak ada)</option>
+              <option value="productId">Product ID / SKU ID</option>
+            </select>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              Pilihan ini menentukan kode yang ditampilkan di kolom "PRODUCT CODE" pada template Surat Jalan
+            </div>
           </div>
 
           <div style={{ marginBottom: '16px' }}>
@@ -6758,6 +6832,7 @@ const CreateDeliveryNoteDialog = ({
   const [manualCustomer, setManualCustomer] = useState('');
   const [manualItems, setManualItems] = useState<Array<{ product: string; productCode?: string; qty: number; unit?: string; spkNo?: string }>>([{ product: '', productCode: '', qty: 1, unit: 'PCS' }]);
   const [deliveryDate, setDeliveryDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [productCodeDisplay, setProductCodeDisplay] = useState<'padCode' | 'productId'>('padCode');
   
   const [customersList, setCustomersList] = useState<any[]>([]);
   const [productsList, setProductsList] = useState<any[]>([]);
@@ -6952,6 +7027,7 @@ const CreateDeliveryNoteDialog = ({
           customer: autoPOCustomer,
           items: autoPOItems,
           deliveryDate,
+          productCodeDisplay: productCodeDisplay,
         }
       });
     } else if (mode === 'so') {
@@ -6969,6 +7045,7 @@ const CreateDeliveryNoteDialog = ({
           customer: autoSOCustomer,
           items: autoSOItems,
           deliveryDate,
+          productCodeDisplay: productCodeDisplay,
         }
       });
     } else {
@@ -6981,6 +7058,7 @@ const CreateDeliveryNoteDialog = ({
           customer: manualCustomer,
           items: manualItems,
           deliveryDate,
+          productCodeDisplay: productCodeDisplay,
         }
       });
     }
@@ -7329,6 +7407,31 @@ const CreateDeliveryNoteDialog = ({
             </>
           )}
           
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
+              Product Code Display (Template SJ)
+            </label>
+            <select
+              value={productCodeDisplay}
+              onChange={(e) => setProductCodeDisplay(e.target.value as 'padCode' | 'productId')}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            >
+              <option value="padCode">Pad Code (default, fallback ke Product ID jika tidak ada)</option>
+              <option value="productId">Product ID / SKU ID</option>
+            </select>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              Pilihan ini menentukan kode yang ditampilkan di kolom "PRODUCT CODE" pada template Surat Jalan
+            </div>
+          </div>
+
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
               Delivery Date

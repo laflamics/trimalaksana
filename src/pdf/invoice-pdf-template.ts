@@ -1364,7 +1364,14 @@ function generateInvoiceHtmlTemplate2({
         let name = productMap[l.itemSku] || l.itemSku;
         // Hapus informasi SO dari nama produk jika ada (format: "Product Name (SO: xxx)")
         name = name.replace(/\s*\(SO:\s*[^)]+\)/gi, '').trim();
-        const code = productCodeMap[l.itemSku] || ''; // Ambil kode dari productCodeMap, kosongkan jika tidak ada
+        
+        // Gunakan productCodeMap jika sudah di-set dengan benar (sudah menggunakan productCodeDisplay)
+        let code = productCodeMap[l.itemSku] || '';
+        if (!code) {
+          // Fallback: gunakan itemSku sebagai code
+          code = l.itemSku || '';
+        }
+        
         const soNo = l.soNo || ''; // Ambil SO number dari line
         const totalLine = Number(l.qty || 0) * Number(l.price || 0);
 

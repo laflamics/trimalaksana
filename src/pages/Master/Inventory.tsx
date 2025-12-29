@@ -25,6 +25,7 @@ interface InventoryItem {
   lastUpdate?: string;
   anomaly?: string;
   anomalyDetail?: string;
+  padCode?: string; // PAD Code untuk product (diambil dari master product)
   // Tracking untuk anti-duplicate
   processedPOs?: string[]; // PO numbers yang sudah diproses (untuk material: RECEIVE dari GRN dan OUTGOING dari Production)
   processedSPKs?: string[]; // SPK numbers yang sudah diproses (untuk product: RECEIVE dari QC PASS dan OUTGOING dari Delivery)
@@ -491,9 +492,14 @@ const Inventory = () => {
         const priceFromSO = productPriceMap.get(key);
         const finalPrice = priceFromSO !== undefined ? priceFromSO : item.price;
         
+        // Update padCode dari product jika ada
+        const product = productsMap.get(item.codeItem);
+        const padCode = product?.padCode || item.padCode || '';
+        
         inventoryMap.set(key, {
           ...item,
           price: finalPrice,
+          padCode: padCode,
           receive: 0,
           outgoing: 0,
           return: 0,
@@ -774,6 +780,7 @@ const Inventory = () => {
               kategori: product.kategori || 'Product',
               satuan: product.satuan || product.unit || 'PCS',
               price: finalPrice,
+              padCode: product.padCode || '', // Ambil padCode dari master product
               stockPremonth: 0,
               receive: 0,
               outgoing: 0,
@@ -788,6 +795,11 @@ const Inventory = () => {
             // Update price dari salesOrders jika ada
             if (priceFromSO !== undefined) {
               item.price = priceFromSO;
+            }
+            // Update padCode dari product jika ada
+            const product = productsMap.get(productId);
+            if (product && product.padCode) {
+              item.padCode = product.padCode;
             }
           }
 
@@ -838,6 +850,7 @@ const Inventory = () => {
               kategori: product.kategori || 'Product',
               satuan: item.unit || product.satuan || product.unit || 'PCS',
               price: finalPrice,
+              padCode: product.padCode || '', // Ambil padCode dari master product
               stockPremonth: 0,
               receive: 0,
               outgoing: 0,
@@ -852,6 +865,11 @@ const Inventory = () => {
             // Update price dari salesOrders jika ada
             if (priceFromSO !== undefined) {
               inventoryItem.price = priceFromSO;
+            }
+            // Update padCode dari product jika ada
+            const product = productsMap.get(productId);
+            if (product && product.padCode) {
+              inventoryItem.padCode = product.padCode;
             }
           }
 
@@ -1015,6 +1033,11 @@ const Inventory = () => {
     },
     { key: 'codeItem', header: 'CODE item' },
     { key: 'description', header: 'DESCRIPTION/Nama Item' },
+    { 
+      key: 'padCode', 
+      header: 'Pad Code',
+      render: (item: InventoryItem) => item.padCode || '-',
+    },
     { key: 'kategori', header: 'Kategori' },
     { key: 'satuan', header: 'Satuan/UOM' },
     {

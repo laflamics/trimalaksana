@@ -99,11 +99,25 @@ export function generateSuratJalanHtml({
     ) || null;
   };
 
+  // Get productCodeDisplay preference (default: 'padCode')
+  const productCodeDisplay = (item as any).productCodeDisplay || 'padCode';
+
   // Prepare main product values (baris pertama sesuai SO line 1)
   // ITEM ambil dari productName di soLines (dari SPK no dan Product di delivery items)
   let mainProductName = item.product || '';
   let mainProductId = item.product || '';
   let mainProductUnit = 'PCS';
+
+  // Helper function untuk mendapatkan product code berdasarkan preference
+  const getProductCode = (product: any, defaultCode: string): string => {
+    if (productCodeDisplay === 'padCode') {
+      // Default: Pad Code, fallback ke Product ID jika tidak ada
+      return product?.padCode || product?.sku || product?.kode || product?.id || defaultCode;
+    } else {
+      // Product ID / SKU ID
+      return product?.sku || product?.kode || product?.id || defaultCode;
+    }
+  };
 
   if (item.soLines && item.soLines.length > 0) {
     const first = item.soLines[0];
@@ -115,8 +129,8 @@ export function generateSuratJalanHtml({
     if (sku) {
       const found = findProductByItemSku(sku);
       if (found) {
-        // PRODUCT CODE = SKU/kode produk
-        mainProductId = found.sku || found.kode || found.id || sku;
+        // PRODUCT CODE berdasarkan preference (Pad Code atau Product ID)
+        mainProductId = getProductCode(found, sku);
         // Jika productName belum ada, gunakan nama dari master product
         if (!first.productName) {
           mainProductName = found.name || sku;
@@ -141,7 +155,8 @@ export function generateSuratJalanHtml({
     const found = findProductByItemSku(String(item.product));
     if (found) {
       mainProductName = found.name || mainProductName;
-      mainProductId = found.sku || found.kode || found.id || mainProductId;
+      // PRODUCT CODE berdasarkan preference (Pad Code atau Product ID)
+      mainProductId = getProductCode(found, mainProductId);
       const bom = (found as any).bom;
       if (bom) {
         if (Array.isArray(bom)) mainProductUnit = bom[0]?.unit || mainProductUnit;
@@ -315,8 +330,8 @@ export function generateSuratJalanHtml({
     let prodId = sku || '';
     let unit = 'PCS';
     if (found) {
-      // PRODUCT CODE = SKU/kode produk
-      prodId = found.sku || found.kode || found.id || sku;
+      // PRODUCT CODE berdasarkan preference (Pad Code atau Product ID)
+      prodId = getProductCode(found, sku);
       // Jika productName belum ada, gunakan nama dari master product
       if (!line.productName) {
         prodName = found.name || sku;

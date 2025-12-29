@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
@@ -28,6 +29,7 @@ interface Product {
   harga?: number;
   hargaFg?: number;
   bom?: any[];
+  padCode?: string; // PAD Code untuk product
 }
 
 interface Customer {
@@ -37,6 +39,7 @@ interface Customer {
 }
 
 const Products = () => {
+  const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [bomData, setBomData] = useState<any[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -76,6 +79,7 @@ const Products = () => {
   const [formData, setFormData] = useState<Partial<Product>>({
     kode: '',
     nama: '',
+    padCode: '',
     satuan: '',
     stockAman: 0,
     stockMinimum: 0,
@@ -88,7 +92,13 @@ const Products = () => {
     const data = await storageService.get<Product[]>('products') || [];
     const bom = await storageService.get<any[]>('bom') || [];
     setBomData(bom);
-    setProducts(data.map((p, idx) => ({ ...p, no: idx + 1 })));
+    // Ensure padCode is always present (even if empty string) for all products
+    const productsWithPadCode = data.map((p, idx) => ({ 
+      ...p, 
+      no: idx + 1,
+      padCode: p.padCode !== undefined ? p.padCode : '' // Ensure padCode always exists
+    }));
+    setProducts(productsWithPadCode);
   }, []);
 
   const loadCustomers = useCallback(async () => {
@@ -213,16 +223,26 @@ const Products = () => {
         (product.product_id || '').toLowerCase().includes(query) ||
         (product.nama || '').toLowerCase().includes(query) ||
         (product.kategori || '').toLowerCase().includes(query) ||
-        (product.customer || product.supplier || '').toLowerCase().includes(query)
+        (product.customer || product.supplier || '').toLowerCase().includes(query) ||
+        (product.padCode || '').toLowerCase().includes(query)
       );
     })
     .sort((a, b) => {
       // Priority sorting:
-      // 1. Products with customer + price + BOM (highest priority)
-      // 2. Products with customer + price (no BOM)
-      // 3. Products with BOM only (no customer/price)
-      // 4. Everything else
+      // 1. Products with padCode (highest priority - muncul paling atas)
+      // 2. Products with customer + price + BOM
+      // 3. Products with customer + price (no BOM)
+      // 4. Products with BOM only (no customer/price)
+      // 5. Everything else
       
+      const aHasPadCode = !!(a.padCode && a.padCode.trim());
+      const bHasPadCode = !!(b.padCode && b.padCode.trim());
+      
+      // Priority 1: padCode (highest)
+      if (aHasPadCode && !bHasPadCode) return -1;
+      if (!aHasPadCode && bHasPadCode) return 1;
+      
+      // Jika sama-sama punya padCode atau sama-sama tidak punya, lanjut ke priority berikutnya
       const aHasCustomerPrice = hasCustomerAndPrice(a);
       const bHasCustomerPrice = hasCustomerAndPrice(b);
       const aHasBOM = hasBOM(a);
@@ -230,10 +250,10 @@ const Products = () => {
       
       // Calculate priority score (higher = better)
       const getPriority = (hasCustomerPrice: boolean, hasBOM: boolean): number => {
-        if (hasCustomerPrice && hasBOM) return 3; // Highest priority
-        if (hasCustomerPrice) return 2; // Second priority
-        if (hasBOM) return 1; // Third priority
-        return 0; // Lowest priority
+        if (hasCustomerPrice && hasBOM) return 3;
+        if (hasCustomerPrice) return 2;
+        if (hasBOM) return 1;
+        return 0;
       };
       
       const aPriority = getPriority(aHasCustomerPrice, aHasBOM);
@@ -261,22 +281,59 @@ const Products = () => {
 
   const handleSave = async () => {
     try {
+      // Extract padCode explicitly to ensure it's not lost
+      const padCodeValue = (formData.padCode || '').trim();
+      
       if (editingItem) {
-        const updated = products.map(p =>
-          p.id === editingItem.id
-            ? { ...formData, id: editingItem.id, no: editingItem.no, lastUpdate: new Date().toISOString(), userUpdate: 'System', ipAddress: '127.0.0.1' } as Product
-            : p
-        );
+        const updated = products.map(p => {
+          if (p.id === editingItem.id) {
+            // Create new object with all fields explicitly set
+            const updatedProduct: Product = {
+              id: editingItem.id,
+              no: editingItem.no,
+              kode: formData.kode !== undefined && formData.kode !== null ? String(formData.kode).trim() : (p.kode || ''),
+              nama: formData.nama !== undefined && formData.nama !== null ? String(formData.nama).trim() : (p.nama || ''),
+              padCode: padCodeValue, // Always set padCode explicitly
+              satuan: formData.satuan !== undefined && formData.satuan !== null ? String(formData.satuan).trim() : (p.satuan || ''),
+              stockAman: formData.stockAman !== undefined ? Number(formData.stockAman) : (p.stockAman || 0),
+              stockMinimum: formData.stockMinimum !== undefined ? Number(formData.stockMinimum) : (p.stockMinimum || 0),
+              kategori: formData.kategori !== undefined && formData.kategori !== null ? String(formData.kategori).trim() : (p.kategori || ''),
+              customer: formData.customer !== undefined && formData.customer !== null ? String(formData.customer).trim() : (p.customer || ''),
+              supplier: formData.supplier !== undefined && formData.supplier !== null ? String(formData.supplier).trim() : (p.supplier || ''),
+              hargaFg: formData.hargaFg !== undefined ? Number(formData.hargaFg) : (p.hargaFg || 0),
+              harga: formData.harga !== undefined ? Number(formData.harga) : (p.harga || 0),
+              bom: formData.bom !== undefined ? formData.bom : (p.bom || []),
+              product_id: p.product_id,
+              lastUpdate: new Date().toISOString(), 
+              userUpdate: 'System', 
+              ipAddress: '127.0.0.1' 
+            };
+            return updatedProduct;
+          }
+          return p;
+        });
+        
         await storageService.set('products', updated);
         setProducts(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
       } else {
         const newProduct: Product = {
           id: Date.now().toString(),
           no: products.length + 1,
+          kode: formData.kode || '',
+          nama: formData.nama || '',
+          padCode: padCodeValue, // Explicitly set padCode
+          satuan: formData.satuan || '',
+          stockAman: formData.stockAman || 0,
+          stockMinimum: formData.stockMinimum || 0,
+          kategori: formData.kategori || '',
+          customer: formData.customer || '',
+          supplier: formData.supplier,
+          hargaFg: formData.hargaFg || 0,
+          harga: formData.harga,
+          bom: formData.bom,
           lastUpdate: new Date().toISOString(),
           userUpdate: 'System',
           ipAddress: '127.0.0.1',
-          ...formData,
         } as Product;
         const updated = [...products, newProduct];
         await storageService.set('products', updated);
@@ -288,7 +345,7 @@ const Products = () => {
       setStockAmanInputValue('');
       setStockMinimumInputValue('');
       setPriceInputValue('');
-      setFormData({ kode: '', nama: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0 });
+      setFormData({ kode: '', nama: '', padCode: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0 });
     } catch (error: any) {
       showAlert(`Error saving product: ${error.message}`, 'Error');
     }
@@ -309,6 +366,7 @@ const Products = () => {
     setFormData({
       ...item,
       customer: item.customer || item.supplier || '', // Use customer if available, fallback to supplier
+      padCode: item.padCode || '', // Ensure padCode is included
     });
     setShowForm(true);
   };
@@ -334,8 +392,8 @@ const Products = () => {
   const handleDownloadTemplate = () => {
     try {
       const templateData = [
-        { 'Kode': 'PRD-001', 'Nama': 'Product Example 1', 'Satuan': 'PCS', 'Kategori': 'Product', 'Customer': 'Customer A', 'Stock Aman': '100', 'Stock Minimum': '50', 'Harga FG': '50000' },
-        { 'Kode': 'PRD-002', 'Nama': 'Product Example 2', 'Satuan': 'BOX', 'Kategori': 'Product', 'Customer': 'Customer B', 'Stock Aman': '200', 'Stock Minimum': '100', 'Harga FG': '75000' },
+        { 'Kode': 'PRD-001', 'Nama': 'Product Example 1', 'Pad Code': 'PAD001', 'Satuan': 'PCS', 'Kategori': 'Product', 'Customer': 'Customer A', 'Stock Aman': '100', 'Stock Minimum': '50', 'Harga FG': '50000' },
+        { 'Kode': 'PRD-002', 'Nama': 'Product Example 2', 'Pad Code': 'PAD002', 'Satuan': 'BOX', 'Kategori': 'Product', 'Customer': 'Customer B', 'Stock Aman': '200', 'Stock Minimum': '100', 'Harga FG': '75000' },
       ];
 
       const ws = XLSX.utils.json_to_sheet(templateData);
@@ -352,7 +410,7 @@ const Products = () => {
 
   const handleImportExcel = () => {
     // Show preview dialog dengan contoh header sebelum browse file
-    const exampleHeaders = ['Kode', 'Nama', 'Satuan', 'Kategori', 'Customer', 'Stock Aman', 'Stock Minimum', 'Harga FG'];
+    const exampleHeaders = ['Kode', 'Nama', 'Pad Code', 'Satuan', 'Kategori', 'Customer', 'Stock Aman', 'Stock Minimum', 'Harga FG'];
     const exampleData = [
       { 'Kode': 'PRD-001', 'Nama': 'Product Example 1', 'Satuan': 'PCS', 'Kategori': 'Product', 'Customer': 'Customer A', 'Stock Aman': '100', 'Stock Minimum': '50', 'Harga FG': '50000' },
       { 'Kode': 'PRD-002', 'Nama': 'Product Example 2', 'Satuan': 'BOX', 'Kategori': 'Product', 'Customer': 'Customer B', 'Stock Aman': '200', 'Stock Minimum': '100', 'Harga FG': '75000' },
@@ -400,6 +458,7 @@ const Products = () => {
           try {
             const kode = mapColumn(row, ['Kode', 'KODE', 'Code', 'CODE', 'SKU', 'sku', 'Product Code', 'product_code']);
             const nama = mapColumn(row, ['Nama', 'NAMA', 'Name', 'NAME', 'Product Name', 'product_name']);
+            const padCode = mapColumn(row, ['Pad Code', 'PAD CODE', 'PadCode', 'pad_code', 'PAD', 'pad']);
             const satuan = mapColumn(row, ['Satuan', 'SATUAN', 'Unit', 'UNIT', 'UOM', 'uom']);
             const kategori = mapColumn(row, ['Kategori', 'KATEGORI', 'Category', 'CATEGORY']);
             const customer = mapColumn(row, ['Customer', 'CUSTOMER', 'Customer Name', 'customer_name']);
@@ -433,6 +492,7 @@ const Products = () => {
                 ...existing,
                 kode,
                 nama,
+                padCode: padCode || existing.padCode || '',
                 satuan: satuan || existing.satuan || 'PCS',
                 kategori: kategori || existing.kategori || '',
                 customer: customer || existing.customer || '',
@@ -450,6 +510,7 @@ const Products = () => {
                 no: products.length + newProducts.length + 1,
                 kode,
                 nama,
+                padCode: padCode || '',
                 satuan: satuan || 'PCS',
                 kategori: kategori || '',
                 customer: customer || '',
@@ -522,6 +583,7 @@ const Products = () => {
         'No': product.no,
         'Kode': product.kode,
         'Nama': product.nama,
+        'Pad Code': product.padCode || '',
         'Satuan': product.satuan,
         'Kategori': product.kategori,
         'Customer': product.customer || '',
@@ -643,6 +705,7 @@ const Products = () => {
     },
     { key: 'kode', header: 'Kode (SKU/ID)' },
     { key: 'nama', header: 'Nama' },
+    { key: 'padCode', header: 'Pad Code' },
     { key: 'satuan', header: 'Satuan (Unit)' },
     { key: 'kategori', header: 'Kategori' },
     { 
@@ -677,6 +740,15 @@ const Products = () => {
         <div style={{ display: 'flex', gap: '8px' }}>
           <Button variant="secondary" onClick={() => handleEdit(item)}>Edit</Button>
           <Button variant="primary" onClick={() => handleEditBOM(item)}>Edit BOM</Button>
+          <Button 
+            variant="secondary" 
+            onClick={() => navigate('/packaging/master/inventory', { 
+              state: { highlightProduct: item.product_id || item.kode } 
+            })}
+            style={{ fontSize: '12px', padding: '4px 8px' }}
+          >
+            📊 Inventory
+          </Button>
           <Button variant="danger" onClick={() => handleDelete(item)}>Delete</Button>
         </div>
       ),
@@ -697,7 +769,7 @@ const Products = () => {
               setStockAmanInputValue('');
               setStockMinimumInputValue('');
               setPriceInputValue('');
-              setFormData({ kode: '', nama: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0 });
+              setFormData({ kode: '', nama: '', padCode: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0 });
               setEditingItem(null);
             }
             setShowForm(!showForm);
@@ -719,6 +791,11 @@ const Products = () => {
             label="Nama"
             value={formData.nama || ''}
             onChange={(v) => setFormData({ ...formData, nama: v })}
+          />
+          <Input
+            label="Pad Code"
+            value={formData.padCode || ''}
+            onChange={(v) => setFormData({ ...formData, padCode: v })}
           />
           <Input
             label="Satuan (Unit)"

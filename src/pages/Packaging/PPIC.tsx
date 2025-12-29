@@ -3273,6 +3273,13 @@ const PPIC = () => {
         const hasPR = !!relatedPR;
         const prIsApproved = relatedPR && (relatedPR.status === 'APPROVED' || relatedPR.status === 'PO_CREATED');
         
+        // Get padCode from product
+        const productId = spk.product_id || spk.kode || '';
+        const masterProduct = products.find(p => 
+          (p.product_id || p.kode) === productId
+        );
+        const padCode = masterProduct?.padCode || '';
+        
         flattened.push({
           id: spk.id || `${group.soNo}-${spk.spkNo}`,
           soNo: group.soNo,
@@ -3280,6 +3287,7 @@ const PPIC = () => {
           spkNo: spk.spkNo || '-',
           productCode: spk.product_id || spk.kode || '-',
           product: spk.product || '-',
+          padCode: padCode,
           qty: spk.qty || spk.target || 0,
           progress: spk.progress || 0,
           target: spk.target || spk.qty || 0,
@@ -3295,7 +3303,7 @@ const PPIC = () => {
       });
     });
     return flattened;
-  }, [filteredSpkData, scheduleData, purchaseRequests, spkViewMode]);
+  }, [filteredSpkData, scheduleData, purchaseRequests, spkViewMode, products]);
 
   const spkTableColumns = [
     { 
@@ -3331,6 +3339,15 @@ const PPIC = () => {
       header: 'Product',
       render: (item: any) => (
         <span style={{ fontSize: '13px' }}>{item.product}</span>
+      ),
+    },
+    {
+      key: 'padCode',
+      header: 'Pad Code',
+      render: (item: any) => (
+        <span style={{ fontSize: '12px', color: item.padCode && item.padCode !== '-' ? 'var(--primary)' : 'var(--text-secondary)' }}>
+          {item.padCode || '-'}
+        </span>
       ),
     },
     {

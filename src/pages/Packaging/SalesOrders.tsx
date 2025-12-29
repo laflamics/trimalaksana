@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
@@ -22,6 +23,8 @@ interface SOItem {
   price: number;
   total: number;
   specNote?: string;
+  padCode?: string; // PAD Code untuk product
+  inventoryQty?: number; // Inventory quantity yang akan masuk ke premonth stock
   discountPercent?: number; // Diskon per item (0-100)
   bom?: Array<{
     materialId: string;
@@ -70,6 +73,7 @@ interface Product {
   satuan: string;
   hargaFg?: number;
   hargaSales?: number;
+  padCode?: string; // PAD Code untuk product
 }
 
 interface Material {
@@ -263,6 +267,7 @@ const SOActionMenu = ({
 };
 
 const SalesOrders = () => {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<SalesOrder[]>([]);
   const [quotations, setQuotations] = useState<SalesOrder[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -546,7 +551,33 @@ const SalesOrders = () => {
     const data = await storageService.get<SalesOrder[]>('salesOrders') || [];
     // ENHANCED: Filter out deleted items for display (but keep them in storage for tombstone)
     const activeOrders = filterActiveItems(data);
-    setOrders(activeOrders);
+    
+    // Load products to update padCode (don't rely on state)
+    const currentProducts = await storageService.get<Product[]>('products') || [];
+    
+    // Update padCode from master product for all items
+    const ordersWithUpdatedPadCode = activeOrders.map(order => {
+      if (!order.items || order.items.length === 0) return order;
+      
+      const updatedItems = order.items.map(item => {
+        if (item.productId || item.productKode) {
+          const productId = item.productId || item.productKode;
+          const masterProduct = currentProducts.find(p => 
+            (p.product_id || p.kode) === productId
+          );
+          if (masterProduct && masterProduct.padCode) {
+            return { ...item, padCode: masterProduct.padCode };
+          } else if (!item.padCode) {
+            return { ...item, padCode: '' };
+          }
+        }
+        return item;
+      });
+      
+      return { ...order, items: updatedItems };
+    });
+    
+    setOrders(ordersWithUpdatedPadCode);
     
     // Log tombstone info for debugging
     const deletedCount = data.length - activeOrders.length;
@@ -701,6 +732,8 @@ const SalesOrders = () => {
       price: 0,
       total: 0,
       specNote: '',
+      padCode: '',
+      inventoryQty: 0,
     };
     setFormData(prev => {
       const nextIndex = (prev.items || []).length;
@@ -805,6 +838,8 @@ const SalesOrders = () => {
           const hargaFromMaster = product.hargaSales || product.hargaFg || (product as any).harga || 0;
           item.price = Number(hargaFromMaster) || 0;
           item.total = (item.qty || 0) * item.price;
+          // Auto-fill padCode dari master product
+          item.padCode = product.padCode || '';
 
           const productBOM = bomData.filter(b => {
             const bomProductId = (b.product_id || b.kode || '').toString().trim();
@@ -1316,14 +1351,69 @@ const SalesOrders = () => {
       // Generate BOM snapshot
       const bomSnapshot = generateBOMPreview();
       
+      // Update master product jika padCode di SO berbeda dengan master product
+      const updatedProducts = [...products];
+      let productsUpdated = false;
+      
+      (formData.items || []).forEach(item => {
+        if (item.productId || item.productKode) {
+          const productId = item.productId || item.productKode;
+          const masterProductIndex = updatedProducts.findIndex(p => 
+            (p.product_id || p.kode) === productId
+          );
+          
+          if (masterProductIndex >= 0) {
+            const masterProduct = updatedProducts[masterProductIndex];
+            // Jika padCode di SO berbeda dengan master product, update master product
+            if (item.padCode && item.padCode.trim() && item.padCode !== (masterProduct.padCode || '')) {
+              updatedProducts[masterProductIndex] = {
+                ...masterProduct,
+                padCode: item.padCode.trim(),
+                lastUpdate: new Date().toISOString(),
+                userUpdate: 'System',
+                ipAddress: '127.0.0.1',
+              };
+              productsUpdated = true;
+            }
+          }
+        }
+      });
+      
+      // Save updated products jika ada perubahan
+      if (productsUpdated) {
+        await storageService.set('products', updatedProducts);
+        // Update local products state untuk UI
+        setProducts(updatedProducts);
+      }
+      
+      // Ensure padCode is updated from master product before save (untuk items yang belum punya padCode)
+      const itemsWithPadCode = (formData.items || []).map(item => {
+        if (item.productId || item.productKode) {
+          const productId = item.productId || item.productKode;
+          const masterProduct = updatedProducts.find(p => 
+            (p.product_id || p.kode) === productId
+          );
+          // Gunakan padCode dari item jika ada, kalau tidak gunakan dari master product
+          if (masterProduct && !item.padCode) {
+            return { ...item, padCode: masterProduct.padCode || '' };
+          }
+        }
+        return item;
+      });
+      
+      const formDataWithPadCode = {
+        ...formData,
+        items: itemsWithPadCode,
+      };
+      
       if (editingOrder) {
         const ordersArray = Array.isArray(orders) ? orders : [];
         const updated = ordersArray.map(o =>
           o.id === editingOrder.id
             ? {
-                ...formData,
+                ...formDataWithPadCode,
                 id: editingOrder.id,
-                soNo: formData.soNo || editingOrder.soNo, // Allow edit SO No
+                soNo: formDataWithPadCode.soNo || editingOrder.soNo, // Allow edit SO No
                 created: editingOrder.created,
                 bomSnapshot,
                 status: editingOrder.status, // Keep status unless explicitly changed
@@ -1332,26 +1422,76 @@ const SalesOrders = () => {
         );
         await storageService.set('salesOrders', updated);
         setOrders(updated);
-        showAlert(`SO ${formData.soNo} updated successfully`, 'Success');
+        showAlert(`SO ${formDataWithPadCode.soNo} updated successfully`, 'Success');
       } else {
         const newOrder: SalesOrder = {
           id: Date.now().toString(),
-          soNo: formData.soNo.trim(),
-          customer: formData.customer || '',
-          customerKode: formData.customerKode || '',
-          paymentTerms: formData.paymentTerms || 'TOP',
-          topDays: formData.topDays,
+          soNo: formDataWithPadCode.soNo.trim(),
+          customer: formDataWithPadCode.customer || '',
+          customerKode: formDataWithPadCode.customerKode || '',
+          paymentTerms: formDataWithPadCode.paymentTerms || 'TOP',
+          topDays: formDataWithPadCode.topDays,
           status: 'OPEN', // Auto OPEN saat SO dibuat (PO customer masuk)
           created: new Date().toISOString(),
-          items: formData.items || [],
-          globalSpecNote: formData.globalSpecNote,
-          category: formData.category || 'packaging',
+          items: itemsWithPadCode,
+          globalSpecNote: formDataWithPadCode.globalSpecNote,
+          category: formDataWithPadCode.category || 'packaging',
           bomSnapshot,
         };
         const ordersArray = Array.isArray(orders) ? orders : [];
         const updated = [...ordersArray, newOrder];
         await storageService.set('salesOrders', updated);
         setOrders(updated);
+        
+        // Update inventory premonth stock untuk items yang punya inventoryQty
+        if (formData.items && formData.items.length > 0) {
+          const inventoryData = await storageService.get<any[]>('inventory') || [];
+          const updatedInventory = [...inventoryData];
+          
+          formData.items.forEach((item: SOItem) => {
+            if (item.inventoryQty && item.inventoryQty > 0 && item.productId) {
+              const productId = item.productId.toLowerCase();
+              const inventoryItem = updatedInventory.find(inv => 
+                (inv.codeItem || '').toLowerCase() === productId
+              );
+              
+              if (inventoryItem) {
+                // Update premonth stock
+                inventoryItem.stockPremonth = (inventoryItem.stockPremonth || 0) + item.inventoryQty;
+                inventoryItem.lastUpdate = new Date().toISOString();
+              } else {
+                // Create new inventory item jika belum ada
+                const product = products.find(p => 
+                  ((p.product_id || p.kode) || '').toLowerCase() === productId
+                );
+                if (product) {
+                  updatedInventory.push({
+                    id: Date.now().toString() + productId,
+                    supplierName: formData.customer || '',
+                    codeItem: item.productId,
+                    description: item.productName || product.nama || '',
+                    kategori: product.kategori || 'Product',
+                    satuan: item.unit || product.satuan || 'PCS',
+                    price: item.price || product.hargaFg || product.hargaSales || 0,
+                    padCode: item.padCode || product.padCode || '',
+                    stockPremonth: item.inventoryQty,
+                    receive: 0,
+                    outgoing: 0,
+                    return: 0,
+                    nextStock: item.inventoryQty,
+                    lastUpdate: new Date().toISOString(),
+                  });
+                }
+              }
+            }
+          });
+          
+          if (updatedInventory.length !== inventoryData.length || 
+              formData.items.some(item => item.inventoryQty && item.inventoryQty > 0)) {
+            await storageService.set('inventory', updatedInventory);
+          }
+        }
+        
         showAlert(`SO ${formData.soNo} created successfully`, 'Success');
       }
       setShowForm(false);
@@ -1416,8 +1556,21 @@ const SalesOrders = () => {
     setEditingOrder(item);
     setFormKey(prev => prev + 1); // Force re-render input fields
     
-    // Reload BOM for items if not already loaded
+    // Reload BOM for items if not already loaded, and update padCode from master product
     const itemsWithBOM = await Promise.all((item.items || []).map(async (itm) => {
+      // Update padCode from master product if productId exists
+      if (itm.productId || itm.productKode) {
+        const productId = itm.productId || itm.productKode;
+        const masterProduct = products.find(p => 
+          (p.product_id || p.kode) === productId
+        );
+        if (masterProduct && masterProduct.padCode) {
+          itm.padCode = masterProduct.padCode;
+        } else if (!itm.padCode) {
+          itm.padCode = '';
+        }
+      }
+      
       if (itm.bom && itm.bom.length > 0) {
         return itm; // BOM already exists
       }
@@ -2456,6 +2609,7 @@ const SalesOrders = () => {
           confirmed: order.confirmed,
           productCode: '-',
           productName: '-',
+          padCode: '-',
           qty: 0,
           unit: '-',
           price: 0,
@@ -2476,6 +2630,7 @@ const SalesOrders = () => {
             confirmed: order.confirmed,
             productCode: item.productKode || item.productId || '-',
             productName: item.productName || '-',
+            padCode: item.padCode || '-',
             qty: item.qty || 0,
             unit: item.unit || 'PCS',
             price: item.price || 0,
@@ -2520,6 +2675,15 @@ const SalesOrders = () => {
       header: 'Product',
       render: (item: any) => (
         <span style={{ fontSize: '13px' }}>{item.productName}</span>
+      ),
+    },
+    {
+      key: 'padCode',
+      header: 'Pad Code',
+      render: (item: any) => (
+        <span style={{ fontSize: '12px', color: item.padCode && item.padCode !== '-' ? 'var(--primary)' : 'var(--text-secondary)' }}>
+          {item.padCode || '-'}
+        </span>
       ),
     },
     {
@@ -2923,10 +3087,12 @@ const SalesOrders = () => {
                   <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                     <tr style={{ backgroundColor: 'var(--bg-tertiary)', borderBottom: '2px solid var(--border)' }}>
                       <th style={{ padding: '8px', textAlign: 'left', backgroundColor: 'var(--bg-tertiary)' }}>Product</th>
+                      <th style={{ padding: '8px', textAlign: 'left', backgroundColor: 'var(--bg-tertiary)' }}>Pad Code</th>
                       <th style={{ padding: '8px', textAlign: 'left', backgroundColor: 'var(--bg-tertiary)' }}>Qty</th>
                       <th style={{ padding: '8px', textAlign: 'left', backgroundColor: 'var(--bg-tertiary)' }}>Unit</th>
                       <th style={{ padding: '8px', textAlign: 'left', backgroundColor: 'var(--bg-tertiary)' }}>Price</th>
                       <th style={{ padding: '8px', textAlign: 'left', backgroundColor: 'var(--bg-tertiary)' }}>Total</th>
+                      <th style={{ padding: '8px', textAlign: 'left', backgroundColor: 'var(--bg-tertiary)' }}>Inventory</th>
                       <th style={{ padding: '8px', textAlign: 'left', backgroundColor: 'var(--bg-tertiary)' }}>Spec Note</th>
                       <th style={{ padding: '8px', textAlign: 'center', backgroundColor: 'var(--bg-tertiary)' }}>Actions</th>
                     </tr>
@@ -2981,7 +3147,49 @@ const SalesOrders = () => {
                             >
                               Select
                             </Button>
+                            {item.productId && (
+                              <Button
+                                variant="secondary"
+                                onClick={() => {
+                                  navigate('/packaging/master/inventory', { 
+                                    state: { highlightProduct: item.productId } 
+                                  });
+                                }}
+                                style={{ fontSize: '11px', padding: '4px 8px', whiteSpace: 'nowrap' }}
+                                title="Buka Inventory untuk product ini"
+                              >
+                                📊
+                              </Button>
+                            )}
                           </div>
+                        </td>
+                        <td style={{ padding: '8px' }}>
+                          <input
+                            key={`padCode-${item.id}-${formKey}`}
+                            type="text"
+                            value={item.padCode || ''}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              handleUpdateItem(index, 'padCode', e.target.value);
+                            }}
+                            onBlur={(e) => {
+                              e.stopPropagation();
+                              handleUpdateItem(index, 'padCode', e.target.value);
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                            }}
+                            placeholder="Pad Code"
+                            style={{
+                              width: '100px',
+                              padding: '6px 8px',
+                              border: '1px solid var(--border)',
+                              borderRadius: '4px',
+                              backgroundColor: 'var(--bg-primary)',
+                              color: 'var(--text-primary)',
+                              fontSize: '13px',
+                            }}
+                          />
                         </td>
                         <td style={{ padding: '8px' }}>
                           <input
@@ -3198,6 +3406,54 @@ const SalesOrders = () => {
                         </td>
                         <td style={{ padding: '8px' }}>
                           <input
+                            key={`inventoryQty-${item.id}-${formKey}`}
+                            type="text"
+                            inputMode="decimal"
+                            value={item.inventoryQty !== undefined && item.inventoryQty !== null && item.inventoryQty !== 0 ? String(item.inventoryQty) : ''}
+                            onFocus={(e) => {
+                              e.stopPropagation();
+                              const input = e.target as HTMLInputElement;
+                              const currentQty = item.inventoryQty;
+                              if (currentQty === 0 || currentQty === null || currentQty === undefined || String(currentQty) === '0') {
+                                input.value = '';
+                              } else {
+                                input.select();
+                              }
+                            }}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              let val = e.target.value;
+                              val = val.replace(/[^\d.,]/g, '');
+                              const cleaned = removeLeadingZero(val);
+                              handleUpdateItem(index, 'inventoryQty', cleaned === '' ? '' : cleaned);
+                            }}
+                            onBlur={(e) => {
+                              e.stopPropagation();
+                              const val = e.target.value;
+                              if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
+                                handleUpdateItem(index, 'inventoryQty', 0);
+                              } else {
+                                handleUpdateItem(index, 'inventoryQty', Number(val));
+                              }
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                            }}
+                            placeholder="0"
+                            title="Inventory quantity yang akan masuk ke premonth stock"
+                            style={{
+                              width: '80px',
+                              padding: '6px 8px',
+                              border: '1px solid var(--border)',
+                              borderRadius: '4px',
+                              backgroundColor: 'var(--bg-primary)',
+                              color: 'var(--text-primary)',
+                              fontSize: '13px',
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: '8px' }}>
+                          <input
                             key={`specNote-${item.id}-${formKey}`}
                             type="text"
                             value={item.specNote || ''}
@@ -3253,11 +3509,11 @@ const SalesOrders = () => {
                   </tbody>
                   <tfoot>
                     <tr style={{ borderTop: '2px solid var(--border)', fontWeight: 'bold' }}>
-                      <td colSpan={4} style={{ padding: '8px', textAlign: 'right' }}>Total:</td>
+                      <td colSpan={5} style={{ padding: '8px', textAlign: 'right' }}>Total:</td>
                       <td style={{ padding: '8px' }}>
                         Rp {((formData.items || []).reduce((sum, i) => sum + i.total, 0)).toLocaleString('id-ID')}
                       </td>
-                      <td colSpan={2}></td>
+                      <td colSpan={3}></td>
                     </tr>
                   </tfoot>
                 </table>
@@ -3467,7 +3723,17 @@ const SalesOrders = () => {
                         const prodHasBOM = bomProductIds.has(productId);
                         const handleSelect = () => {
                           if (showProductDialog !== null) {
-                            handleUpdateItem(showProductDialog, 'productId', prod.product_id || prod.kode);
+                            const index = showProductDialog;
+                            handleUpdateItem(index, 'productId', prod.product_id || prod.kode);
+                            // Also update padCode from master product
+                            if (prod.padCode) {
+                              const currentItems = formData.items || [];
+                              if (currentItems[index]) {
+                                const updatedItems = [...currentItems];
+                                updatedItems[index] = { ...updatedItems[index], padCode: prod.padCode };
+                                setFormData(prev => ({ ...prev, items: updatedItems }));
+                              }
+                            }
                             setShowProductDialog(null);
                             setProductDialogSearch('');
                           }
@@ -3789,23 +4055,17 @@ const SalesOrders = () => {
                   + Create Quotation
                 </Button>
               </div>
-              {filteredQuotations.length === 0 ? (
-                <p style={{ color: 'var(--text-secondary)', padding: '40px', textAlign: 'center' }}>
-                  No quotations found. Click "+ Create Quotation" to create a new quotation.
-                </p>
-              ) : (
-                <Table
-                  columns={quotationColumns}
-                  data={filteredQuotations}
-                  onRowClick={(_item: SalesOrder) => {
-                    // Optional: Show detail on row click
-                  }}
-                  getRowStyle={(item: SalesOrder) => ({
-                    backgroundColor: getRowColor(item.soNo),
-                  })}
-                  emptyMessage="No quotations found"
-                />
-              )}
+              <Table
+                columns={quotationColumns}
+                data={filteredQuotations}
+                onRowClick={(_item: SalesOrder) => {
+                  // Optional: Show detail on row click
+                }}
+                getRowStyle={(item: SalesOrder) => ({
+                  backgroundColor: getRowColor(item.soNo),
+                })}
+                emptyMessage="No quotations found. Click '+ Create Quotation' to create a new quotation."
+              />
             </div>
           ) : (
             orderViewMode === 'cards'

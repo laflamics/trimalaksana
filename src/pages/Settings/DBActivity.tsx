@@ -1550,8 +1550,10 @@ const DBActivity = () => {
                 </Button>
               )}
               <Button variant="primary" onClick={() => {
-                if (dialogState.onConfirm) dialogState.onConfirm();
-                if (dialogState.type === 'alert') closeDialog();
+                if (dialogState.onConfirm) {
+                  dialogState.onConfirm();
+                }
+                closeDialog(); // Always close dialog after action
               }}>
                 {dialogState.type === 'alert' ? 'OK' : 'Confirm'}
               </Button>

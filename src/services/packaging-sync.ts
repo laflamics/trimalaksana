@@ -33,6 +33,37 @@ class PackagingSync {
   constructor() {
     this.initializeWebSocket();
     this.startQueueProcessor();
+    // Check initial sync status based on storage config
+    this.checkInitialSyncStatus();
+  }
+
+  /**
+   * Check initial sync status based on storage config
+   */
+  private checkInitialSyncStatus() {
+    try {
+      const storageConfig = JSON.parse(localStorage.getItem('storage_config') || '{"type":"local"}');
+      
+      if (storageConfig.type === 'server' && storageConfig.serverUrl) {
+        // If server mode is configured, check if there are unsynced items
+        const unsyncedCount = this.getUnsyncedCount();
+        if (unsyncedCount === 0) {
+          // No unsynced items, set status to synced
+          this.syncStatus = 'synced';
+          this.emitStatusChange('synced');
+        } else {
+          // There are unsynced items, set status to idle (will be synced when queue processes)
+          this.syncStatus = 'idle';
+          this.emitStatusChange('idle');
+        }
+      } else {
+        // Local mode, set status to idle
+        this.syncStatus = 'idle';
+        this.emitStatusChange('idle');
+      }
+    } catch (error) {
+      console.error('[PackagingSync] Error checking initial sync status:', error);
+    }
   }
 
   private initializeWebSocket() {
@@ -144,10 +175,33 @@ class PackagingSync {
     const maxBackoffDelay = 30000; // Max 30s
     
     const processQueueLoop = async () => {
-      if (this.syncQueue.length === 0 || this.syncStatus === 'syncing') {
+      if (this.syncQueue.length === 0) {
+        // Queue is empty, check final status
+        const unsyncedCount = this.getUnsyncedCount();
+        const storageConfig = JSON.parse(localStorage.getItem('storage_config') || '{"type":"local"}');
+        
+        if (storageConfig.type === 'server' && storageConfig.serverUrl) {
+          if (unsyncedCount === 0) {
+            this.syncStatus = 'synced';
+            this.emitStatusChange('synced');
+          } else {
+            this.syncStatus = 'idle';
+            this.emitStatusChange('idle');
+          }
+        } else {
+          this.syncStatus = 'idle';
+          this.emitStatusChange('idle');
+        }
+        
         // Exponential backoff when queue is empty
         backoffDelay = Math.min(backoffDelay * 1.2, maxBackoffDelay);
         setTimeout(processQueueLoop, backoffDelay);
+        return;
+      }
+      
+      if (this.syncStatus === 'syncing') {
+        // Still syncing, wait a bit
+        setTimeout(processQueueLoop, 100);
         return;
       }
       
@@ -164,7 +218,25 @@ class PackagingSync {
   }
 
   private async processQueue() {
-    if (this.syncQueue.length === 0) return;
+    if (this.syncQueue.length === 0) {
+      // Queue is empty, check final status
+      const unsyncedCount = this.getUnsyncedCount();
+      const storageConfig = JSON.parse(localStorage.getItem('storage_config') || '{"type":"local"}');
+      
+      if (storageConfig.type === 'server' && storageConfig.serverUrl) {
+        if (unsyncedCount === 0) {
+          this.syncStatus = 'synced';
+          this.emitStatusChange('synced');
+        } else {
+          this.syncStatus = 'idle';
+          this.emitStatusChange('idle');
+        }
+      } else {
+        this.syncStatus = 'idle';
+        this.emitStatusChange('idle');
+      }
+      return;
+    }
     
     this.syncStatus = 'syncing';
     this.emitStatusChange('syncing');
@@ -184,8 +256,25 @@ class PackagingSync {
         }
       }
       
-      this.syncStatus = 'synced';
-      this.emitStatusChange('synced');
+      // Check if queue is empty after sync
+      if (this.syncQueue.length === 0) {
+        const unsyncedCount = this.getUnsyncedCount();
+        const storageConfig = JSON.parse(localStorage.getItem('storage_config') || '{"type":"local"}');
+        
+        if (storageConfig.type === 'server' && storageConfig.serverUrl) {
+          if (unsyncedCount === 0) {
+            this.syncStatus = 'synced';
+            this.emitStatusChange('synced');
+          } else {
+            this.syncStatus = 'idle';
+            this.emitStatusChange('idle');
+          }
+        } else {
+          this.syncStatus = 'idle';
+          this.emitStatusChange('idle');
+        }
+      }
+      // If queue is not empty, status will remain 'syncing' and processQueue will be called again
       
     } catch (error) {
       console.error(`[PackagingSync] Sync failed for ${operation.key}:`, error);

@@ -471,7 +471,6 @@ ipcMain.handle('save-storage', async (event, key: string, value: any) => {
   try {
     // Skip BOM for GT (General Trading doesn't use BOM)
     if (key === 'bom' || key === 'gt_bom') {
-      console.log(`⏭️ Skipping save for ${key} (not used in General Trading)`);
       return { success: true, path: '', skipped: true };
     }
     

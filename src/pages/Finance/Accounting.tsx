@@ -560,6 +560,7 @@ const Accounting = () => {
         sjNo: delivery.sjNo,
         customer: item.customer || notif?.customer,
         lines: invoiceLines,
+        productCodeDisplay: delivery.productCodeDisplay || 'padCode', // Ambil dari delivery note
         bom: {
           subtotal: subtotal,
           discount: 0,
@@ -812,6 +813,18 @@ const Accounting = () => {
         }
       }
 
+      // Ambil productCodeDisplay dari delivery note jika ada
+      let productCodeDisplay = 'padCode';
+      if (sjNo) {
+        const deliveryData = await storageService.get<any[]>('delivery') || [];
+        const relatedDN = deliveryData.find((dn: any) => dn.sjNo === sjNo);
+        if (relatedDN && relatedDN.productCodeDisplay) {
+          productCodeDisplay = relatedDN.productCodeDisplay;
+        }
+      } else if (manualData.productCodeDisplay) {
+        productCodeDisplay = manualData.productCodeDisplay;
+      }
+
       const newInvoice = {
         id: Date.now().toString(),
         invoiceNo,
@@ -819,6 +832,7 @@ const Accounting = () => {
         sjNo: sjNo || '',
         customer: manualData.customer,
         lines: invoiceLines,
+        productCodeDisplay: productCodeDisplay,
         bom: {
           subtotal,
           discount,
@@ -1136,9 +1150,22 @@ const Accounting = () => {
       
       // Simpan kode item dan nama produk
       if (product) {
-        // Ambil kode dari berbagai field yang mungkin ada di master products
-        // Prioritaskan: product_id > kode > sku > codeItem > id
-        const productCode = product.product_id || product.kode || product.sku || product.codeItem || product.id || '';
+        // Get productCodeDisplay preference (default: 'padCode')
+        const productCodeDisplay = item.productCodeDisplay || 'padCode';
+        
+        // Helper function untuk mendapatkan product code berdasarkan preference
+        const getProductCode = (prod: any, defaultCode: string): string => {
+          if (productCodeDisplay === 'padCode') {
+            // Default: Pad Code, fallback ke Product ID jika tidak ada
+            return prod?.padCode || prod?.sku || prod?.kode || prod?.product_id || prod?.id || defaultCode;
+          } else {
+            // Product ID / SKU ID
+            return prod?.sku || prod?.kode || prod?.product_id || prod?.id || defaultCode;
+          }
+        };
+        
+        // Ambil kode berdasarkan preference
+        const productCode = getProductCode(product, line.itemSku || '');
         productCodeMap[line.itemSku] = productCode;
         productMap[line.itemSku] = product.nama || product.description || product.name || line.itemSku;
       } else {
@@ -3106,6 +3133,7 @@ const CreateInvoiceDialog = ({
   const [paymentTerms, setPaymentTerms] = useState('TOP');
   const [topDays, setTopDays] = useState(30);
   const [templateType, setTemplateType] = useState('template1');
+  const [productCodeDisplay, setProductCodeDisplay] = useState<'padCode' | 'productId'>('padCode');
   
   // Helper function to calculate due date based on payment terms
   const calculateDueDate = (terms: string, days: number): string => {
@@ -3515,6 +3543,7 @@ const CreateInvoiceDialog = ({
           paymentTerms,
           topDays,
           templateType,
+          productCodeDisplay: productCodeDisplay,
         }
       });
     } else if (mode === 'sj') {
@@ -3539,6 +3568,7 @@ const CreateInvoiceDialog = ({
           paymentTerms,
           topDays,
           templateType,
+          productCodeDisplay: productCodeDisplay,
         }
       });
     } else {
@@ -3557,6 +3587,7 @@ const CreateInvoiceDialog = ({
           paymentTerms,
           topDays,
           templateType,
+          productCodeDisplay: productCodeDisplay,
         }
       });
     }
@@ -4574,6 +4605,32 @@ const CreateInvoiceDialog = ({
                 >
                   Template 2 (Baru) ✨
                 </button>
+              </div>
+            </div>
+
+            {/* Product Code Display Selection */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
+                Product Code Display (Template Invoice)
+              </label>
+              <select
+                value={productCodeDisplay}
+                onChange={(e) => setProductCodeDisplay(e.target.value as 'padCode' | 'productId')}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '4px',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '14px',
+                }}
+              >
+                <option value="padCode">Pad Code (default, fallback ke Product ID jika tidak ada)</option>
+                <option value="productId">Product ID / SKU ID</option>
+              </select>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                Pilihan ini menentukan kode yang ditampilkan di kolom "Kode Item" pada template Invoice
               </div>
             </div>
 
