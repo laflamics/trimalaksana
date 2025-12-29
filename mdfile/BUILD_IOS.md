@@ -132,6 +132,61 @@ Setelah dapat file `.ipa` dari GitHub Actions, install ke iPhone pakai salah sat
 
 ### Troubleshooting Install:
 
+#### 🔴 Device Tidak Terdeteksi di Sideloadly
+
+**Solusi Step-by-Step:**
+
+1. **Install iTunes/Apple Mobile Device Support:**
+   - Download **iTunes** dari Apple (https://www.apple.com/itunes/)
+   - Atau install **Apple Mobile Device Support** saja (lebih ringan)
+   - Restart komputer setelah install
+
+2. **Trust Computer di iPhone:**
+   - Unlock iPhone
+   - Connect via USB
+   - Kalau muncul popup "Trust This Computer?" → Tap **Trust**
+   - Masukkan passcode iPhone kalau diminta
+
+3. **Cek USB Connection:**
+   - Coba ganti kabel USB (pakai original Apple cable kalau bisa)
+   - Coba port USB lain di komputer
+   - Jangan pakai USB hub, langsung ke port komputer
+
+4. **Enable USB Accessories (iOS 11.4.1+):**
+   - Settings > Face ID & Passcode (atau Touch ID & Passcode)
+   - Scroll ke bawah, pastikan **"USB Accessories"** ON
+   - Kalau OFF, unlock iPhone dulu baru bisa connect
+
+5. **Restart Services (Windows):**
+   ```powershell
+   # Buka PowerShell as Administrator
+   net stop "Apple Mobile Device Service"
+   net start "Apple Mobile Device Service"
+   ```
+   - Atau restart komputer
+
+6. **Cek Device Manager (Windows):**
+   - Buka Device Manager
+   - Cek apakah iPhone muncul di "Portable Devices" atau "Universal Serial Bus controllers"
+   - Kalau ada tanda seru kuning → Update driver
+   - Kalau tidak muncul sama sekali → Coba restart iPhone
+
+7. **Restart iPhone:**
+   - Restart iPhone (hold power + volume down)
+   - Connect lagi setelah restart
+
+8. **Cek Sideloadly Version:**
+   - Update Sideloadly ke versi terbaru
+   - Download dari: https://sideloadly.io/
+
+9. **Coba Tools Lain:**
+   - **3uTools** (https://www.3u.com/) - Alternatif yang lebih reliable
+   - **AltStore** (https://altstore.io/) - Butuh setup lebih kompleks
+
+10. **Cek Windows Firewall/Antivirus:**
+    - Matikan antivirus sementara
+    - Allow Sideloadly di Windows Firewall
+
 **Error: "Untrusted Developer"**
 - Settings > General > VPN & Device Management
 - Tap developer certificate
