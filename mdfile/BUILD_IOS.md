@@ -50,7 +50,34 @@ Workflow akan otomatis jalan kalau kamu push ke branch `main` atau `master` dan 
 
 Setelah dapat file `.ipa` dari GitHub Actions, install ke iPhone pakai salah satu cara ini:
 
-### Opsi 1: Sideloadly (PALING MUDAH) ⭐
+### Opsi 0: Install Langsung dari iPhone (BERBAYAR) 💰
+
+**Service Online yang Support Install Langsung dari iPhone:**
+
+1. **Signulous** (https://signulous.com/) - $20/tahun
+   - Upload IPA via browser di iPhone
+   - Install langsung tanpa komputer
+   - Auto-refresh setiap 7 hari
+
+2. **AppDB** (https://appdb.to/) - €15/tahun
+   - Upload IPA via browser
+   - Install langsung dari iPhone
+   - Support multiple apps
+
+3. **ESign** (https://esign.com/) - Berbayar
+   - Upload IPA via web
+   - Install langsung dari iPhone
+
+**Cara Pakai:**
+1. Upload file IPA ke service tersebut
+2. Buka link di Safari iPhone
+3. Install langsung tanpa komputer ✅
+
+**Catatan:** Service ini berbayar tapi paling praktis kalau mau install langsung dari iPhone tanpa komputer.
+
+---
+
+### Opsi 1: Sideloadly (PALING MUDAH & GRATIS) ⭐
 
 **Download:** https://sideloadly.io/
 
