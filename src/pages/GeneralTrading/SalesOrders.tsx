@@ -35,6 +35,9 @@ interface SalesOrder {
   topDays?: number;
   status: 'OPEN' | 'CLOSE';
   created: string;
+  timestamp?: number; // Timestamp untuk sync dengan server
+  _timestamp?: number; // Backward compatibility timestamp
+  lastUpdate?: string; // Last update time (ISO string)
   globalSpecNote?: string;
   items: SOItem[];
   discountPercent?: number; // Discount percentage untuk quotation
@@ -575,14 +578,144 @@ const SalesOrders = () => {
     loadProducts();
   }, []);
 
+  // Helper functions untuk save/load signature dari localStorage
+  const saveSignatureToLocalStorage = (signatureBase64: string, signatureName: string, signatureTitle: string) => {
+    try {
+      localStorage.setItem('gt_quotation_last_signature', JSON.stringify({
+        signatureBase64,
+        signatureName,
+        signatureTitle,
+      }));
+    } catch (error) {
+      // Ignore localStorage errors
+    }
+  };
+
+  const loadSignatureFromLocalStorage = () => {
+    try {
+      const saved = localStorage.getItem('gt_quotation_last_signature');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (error) {
+      // Ignore localStorage errors
+    }
+    return null;
+  };
+
+  // Load default signature (TTD Pak Ali) dari data folder
+  const loadDefaultSignature = async (): Promise<{ signatureBase64: string; signatureName: string; signatureTitle: string } | null> => {
+    const DEFAULT_SIGNATURE_NAME = 'M. Ali Audah';
+    const DEFAULT_SIGNATURE_TITLE = 'Direktur';
+    
+    try {
+      const electronAPI = (window as any).electronAPI;
+      
+      // Coba load dari Electron API dulu
+      if (electronAPI && electronAPI.getResourceBase64) {
+        try {
+          const base64Ttd = await electronAPI.getResourceBase64('ttdPakAli.png');
+          if (base64Ttd && base64Ttd.startsWith('data:')) {
+            return {
+              signatureBase64: base64Ttd,
+              signatureName: DEFAULT_SIGNATURE_NAME,
+              signatureTitle: DEFAULT_SIGNATURE_TITLE,
+            };
+          }
+        } catch (error) {
+          // Continue to fallback
+        }
+      }
+
+      // Fallback: coba load dari berbagai path (prioritaskan public folder)
+      const ttdPaths = [
+        '/ttdPakAli.png',           // Public folder (prioritas tertinggi)
+        './ttdPakAli.png',          // Relative path
+        '/data/ttdPakAli.png',      // Data folder
+        './data/ttdPakAli.png',     // Data folder relative
+        '../data/ttdPakAli.png',    // Data folder parent
+        'data/ttdPakAli.png',       // Data folder direct
+      ];
+
+      for (const ttdPath of ttdPaths) {
+        try {
+          const response = await fetch(ttdPath, {
+            method: 'GET',
+            cache: 'no-cache',
+          });
+
+          if (response.ok) {
+            const blob = await response.blob();
+            if (blob.type.startsWith('image/')) {
+              const base64Ttd = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                  const result = reader.result as string;
+                  if (result && result.startsWith('data:')) {
+                    resolve(result);
+                  } else {
+                    reject(new Error('Invalid base64 result'));
+                  }
+                };
+                reader.onerror = () => reject(new Error('FileReader error'));
+                reader.readAsDataURL(blob);
+              });
+
+              return {
+                signatureBase64: base64Ttd,
+                signatureName: DEFAULT_SIGNATURE_NAME,
+                signatureTitle: DEFAULT_SIGNATURE_TITLE,
+              };
+            }
+          }
+        } catch (error) {
+          // Continue to next path
+          continue;
+        }
+      }
+    } catch (error) {
+      // Silent fail
+    }
+    
+    return null;
+  };
+
   // Auto-generate quotation no saat form dibuka (hanya untuk create baru, bukan edit)
   useEffect(() => {
     if (showQuotationFormDialog && !editingQuotation) {
       // Selalu generate nomor baru setiap kali form dibuka untuk create baru
       const autoNo = generateQuotationNo(quotations);
-      setQuotationFormData(prev => ({ ...prev, soNo: autoNo }));
+      
+      // Load signature terakhir dari localStorage atau default
+      const loadSignature = async () => {
+        let signatureData = loadSignatureFromLocalStorage();
+        
+        // Jika belum ada di localStorage, load default signature
+        if (!signatureData || !signatureData.signatureBase64) {
+          const defaultSignature = await loadDefaultSignature();
+          if (defaultSignature) {
+            signatureData = defaultSignature;
+            // Save default signature ke localStorage untuk next time
+            saveSignatureToLocalStorage(
+              defaultSignature.signatureBase64,
+              defaultSignature.signatureName,
+              defaultSignature.signatureTitle
+            );
+          }
+        }
+        
+        setQuotationFormData(prev => ({
+          ...prev,
+          soNo: autoNo,
+          signatureBase64: signatureData?.signatureBase64 || '',
+          signatureName: signatureData?.signatureName || '',
+          signatureTitle: signatureData?.signatureTitle || '',
+        }));
+      };
+      
+      loadSignature();
     } else if (!showQuotationFormDialog) {
-      // Reset form saat dialog ditutup
+      // Reset form saat dialog ditutup (tapi jangan reset signature, sudah di-save di localStorage)
       setQuotationFormData({
         soNo: '',
         customer: '',
@@ -1301,6 +1434,20 @@ const SalesOrders = () => {
     try {
       const quotationsArray = Array.isArray(quotations) ? quotations : [];
       
+      // Load default signature jika signature kosong
+      let finalSignatureBase64 = quotationFormData.signatureBase64 || '';
+      let finalSignatureName = quotationFormData.signatureName || '';
+      let finalSignatureTitle = quotationFormData.signatureTitle || '';
+      
+      if (!finalSignatureBase64 || !finalSignatureName || !finalSignatureTitle) {
+        const defaultSignature = await loadDefaultSignature();
+        if (defaultSignature) {
+          finalSignatureBase64 = finalSignatureBase64 || defaultSignature.signatureBase64;
+          finalSignatureName = finalSignatureName || defaultSignature.signatureName;
+          finalSignatureTitle = finalSignatureTitle || defaultSignature.signatureTitle;
+        }
+      }
+      
       if (editingQuotation) {
         // Update existing quotation
         const updated = quotationsArray.map(q =>
@@ -1314,9 +1461,12 @@ const SalesOrders = () => {
                 items: quotationFormData.items || [],
                 globalSpecNote: quotationFormData.globalSpecNote,
                 discountPercent: quotationFormData.discountPercent || 0,
-                signatureBase64: quotationFormData.signatureBase64,
-                signatureName: quotationFormData.signatureName,
-                signatureTitle: quotationFormData.signatureTitle,
+                signatureBase64: finalSignatureBase64,
+                signatureName: finalSignatureName,
+                signatureTitle: finalSignatureTitle,
+                timestamp: Date.now(),
+                _timestamp: Date.now(),
+                lastUpdate: new Date().toISOString(),
               }
             : q
         );
@@ -1337,12 +1487,15 @@ const SalesOrders = () => {
           topDays: quotationFormData.topDays,
           status: 'OPEN', // Quotation langsung OPEN saat dibuat
           created: new Date().toISOString(),
+          timestamp: Date.now(),
+          _timestamp: Date.now(),
+          lastUpdate: new Date().toISOString(),
           items: quotationFormData.items || [],
           globalSpecNote: quotationFormData.globalSpecNote,
           discountPercent: quotationFormData.discountPercent || 0,
-          signatureBase64: quotationFormData.signatureBase64,
-          signatureName: quotationFormData.signatureName,
-          signatureTitle: quotationFormData.signatureTitle,
+          signatureBase64: finalSignatureBase64,
+          signatureName: finalSignatureName,
+          signatureTitle: finalSignatureTitle,
         };
         
         // Check duplicate quotation no
@@ -1357,6 +1510,15 @@ const SalesOrders = () => {
         await storageService.set('gt_quotations', updated);
         setQuotations(updated);
         showAlert(`Quotation ${quotationNo} created successfully`, 'Success');
+      }
+      
+      // Save signature terakhir ke localStorage sebelum reset (gunakan final signature yang sudah di-load)
+      if (finalSignatureBase64 || finalSignatureName || finalSignatureTitle) {
+        saveSignatureToLocalStorage(
+          finalSignatureBase64,
+          finalSignatureName,
+          finalSignatureTitle
+        );
       }
       
       // Reset form dan tutup dialog
@@ -1952,9 +2114,9 @@ const SalesOrders = () => {
           topDays: formData.topDays,
           status: 'OPEN', // Auto OPEN saat SO dibuat (PO customer masuk)
           created: new Date().toISOString(),
-          lastUpdate: new Date().toISOString(),
           timestamp: Date.now(),
           _timestamp: Date.now(),
+          lastUpdate: new Date().toISOString(),
           items: formData.items || [],
           globalSpecNote: formData.globalSpecNote,
           discountPercent: formData.discountPercent || 0,
@@ -2853,6 +3015,7 @@ const SalesOrders = () => {
                 <Button variant="secondary" onClick={() => handleViewSO(order)} style={{ fontSize: '12px', padding: '6px 12px' }}>
                   View SO
                 </Button>
+                {/* Hide View Quotation button - sudah ada di tab quotation */}
                 {order.status === 'OPEN' && !order.ppicNotified && (
                   <Button 
                     variant="primary" 
@@ -4796,7 +4959,8 @@ const SalesOrders = () => {
                         {filteredQuotationCustomers.map(c => (
                           <div
                             key={c.id}
-                            onClick={() => {
+                            onMouseDown={(e) => {
+                              e.preventDefault();
                               setQuotationCustomerSearch(c.nama);
                               setQuotationFormData({
                                 ...quotationFormData,
@@ -4972,10 +5136,17 @@ const SalesOrders = () => {
                           if (file) {
                             const reader = new FileReader();
                             reader.onloadend = () => {
+                              const newSignatureBase64 = reader.result as string;
                               setQuotationFormData({
                                 ...quotationFormData,
-                                signatureBase64: reader.result as string,
+                                signatureBase64: newSignatureBase64,
                               });
+                              // Save ke localStorage saat upload
+                              saveSignatureToLocalStorage(
+                                newSignatureBase64,
+                                quotationFormData.signatureName || '',
+                                quotationFormData.signatureTitle || ''
+                              );
                             };
                             reader.readAsDataURL(file);
                           }
@@ -5003,13 +5174,29 @@ const SalesOrders = () => {
                     <Input
                       label="Signature Name"
                       value={quotationFormData.signatureName || ''}
-                      onChange={(v) => setQuotationFormData({ ...quotationFormData, signatureName: v })}
+                      onChange={(v) => {
+                        setQuotationFormData({ ...quotationFormData, signatureName: v });
+                        // Save ke localStorage saat diubah
+                        saveSignatureToLocalStorage(
+                          quotationFormData.signatureBase64 || '',
+                          v,
+                          quotationFormData.signatureTitle || ''
+                        );
+                      }}
                       placeholder="Nama penandatangan..."
                     />
                     <Input
                       label="Signature Title"
                       value={quotationFormData.signatureTitle || ''}
-                      onChange={(v) => setQuotationFormData({ ...quotationFormData, signatureTitle: v })}
+                      onChange={(v) => {
+                        setQuotationFormData({ ...quotationFormData, signatureTitle: v });
+                        // Save ke localStorage saat diubah
+                        saveSignatureToLocalStorage(
+                          quotationFormData.signatureBase64 || '',
+                          quotationFormData.signatureName || '',
+                          v
+                        );
+                      }}
                       placeholder="Jabatan/title..."
                     />
                   </div>
@@ -5384,6 +5571,14 @@ const SalesOrders = () => {
                   <Button
                     variant="secondary"
                     onClick={() => {
+                      // Save signature terakhir ke localStorage sebelum cancel
+                      if (quotationFormData.signatureBase64 || quotationFormData.signatureName || quotationFormData.signatureTitle) {
+                        saveSignatureToLocalStorage(
+                          quotationFormData.signatureBase64 || '',
+                          quotationFormData.signatureName || '',
+                          quotationFormData.signatureTitle || ''
+                        );
+                      }
                       setShowQuotationFormDialog(false);
                       setQuotationFormData({
                         soNo: '',

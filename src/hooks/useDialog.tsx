@@ -216,15 +216,20 @@ export const useDialog = () => {
               )}
               <Button 
                 variant={iconInfo.type === 'error' ? 'danger' : 'primary'} 
-                onClick={() => {
+                onClick={async () => {
                   if (dialogState.onConfirm) {
-                    if (dialogState.type === 'prompt') {
-                      dialogState.onConfirm(dialogState.inputValue);
-                    } else {
-                      dialogState.onConfirm();
+                    try {
+                      if (dialogState.type === 'prompt') {
+                        await dialogState.onConfirm(dialogState.inputValue);
+                      } else {
+                        await dialogState.onConfirm();
+                      }
+                    } catch (error) {
+                      console.error('Error in onConfirm callback:', error);
                     }
                   }
-                  if (dialogState.type === 'alert') closeDialog();
+                  // IMPORTANT: Selalu tutup dialog setelah onConfirm dipanggil (untuk semua tipe dialog)
+                  closeDialog();
                 }}
                 style={{
                   minWidth: '100px',

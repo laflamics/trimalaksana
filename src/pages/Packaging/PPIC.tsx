@@ -642,7 +642,7 @@ const PPIC = () => {
       // Hitung available stock
       // Available stock = stockPremonth + receive - outgoing + return
       // Atau bisa juga pakai nextStock jika sudah dihitung
-      const availableStock = inventoryItem.nextStock !== undefined 
+      const baseStock = inventoryItem.nextStock !== undefined 
         ? (inventoryItem.nextStock || 0)
         : (
             (inventoryItem.stockPremonth || 0) + 
@@ -650,6 +650,70 @@ const PPIC = () => {
             (inventoryItem.outgoing || 0) + 
             (inventoryItem.return || 0)
           );
+      
+      // IMPORTANT: Hitung stock yang sudah digunakan oleh SPK lain (yang belum di-close)
+      // Cek delivery data untuk melihat stock yang sudah digunakan oleh SPK lain untuk product yang sama
+      let stockUsedByOtherSPKs = 0;
+      const currentSpkNo = (s.spkNo || '').toString().trim();
+      
+      // Cek semua SPK lain yang menggunakan product yang sama dan belum di-close
+      const otherSPKsWithSameProduct = (updatedSPK ? updatedSpkList : cleanedSpk).filter((otherSpk: any) => {
+        const otherSpkNo = (otherSpk.spkNo || '').toString().trim();
+        const otherSpkProductId = (otherSpk.product_id || otherSpk.productId || otherSpk.kode || '').toString().trim();
+        // Skip SPK ini sendiri
+        if (otherSpkNo === currentSpkNo) return false;
+        // Skip SPK yang sudah di-close
+        if (otherSpk.status === 'CLOSE') return false;
+        // Skip jika product berbeda
+        if (otherSpkProductId !== spkProductId) return false;
+        // Skip jika sudah stockFulfilled (sudah dialokasikan stock)
+        if (otherSpk.stockFulfilled === true) return false;
+        return true;
+      });
+      
+      // Hitung total qty dari SPK lain yang sudah menggunakan stock
+      otherSPKsWithSameProduct.forEach((otherSpk: any) => {
+        const otherSpkQty = parseFloat(otherSpk.qty || '0') || 0;
+        stockUsedByOtherSPKs += otherSpkQty;
+      });
+      
+      // Cek juga delivery yang sudah dibuat untuk SPK lain (yang belum di-close)
+      const deliveriesForOtherSPKs = deliveryNotesData.filter((del: any) => {
+        // Skip delivery yang sudah di-close atau deleted
+        if (del.status === 'CLOSE' || del.status === 'DELIVERED' || del.deleted === true) return false;
+        // Cek apakah delivery ini untuk product yang sama
+        if (del.items && Array.isArray(del.items)) {
+          return del.items.some((item: any) => {
+            const itemProductId = (item.productId || item.productKode || '').toString().trim();
+            const itemSpkNo = (item.spkNo || '').toString().trim();
+            // Skip jika untuk SPK ini sendiri
+            if (itemSpkNo === currentSpkNo) return false;
+            // Cek apakah product sama
+            return itemProductId === spkProductId;
+          });
+        }
+        return false;
+      });
+      
+      // Hitung total qty dari delivery yang sudah dibuat untuk SPK lain
+      deliveriesForOtherSPKs.forEach((del: any) => {
+        if (del.items && Array.isArray(del.items)) {
+          del.items.forEach((item: any) => {
+            const itemProductId = (item.productId || item.productKode || '').toString().trim();
+            const itemSpkNo = (item.spkNo || '').toString().trim();
+            // Skip jika untuk SPK ini sendiri
+            if (itemSpkNo === currentSpkNo) return;
+            // Cek apakah product sama
+            if (itemProductId === spkProductId) {
+              const itemQty = parseFloat(item.qty || '0') || 0;
+              stockUsedByOtherSPKs += itemQty;
+            }
+          });
+        }
+      });
+      
+      // Available stock = base stock - stock yang sudah digunakan oleh SPK lain
+      const availableStock = Math.max(0, baseStock - stockUsedByOtherSPKs);
       
       // IMPORTANT: Validasi stock harus > 0 dan cukup untuk fulfill SPK ini
       // Jangan set stockFulfilled jika inventory kosong atau stock tidak cukup
@@ -2474,7 +2538,7 @@ const PPIC = () => {
                   const hasProductionBatches = schedule?.batches && schedule.batches.length > 0;
                   const hasDeliveryBatches = schedule?.deliveryBatches && schedule.deliveryBatches.length > 0;
                   
-                  // Cek PR
+                  // Cek PR - IMPORTANT: Gunakan logika yang sama dengan table list (flattenedSpkData)
                   const spkNoNormalized = (spk.spkNo || '').toString().trim();
                   const relatedPR = purchaseRequests.find((pr: any) => {
                     const prSpkNo = (pr.spkNo || '').toString().trim();
@@ -2487,6 +2551,10 @@ const PPIC = () => {
                   });
                   const hasPR = !!relatedPR;
                   const prIsApproved = relatedPR && (relatedPR.status === 'APPROVED' || relatedPR.status === 'PO_CREATED');
+                  
+                  // IMPORTANT: Pastikan tombol PR muncul jika PR belum dibuat (konsisten dengan table list)
+                  // showCreatePR = !spk.stockFulfilled (sama seperti table list)
+                  const showCreatePR = !spk.stockFulfilled;
                   
                   // Cek Schedule
                   const hasSchedule = schedule && schedule.scheduleStartDate;
@@ -2895,6 +2963,7 @@ const PPIC = () => {
                                 Edit
                               </Button>
                             )}
+                            {/* IMPORTANT: Tombol PR harus selalu muncul jika !spk.stockFulfilled (konsisten dengan table list: showCreatePR={!spk.stockFulfilled}) */}
                             <Button 
                               variant="secondary" 
                               onClick={() => handleCreatePR(spk)}

@@ -847,22 +847,7 @@ export function generateSuratJalanHtml({
       <div class="keterangan">
         <div class="title">Keterangan :</div>
         <div class="note-text">
-          ${sj.sjNo ? `<strong>No. SJ: ${htmlEscape(sj.sjNo)}</strong><br/>` : ''}
-          ${item.items && item.items.length > 0 ? `
-            <div style="margin-top: 6px;">
-              <strong>Detail Product:</strong><br/>
-              ${item.items.map((deliveryItem: any, idx: number) => {
-                const productName = deliveryItem.product || '';
-                const productCode = deliveryItem.productCode || '';
-                const qty = deliveryItem.qty || 0;
-                const unit = deliveryItem.unit || 'PCS';
-                const spkNo = deliveryItem.spkNo || '';
-                const soNo = deliveryItem.soNo || '';
-                return `${idx + 1}. ${htmlEscape(productName)}${productCode ? ` (${htmlEscape(productCode)})` : ''} - Qty: ${qty} ${unit}${spkNo ? ` | SPK: ${htmlEscape(spkNo)}` : ''}${soNo ? ` | SO: ${htmlEscape(soNo)}` : ''}`;
-              }).join('<br/>')}
-            </div>
-          ` : ''}
-          ${item.specNote ? `<div style="margin-top: 6px;">${htmlEscape(item.specNote)}</div>` : ''}
+          ${item.specNote ? htmlEscape(item.specNote) : ''}
         </div>
       </div>
       <div class="footer-date">Bekasi, ${formatDate(sj.sjDate || item.sjDate || '')}</div>

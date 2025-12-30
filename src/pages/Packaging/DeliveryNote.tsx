@@ -50,6 +50,7 @@ interface DeliveryNote {
   spkNo?: string; // Deprecated - use items instead
   deliveryDate?: string; // Delivery date from schedule
   productCodeDisplay?: 'padCode' | 'productId'; // Pilihan untuk menampilkan Pad Code atau Product ID di template SJ (default: 'padCode')
+  specNote?: string; // Keterangan untuk template Surat Jalan (akan muncul di bagian Keterangan)
   deleted?: boolean; // Tombstone flag for soft delete
   deletedAt?: string; // Timestamp when deleted
   // Timestamp fields untuk sync dan tracking
@@ -428,8 +429,8 @@ const DeliveryNote = () => {
     showAlertBase(message, title);
   };
 
-  const showConfirm = (title: string, message: string, onConfirm: () => void) => {
-    showConfirmBase(message, onConfirm, undefined, title);
+  const showConfirm = (title: string, message: string, onConfirm: () => void, onCancel?: () => void) => {
+    showConfirmBase(message, onConfirm, onCancel, title);
   };
 
   const showPrompt = (title: string, message: string, defaultValue: string, onConfirm: (value: string) => void, placeholder?: string) => {
@@ -1785,13 +1786,20 @@ const DeliveryNote = () => {
         }
 
         // ANTI-DUPLICATE: Cek di inventory apakah SPK number sudah pernah diproses untuk product ini
-        // Key tracking: SPK number (bukan delivery number), karena product berasal dari SPK
+        // IMPORTANT: Key tracking: SPK number per item (bukan delivery number), karena product berasal dari SPK
+        // Setiap item dengan SPK berbeda harus diproses terpisah (untuk support batch dengan SPK berbeda)
         // SPK bisa dari item level atau delivery level (fallback)
         const spkNo = item.spkNo || delivery.spkNo || '';
-        if (existingProductInventory && spkNo) {
+        
+        // IMPORTANT: Untuk batch dengan SPK berbeda, gunakan kombinasi delivery.id + spkNo untuk tracking yang lebih akurat
+        // Ini memastikan bahwa setiap item dengan SPK berbeda dalam delivery yang sama akan diproses terpisah
+        const deliverySpkKey = delivery.id && spkNo ? `DEL_${delivery.id}_${spkNo}` : spkNo;
+        
+        if (existingProductInventory && deliverySpkKey) {
           const processedSPKs = existingProductInventory.processedSPKs || [];
-          if (processedSPKs.includes(spkNo)) {
-            console.warn(`⚠️ [Delivery Inventory] SPK ${spkNo} sudah pernah diproses untuk product ${productCode} (OUTGOING). Skip update.`);
+          // Cek apakah SPK atau delivery+SPK key sudah pernah diproses
+          if (processedSPKs.includes(deliverySpkKey) || (spkNo && processedSPKs.includes(spkNo))) {
+            console.warn(`⚠️ [Delivery Inventory] SPK ${spkNo} (key: ${deliverySpkKey}) sudah pernah diproses untuk product ${productCode} (OUTGOING). Skip update.`);
             continue; // Skip product ini, lanjut ke product berikutnya
           }
         }
@@ -1809,9 +1817,15 @@ const DeliveryNote = () => {
           const newOnGoing = Math.max(0, oldOnGoing - qtyDelivered);
           
           // Tambahkan SPK number ke processedSPKs untuk anti-duplicate (OUTGOING tracking)
+          // IMPORTANT: Gunakan delivery+SPK key untuk support batch dengan SPK berbeda dalam delivery yang sama
           // Note: processedSPKs juga dipakai untuk RECEIVE, jadi kita track keduanya
           const processedSPKs = existingProductInventory.processedSPKs || [];
-          if (spkNo && !processedSPKs.includes(spkNo)) {
+          // Tambahkan delivery+SPK key untuk tracking yang lebih akurat (support batch)
+          if (deliverySpkKey && !processedSPKs.includes(deliverySpkKey)) {
+            processedSPKs.push(deliverySpkKey);
+          }
+          // Juga tambahkan SPK saja untuk backward compatibility (jika belum ada)
+          if (spkNo && !processedSPKs.includes(spkNo) && !processedSPKs.includes(deliverySpkKey)) {
             processedSPKs.push(spkNo);
           }
           
@@ -1829,7 +1843,7 @@ const DeliveryNote = () => {
           existingProductInventory.lastUpdate = new Date().toISOString();
           console.log(`✅ [Delivery Inventory] Product inventory updated (OUTGOING from SPK ${spkNo}):`);
           console.log(`   Product: ${productName} (${productCode})`);
-          console.log(`   SPK: ${spkNo} (key tracking untuk OUTGOING)`);
+          console.log(`   SPK: ${spkNo} (key: ${deliverySpkKey} untuk OUTGOING tracking - support batch)`);
           console.log(`   Outgoing: ${oldOutgoing} → ${newOutgoing} (+${qtyDelivered})`);
           console.log(`   On Going (Production Stock): ${oldOnGoing} → ${newOnGoing} (-${qtyDelivered})`);
           console.log(`   Receive: ${oldReceive}`);
@@ -1853,13 +1867,13 @@ const DeliveryNote = () => {
             on_going: 0, // Backward compatibility
             productionStock: 0, // Alternative field name
             nextStock: 0 + 0 - qtyDelivered + 0, // stockPremonth + receive - outgoing + return
-            processedSPKs: spkNo ? [spkNo] : [], // Track SPK yang sudah diproses (untuk OUTGOING)
+            processedSPKs: deliverySpkKey ? [deliverySpkKey] : (spkNo ? [spkNo] : []), // Track delivery+SPK key untuk support batch
             lastUpdate: new Date().toISOString(),
           };
           inventory.push(newInventoryEntry);
           console.log(`✅ [Delivery Inventory] New product inventory created (OUTGOING from SPK ${spkNo}):`);
           console.log(`   Product: ${productName} (${productCode})`);
-          console.log(`   SPK: ${spkNo} (key tracking untuk OUTGOING)`);
+          console.log(`   SPK: ${spkNo} (key: ${deliverySpkKey} untuk OUTGOING tracking - support batch)`);
           console.log(`   Outgoing: ${qtyDelivered}`);
           console.log(`   On Going: 0 (new entry)`);
           console.log(`   NextStock: ${0 - qtyDelivered}`);
@@ -2843,7 +2857,19 @@ const DeliveryNote = () => {
     }
   };
 
+  const [isProcessingNotification, setIsProcessingNotification] = useState<string | null>(null);
+  const [isProcessingAction, setIsProcessingAction] = useState<string | null>(null);
+  
   const handleCreateFromNotification = async (notif: any) => {
+    // IMPORTANT: Prevent multiple calls untuk notification yang sama
+    const notifId = notif.id || `${notif.soNo}-${notif.spkNo || notif.spkNos?.join('-') || 'unknown'}`;
+    if (isProcessingNotification === notifId) {
+      console.log('⚠️ [Delivery Note] Already processing notification:', notifId);
+      return;
+    }
+    
+    setIsProcessingNotification(notifId);
+    
     // Handle grouped notifications
     const notificationsToProcess = notif.isGrouped && notif.groupedNotifications 
       ? notif.groupedNotifications 
@@ -3967,26 +3993,42 @@ const DeliveryNote = () => {
           await loadNotifications();
         } catch (error: any) {
           showAlert('Error', `Error creating Delivery Note: ${error.message}`);
+        } finally {
+          // IMPORTANT: Reset processing flag setelah selesai (baik success maupun error)
+          setIsProcessingNotification(null);
         }
+      },
+      () => {
+        // IMPORTANT: Reset processing flag jika user cancel
+        setIsProcessingNotification(null);
       }
     );
   };
 
   const handleUpdateStatus = async (item: DeliveryNote) => {
+    // IMPORTANT: Prevent multiple calls
+    const actionId = `update-status-${item.id}`;
+    if (isProcessingAction === actionId) {
+      return;
+    }
+    setIsProcessingAction(actionId);
+    
     showPrompt(
       'Update Status',
       `Update status for SJ: ${item.sjNo}\n\nCurrent: ${item.status}\n\nEnter new status (DRAFT/OPEN/CLOSE):`,
       item.status || '',
       async (newStatus: string) => {
-        if (newStatus && newStatus !== item.status && ['DRAFT', 'OPEN', 'CLOSE'].includes(newStatus.toUpperCase())) {
-          const normalizedStatus = newStatus.toUpperCase();
-          // Jika mau close, wajib upload signed document
-          if (normalizedStatus === 'CLOSE' && !item.signedDocument && !item.signedDocumentPath) {
-            showAlert('Validation Error', '⚠️ Cannot close Delivery Note without signed document!\n\nPlease upload signed document (Surat Jalan yang sudah di TTD) first.');
-            return;
-          }
-
-          try {
+        // Reset flag di awal callback (jika user cancel, flag akan tetap di-reset)
+        const resetFlag = () => setIsProcessingAction(null);
+        try {
+          if (newStatus && newStatus !== item.status && ['DRAFT', 'OPEN', 'CLOSE'].includes(newStatus.toUpperCase())) {
+            const normalizedStatus = newStatus.toUpperCase();
+            // Jika mau close, wajib upload signed document
+            if (normalizedStatus === 'CLOSE' && !item.signedDocument && !item.signedDocumentPath) {
+              showAlert('Validation Error', '⚠️ Cannot close Delivery Note without signed document!\n\nPlease upload signed document (Surat Jalan yang sudah di TTD) first.');
+              resetFlag();
+              return;
+            }
             // Load all deliveries from storage (including deleted ones)
             const allDeliveries = await storageService.get<DeliveryNote[]>('delivery') || [];
             const updated = allDeliveries.map(d =>
@@ -4003,11 +4045,13 @@ const DeliveryNote = () => {
             const activeDeliveries = updated.filter(d => !d.deleted);
             setDeliveries(activeDeliveries);
             showAlert('Success', `✅ Status updated to: ${normalizedStatus}`);
-          } catch (error: any) {
-            showAlert('Error', `Error updating status: ${error.message}`);
+          } else if (newStatus && newStatus !== item.status) {
+            showAlert('Validation Error', 'Invalid status! Please enter DRAFT, OPEN, or CLOSE.');
           }
-        } else if (newStatus && newStatus !== item.status) {
-          showAlert('Validation Error', 'Invalid status! Please enter DRAFT, OPEN, or CLOSE.');
+        } catch (error: any) {
+          showAlert('Error', `Error updating status: ${error.message}`);
+        } finally {
+          setIsProcessingAction(null);
         }
       },
       'DRAFT/OPEN/CLOSE'
@@ -4035,6 +4079,13 @@ const DeliveryNote = () => {
   };
 
   const handleDelete = async (item: DeliveryNote) => {
+    // IMPORTANT: Prevent multiple calls
+    const actionId = `delete-${item.id}`;
+    if (isProcessingAction === actionId) {
+      return;
+    }
+    setIsProcessingAction(actionId);
+    
     showConfirm(
       'Delete Delivery Note',
       `Are you sure you want to delete delivery note ${item.sjNo || item.id}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nThis action cannot be undone.`,
@@ -4056,7 +4107,13 @@ const DeliveryNote = () => {
         } catch (error: any) {
           console.error('[DeliveryNote] Error in safe delete:', error);
           showAlert('Error', `❌ Error deleting delivery note: ${error.message}`);
+        } finally {
+          setIsProcessingAction(null);
         }
+      },
+      () => {
+        // Reset flag jika user cancel
+        setIsProcessingAction(null);
       }
     );
   };
@@ -4787,6 +4844,7 @@ const DeliveryNote = () => {
                   status: 'OPEN' as const,
                   deliveryDate: data.manualData.deliveryDate || undefined,
                   productCodeDisplay: data.manualData.productCodeDisplay || 'padCode',
+                  specNote: data.manualData.specNote || undefined,
                   created: new Date().toISOString(),
                   lastUpdate: new Date().toISOString(),
                   timestamp: Date.now(),
@@ -4844,6 +4902,7 @@ const DeliveryNote = () => {
                   status: 'OPEN' as const,
                   deliveryDate: data.manualData.deliveryDate || undefined,
                   productCodeDisplay: data.manualData.productCodeDisplay || 'padCode',
+                  specNote: data.manualData.specNote || undefined,
                   created: new Date().toISOString(),
                   lastUpdate: new Date().toISOString(),
                   timestamp: Date.now(),
@@ -4894,6 +4953,7 @@ const DeliveryNote = () => {
                   status: 'OPEN' as const,
                   deliveryDate: data.manualData.deliveryDate || undefined,
                   productCodeDisplay: data.manualData.productCodeDisplay || 'padCode',
+                  specNote: data.manualData.specNote || undefined,
                   created: new Date().toISOString(),
                   lastUpdate: new Date().toISOString(),
                   timestamp: Date.now(),
@@ -4933,6 +4993,7 @@ const DeliveryNote = () => {
                   status: 'OPEN' as const,
                   deliveryDate: data.manualData.deliveryDate || undefined,
                   productCodeDisplay: data.manualData.productCodeDisplay || 'padCode',
+                  specNote: data.manualData.specNote || undefined,
                   created: new Date().toISOString(),
                   lastUpdate: new Date().toISOString(),
                   timestamp: Date.now(),
@@ -6222,6 +6283,7 @@ const EditSJDialog = ({ delivery, onClose, onSave }: { delivery: DeliveryNote; o
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [soNo, setSoNo] = useState(delivery.soNo || '');
   const [productCodeDisplay, setProductCodeDisplay] = useState<'padCode' | 'productId'>(delivery.productCodeDisplay || 'padCode');
+  const [specNote, setSpecNote] = useState(delivery.specNote || '');
   const [items, setItems] = useState<DeliveryNoteItem[]>(delivery.items && delivery.items.length > 0 ? delivery.items : (delivery.product ? [{ product: delivery.product, qty: delivery.qty || 0, unit: 'PCS', spkNo: delivery.spkNo, soNo: delivery.soNo }] : []));
   const [signedFile, setSignedFile] = useState<File | null>(null);
   const [products, setProducts] = useState<any[]>([]);
@@ -6382,6 +6444,7 @@ const EditSJDialog = ({ delivery, onClose, onSave }: { delivery: DeliveryNote; o
       customer,
       soNo,
       productCodeDisplay: productCodeDisplay,
+      specNote: specNote || undefined,
       items: items.length > 0 ? items : undefined,
       // Update deprecated fields for backward compatibility
       product: items.length > 0 ? items[0].product : delivery.product,
@@ -6757,6 +6820,32 @@ const EditSJDialog = ({ delivery, onClose, onSave }: { delivery: DeliveryNote; o
 
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+              Keterangan (akan muncul di template SJ)
+            </label>
+            <textarea
+              value={specNote}
+              onChange={(e) => setSpecNote(e.target.value)}
+              placeholder="Masukkan keterangan untuk Surat Jalan (No. SJ, Detail Product, dll)"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+                minHeight: '100px',
+                resize: 'vertical',
+                fontFamily: 'inherit',
+              }}
+            />
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              Keterangan ini akan ditampilkan di bagian "Keterangan" pada template Surat Jalan
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
               Upload Signed Document
             </label>
             <input
@@ -6833,6 +6922,7 @@ const CreateDeliveryNoteDialog = ({
   const [manualItems, setManualItems] = useState<Array<{ product: string; productCode?: string; qty: number; unit?: string; spkNo?: string }>>([{ product: '', productCode: '', qty: 1, unit: 'PCS' }]);
   const [deliveryDate, setDeliveryDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [productCodeDisplay, setProductCodeDisplay] = useState<'padCode' | 'productId'>('padCode');
+  const [specNote, setSpecNote] = useState('');
   
   const [customersList, setCustomersList] = useState<any[]>([]);
   const [productsList, setProductsList] = useState<any[]>([]);
@@ -7028,6 +7118,7 @@ const CreateDeliveryNoteDialog = ({
           items: autoPOItems,
           deliveryDate,
           productCodeDisplay: productCodeDisplay,
+          specNote: specNote || undefined,
         }
       });
     } else if (mode === 'so') {
@@ -7046,6 +7137,7 @@ const CreateDeliveryNoteDialog = ({
           items: autoSOItems,
           deliveryDate,
           productCodeDisplay: productCodeDisplay,
+          specNote: specNote || undefined,
         }
       });
     } else {
@@ -7059,6 +7151,7 @@ const CreateDeliveryNoteDialog = ({
           items: manualItems,
           deliveryDate,
           productCodeDisplay: productCodeDisplay,
+          specNote: specNote || undefined,
         }
       });
     }
@@ -7407,6 +7500,32 @@ const CreateDeliveryNoteDialog = ({
             </>
           )}
           
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
+              Keterangan (akan muncul di template SJ)
+            </label>
+            <textarea
+              value={specNote}
+              onChange={(e) => setSpecNote(e.target.value)}
+              placeholder="Masukkan keterangan untuk Surat Jalan (No. SJ, Detail Product, dll)"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+                minHeight: '100px',
+                resize: 'vertical',
+                fontFamily: 'inherit',
+              }}
+            />
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              Keterangan ini akan ditampilkan di bagian "Keterangan" pada template Surat Jalan
+            </div>
+          </div>
+
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
               Product Code Display (Template SJ)

@@ -1478,8 +1478,12 @@ const Production = () => {
       qty: soItem.qty || 0,
     }));
 
-    // Format materials dari BOM
+    // Format materials dari BOM dengan mempertimbangkan bomOverride dari SPK
     const woMaterials: any[] = [];
+    // IMPORTANT: Ambil bomOverride dari SPK
+    const spkBOMOverride = spk?.bomOverride || {}; // SPK-specific BOM override: { materialId: qty }
+    const spkQty = spk?.qty || item.target || item.targetQty || 0;
+    
     productItems.forEach((soItem: any) => {
       const productId = (soItem.productId || soItem.productKode || '').toString().trim();
       const productBOM = bomList.filter((b: any) => {
@@ -1493,6 +1497,22 @@ const Production = () => {
         );
 
         if (material) {
+          const materialId = (material.material_id || material.kode || '').toString().trim();
+          
+          // IMPORTANT: Hitung qty dengan mempertimbangkan override dari SPK
+          let materialQty: number;
+          let qtyPerUnit: number;
+          
+          if (spkBOMOverride[materialId] !== undefined && spkBOMOverride[materialId] !== null) {
+            // Gunakan override qty dari PPIC (tidak mengikuti ratio)
+            materialQty = Math.max(Math.ceil(parseFloat(spkBOMOverride[materialId]) || 0), 0);
+            qtyPerUnit = spkQty > 0 ? materialQty / spkQty : (bom.ratio || 1);
+          } else {
+            // Gunakan ratio calculation (default)
+            qtyPerUnit = parseFloat(bom.ratio || 1) || 1;
+            materialQty = Math.max(Math.ceil((soItem.qty || 0) * qtyPerUnit), 0);
+          }
+          
           woMaterials.push({
             materialId: material.material_id || material.kode || '',
             materialCode: material.material_id || material.kode || '',
@@ -1502,8 +1522,8 @@ const Production = () => {
             lebar: material.lebar || '0.00',
             tinggi: material.tinggi || '0.00',
             unit: material.satuan || 'PCS',
-            qtyPerUnit: bom.ratio || 1,
-            qty: (soItem.qty || 0) * (bom.ratio || 1),
+            qtyPerUnit: qtyPerUnit,
+            qty: materialQty,
           });
         }
       });
@@ -2777,20 +2797,39 @@ const Production = () => {
         const schedule = scheduleArray.find((s: any) => s.spkNo === prod.spkNo);
         const spk = spkData.find((s: any) => s.spkNo === prod.spkNo);
         const productId = (prod.productId || spk?.product_id || spk?.kode || '').toString().trim();
+        
+        // IMPORTANT: Ambil bomOverride dari SPK seperti di submit result
+        const spkBOMOverride = spk?.bomOverride || {}; // SPK-specific BOM override: { materialId: qty }
+        const spkQty = spk?.qty || prod.target || 0;
+        
         // Load BOM untuk product ini
         const prodBOMRaw = bomData.filter((b: any) => {
           const bomProductId = (b.product_id || b.kode || '').toString().trim();
           return bomProductId === productId;
         });
         
-        // IMPORTANT: Deduplikasi BOM berdasarkan material_id (jika ada duplikasi)
+        // IMPORTANT: Deduplikasi BOM berdasarkan material_id dan enrich dengan override qty dari SPK
         const bomMap = new Map<string, any>();
         prodBOMRaw.forEach((bom: any) => {
           const materialId = (bom.material_id || '').toString().trim();
           if (!materialId) return;
           
           if (!bomMap.has(materialId)) {
-            bomMap.set(materialId, bom);
+            // IMPORTANT: Hitung requiredQty dengan mempertimbangkan override dari SPK
+            let requiredQty: number;
+            if (spkBOMOverride[materialId] !== undefined && spkBOMOverride[materialId] !== null) {
+              // Gunakan override qty dari PPIC (tidak mengikuti ratio)
+              requiredQty = Math.max(Math.ceil(parseFloat(spkBOMOverride[materialId]) || 0), 0);
+            } else {
+              // Gunakan ratio calculation (default)
+              const ratio = parseFloat(bom.ratio || 1) || 1;
+              requiredQty = Math.max(Math.ceil(spkQty * ratio), 0);
+            }
+            
+            bomMap.set(materialId, {
+              ...bom,
+              requiredQty: requiredQty, // Store calculated requiredQty
+            });
           } else {
             // Jika material sudah ada, keep yang pertama (skip duplikasi)
             console.log(`⚠️ [Production BOM] Duplicate BOM entry found for material ${materialId}, keeping first entry`);
@@ -2823,6 +2862,46 @@ const Production = () => {
             <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
               {prod.productionNo || prod.grnNo || '-'} - {prod.product || spk?.product || '-'}
             </div>
+            
+            {/* Related SPKs - hanya SPK yang terkait dengan production ini (SO dan product sama) */}
+            {(() => {
+              // Cari SPK terkait dari group yang memiliki SO dan product yang sama
+              const relatedSPKs = group.productionList
+                .filter((p: any) => {
+                  const pProductId = (p.productId || spkData.find((s: any) => s.spkNo === p.spkNo)?.product_id || spkData.find((s: any) => s.spkNo === p.spkNo)?.kode || '').toString().trim();
+                  const currentProductId = (prod.productId || spk?.product_id || spk?.kode || '').toString().trim();
+                  return p.soNo === prod.soNo && pProductId === currentProductId && p.spkNo !== prod.spkNo;
+                })
+                .map((p: any) => {
+                  const relatedSpk = spkData.find((s: any) => s.spkNo === p.spkNo);
+                  return {
+                    spkNo: p.spkNo,
+                    product: p.product || relatedSpk?.product || '-',
+                  };
+                });
+              
+              if (relatedSPKs.length === 0) return null;
+              
+              return (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '8px' }}>
+                  {relatedSPKs.map((relatedSpk: any, idx: number) => (
+                    <div
+                      key={relatedSpk.spkNo || idx}
+                      style={{
+                        padding: '3px 6px',
+                        backgroundColor: 'var(--bg-secondary)',
+                        borderRadius: '4px',
+                        border: '1px solid var(--border-color)',
+                        fontSize: '9px',
+                      }}
+                    >
+                      <span style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{relatedSpk.spkNo}</span>
+                      <span style={{ color: 'var(--text-secondary)', marginLeft: '4px' }}>{relatedSpk.product}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '4px' }}>
               <div>
@@ -2915,7 +2994,8 @@ const Production = () => {
                         const material = materials.find((m: any) => 
                           ((m.material_id || m.kode || '').toString().trim()) === ((bom.material_id || '').toString().trim())
                         );
-                        const requiredQty = Math.ceil((prod.target || 0) * (bom.ratio || 1));
+                        // IMPORTANT: Gunakan requiredQty yang sudah dihitung dari SPK (dengan override jika ada)
+                        const requiredQty = bom.requiredQty || Math.ceil((prod.target || 0) * (bom.ratio || 1));
                         return (
                           <div 
                             key={bom.id || bomIdx}

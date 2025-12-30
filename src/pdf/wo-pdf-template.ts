@@ -405,8 +405,10 @@ export function generateWOHtml({
     .data-table { width: 100%; border-collapse: collapse; margin: 10px 0; table-layout: fixed; }
     .data-table th, .data-table td { border: 1px solid #000; padding: 6px; text-align: left; font-size: 10px; }
     .data-table th { background-color: #f0f0f0; font-weight: bold; text-align: center; }
-    .data-table td { text-align: center; }
+    .data-table td { text-align: center; min-height: 30px; }
     .data-table .text-left { text-align: left; }
+    .data-table tbody tr:empty td,
+    .data-table tbody tr td:empty { min-height: 50px; height: 50px; }
     .note-section { 
       margin-top: 0; 
     }
@@ -533,7 +535,7 @@ export function generateWOHtml({
       `).join('') : '<tr><td colspan="11" style="text-align:center;">No products</td></tr>'}
       ${productLines.length > 0 && productLines.length < 3 ? Array(3 - productLines.length).fill(0).map(() => `
         <tr>
-          <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+          <td style="width: 4%; height: 50px;"></td><td style="width: 12%; height: 50px;"></td><td style="width: 18%; height: 50px;"></td><td style="width: 10%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td>
         </tr>
       `).join('') : ''}
     </tbody>
@@ -572,7 +574,7 @@ export function generateWOHtml({
       `).join('') : '<tr><td colspan="10" style="text-align:center;">No materials</td></tr>'}
       ${materialLines.length > 0 && materialLines.length < 3 ? Array(3 - materialLines.length).fill(0).map(() => `
         <tr>
-          <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+          <td style="width: 4%; height: 50px;"></td><td style="width: 12%; height: 50px;"></td><td style="width: 20%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 10%; height: 50px;"></td><td style="width: 10%; height: 50px;"></td><td style="width: 12%; height: 50px;"></td>
         </tr>
       `).join('') : ''}
     </tbody>

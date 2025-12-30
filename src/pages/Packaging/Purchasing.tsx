@@ -344,6 +344,12 @@ const Purchasing = () => {
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<PurchaseOrder | null>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editFormData, setEditFormData] = useState<Partial<PurchaseOrder>>({});
+  const [editSupplierInputValue, setEditSupplierInputValue] = useState('');
+  const [editMaterialInputValue, setEditMaterialInputValue] = useState('');
+  const [editQtyInputValue, setEditQtyInputValue] = useState('');
+  const [editPriceInputValue, setEditPriceInputValue] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'outstanding'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPR, setSelectedPR] = useState<PurchaseRequest | null>(null);
@@ -570,6 +576,51 @@ const Purchasing = () => {
     setShowForm(true);
   };
 
+  const handleSaveEdit = async () => {
+    if (!editFormData.supplier || !editFormData.materialItem || !editFormData.qty || editFormData.qty <= 0) {
+      showAlert('Please fill all required fields (Supplier, Material, Qty)', 'Validation Error');
+      return;
+    }
+    if (!(editFormData.soNo && editFormData.soNo.trim()) && !(editFormData.purchaseReason && editFormData.purchaseReason.trim())) {
+      showAlert('Isi "Reason pembelian" jika tidak link ke SO/SPK.', 'Validation Error');
+      return;
+    }
+    try {
+      if (!editingItem) return;
+      // Update existing PO
+      const updatedPO: PurchaseOrder = {
+        ...editingItem,
+        supplier: editFormData.supplier || '',
+        soNo: editFormData.soNo || '',
+        purchaseReason: editFormData.purchaseReason || '',
+        materialItem: editFormData.materialItem || '',
+        qty: editFormData.qty || 0,
+        price: Math.ceil(editFormData.price || 0),
+        total: Math.ceil((editFormData.qty || 0) * (editFormData.price || 0)),
+        paymentTerms: editFormData.paymentTerms || 'TOP',
+        topDays: (editFormData.paymentTerms === 'COD' || editFormData.paymentTerms === 'CBD') ? 0 : (editFormData.topDays || 30),
+        receiptDate: editFormData.receiptDate || new Date().toISOString().split('T')[0],
+        quality: editFormData.quality || '',
+        score: editFormData.score || '',
+        keterangan: editFormData.keterangan || '',
+      };
+      const ordersArray = Array.isArray(orders) ? orders : [];
+      const updated = ordersArray.map(o => o.id === editingItem.id ? updatedPO : o);
+      await storageService.set('purchaseOrders', updated);
+      setOrders(updated);
+      showAlert(`PO updated: ${editingItem.poNo}`, 'Success');
+      setShowEditDialog(false);
+      setEditingItem(null);
+      setEditFormData({});
+      setEditSupplierInputValue('');
+      setEditMaterialInputValue('');
+      setEditQtyInputValue('');
+      setEditPriceInputValue('');
+    } catch (error: any) {
+      showAlert(`Error saving PO: ${error.message}`, 'Error');
+    }
+  };
+
   const handleSave = async () => {
     if (!formData.supplier || !formData.materialItem || !formData.qty || formData.qty <= 0) {
       showAlert('Please fill all required fields (Supplier, Material, Qty)', 'Validation Error');
@@ -581,28 +632,8 @@ const Purchasing = () => {
     }
     try {
       if (editingItem) {
-        // Update existing PO
-        const updatedPO: PurchaseOrder = {
-          ...editingItem,
-          supplier: formData.supplier || '',
-          soNo: formData.soNo || '',
-          purchaseReason: formData.purchaseReason || '',
-          materialItem: formData.materialItem || '',
-          qty: formData.qty || 0,
-          price: Math.ceil(formData.price || 0),
-          total: Math.ceil((formData.qty || 0) * (formData.price || 0)),
-          paymentTerms: formData.paymentTerms || 'TOP',
-          topDays: (formData.paymentTerms === 'COD' || formData.paymentTerms === 'CBD') ? 0 : (formData.topDays || 30),
-          receiptDate: formData.receiptDate || new Date().toISOString().split('T')[0],
-          quality: formData.quality || '',
-          score: formData.score || '',
-          keterangan: formData.keterangan || '',
-        };
-        const ordersArray = Array.isArray(orders) ? orders : [];
-        const updated = ordersArray.map(o => o.id === editingItem.id ? updatedPO : o);
-        await storageService.set('purchaseOrders', updated);
-        setOrders(updated);
-        showAlert(`PO updated: ${editingItem.poNo}`, 'Success');
+        // Should not happen - edit should use handleSaveEdit
+        return;
       } else {
         // Create new PO with random number
         const now = new Date();
@@ -662,7 +693,6 @@ const Purchasing = () => {
         showAlert(`PO created: ${poNo}`, 'Success');
       }
       setShowForm(false);
-      setEditingItem(null);
       setMaterialInputValue('');
       setSupplierInputValue('');
       setQtyInputValue('');
@@ -869,19 +899,19 @@ const Purchasing = () => {
     setEditingItem(item);
     const supplier = suppliers.find(s => s.nama === item.supplier);
     if (supplier) {
-      setSupplierInputValue(`${supplier.kode} - ${supplier.nama}`);
+      setEditSupplierInputValue(`${supplier.kode} - ${supplier.nama}`);
     } else {
-      setSupplierInputValue(item.supplier);
+      setEditSupplierInputValue(item.supplier);
     }
     const material = materials.find(m => m.nama === item.materialItem);
     if (material) {
-      setMaterialInputValue(`${material.material_id || material.kode} - ${material.nama}`);
+      setEditMaterialInputValue(`${material.material_id || material.kode} - ${material.nama}`);
     } else {
-      setMaterialInputValue(item.materialItem);
+      setEditMaterialInputValue(item.materialItem);
     }
-    setQtyInputValue('');
-    setPriceInputValue('');
-    setFormData({
+    setEditQtyInputValue('');
+    setEditPriceInputValue('');
+    setEditFormData({
       supplier: item.supplier,
       soNo: item.soNo,
       purchaseReason: item.purchaseReason || '',
@@ -896,7 +926,7 @@ const Purchasing = () => {
       score: item.score || '',
       keterangan: item.keterangan || '',
     });
-    setShowForm(true);
+    setShowEditDialog(true);
   };
 
   const handleCreateGRN = (item: PurchaseOrder) => {
@@ -993,14 +1023,18 @@ const Purchasing = () => {
         return;
       }
 
-      // Validasi: qtyReceived tidak boleh melebihi remaining qty
-      if (qtyReceived > remainingQty) {
+      // Validasi: qtyReceived tidak boleh melebihi remaining qty + 10% toleransi
+      const maxAllowedQty = item.qty * 1.1; // 10% toleransi dari qty ordered
+      const maxAllowedWithExisting = maxAllowedQty - totalQtyReceived;
+      
+      if (qtyReceived > maxAllowedWithExisting) {
+        const maxTotal = Math.ceil(maxAllowedQty);
         showAlert(
-          `⚠️ Quantity received (${qtyReceived}) melebihi sisa yang belum diterima!\n\n` +
+          `⚠️ Quantity received (${qtyReceived}) melebihi batas maksimal!\n\n` +
           `Qty Ordered: ${item.qty}\n` +
           `Total Sudah Diterima: ${totalQtyReceived}\n` +
-          `Sisa: ${remainingQty}\n\n` +
-          `Maksimal yang bisa diterima: ${remainingQty}`,
+          `Maksimal Total (dengan toleransi 10%): ${maxTotal}\n` +
+          `Maksimal yang bisa diterima sekarang: ${Math.ceil(maxAllowedWithExisting)}`,
           'Validation Error'
         );
         return;
@@ -2491,23 +2525,15 @@ const Purchasing = () => {
         </div>
       </div>
 
-      {showForm && (
-        <Card title={editingItem ? `Edit Purchase Order - ${editingItem.poNo}` : "Create New Purchase Order"} className="mb-4">
-          {editingItem && (
-            <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px' }}>
-              <div><strong>PO No:</strong> {editingItem.poNo}</div>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                Status: {editingItem.status} | Created: {new Date(editingItem.created).toLocaleDateString('id-ID')}
-              </div>
-            </div>
-          )}
+      {showForm && !editingItem && (
+        <Card title="Create New Purchase Order" className="mb-4">
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
               Supplier *
             </label>
             <input
               type="text"
-              list={`supplier-list-${editingItem?.id || 'new'}`}
+              list="supplier-list-new"
               value={getSupplierInputDisplayValue()}
               onChange={(e) => {
                 handleSupplierInputChange(e.target.value);
@@ -2533,7 +2559,7 @@ const Purchasing = () => {
                 fontSize: '14px',
               }}
             />
-            <datalist id={`supplier-list-${editingItem?.id || 'new'}`}>
+            <datalist id="supplier-list-new">
               {suppliers.map(s => (
                 <option key={s.id} value={`${s.kode} - ${s.nama}`}>
                   {s.kode} - {s.nama}
@@ -2559,7 +2585,7 @@ const Purchasing = () => {
             </label>
             <input
               type="text"
-              list={`material-list-${editingItem?.id || 'new'}`}
+              list="material-list-new"
               value={getMaterialInputDisplayValue()}
               onChange={(e) => {
                 handleMaterialInputChange(e.target.value);
@@ -2593,7 +2619,7 @@ const Purchasing = () => {
                 fontSize: '14px',
               }}
             />
-            <datalist id={`material-list-${editingItem?.id || 'new'}`}>
+            <datalist id="material-list-new">
               {materials.map(m => (
                 <option key={m.id} value={`${m.material_id || m.kode} - ${m.nama}`}>
                   {m.material_id || m.kode} - {m.nama}
@@ -3350,6 +3376,36 @@ const Purchasing = () => {
         </div>
       )}
 
+      {/* Edit PO Dialog */}
+      {showEditDialog && editingItem && (
+        <EditPODialog
+          po={editingItem}
+          suppliers={suppliers}
+          materials={materials}
+          formData={editFormData}
+          setFormData={setEditFormData}
+          supplierInputValue={editSupplierInputValue}
+          setSupplierInputValue={setEditSupplierInputValue}
+          materialInputValue={editMaterialInputValue}
+          setMaterialInputValue={setEditMaterialInputValue}
+          qtyInputValue={editQtyInputValue}
+          setQtyInputValue={setEditQtyInputValue}
+          priceInputValue={editPriceInputValue}
+          setPriceInputValue={setEditPriceInputValue}
+          onClose={() => {
+            setShowEditDialog(false);
+            setEditingItem(null);
+            setEditFormData({});
+            setEditSupplierInputValue('');
+            setEditMaterialInputValue('');
+            setEditQtyInputValue('');
+            setEditPriceInputValue('');
+          }}
+          onSave={handleSaveEdit}
+          removeLeadingZero={removeLeadingZero}
+        />
+      )}
+
       {/* PDF Preview Dialog untuk PR */}
       {viewPRPdfData && (
         <div className="dialog-overlay" onClick={() => setViewPRPdfData(null)}>
@@ -3836,9 +3892,43 @@ const ReceiptDialog = ({ po, onClose, onSave }: { po: PurchaseOrder; onClose: ()
   const [suratJalanFile, setSuratJalanFile] = useState<File | null>(null);
   const [invoiceNo, setInvoiceNo] = useState<string>('');
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
+  const [totalReceived, setTotalReceived] = useState<number>(0);
+  const [maxAllowedQty, setMaxAllowedQty] = useState<number>(po.qty);
   
   // Custom Dialog - menggunakan hook terpusat
   const { showAlert, DialogComponent: ReceiptDialogComponent } = useDialog();
+  
+  // Load existing GRNs untuk calculate total received
+  useEffect(() => {
+    const loadGRNs = async () => {
+      try {
+        const grnData = await storageService.get<any[]>('grnPackaging') || [];
+        const grnsForPO = grnData.filter((grn: any) => 
+          (grn.poNo || '').toString().trim() === (po.poNo || '').toString().trim()
+        );
+        const total = grnsForPO.reduce((sum: number, grn: any) => sum + (grn.qtyReceived || 0), 0);
+        setTotalReceived(total);
+        
+        // Calculate max allowed with 10% tolerance
+        const maxTotal = Math.ceil(po.qty * 1.1);
+        const maxRemaining = maxTotal - total;
+        setMaxAllowedQty(maxRemaining > 0 ? maxRemaining : 0);
+        
+        // Set default qtyReceived ke remaining qty jika masih ada
+        const remaining = po.qty - total;
+        if (remaining > 0) {
+          setQtyReceived(remaining.toString());
+        } else if (maxRemaining > 0) {
+          setQtyReceived(maxRemaining.toString());
+        } else {
+          setQtyReceived('0');
+        }
+      } catch (error) {
+        // Ignore errors
+      }
+    };
+    loadGRNs();
+  }, [po.poNo, po.qty]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -3860,6 +3950,24 @@ const ReceiptDialog = ({ po, onClose, onSave }: { po: PurchaseOrder; onClose: ()
       showAlert('Quantity received must be greater than 0', 'Validation Error');
       return;
     }
+    
+    // Validasi dengan toleransi 10%
+    const maxAllowedTotal = Math.ceil(po.qty * 1.1);
+    const newTotal = totalReceived + qty;
+    if (newTotal > maxAllowedTotal) {
+      showAlert(
+        `⚠️ Quantity received melebihi batas maksimal!\n\n` +
+        `Qty Ordered: ${po.qty}\n` +
+        `Total Sudah Diterima: ${totalReceived}\n` +
+        `Qty Baru: ${qty}\n` +
+        `Total Baru: ${newTotal}\n` +
+        `Maksimal Total (dengan toleransi 10%): ${maxAllowedTotal}\n` +
+        `Maksimal yang bisa diterima sekarang: ${maxAllowedQty}`,
+        'Validation Error'
+      );
+      return;
+    }
+    
     if (!receivedDate) {
       showAlert('Received date is required', 'Validation Error');
       return;
@@ -3986,6 +4094,16 @@ const ReceiptDialog = ({ po, onClose, onSave }: { po: PurchaseOrder; onClose: ()
               />
               <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
                 Ordered: {po.qty} PCS
+                {totalReceived > 0 && (
+                  <span> | Already Received: {totalReceived} PCS</span>
+                )}
+                <br />
+                <span style={{ color: 'var(--primary-color)', fontWeight: '500' }}>
+                  Max Allowed (with 10% tolerance): {Math.ceil(po.qty * 1.1)} PCS
+                  {totalReceived > 0 && (
+                    <span> | Remaining: {maxAllowedQty} PCS</span>
+                  )}
+                </span>
               </div>
             </div>
 
@@ -4115,6 +4233,521 @@ const ReceiptDialog = ({ po, onClose, onSave }: { po: PurchaseOrder; onClose: ()
       
       {/* Custom Dialog for ReceiptDialog */}
       <ReceiptDialogComponent />
+    </div>
+  );
+};
+
+// Edit PO Dialog Component
+const EditPODialog = ({
+  po,
+  suppliers,
+  materials,
+  formData,
+  setFormData,
+  supplierInputValue,
+  setSupplierInputValue,
+  materialInputValue,
+  setMaterialInputValue,
+  qtyInputValue,
+  setQtyInputValue,
+  priceInputValue,
+  setPriceInputValue,
+  onClose,
+  onSave,
+  removeLeadingZero,
+}: {
+  po: PurchaseOrder;
+  suppliers: Supplier[];
+  materials: Material[];
+  formData: Partial<PurchaseOrder>;
+  setFormData: (data: Partial<PurchaseOrder>) => void;
+  supplierInputValue: string;
+  setSupplierInputValue: (value: string) => void;
+  materialInputValue: string;
+  setMaterialInputValue: (value: string) => void;
+  qtyInputValue: string;
+  setQtyInputValue: (value: string) => void;
+  priceInputValue: string;
+  setPriceInputValue: (value: string) => void;
+  onClose: () => void;
+  onSave: () => void;
+  removeLeadingZero: (value: string) => string;
+}) => {
+  const getSupplierInputDisplayValue = () => {
+    if (supplierInputValue !== undefined && supplierInputValue !== '') {
+      return supplierInputValue;
+    }
+    if (formData.supplier) {
+      const supplier = suppliers.find(s => s.nama === formData.supplier);
+      if (supplier) {
+        return `${supplier.kode} - ${supplier.nama}`;
+      }
+      return formData.supplier;
+    }
+    return '';
+  };
+
+  const handleSupplierInputChange = (text: string) => {
+    setSupplierInputValue(text);
+    if (!text) {
+      setFormData({ ...formData, supplier: '' });
+      return;
+    }
+    const normalized = text.toLowerCase();
+    const matchedSupplier = suppliers.find(s => {
+      const label = `${s.kode || ''}${s.kode ? ' - ' : ''}${s.nama || ''}`.toLowerCase();
+      const code = (s.kode || '').toLowerCase();
+      const name = (s.nama || '').toLowerCase();
+      return label === normalized || code === normalized || name === normalized;
+    });
+    if (matchedSupplier) {
+      setFormData({ ...formData, supplier: matchedSupplier.nama });
+    } else {
+      setFormData({ ...formData, supplier: text });
+    }
+  };
+
+  const getMaterialInputDisplayValue = () => {
+    if (materialInputValue !== undefined && materialInputValue !== '') {
+      return materialInputValue;
+    }
+    if (formData.materialItem) {
+      const material = materials.find(m => m.nama === formData.materialItem);
+      if (material) {
+        return `${material.material_id || material.kode} - ${material.nama}`;
+      }
+      return formData.materialItem;
+    }
+    return '';
+  };
+
+  const handleMaterialInputChange = (text: string) => {
+    setMaterialInputValue(text);
+    if (!text) {
+      setFormData({
+        ...formData,
+        materialItem: '',
+        price: 0,
+        total: 0,
+      });
+      return;
+    }
+    const normalized = text.toLowerCase();
+    const matchedMaterial = materials.find(m => {
+      const label = `${m.material_id || m.kode || ''}${m.material_id || m.kode ? ' - ' : ''}${m.nama || ''}`.toLowerCase();
+      const code = (m.material_id || m.kode || '').toLowerCase();
+      const name = (m.nama || '').toLowerCase();
+      return label === normalized || code === normalized || name === normalized;
+    });
+    if (matchedMaterial) {
+      const materialPrice = matchedMaterial.priceMtr || matchedMaterial.harga || 0;
+      const roundedPrice = Math.ceil(materialPrice);
+      const roundedTotal = Math.ceil((formData.qty || 0) * roundedPrice);
+      setFormData({
+        ...formData,
+        materialItem: matchedMaterial.nama,
+        price: roundedPrice,
+        total: roundedTotal,
+      });
+    } else {
+      setFormData({
+        ...formData,
+        materialItem: text,
+        price: 0,
+        total: 0,
+      });
+    }
+  };
+
+  return (
+    <div className="dialog-overlay" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '700px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
+        <Card className="dialog-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h2>Edit Purchase Order - {po.poNo}</h2>
+            <Button variant="secondary" onClick={onClose} style={{ padding: '6px 12px' }}>✕</Button>
+          </div>
+
+          <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px' }}>
+            <div><strong>PO No:</strong> {po.poNo}</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              Status: {po.status} | Created: {new Date(po.created).toLocaleDateString('id-ID')}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+              Supplier *
+            </label>
+            <input
+              type="text"
+              list={`supplier-list-edit-${po.id}`}
+              value={getSupplierInputDisplayValue()}
+              onChange={(e) => {
+                handleSupplierInputChange(e.target.value);
+              }}
+              onBlur={(e) => {
+                const value = e.target.value;
+                const matchedSupplier = suppliers.find(s => {
+                  const label = `${s.kode || ''}${s.kode ? ' - ' : ''}${s.nama || ''}`;
+                  return label === value;
+                });
+                if (matchedSupplier) {
+                  setFormData({ ...formData, supplier: matchedSupplier.nama });
+                }
+              }}
+              placeholder="-- Pilih Supplier --"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            />
+            <datalist id={`supplier-list-edit-${po.id}`}>
+              {suppliers.map(s => (
+                <option key={s.id} value={`${s.kode} - ${s.nama}`}>
+                  {s.kode} - {s.nama}
+                </option>
+              ))}
+            </datalist>
+          </div>
+          <Input
+            label="SO No (Linked - Cannot Edit)"
+            value={formData.soNo || ''}
+            onChange={(v) => setFormData({ ...formData, soNo: v })}
+            disabled={true}
+          />
+          <Input
+            label="Reason Pembelian (jika tanpa SO/SPK)"
+            value={formData.purchaseReason || ''}
+            onChange={(v) => setFormData({ ...formData, purchaseReason: v })}
+            placeholder="Contoh: Refill stock umum / sample R&D"
+          />
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+              Material/Item *
+            </label>
+            <input
+              type="text"
+              list={`material-list-edit-${po.id}`}
+              value={getMaterialInputDisplayValue()}
+              onChange={(e) => {
+                handleMaterialInputChange(e.target.value);
+              }}
+              onBlur={(e) => {
+                const value = e.target.value;
+                const matchedMaterial = materials.find(m => {
+                  const label = `${m.material_id || m.kode || ''}${m.material_id || m.kode ? ' - ' : ''}${m.nama || ''}`;
+                  return label === value;
+                });
+                if (matchedMaterial) {
+                  const materialPrice = matchedMaterial.priceMtr || matchedMaterial.harga || 0;
+                  const roundedPrice = Math.ceil(materialPrice);
+                  const roundedTotal = Math.ceil((formData.qty || 0) * roundedPrice);
+                  setFormData({
+                    ...formData,
+                    materialItem: matchedMaterial.nama,
+                    price: roundedPrice,
+                    total: roundedTotal,
+                  });
+                }
+              }}
+              placeholder="-- Pilih Material --"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            />
+            <datalist id={`material-list-edit-${po.id}`}>
+              {materials.map(m => (
+                <option key={m.id} value={`${m.material_id || m.kode} - ${m.nama}`}>
+                  {m.material_id || m.kode} - {m.nama}
+                </option>
+              ))}
+            </datalist>
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+              Qty *
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={qtyInputValue !== undefined && qtyInputValue !== '' ? qtyInputValue : (formData.qty !== undefined && formData.qty !== null && formData.qty !== 0 ? String(formData.qty) : '')}
+              onFocus={(e) => {
+                const input = e.target as HTMLInputElement;
+                const currentQty = formData.qty;
+                if (currentQty === 0 || currentQty === null || currentQty === undefined || String(currentQty) === '0') {
+                  setQtyInputValue('');
+                  input.value = '';
+                } else {
+                  input.select();
+                }
+              }}
+              onMouseDown={(e) => {
+                const input = e.target as HTMLInputElement;
+                const currentQty = formData.qty;
+                if (currentQty === 0 || currentQty === null || currentQty === undefined || String(currentQty) === '0') {
+                  setQtyInputValue('');
+                  input.value = '';
+                }
+              }}
+              onChange={(e) => {
+                let val = e.target.value;
+                val = val.replace(/[^\d.,]/g, '');
+                const cleaned = removeLeadingZero(val);
+                setQtyInputValue(cleaned);
+                const qty = cleaned === '' ? 0 : Number(cleaned) || 0;
+                const total = Math.ceil(qty * (formData.price || 0));
+                setFormData({
+                  ...formData,
+                  qty,
+                  total,
+                });
+              }}
+              onBlur={(e) => {
+                const val = e.target.value;
+                if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
+                  setFormData({
+                    ...formData,
+                    qty: 0,
+                    total: 0,
+                  });
+                  setQtyInputValue('');
+                } else {
+                  const qty = Number(val);
+                  const total = Math.ceil(qty * (formData.price || 0));
+                  setFormData({
+                    ...formData,
+                    qty,
+                    total,
+                  });
+                  setQtyInputValue('');
+                }
+              }}
+              onKeyDown={(e) => {
+                const input = e.target as HTMLInputElement;
+                const currentVal = input.value;
+                if ((currentVal === '' || currentVal === '0') && /^[1-9]$/.test(e.key)) {
+                  e.preventDefault();
+                  const newVal = e.key;
+                  setQtyInputValue(newVal);
+                  input.value = newVal;
+                  const qty = Number(newVal);
+                  const total = Math.ceil(qty * (formData.price || 0));
+                  setFormData({
+                    ...formData,
+                    qty,
+                    total,
+                  });
+                }
+              }}
+              placeholder="0"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            />
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+              Price
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={priceInputValue !== undefined && priceInputValue !== '' ? priceInputValue : (formData.price !== undefined && formData.price !== null && formData.price !== 0 ? String(Math.ceil(formData.price)) : '')}
+              onFocus={(e) => {
+                const input = e.target as HTMLInputElement;
+                const currentPrice = formData.price;
+                if (currentPrice === 0 || currentPrice === null || currentPrice === undefined || String(currentPrice) === '0') {
+                  setPriceInputValue('');
+                  input.value = '';
+                } else {
+                  input.select();
+                }
+              }}
+              onMouseDown={(e) => {
+                const input = e.target as HTMLInputElement;
+                const currentPrice = formData.price;
+                if (currentPrice === 0 || currentPrice === null || currentPrice === undefined || String(currentPrice) === '0') {
+                  setPriceInputValue('');
+                  input.value = '';
+                }
+              }}
+              onChange={(e) => {
+                let val = e.target.value;
+                val = val.replace(/[^\d.,]/g, '');
+                const cleaned = removeLeadingZero(val);
+                setPriceInputValue(cleaned);
+                const price = cleaned === '' ? 0 : Math.ceil(Number(cleaned) || 0);
+                const total = Math.ceil((formData.qty || 0) * price);
+                setFormData({
+                  ...formData,
+                  price,
+                  total,
+                });
+              }}
+              onBlur={(e) => {
+                const val = e.target.value;
+                if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
+                  setFormData({
+                    ...formData,
+                    price: 0,
+                    total: 0,
+                  });
+                  setPriceInputValue('');
+                } else {
+                  const price = Math.ceil(Number(val));
+                  const total = Math.ceil((formData.qty || 0) * price);
+                  setFormData({
+                    ...formData,
+                    price,
+                    total,
+                  });
+                  setPriceInputValue('');
+                }
+              }}
+              onKeyDown={(e) => {
+                const input = e.target as HTMLInputElement;
+                const currentVal = input.value;
+                if ((currentVal === '' || currentVal === '0') && /^[1-9]$/.test(e.key)) {
+                  e.preventDefault();
+                  const newVal = e.key;
+                  setPriceInputValue(newVal);
+                  input.value = newVal;
+                  const price = Math.ceil(Number(newVal));
+                  const total = Math.ceil((formData.qty || 0) * price);
+                  setFormData({
+                    ...formData,
+                    price,
+                    total,
+                  });
+                }
+              }}
+              placeholder="0"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            />
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+              Total: Rp {Math.ceil((formData.qty || 0) * (formData.price || 0)).toLocaleString('id-ID', { maximumFractionDigits: 0 })}
+            </label>
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+              Quality
+            </label>
+            <Input
+              value={formData.quality || ''}
+              onChange={(v) => setFormData({ ...formData, quality: v })}
+              placeholder="Quality"
+            />
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+              Score
+            </label>
+            <Input
+              value={formData.score !== undefined && formData.score !== null ? String(formData.score) : ''}
+              onChange={(v) => setFormData({ ...formData, score: v === '' ? '' : (isNaN(Number(v)) ? v : Number(v)) })}
+              placeholder="Score"
+            />
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+              Keterangan
+            </label>
+            <textarea
+              value={formData.keterangan || ''}
+              onChange={(e) => setFormData({ ...formData, keterangan: e.target.value })}
+              placeholder="Keterangan"
+              rows={3}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+                fontFamily: 'inherit',
+                resize: 'vertical',
+              }}
+            />
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+              Payment Terms *
+            </label>
+            <select
+              value={formData.paymentTerms || 'TOP'}
+              onChange={(e) => {
+                const newPaymentTerms = e.target.value as any;
+                const newTopDays = (newPaymentTerms === 'COD' || newPaymentTerms === 'CBD') ? 0 : (formData.topDays || 30);
+                setFormData({ ...formData, paymentTerms: newPaymentTerms, topDays: newTopDays });
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            >
+              <option value="TOP">TOP (Term of Payment)</option>
+              <option value="COD">COD (Cash on Delivery)</option>
+              <option value="CBD">CBD (Cash Before Delivery)</option>
+            </select>
+          </div>
+          {formData.paymentTerms === 'TOP' && (
+            <Input
+              label="TOP Days"
+              type="number"
+              value={String(formData.topDays || 30)}
+              onChange={(v) => setFormData({ ...formData, topDays: Number(v) })}
+            />
+          )}
+          <Input
+            label="Receipt Date (Tanggal Penerimaan)"
+            type="date"
+            value={formData.receiptDate || ''}
+            onChange={(v) => setFormData({ ...formData, receiptDate: v })}
+          />
+          <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
+            <Button onClick={onClose} variant="secondary">
+              Cancel
+            </Button>
+            <Button onClick={onSave} variant="primary">
+              Update PO
+            </Button>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 };
