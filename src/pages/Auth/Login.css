@@ -18,7 +18,7 @@
   max-width: 450px;
   min-width: 280px;
   width: 100%;
-  color: #fff;
+  color: var(--text-primary);
   flex-shrink: 0;
   box-sizing: border-box;
 }
@@ -28,18 +28,19 @@
   font-size: 32px;
   line-height: 1.2;
   word-break: break-word;
+  color: var(--text-primary);
 }
 
 .login-hero p {
   margin: 0 0 20px;
   font-size: 16px;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 
 .login-hero ul {
   padding-left: 24px;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--text-secondary);
   line-height: 1.8;
   margin: 0;
 }

@@ -194,7 +194,7 @@
 /* Header Styles */
 .business-selector-header {
   margin-bottom: 20px;
-  color: white;
+  color: var(--text-inverse);
   width: 100%;
   box-sizing: border-box;
 }
@@ -219,7 +219,7 @@
 .selector-user-card button {
   border: 1px solid rgba(255, 255, 255, 0.4);
   background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  color: var(--text-inverse);
   padding: 8px 16px;
   border-radius: 8px;
   cursor: pointer;
@@ -484,16 +484,12 @@
   font-size: 20px;
   font-weight: 700;
   margin: 0 0 10px 0;
-  color: white;
+  background-image: linear-gradient(135deg, rgba(131, 97, 255, 1) 0%, rgba(194, 194, 194, 1) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
   letter-spacing: -0.3px;
   transition: all 0.3s ease;
-}
-
-.business-card:hover h3 {
-  background: var(--card-gradient);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
 }
 
 .business-card p {
@@ -520,7 +516,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--text-inverse);
   opacity: 0;
   transform: translateX(-20px) rotate(-45deg);
   transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
