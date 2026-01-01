@@ -17,8 +17,161 @@ import { loadLogoAsBase64 } from '../../utils/logo-loader';
 import { generatePRHtml } from '../../pdf/pr-pdf-template';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
+import { getTheme } from '../../utils/theme';
 import '../../styles/common.css';
 import '../../styles/compact.css';
+
+// PTP Action Menu Component untuk dropdown 3 titik (vertical)
+const PTPActionMenu = ({
+  onView,
+  onCreateSPK,
+  onMatchSO,
+  hasSPK,
+}: {
+  onView?: () => void;
+  onCreateSPK?: () => void;
+  onMatchSO?: () => void;
+  hasSPK?: boolean;
+}) => {
+  const [showMenu, setShowMenu] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
+  const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node) &&
+          buttonRef.current && !buttonRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showMenu]);
+
+  useEffect(() => {
+    if (showMenu && buttonRef.current) {
+      requestAnimationFrame(() => {
+        if (!buttonRef.current) return;
+        const buttonRect = buttonRef.current.getBoundingClientRect();
+        const menuHeight = 200;
+        const spaceBelow = window.innerHeight - buttonRect.bottom;
+        const spaceAbove = buttonRect.top;
+        const gap = 0;
+        
+        if (spaceBelow < menuHeight && spaceAbove > menuHeight) {
+          setMenuPosition({
+            top: buttonRect.top - menuHeight - gap,
+            right: window.innerWidth - buttonRect.right,
+          });
+        } else {
+          setMenuPosition({
+            top: buttonRect.bottom + gap,
+            right: window.innerWidth - buttonRect.right,
+          });
+        }
+      });
+    }
+  }, [showMenu]);
+
+  return (
+    <>
+      <div ref={buttonRef} style={{ position: 'relative', display: 'inline-block' }}>
+        <Button 
+          variant="secondary" 
+          onClick={() => setShowMenu(!showMenu)}
+          style={{ fontSize: '10px', padding: '3px 6px', minHeight: '24px' }}
+        >
+          ⋮
+        </Button>
+      </div>
+      {showMenu && (
+        <div 
+          ref={menuRef}
+          style={{
+            position: 'fixed',
+            top: `${menuPosition.top}px`,
+            right: `${menuPosition.right}px`,
+            backgroundColor: 'var(--bg-primary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '6px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            zIndex: 10000,
+            minWidth: '160px',
+            padding: '4px',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          {onView && (
+            <button
+              onClick={() => { onView(); setShowMenu(false); }}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                fontSize: '11px',
+                borderRadius: '4px',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              👁️ View
+            </button>
+          )}
+          {onCreateSPK && !hasSPK && (
+            <button
+              onClick={() => { onCreateSPK(); setShowMenu(false); }}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                fontSize: '11px',
+                borderRadius: '4px',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              📋 Create SPK
+            </button>
+          )}
+          {onMatchSO && (
+            <button
+              onClick={() => { onMatchSO(); setShowMenu(false); }}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                fontSize: '11px',
+                borderRadius: '4px',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              🔗 Match SO
+            </button>
+          )}
+        </div>
+      )}
+    </>
+  );
+};
 
 // Action Menu Component untuk compact actions (3 dots dropdown)
 const ActionMenu = ({ 
@@ -319,6 +472,28 @@ const PPIC = () => {
     spk: null,
     checklist: null,
   });
+  const [theme, setTheme] = useState<'light' | 'dark'>(getTheme());
+  
+  useEffect(() => {
+    // Update theme saat berubah
+    const checkTheme = () => {
+      const currentTheme = getTheme();
+      setTheme(currentTheme);
+    };
+    checkTheme();
+    
+    // Listen untuk perubahan theme via MutationObserver
+    const observer = new MutationObserver(() => {
+      checkTheme();
+    });
+    
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    });
+    
+    return () => observer.disconnect();
+  }, []);
   
   // Custom Dialog state (untuk ganti confirm/alert)
   const [dialogState, setDialogState] = useState<{
@@ -465,7 +640,8 @@ const PPIC = () => {
     // OPTIMIZATION: Load from localStorage FIRST (instant, non-blocking)
     // Then sync from server in background if needed
     let spk = loadFromLocalStorage('spk');
-    const ptp = loadFromLocalStorage('ptp');
+    const ptpRaw = loadFromLocalStorage('ptp');
+    const ptp = filterActiveItems(ptpRaw); // Filter deleted PTP items
     let schedule = loadFromLocalStorage('schedule');
     let production = loadFromLocalStorage('production');
     const customersData = loadFromLocalStorage('customers');
@@ -2896,7 +3072,7 @@ const PPIC = () => {
                             {bomMaterials.slice(0, 3).map((mat: any, matIdx: number) => (
                               <div key={mat.materialId || matIdx} style={{ 
                                 fontSize: '7px',
-                                color: '#fff',
+                                color: theme === 'light' ? '#000' : '#fff',
                                 display: 'flex',
                                 justifyContent: 'space-between',
                                 gap: '4px',
@@ -2905,13 +3081,13 @@ const PPIC = () => {
                                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   {mat.materialName.length > 15 ? mat.materialName.substring(0, 15) + '...' : mat.materialName}
                                 </span>
-                                <span style={{ fontWeight: 'bold', color: '#fff', whiteSpace: 'nowrap' }}>
+                                <span style={{ fontWeight: 'bold', color: theme === 'light' ? '#000' : '#fff', whiteSpace: 'nowrap' }}>
                                   {Math.ceil(mat.requiredQty)} {mat.unit}
                                 </span>
                               </div>
                             ))}
                             {bomMaterials.length > 3 && (
-                              <div style={{ fontSize: '7px', color: '#fff', fontStyle: 'italic', paddingTop: '2px', borderTop: '1px solid rgba(156, 39, 176, 0.2)' }}>
+                              <div style={{ fontSize: '7px', color: theme === 'light' ? '#000' : '#fff', fontStyle: 'italic', paddingTop: '2px', borderTop: '1px solid rgba(156, 39, 176, 0.2)' }}>
                                 +{bomMaterials.length - 3} material lainnya
                               </div>
                             )}
@@ -3310,6 +3486,13 @@ const PPIC = () => {
                         Close
                       </Button>
                     )}
+                    <Button 
+                      variant="danger" 
+                      onClick={() => handleDeletePTP(item)}
+                      style={{ fontSize: '8px', padding: '2px 4px', minHeight: '20px' }}
+                    >
+                      Delete
+                    </Button>
                   </div>
                 </div>
               </Card>
@@ -3713,6 +3896,38 @@ const PPIC = () => {
         } catch {
           return <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>-</span>;
         }
+      },
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      render: (item: any) => {
+        const relatedSPK = spkData.find((s: any) => s.ptpRequestNo === item.requestNo);
+        const hasSPK = !!relatedSPK;
+        
+        // Find full PTP item from ptpData
+        const fullPTPItem = ptpData.find((p: any) => p.requestNo === item.requestNo);
+        
+        return (
+          <PTPActionMenu
+            onView={() => {
+              if (fullPTPItem) {
+                handleViewPTP(fullPTPItem);
+              }
+            }}
+            onCreateSPK={() => {
+              if (fullPTPItem) {
+                handleCreateSPKFromPTP(fullPTPItem);
+              }
+            }}
+            onMatchSO={() => {
+              if (fullPTPItem) {
+                handleMatchSO(fullPTPItem);
+              }
+            }}
+            hasSPK={hasSPK}
+          />
+        );
       },
     },
   ];
@@ -6242,38 +6457,42 @@ const PPIC = () => {
         return;
       }
 
-      if (!item.productItem) {
-        showAlert('Error: Product/Item tidak ditemukan di PTP', 'Error');
+      // Support both old format (single productItem) and new format (items array)
+      const items = item.items && Array.isArray(item.items) && item.items.length > 0
+        ? item.items
+        : item.productItem
+          ? [{
+              productItem: item.productItem,
+              qty: item.qty || 0,
+              unit: item.unit || 'PCS',
+              price: item.price || 0,
+              total: item.total || 0,
+            }]
+          : [];
+
+      if (items.length === 0) {
+        showAlert('Error: PTP tidak memiliki product items', 'Error');
         closeDialog();
         return;
       }
 
-      if (!item.qty || item.qty <= 0) {
-        showAlert('Error: Quantity harus lebih dari 0', 'Error');
-        closeDialog();
-        return;
-      }
+      // Validate all items
+      for (const ptpItem of items) {
+        if (!ptpItem.productItem) {
+          showAlert('Error: Product/Item tidak ditemukan di PTP', 'Error');
+          closeDialog();
+          return;
+        }
 
-      // Find product by name or code (case-insensitive)
-      const productItemLower = (item.productItem || '').toLowerCase().trim();
-      const product = products.find(p => {
-        const productName = (p.nama || '').toLowerCase().trim();
-        const productCode = (p.kode || '').toLowerCase().trim();
-        const productId = (p.product_id || '').toLowerCase().trim();
-        return productName === productItemLower || 
-               productCode === productItemLower || 
-               productId === productItemLower ||
-               productName.includes(productItemLower) ||
-               productCode.includes(productItemLower);
-      });
-
-      if (!product) {
-        showAlert(`Error: Product "${item.productItem}" tidak ditemukan di Master Products.\n\nPastikan product sudah ada di Master Products sebelum membuat SPK.`, 'Error');
-        closeDialog();
-        return;
+        if (!ptpItem.qty || ptpItem.qty <= 0) {
+          showAlert('Error: Quantity harus lebih dari 0 untuk semua items', 'Error');
+          closeDialog();
+          return;
+        }
       }
 
       // Create SPK from PTP (skip SO - langsung buat SPK)
+      // Create one SPK per item in PTP
       const now = new Date();
       const day = String(now.getDate()).padStart(2, '0');
       const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -6290,34 +6509,61 @@ const PPIC = () => {
         return code;
       };
       
-      // Ensure unique SPK number
-      let spkNo = '';
-      let isUnique = false;
-      while (!isUnique) {
-        const randomCode = generateRandomCode();
-        spkNo = `SPK/${year}${month}${day}/${randomCode}`;
-        isUnique = !existingSpk.some(s => s.spkNo === spkNo);
-      }
+      const newSPKs: any[] = [];
+      let materialReservationMessage = '';
       
-      const newSPK = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-        spkNo: spkNo,
-        soNo: item.soNo || item.requestNo, // Use linked SO or requestNo as fallback
-        customer: item.customer || '',
-        product: item.productItem,
-        product_id: product.product_id || product.kode || '',
-        kode: product.kode || product.product_id || '',
-        qty: parseFloat(item.qty) || 0,
-        status: 'OPEN',
-        created: new Date().toISOString(),
-        ptpRequestNo: item.requestNo, // Link dengan PTP
-      };
+      // Create SPK for each item
+      for (const ptpItem of items) {
+        // Find product by name or code (case-insensitive)
+        const productItemLower = (ptpItem.productItem || '').toLowerCase().trim();
+        const product = products.find(p => {
+          const productName = (p.nama || '').toLowerCase().trim();
+          const productCode = (p.kode || '').toLowerCase().trim();
+          const productId = (p.product_id || '').toLowerCase().trim();
+          return productName === productItemLower || 
+                 productCode === productItemLower || 
+                 productId === productItemLower ||
+                 productName.includes(productItemLower) ||
+                 productCode.includes(productItemLower);
+        });
+
+        if (!product) {
+          showAlert(`Error: Product "${ptpItem.productItem}" tidak ditemukan di Master Products.\n\nPastikan product sudah ada di Master Products sebelum membuat SPK.`, 'Error');
+          closeDialog();
+          return;
+        }
+
+        // Ensure unique SPK number
+        let spkNo = '';
+        let isUnique = false;
+        while (!isUnique) {
+          const randomCode = generateRandomCode();
+          spkNo = `SPK/${year}${month}${day}/${randomCode}`;
+          isUnique = !existingSpk.some(s => s.spkNo === spkNo) && !newSPKs.some(s => s.spkNo === spkNo);
+        }
+        
+        const newSPK = {
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 9) + newSPKs.length,
+          spkNo: spkNo,
+          soNo: item.soNo || item.requestNo, // Use linked SO or requestNo as fallback
+          customer: item.customer || '',
+          product: ptpItem.productItem,
+          product_id: product.product_id || product.kode || '',
+          kode: product.kode || product.product_id || '',
+          qty: parseFloat(ptpItem.qty) || 0,
+          status: 'OPEN',
+          created: new Date().toISOString(),
+          ptpRequestNo: item.requestNo, // Link dengan PTP
+        };
+
+        newSPKs.push(newSPK);
+      }
 
       const currentSPK = extractStorageValue(await storageService.get<any[]>('spk'));
-      await storageService.set('spk', [...currentSPK, newSPK]);
-      setSpkData([...currentSPK, newSPK]);
+      await storageService.set('spk', [...currentSPK, ...newSPKs]);
+      setSpkData([...currentSPK, ...newSPKs]);
       
-      // ENHANCED: Reserve materials for the new SPK
+      // ENHANCED: Reserve materials for all new SPKs
       const bomList = await storageService.get<any[]>('bom') || [];
       const materialsList = await storageService.get<any[]>('materials') || [];
       
@@ -6339,52 +6585,59 @@ const PPIC = () => {
         productBomMap[key].push(bom);
       });
       
-      // Reserve materials for the SPK
-      const productKey = normalizeKey(newSPK.product_id || newSPK.kode);
-      const spkQty = toNumber(newSPK.qty);
-      let materialReservationMessage = '';
-      
-      if (productKey && spkQty > 0) {
-        const bomForProduct = productBomMap[productKey] || [];
-        if (bomForProduct.length > 0) {
-          // Calculate material requirements
-          const materialRequirements: any[] = [];
-          bomForProduct.forEach((bom: any) => {
-            const materialKey = normalizeKey(bom.material_id || bom.kode || bom.materialId);
-            if (!materialKey) return;
-            
-            const ratio = toNumber(bom.ratio || 1) || 1;
-            const requiredQty = Math.max(Math.ceil(spkQty * ratio), 0);
-            if (requiredQty === 0) return;
-            
-            // Find material name
-            const material = materialsList.find((m: any) => 
-              normalizeKey(m.material_id || m.kode) === materialKey
-            );
-            
-            materialRequirements.push({
-              id: materialKey,
-              nama: material?.name || material?.material_name || bom.material_name || materialKey,
-              qty: requiredQty,
-              unit: material?.unit || bom.unit || 'PCS',
-            });
-          });
-          
-          if (materialRequirements.length > 0) {
-            try {
-              const reservation = await materialAllocator.reserveMaterials(newSPK.spkNo, materialRequirements);
+      // Reserve materials for each SPK
+      for (const newSPK of newSPKs) {
+        const productKey = normalizeKey(newSPK.product_id || newSPK.kode);
+        const spkQty = toNumber(newSPK.qty);
+        
+        if (productKey && spkQty > 0) {
+          const bomForProduct = productBomMap[productKey] || [];
+          if (bomForProduct.length > 0) {
+            // Calculate material requirements
+            const materialRequirements: any[] = [];
+            bomForProduct.forEach((bom: any) => {
+              const materialKey = normalizeKey(bom.material_id || bom.kode || bom.materialId);
+              if (!materialKey) return;
               
-              if (reservation.success) {
-                console.log(`✅ [PPIC] Materials reserved for SPK ${newSPK.spkNo}: ${materialRequirements.length} materials`);
-                materialReservationMessage = `\n📦 Materials reserved: ${materialRequirements.length} materials`;
-              } else {
-                console.warn(`⚠️ [PPIC] Material shortage for SPK ${newSPK.spkNo}:`, reservation.shortages);
-                const shortageList = reservation.shortages.map((s: any) => s.materialName).join(', ');
-                materialReservationMessage = `\n⚠️ Material shortage: ${shortageList}`;
+              const ratio = toNumber(bom.ratio || 1) || 1;
+              const requiredQty = Math.max(Math.ceil(spkQty * ratio), 0);
+              if (requiredQty === 0) return;
+              
+              // Find material name
+              const material = materialsList.find((m: any) => 
+                normalizeKey(m.material_id || m.kode) === materialKey
+              );
+              
+              materialRequirements.push({
+                id: materialKey,
+                nama: material?.name || material?.material_name || bom.material_name || materialKey,
+                qty: requiredQty,
+                unit: material?.unit || bom.unit || 'PCS',
+              });
+            });
+            
+            if (materialRequirements.length > 0) {
+              try {
+                const reservation = await materialAllocator.reserveMaterials(newSPK.spkNo, materialRequirements);
+                
+                if (reservation.success) {
+                  console.log(`✅ [PPIC] Materials reserved for SPK ${newSPK.spkNo}: ${materialRequirements.length} materials`);
+                  if (!materialReservationMessage) {
+                    materialReservationMessage = `\n📦 Materials reserved for ${newSPKs.length} SPK(s)`;
+                  }
+                } else {
+                  console.warn(`⚠️ [PPIC] Material shortage for SPK ${newSPK.spkNo}:`, reservation.shortages);
+                  const shortageList = reservation.shortages.map((s: any) => s.materialName).join(', ');
+                  if (!materialReservationMessage) {
+                    materialReservationMessage = `\n⚠️ Material shortage: ${shortageList}`;
+                  }
+                }
+              } catch (error) {
+                console.error(`❌ [PPIC] Error reserving materials for SPK ${newSPK.spkNo}:`, error);
+                if (!materialReservationMessage) {
+                  materialReservationMessage = `\n❌ Error reserving materials`;
+                }
               }
-            } catch (error) {
-              console.error(`❌ [PPIC] Error reserving materials for SPK ${newSPK.spkNo}:`, error);
-              materialReservationMessage = `\n❌ Error reserving materials`;
             }
           }
         }
@@ -6397,7 +6650,9 @@ const PPIC = () => {
       await storageService.set('ptp', updatedPTP);
       setPtpData(updatedPTP);
       
-      showAlert(`✅ SPK berhasil dibuat!\n\nSPK No: ${newSPK.spkNo}\nProduct: ${item.productItem}\nQty: ${item.qty} ${item.unit || 'PCS'}${materialReservationMessage}\n\nPTP status updated to OPEN.`, 'Success');
+      const spkNos = newSPKs.map((s: any) => s.spkNo).join(', ');
+      const itemsSummary = items.map((i: any) => `${i.productItem} (${i.qty} ${i.unit || 'PCS'})`).join('\n');
+      showAlert(`✅ ${newSPKs.length} SPK berhasil dibuat!\n\nSPK No: ${spkNos}\n\nItems:\n${itemsSummary}${materialReservationMessage}\n\nPTP status updated to OPEN.`, 'Success');
       closeDialog();
       loadData();
     } catch (error: any) {
@@ -6686,16 +6941,81 @@ const PPIC = () => {
     }
   };
 
+  const handleDeletePTP = async (item: any) => {
+    if (!item || !item.requestNo) {
+      showAlert('PTP tidak valid. Mohon coba lagi.', 'Error');
+      return;
+    }
+
+    showConfirm(
+      `Hapus PTP ${item.requestNo}?\n\nTindakan ini akan menghapus PTP dari daftar.`,
+      async () => {
+        try {
+          // Use tombstone pattern untuk prevent data resurrection dari sync
+          const success = await safeDeleteItem('ptp', item.id, 'id');
+          if (!success) {
+            showAlert('Gagal menghapus PTP. Silakan coba lagi.', 'Error');
+            return;
+          }
+          
+          // Reload PTP data dengan filter active items
+          const ptpDataRaw = await storageService.get<any[]>('ptp') || [];
+          const activePTP = filterActiveItems(ptpDataRaw);
+          setPtpData(activePTP);
+          
+          showAlert(`PTP ${item.requestNo} berhasil dihapus.`, 'Success');
+          loadData();
+        } catch (error: any) {
+          showAlert(`Error deleting PTP: ${error.message}`, 'Error');
+        }
+      },
+      undefined,
+      'Confirm Delete'
+    );
+  };
+
   const handleCreatePTP = async (formData: any) => {
     try {
+      // Support both old format (single productItem) and new format (items array)
+      const items = formData.items && Array.isArray(formData.items) && formData.items.length > 0
+        ? formData.items.map((item: any) => ({
+            ...item,
+            total: (item.qty || 0) * (item.price || 0), // Ensure total is calculated
+          }))
+        : formData.productItem
+          ? [{
+              id: Date.now().toString(),
+              productItem: formData.productItem,
+              qty: formData.qty || 0,
+              unit: formData.unit || 'PCS',
+              price: formData.price || 0,
+              total: (formData.qty || 0) * (formData.price || 0),
+              reason: formData.reason || '',
+            }]
+          : [];
+
+      if (items.length === 0) {
+        showAlert('Harap tambahkan minimal 1 product', 'Warning');
+        return;
+      }
+
+      // Calculate totals
+      const totalQty = items.reduce((sum: number, item: any) => sum + (item.qty || 0), 0);
+      const totalAmount = items.reduce((sum: number, item: any) => sum + (item.total || 0), 0);
+
+      // Create PTP with items array
       const newPTP = {
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         requestNo: formData.requestNo || `PTP-${new Date().getFullYear()}${String(Date.now()).slice(-6)}`,
         customer: formData.customer,
-        productItem: formData.productItem,
-        qty: formData.qty,
-        unit: formData.unit,
-        reason: formData.reason,
+        items: items, // New format: items array with price and total
+        // Backward compatibility: keep single productItem, qty, unit for old data
+        productItem: items.length === 1 ? items[0].productItem : items.map((i: any) => i.productItem).join(', '),
+        qty: totalQty,
+        unit: items.length === 1 ? items[0].unit : 'PCS',
+        price: items.length === 1 ? items[0].price : 0, // Single price for backward compatibility
+        total: totalAmount, // Total amount for all items
+        reason: formData.reason || items.map((i: any) => i.reason).filter((r: any) => r).join('; ') || '',
         status: 'OPEN',
         requestDate: formData.requestDate || new Date().toISOString().split('T')[0],
         created: new Date().toISOString(),
@@ -6705,7 +7025,7 @@ const PPIC = () => {
       await storageService.set('ptp', [...currentPTP, newPTP]);
       setPtpData([...currentPTP, newPTP]);
       setShowCreatePTP(false);
-      showAlert(`PTP ${newPTP.requestNo} created successfully`, 'Success');
+      showAlert(`PTP ${newPTP.requestNo} created successfully dengan ${items.length} product(s)`, 'Success');
       loadData();
     } catch (error: any) {
       showAlert(`Error creating PTP: ${error.message}`, 'Error');
@@ -8033,6 +8353,28 @@ const SODetailDialog = ({ so, bomData, materials, inventory, onClose, onBOMUpdat
   };
   const [materialStock, setMaterialStock] = useState<{ [key: string]: number }>({});
   const [activeSection, setActiveSection] = useState<'detail' | 'schedule'>('detail');
+  const [theme, setTheme] = useState<'light' | 'dark'>(getTheme());
+  
+  useEffect(() => {
+    // Update theme saat berubah
+    const checkTheme = () => {
+      const currentTheme = getTheme();
+      setTheme(currentTheme);
+    };
+    checkTheme();
+    
+    // Listen untuk perubahan theme via MutationObserver
+    const observer = new MutationObserver(() => {
+      checkTheme();
+    });
+    
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    });
+    
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     // Defensive check: pastikan so dan so.items ada
@@ -8457,7 +8799,7 @@ const SODetailDialog = ({ so, bomData, materials, inventory, onClose, onBOMUpdat
                 padding: '8px 16px',
                 border: 'none',
                 backgroundColor: activeSection === 'detail' ? 'var(--primary)' : 'transparent',
-                color: activeSection === 'detail' ? '#fff' : 'var(--text-primary)',
+                color: theme === 'light' ? '#000' : (activeSection === 'detail' ? '#fff' : 'var(--text-primary)'),
                 cursor: 'pointer',
                 borderTopLeftRadius: '4px',
                 borderTopRightRadius: '4px',
@@ -8471,7 +8813,7 @@ const SODetailDialog = ({ so, bomData, materials, inventory, onClose, onBOMUpdat
                 padding: '8px 16px',
                 border: 'none',
                 backgroundColor: activeSection === 'schedule' ? 'var(--primary)' : 'transparent',
-                color: activeSection === 'schedule' ? '#fff' : 'var(--text-primary)',
+                color: theme === 'light' ? '#000' : (activeSection === 'schedule' ? '#fff' : 'var(--text-primary)'),
                 cursor: 'pointer',
                 borderTopLeftRadius: '4px',
                 borderTopRightRadius: '4px',
@@ -9173,17 +9515,23 @@ const ScheduleBOMDialog = ({ spks, bomData, materials, inventory, onClose, onSav
 
 // Create PTP Dialog Component
 const CreatePTPDialog = ({ customers, products, onClose, onSave }: any) => {
+  interface PTPItem {
+    id: string;
+    productItem: string;
+    qty: number;
+    unit: string;
+    price: number;
+    total: number;
+    reason?: string;
+  }
+
   const [formData, setFormData] = useState({
     requestNo: '',
     customer: '',
-    productItem: '',
-    qty: '',
-    unit: 'PCS',
+    items: [] as PTPItem[],
     reason: '',
     requestDate: new Date().toISOString().split('T')[0],
   });
-  const [productSearch, setProductSearch] = useState('');
-  const [showProductDropdown, setShowProductDropdown] = useState(false);
   
   // Custom Dialog state
   const [dialogState, setDialogState] = useState<{
@@ -9224,40 +9572,103 @@ const CreatePTPDialog = ({ customers, products, onClose, onSave }: any) => {
     });
   };
 
-  // Filtered products for autocomplete
-  const getFilteredProducts = () => {
-    if (!productSearch) return products;
-    const query = productSearch.toLowerCase();
-    return products.filter((p: any) => 
-      (p.nama || '').toLowerCase().includes(query) || 
-      (p.kode || '').toLowerCase().includes(query) ||
-      ((p.product_id || '') + '').toLowerCase().includes(query)
-    );
+  // Add item
+  const handleAddItem = () => {
+    const newItem: PTPItem = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      productItem: '',
+      qty: 0,
+      unit: 'PCS',
+      price: 0,
+      total: 0,
+      reason: '',
+    };
+    setFormData({ ...formData, items: [...formData.items, newItem] });
+  };
+
+  // Handle qty input change - auto-replace 0 when user types
+  const handleQtyChange = (itemId: string, value: string) => {
+    // If current value is "0" and user types a number, replace it
+    const currentItem = formData.items.find(item => item.id === itemId);
+    if (currentItem && currentItem.qty === 0 && value.length === 1 && /^\d$/.test(value)) {
+      // User is typing first digit, replace 0 with the new digit
+      handleUpdateItem(itemId, 'qty', parseFloat(value) || 0);
+    } else {
+      // Normal update
+      handleUpdateItem(itemId, 'qty', parseFloat(value) || 0);
+    }
+  };
+
+  // Remove item
+  const handleRemoveItem = (itemId: string) => {
+    setFormData({ ...formData, items: formData.items.filter(item => item.id !== itemId) });
+  };
+
+  // Update item
+  const handleUpdateItem = (itemId: string, field: keyof PTPItem, value: any) => {
+    setFormData({
+      ...formData,
+      items: formData.items.map(item => {
+        if (item.id === itemId) {
+          const updated = { ...item, [field]: value };
+          // Auto-calculate total when qty or price changes
+          if (field === 'qty' || field === 'price') {
+            updated.total = (updated.qty || 0) * (updated.price || 0);
+          }
+          // Auto-fill price from product when product is selected
+          if (field === 'productItem' && value) {
+            const selectedProduct = products.find((p: any) => 
+              (p.nama || '') === value || (p.kode || '') === value
+            );
+            if (selectedProduct) {
+              const hargaFromMaster = selectedProduct.hargaSales || selectedProduct.hargaFg || (selectedProduct as any).harga || 0;
+              updated.price = Number(hargaFromMaster) || 0;
+              updated.total = (updated.qty || 0) * updated.price;
+            }
+          }
+          return updated;
+        }
+        return item;
+      }),
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Use productSearch if productItem is not set
-    const finalProductItem = formData.productItem || productSearch;
-    if (!formData.customer || !finalProductItem || !formData.qty) {
-      showAlert('Harap isi semua field yang wajib', 'Warning');
+    if (!formData.customer) {
+      showAlert('Harap pilih customer', 'Warning');
       return;
     }
-    // Validate that product exists in master data
-    const selectedProduct = products.find((p: any) => 
-      (p.nama || '').toLowerCase() === finalProductItem.toLowerCase() ||
-      (p.kode || '').toLowerCase() === finalProductItem.toLowerCase()
-    );
-    if (!selectedProduct) {
-      showAlert('Product tidak ditemukan di master data. Harap pilih product dari dropdown.', 'Error');
+    if (!formData.items || formData.items.length === 0) {
+      showAlert('Harap tambahkan minimal 1 product', 'Warning');
       return;
     }
-    onSave({ ...formData, productItem: selectedProduct.nama || selectedProduct.kode || finalProductItem });
+    // Validate all items
+    for (const item of formData.items) {
+      if (!item.productItem || !item.qty || item.qty <= 0) {
+        showAlert('Harap lengkapi semua field product (product, qty)', 'Warning');
+        return;
+      }
+      if (!item.price || item.price <= 0) {
+        showAlert('Harap isi harga untuk semua product', 'Warning');
+        return;
+      }
+      // Validate that product exists in master data
+      const selectedProduct = products.find((p: any) => 
+        (p.nama || '') === item.productItem ||
+        (p.kode || '') === item.productItem
+      );
+      if (!selectedProduct) {
+        showAlert(`Product "${item.productItem}" tidak ditemukan di master data. Harap pilih product dari dropdown.`, 'Error');
+        return;
+      }
+    }
+    onSave(formData);
   };
 
   return (
     <div className="dialog-overlay" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', width: '90%' }}>
         <Card className="dialog-card">
           <h2>Create PTP (Permintaan Tanpa PO)</h2>
         <form onSubmit={handleSubmit}>
@@ -9282,87 +9693,196 @@ const CreatePTPDialog = ({ customers, products, onClose, onSave }: any) => {
                 ))}
               </select>
             </div>
-            <div style={{ position: 'relative' }}>
-              <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 500 }}>Product/Item *</label>
-              <input
-                type="text"
-                value={productSearch}
-                onChange={(e) => {
-                  setProductSearch(e.target.value);
-                  setShowProductDropdown(true);
-                  // Auto-select jika exact match
-                  const product = products.find((p: any) => 
-                    (p.nama || '').toLowerCase() === e.target.value.toLowerCase() ||
-                    ((p.product_id || p.kode) + '').toLowerCase() === e.target.value.toLowerCase()
-                  );
-                  if (product) {
-                    setFormData({ ...formData, productItem: product.nama || product.kode || '' });
-                  }
-                }}
-                onFocus={() => setShowProductDropdown(true)}
-                onBlur={() => setTimeout(() => setShowProductDropdown(false), 200)}
-                placeholder="Type product name or code..."
-                style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border-color)', borderRadius: '6px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
-                required
-              />
-              {showProductDropdown && getFilteredProducts().length > 0 && (
-                <div style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  right: 0,
-                  backgroundColor: 'var(--bg-secondary)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '6px',
-                  marginTop: '4px',
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <label style={{ fontSize: '14px', fontWeight: 500 }}>Products *</label>
+                <Button variant="secondary" onClick={handleAddItem} style={{ fontSize: '12px', padding: '6px 12px' }}>
+                  + Add Product
+                </Button>
+              </div>
+              
+              {(!formData.items || formData.items.length === 0) ? (
+                <p style={{ color: 'var(--text-secondary)', padding: '20px', textAlign: 'center', fontSize: '13px' }}>
+                  No products added. Click "+ Add Product" to add items.
+                </p>
+              ) : (
+                <div style={{ 
+                  overflowX: 'auto',
                   maxHeight: '400px',
                   overflowY: 'auto',
-                  zIndex: 1000,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '6px',
                 }}>
-                  {getFilteredProducts().map((p: any) => (
-                    <div
-                      key={p.id || p.kode}
-                      onClick={() => {
-                        const productName = p.nama || p.kode || '';
-                        setProductSearch(productName);
-                        setFormData({ ...formData, productItem: productName });
-                        setShowProductDropdown(false);
+                  {formData.items.map((item, index) => (
+                    <div 
+                      key={item.id} 
+                      style={{ 
+                        padding: '12px', 
+                        borderBottom: index < formData.items.length - 1 ? '1px solid var(--border-color)' : 'none',
+                        backgroundColor: 'var(--bg-secondary)',
                       }}
-                      style={{
-                        padding: '8px 12px',
-                        cursor: 'pointer',
-                        borderBottom: '1px solid var(--border-color)',
-                        fontSize: '13px',
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--hover-bg)'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                     >
-                      <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
-                        {p.nama || '-'}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <strong style={{ fontSize: '13px' }}>Product {index + 1}</strong>
+                        <Button 
+                          variant="secondary" 
+                          onClick={() => handleRemoveItem(item.id)} 
+                          style={{ fontSize: '11px', padding: '4px 8px', backgroundColor: '#f44336', color: 'white' }}
+                        >
+                          Remove
+                        </Button>
                       </div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                        {p.kode || p.product_id || ''} {p.satuan ? `(${p.satuan})` : ''}
+                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 100px', gap: '8px', marginBottom: '8px' }}>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 500 }}>Product *</label>
+                          <select
+                            value={item.productItem}
+                            onChange={(e) => handleUpdateItem(item.id, 'productItem', e.target.value)}
+                            style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border-color)', borderRadius: '4px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '13px' }}
+                            required
+                          >
+                            <option value="">-- Pilih Product --</option>
+                            {products.map((p: any) => (
+                              <option key={p.id || p.kode} value={p.nama || p.kode}>
+                                {p.nama || '-'} {p.kode ? `(${p.kode})` : ''} {p.satuan ? `- ${p.satuan}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 500 }}>Qty *</label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={item.qty === 0 ? '' : item.qty.toString()}
+                            onChange={(e) => {
+                              const value = e.target.value.trim();
+                              // Allow empty string for better UX
+                              if (value === '') {
+                                handleUpdateItem(item.id, 'qty', 0);
+                                return;
+                              }
+                              // Only allow numbers
+                              if (/^\d+$/.test(value)) {
+                                const numValue = parseFloat(value);
+                                if (!isNaN(numValue) && numValue >= 0) {
+                                  handleUpdateItem(item.id, 'qty', numValue);
+                                }
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              // Allow: backspace, delete, tab, escape, enter, and numbers
+                              if ([8, 9, 27, 13, 46].indexOf(e.keyCode) !== -1 ||
+                                  // Allow: Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
+                                  (e.keyCode === 65 && e.ctrlKey === true) ||
+                                  (e.keyCode === 67 && e.ctrlKey === true) ||
+                                  (e.keyCode === 86 && e.ctrlKey === true) ||
+                                  (e.keyCode === 88 && e.ctrlKey === true) ||
+                                  // Allow: home, end, left, right
+                                  (e.keyCode >= 35 && e.keyCode <= 39)) {
+                                return;
+                              }
+                              // Ensure that it is a number and stop the keypress
+                              if ((e.shiftKey || (e.keyCode < 48 || e.keyCode > 57)) && (e.keyCode < 96 || e.keyCode > 105)) {
+                                e.preventDefault();
+                              }
+                            }}
+                            onBlur={(e) => {
+                              // If empty on blur, set to 0
+                              if (e.target.value === '' || e.target.value === '0') {
+                                handleUpdateItem(item.id, 'qty', 0);
+                              }
+                            }}
+                            placeholder="0"
+                            style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border-color)', borderRadius: '4px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '13px' }}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 500 }}>Unit</label>
+                          <input
+                            type="text"
+                            value={item.unit}
+                            onChange={(e) => handleUpdateItem(item.id, 'unit', e.target.value)}
+                            placeholder="PCS"
+                            style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border-color)', borderRadius: '4px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '13px' }}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 500 }}>Price *</label>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={item.price === 0 ? '' : item.price.toString()}
+                            onChange={(e) => {
+                              const value = e.target.value.trim().replace(/[^\d.]/g, '');
+                              // Allow empty string for better UX
+                              if (value === '') {
+                                handleUpdateItem(item.id, 'price', 0);
+                                return;
+                              }
+                              // Allow numbers and decimal
+                              if (/^\d*\.?\d*$/.test(value)) {
+                                const numValue = parseFloat(value);
+                                if (!isNaN(numValue) && numValue >= 0) {
+                                  handleUpdateItem(item.id, 'price', numValue);
+                                }
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              // Allow: backspace, delete, tab, escape, enter, numbers, and decimal point
+                              if ([8, 9, 27, 13, 46, 110, 190].indexOf(e.keyCode) !== -1 ||
+                                  // Allow: Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
+                                  (e.keyCode === 65 && e.ctrlKey === true) ||
+                                  (e.keyCode === 67 && e.ctrlKey === true) ||
+                                  (e.keyCode === 86 && e.ctrlKey === true) ||
+                                  (e.keyCode === 88 && e.ctrlKey === true) ||
+                                  // Allow: home, end, left, right
+                                  (e.keyCode >= 35 && e.keyCode <= 39)) {
+                                return;
+                              }
+                              // Ensure that it is a number and stop the keypress
+                              if ((e.shiftKey || (e.keyCode < 48 || e.keyCode > 57)) && (e.keyCode < 96 || e.keyCode > 105)) {
+                                e.preventDefault();
+                              }
+                            }}
+                            onBlur={(e) => {
+                              // If empty on blur, set to 0
+                              if (e.target.value === '' || e.target.value === '0') {
+                                handleUpdateItem(item.id, 'price', 0);
+                              }
+                            }}
+                            placeholder="0"
+                            style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border-color)', borderRadius: '4px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '13px' }}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 500 }}>Total</label>
+                          <input
+                            type="text"
+                            value={`Rp ${(item.total || 0).toLocaleString('id-ID')}`}
+                            readOnly
+                            style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border-color)', borderRadius: '4px', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '13px', cursor: 'not-allowed' }}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 500 }}>Reason (Optional)</label>
+                        <input
+                          type="text"
+                          value={item.reason || ''}
+                          onChange={(e) => handleUpdateItem(item.id, 'reason', e.target.value)}
+                          placeholder="Alasan untuk product ini..."
+                          style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border-color)', borderRadius: '4px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '13px' }}
+                        />
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: '12px' }}>
-              <Input
-                label="Qty *"
-                type="number"
-                value={formData.qty}
-                onChange={(val) => setFormData({ ...formData, qty: val })}
-                placeholder="0"
-              />
-              <Input
-                label="Unit"
-                value={formData.unit}
-                onChange={(val) => setFormData({ ...formData, unit: val })}
-                placeholder="PCS"
-              />
             </div>
             <div>
               <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 500 }}>Reason/Alasan *</label>

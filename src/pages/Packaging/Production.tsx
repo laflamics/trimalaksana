@@ -8,6 +8,7 @@ import ScheduleDialog from '../../components/ScheduleDialog';
 import NotificationBell from '../../components/NotificationBell';
 import { storageService, extractStorageValue } from '../../services/storage';
 import { materialAllocator } from '../../services/material-allocator';
+import { filterActiveItems } from '../../utils/data-persistence-helper';
 import { openPrintWindow } from '../../utils/actions';
 import { generateWOHtml } from '../../pdf/wo-pdf-template';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
@@ -218,12 +219,36 @@ const Production = () => {
     setProductions(enrichedProductions);
 
     // Load notifications dari PPIC (schedule)
-    const productionNotifications = extractStorageValue(await storageService.get<any[]>('productionNotifications'));
+    const productionNotificationsRaw = extractStorageValue(await storageService.get<any[]>('productionNotifications'));
     
     // Cek material status untuk setiap notification
-    const grnList = extractStorageValue(await storageService.get<any[]>('grnPackaging'));
-    const purchaseOrders = extractStorageValue(await storageService.get<any[]>('purchaseOrders'));
-    const inventoryItems = extractStorageValue(await storageService.get<any[]>('inventory'));
+    // IMPORTANT: Filter deleted items untuk prevent data resurrection dari sync
+    const grnListRaw = extractStorageValue(await storageService.get<any[]>('grnPackaging'));
+    const purchaseOrdersRaw = extractStorageValue(await storageService.get<any[]>('purchaseOrders'));
+    const inventoryItemsRaw = extractStorageValue(await storageService.get<any[]>('inventory'));
+    
+    const grnList = filterActiveItems(grnListRaw);
+    const purchaseOrders = filterActiveItems(purchaseOrdersRaw); // Exclude deleted PO
+    const inventoryItems = filterActiveItems(inventoryItemsRaw); // Exclude deleted inventory items
+    
+    // IMPORTANT: Filter productionNotifications yang reference ke deleted PO
+    // Notifikasi yang reference ke PO yang sudah di-delete harus di-exclude
+    const productionNotifications = productionNotificationsRaw.filter((notif: any) => {
+      // Jika notifikasi reference ke PO (via poNo atau poId), cek apakah PO masih aktif
+      if (notif.poNo || notif.poId) {
+        const poRef = notif.poNo || notif.poId;
+        // Cek apakah PO reference masih ada di active PO
+        const hasActivePO = purchaseOrders.some((po: any) => 
+          (po.id === poRef || po.poNo === poRef) && !po.deleted
+        );
+        if (!hasActivePO) {
+          // PO sudah di-delete, skip notifikasi ini
+          return false;
+        }
+      }
+      // Filter deleted notifications juga
+      return !notif.deleted;
+    });
     const bomList = extractStorageValue(await storageService.get<any[]>('bom'));
     const materialsList = extractStorageValue(await storageService.get<any[]>('materials'));
 
@@ -1965,38 +1990,18 @@ const Production = () => {
           console.log(`   Outgoing: ${oldOutgoing} → ${newOutgoing} (+${materialUsed})`);
           console.log(`   NextStock: ${existingMaterialInventory.nextStock}`);
         } else {
-          // Material tidak ditemukan di inventory - ini masalah!
+          // Material tidak ditemukan di inventory - SKIP update, jangan create entry baru
+          // CRITICAL: Produksi hanya cek inventory, bukan create material inventory
+          // Material harus sudah ada di inventory (dari GRN) sebelum bisa digunakan untuk produksi
           console.error(`❌ [Production Inventory] Material NOT FOUND in inventory: ${materialName} (${materialId})`);
           console.error(`   Material sudah digunakan untuk produksi tapi tidak ada di inventory!`);
           console.error(`   Ini berarti material belum pernah masuk ke inventory (belum ada GRN).`);
           console.error(`   Production: ${item.productionNo || item.grnNo}, SO: ${item.soNo}`);
+          console.error(`   ⚠️ SKIPPING inventory update untuk material ini - tidak akan create entry baru`);
+          console.error(`   Material harus masuk ke inventory melalui GRN terlebih dahulu.`);
           
-          // Tetap buat entry baru dengan outgoing (untuk tracking)
-          // Tapi ini seharusnya tidak terjadi jika flow benar
-          // Create new material inventory entry dengan outgoing
-          // Cari material dari master untuk info tambahan
-          const materialFromMaster = materials.find(m => 
-            ((m.material_id || m.kode) || '').toString().trim().toLowerCase() === materialId.toLowerCase()
-          );
-          const supplier = suppliers.find(s => s.nama === (materialFromMaster?.supplier || '')) || suppliers[0];
-          inventory.push({
-            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-            supplierName: materialFromMaster?.supplier || supplier?.nama || '',
-            codeItem: materialId,
-            description: materialName,
-            kategori: materialFromMaster?.kategori || 'Material',
-            satuan: materialFromMaster?.satuan || 'PCS',
-            price: materialFromMaster?.priceMtr || materialFromMaster?.harga || 0,
-            stockPremonth: 0,
-            receive: 0,
-            outgoing: materialUsed,
-            return: 0,
-            nextStock: 0 + 0 - materialUsed + 0, // stockPremonth + receive - outgoing + return
-            processedPOs: poNo ? [poNo] : [], // Track PO untuk reference
-            processedProductions: trackingKey ? [trackingKey] : [], // Track production submission untuk anti-duplicate
-            lastUpdate: new Date().toISOString(),
-          });
-          console.log(`✅ New material inventory created: ${materialName} (${materialId}) | Outgoing: ${materialUsed} | NextStock: ${0 - materialUsed}`);
+          // JANGAN create entry baru - hanya log error dan skip
+          // Material inventory hanya bisa dibuat melalui GRN (Purchasing), bukan dari Production
         }
       }
 
@@ -3391,7 +3396,9 @@ const Production = () => {
     // Tidak perlu first in first serve yang kompleks - cukup cek apakah material tersedia di inventory
     const validateMaterialReadiness = async (notif: any, batchQty?: number) => {
       try {
-        const inventoryItems = await storageService.get<any[]>('inventory') || [];
+        // IMPORTANT: Filter deleted items untuk prevent data resurrection
+        const inventoryItemsRaw = await storageService.get<any[]>('inventory') || [];
+        const inventoryItems = filterActiveItems(inventoryItemsRaw);
         const bomList = await storageService.get<any[]>('bom') || [];
         const materialsList = await storageService.get<any[]>('materials') || [];
         
@@ -3524,39 +3531,48 @@ const Production = () => {
       }
     };
     
-    // Validasi ulang material readiness secara real-time
+    // Info material readiness (tidak block, hanya kasih info)
     const isMaterialReady = await validateMaterialReadiness(notif, batch ? batch.qty : undefined);
     
     if (!isMaterialReady) {
       showAlert(
-        `⚠️ Material belum tersedia untuk SPK: ${notif.spkNo}${batch ? ` (Batch: ${batch.batchNo || batch.batchName || ''})` : ''}.\n\n` +
+        `ℹ️ Material BOM belum tersedia untuk SPK: ${notif.spkNo}${batch ? ` (Batch: ${batch.batchNo || batch.batchName || ''})` : ''}.\n\n` +
         `Material mungkin sudah digunakan oleh SPK lain atau stok inventory tidak mencukupi.\n\n` +
-        `Silakan cek kembali material readiness atau tunggu material tersedia.`,
-        'Material Not Ready'
+        `💡 Anda tetap bisa memulai produksi dan menggunakan material lain yang tersedia saat submit production result.`,
+        'Material BOM Info'
       );
-      return;
+      // Tidak return, biarkan user tetap bisa start production
     }
     
-    // Jika ada batch, cek material readiness untuk batch tersebut
-    let canStartProduction = false;
+    // Info material status (tidak block, hanya kasih info)
     let materialStatusCheck = (notif.materialStatus || '').toString().toUpperCase();
     
     if (batch) {
       // Cek material untuk batch tertentu
       const batchReady = notif.batchMaterialReadiness && notif.batchMaterialReadiness[batch.id || batch.batchNo];
-      canStartProduction = ['RECEIVED', 'STOCK_READY'].includes(materialStatusCheck) && batchReady !== false;
+      const canStartProduction = ['RECEIVED', 'STOCK_READY'].includes(materialStatusCheck) && batchReady !== false;
       
       if (!canStartProduction && !batchReady) {
-        showAlert(`⚠️ Material untuk Batch ${batch.batchNo || batch.batchName || ''} belum siap.\n\nPastikan sudah diterima Purchasing atau stok inventory mencukupi sebelum memulai produksi batch ini.`, 'Material Not Ready');
-        return;
+        showAlert(
+          `ℹ️ Material untuk Batch ${batch.batchNo || batch.batchName || ''} belum siap.\n\n` +
+          `Material mungkin belum diterima Purchasing atau stok inventory tidak mencukupi.\n\n` +
+          `💡 Anda tetap bisa memulai produksi dan menggunakan material lain yang tersedia saat submit production result.`,
+          'Material BOM Info'
+        );
+        // Tidak return, biarkan user tetap bisa start production
       }
     } else {
       // Cek material untuk seluruh SPK
-      canStartProduction = ['RECEIVED', 'STOCK_READY'].includes(materialStatusCheck);
+      const canStartProduction = ['RECEIVED', 'STOCK_READY'].includes(materialStatusCheck);
       
       if (!canStartProduction) {
-        showAlert('⚠️ Material belum siap.\n\nPastikan sudah diterima Purchasing atau stok inventory mencukupi sebelum memulai produksi.', 'Material Not Ready');
-        return;
+        showAlert(
+          `ℹ️ Material BOM belum siap.\n\n` +
+          `Material mungkin belum diterima Purchasing atau stok inventory tidak mencukupi.\n\n` +
+          `💡 Anda tetap bisa memulai produksi dan menggunakan material lain yang tersedia saat submit production result.`,
+          'Material BOM Info'
+        );
+        // Tidak return, biarkan user tetap bisa start production
       }
     }
 
@@ -4192,6 +4208,10 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
   };
 
   useEffect(() => {
+    // Reset materialsUsed saat dialog dibuka untuk memastikan data fresh
+    setMaterialsUsed([]);
+    setLeftovers([]);
+    // Load data fresh dari inventory
     loadBOMData();
     loadAvailableMaterials();
   }, [production]);
@@ -4201,8 +4221,9 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
       const inventoryRaw = await storageService.get<any[]>('inventory');
       const materialsDataRaw = await storageService.get<any[]>('materials');
       
-      // Ensure data is always an array
-      const inventory = Array.isArray(inventoryRaw) ? inventoryRaw : [];
+      // IMPORTANT: Filter deleted items untuk prevent data resurrection
+      const inventoryRawArray = Array.isArray(inventoryRaw) ? inventoryRaw : [];
+      const inventory = filterActiveItems(inventoryRawArray);
       const materialsData = Array.isArray(materialsDataRaw) ? materialsDataRaw : [];
       
       const normalizeKey = (value: any) => (value ?? '').toString().trim().toLowerCase();
@@ -4284,12 +4305,12 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
       const inventoryRaw = await storageService.get<any[]>('inventory');
       const productionResultsRaw = await storageService.get<any[]>('productionResults');
       
-      // Ensure data is always an array
-      const spkData = Array.isArray(spkDataRaw) ? spkDataRaw : [];
-      const bomData = Array.isArray(bomDataRaw) ? bomDataRaw : [];
-      const materialsData = Array.isArray(materialsDataRaw) ? materialsDataRaw : [];
-      const inventory = Array.isArray(inventoryRaw) ? inventoryRaw : [];
-      const productionResults = Array.isArray(productionResultsRaw) ? productionResultsRaw : [];
+      // Ensure data is always an array and filter deleted items
+      const spkData = Array.isArray(spkDataRaw) ? filterActiveItems(spkDataRaw) : [];
+      const bomData = Array.isArray(bomDataRaw) ? filterActiveItems(bomDataRaw) : [];
+      const materialsData = Array.isArray(materialsDataRaw) ? filterActiveItems(materialsDataRaw) : [];
+      const inventory = Array.isArray(inventoryRaw) ? filterActiveItems(inventoryRaw) : []; // Exclude deleted inventory
+      const productionResults = Array.isArray(productionResultsRaw) ? filterActiveItems(productionResultsRaw) : [];
       
       const spk = spkData.find((s: any) => {
         const prodSpkNo = (production.spkNo || '').toString().trim();
@@ -4392,11 +4413,33 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
         const materialUnit = material.satuan || 'PCS';
         
         // Get available stock from inventory untuk material ini
+        // IMPORTANT: Pastikan material benar-benar ada di inventory (tidak deleted)
         const inventoryItem = inventory.find((inv: any) => {
+          // Skip deleted items
+          if (inv.deleted || inv._deleted) return false;
           const invCode = normalizeKey(inv.codeItem);
           const matCode = normalizeKey(materialId);
-          return invCode === matCode;
+          const isMatch = invCode === matCode;
+          if (isMatch) {
+            console.log(`✅ [Submit Dialog] Material ${materialId} (${materialName}) ditemukan di inventory:`, {
+              codeItem: inv.codeItem,
+              materialId: materialId,
+              nextStock: inv.nextStock,
+              stockPremonth: inv.stockPremonth,
+              receive: inv.receive,
+              outgoing: inv.outgoing,
+              return: inv.return
+            });
+          }
+          return isMatch;
         });
+        
+        // Debug log untuk material yang tidak ditemukan
+        if (!inventoryItem) {
+          console.log(`⚠️ [Submit Dialog] Material ${materialId} (${materialName}) TIDAK ditemukan di inventory`);
+          console.log(`   Inventory items count: ${inventory.length}`);
+          console.log(`   Sample inventory codes:`, inventory.slice(0, 5).map((inv: any) => inv.codeItem));
+        }
         
         // Available stock = nextStock (sudah dikurangi outgoing dari production sebelumnya)
         const getAvailableStock = (item: any) => {
@@ -4412,15 +4455,28 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
           );
         };
         
+        // IMPORTANT: Jika material tidak ditemukan di inventory, set semua nilai ke 0
         const availableStock = inventoryItem ? getAvailableStock(inventoryItem) : 0;
         
-        // Material yang sudah digunakan sebelumnya
-        const usedPreviously = materialUsedPreviously[materialId] || 0;
+        // Material yang sudah digunakan sebelumnya (hanya jika material ada di inventory)
+        const usedPreviously = inventoryItem ? (materialUsedPreviously[materialId] || 0) : 0;
         
-        // Material yang tersedia untuk produksi ini = availableStock + usedPreviously (karena outgoing sudah dikurangi)
-        // Tapi kita perlu cek: jika sudah ada production sebelumnya, material yang tersedia = availableStock
-        // Jika belum ada production, material yang tersedia = availableStock (sudah termasuk material dari GRN)
-        const receivedQty = availableStock + usedPreviously; // Total material yang diterima (available + sudah digunakan)
+        // Material yang tersedia untuk produksi ini (bukan total received)
+        // IMPORTANT: Jika material tidak ada di inventory, availableForThisProduction = 0
+        const availableForThisProduction = inventoryItem ? availableStock : 0;
+        
+        // Total material yang diterima (available + sudah digunakan) - hanya jika material ada di inventory
+        // CRITICAL: Pastikan receivedQty = 0 jika material tidak ada di inventory
+        const receivedQty = inventoryItem ? (availableStock + usedPreviously) : 0;
+        
+        // Debug log untuk memastikan receivedQty benar
+        if (!inventoryItem) {
+          console.log(`🔍 [Submit Dialog] Material ${materialId} (${materialName}) - NOT IN INVENTORY:`);
+          console.log(`   availableStock: ${availableStock}, usedPreviously: ${usedPreviously}, receivedQty: ${receivedQty}, availableForThisProduction: ${availableForThisProduction}`);
+        } else {
+          console.log(`🔍 [Submit Dialog] Material ${materialId} (${materialName}) - IN INVENTORY:`);
+          console.log(`   availableStock: ${availableStock}, usedPreviously: ${usedPreviously}, receivedQty: ${receivedQty}, availableForThisProduction: ${availableForThisProduction}`);
+        }
         
         // IMPORTANT: Cek apakah ada override qty dari PPIC (tidak mengikuti ratio)
         // bomOverride sudah di-load di loadBOMData dan di-pass ke production
@@ -4447,9 +4503,6 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
           defaultUsed = currentQtyProduced * ratio;
         }
         
-        // Material yang tersedia untuk produksi ini (bukan total received)
-        const availableForThisProduction = availableStock;
-        
         // Default used tidak boleh melebihi available stock
         const actualDefaultUsed = Math.min(defaultUsed, availableForThisProduction);
         
@@ -4457,13 +4510,26 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
         // Bukan totalReceivedQty - totalUsed
         const defaultLeftover = Math.max(0, availableForThisProduction - actualDefaultUsed);
 
+        // Track apakah material tidak ada di inventory (tidak ditemukan sama sekali, bukan hanya stock 0)
+        const isMaterialNotInInventory = !inventoryItem;
+        
+        // CRITICAL: Pastikan receivedQty = 0 jika material tidak ada di inventory
+        // Jangan gunakan availableForThisProduction karena mungkin masih ada nilai lama
+        const finalReceivedQty = isMaterialNotInInventory ? 0 : availableForThisProduction;
+        
+        console.log(`🔍 [Submit Dialog Final] Material ${materialId} (${materialName}):`);
+        console.log(`   isMaterialNotInInventory: ${isMaterialNotInInventory}`);
+        console.log(`   availableForThisProduction: ${availableForThisProduction}`);
+        console.log(`   finalReceivedQty: ${finalReceivedQty}`);
+
         matsUsed.push({
           materialId,
           materialName,
           unit: materialUnit,
           qtyUsed: actualDefaultUsed.toString(),
-          receivedQty: availableForThisProduction, // Material yang tersedia untuk produksi ini
+          receivedQty: finalReceivedQty, // CRITICAL: Pastikan 0 jika material tidak ada di inventory
           totalReceivedQty: receivedQty, // Total material yang diterima (untuk reference)
+          isNotInInventory: isMaterialNotInInventory, // Flag untuk material yang belum ada di inventory
         });
 
         if (defaultLeftover > 0) {
@@ -4490,6 +4556,9 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
         try {
           const bomData = await storageService.get<any[]>('bom') || [];
           const spkData = await storageService.get<any[]>('spk') || [];
+          const inventoryRaw = await storageService.get<any[]>('inventory') || [];
+          const inventory = Array.isArray(inventoryRaw) ? filterActiveItems(inventoryRaw) : [];
+          
           const spk = spkData.find((s: any) => s.spkNo === production.spkNo || s.soNo === production.soNo);
           const productId = (production.productId || spk?.product_id || spk?.kode || '').toString().trim();
           
@@ -4500,6 +4569,20 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
             return bomProductId === productId;
           });
           
+          const normalizeKey = (value: any) => (value ?? '').toString().trim().toLowerCase();
+          const getAvailableStock = (item: any) => {
+            if (!item) return 0;
+            if (typeof item.nextStock === 'number') return item.nextStock;
+            const parsed = parseFloat(item.nextStock);
+            if (!Number.isNaN(parsed)) return parsed;
+            return (
+              (item.stockPremonth || 0) +
+              (item.receive || 0) -
+              (item.outgoing || 0) +
+              (item.return || 0)
+            );
+          };
+          
           const currentQtyProduced = parseFloat(qtyProduced || '0') || 0;
           const updated = materialsUsed.map((m: any) => {
             const bom = spkBOM.find((b: any) => {
@@ -4508,14 +4591,27 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
             });
             
             if (bom) {
+              // Recalculate receivedQty dari inventory (pastikan selalu up-to-date)
+              const inventoryItem = inventory.find((inv: any) => {
+                if (inv.deleted || inv._deleted) return false;
+                const invCode = normalizeKey(inv.codeItem);
+                const matCode = normalizeKey(m.materialId);
+                return invCode === matCode;
+              });
+              
+              // CRITICAL: Pastikan receivedQty = 0 jika material tidak ada di inventory
+              const availableStock = inventoryItem ? getAvailableStock(inventoryItem) : 0;
+              const receivedQty = inventoryItem ? availableStock : 0;
+              
               const ratio = parseFloat(bom.ratio || '1') || 1;
               const newUsed = currentQtyProduced * ratio;
-              const availableQty = m.receivedQty || 0;
-              const actualUsed = Math.min(newUsed, availableQty);
+              const actualUsed = Math.min(newUsed, receivedQty);
               
               return {
                 ...m,
                 qtyUsed: actualUsed.toString(),
+                receivedQty: receivedQty, // Update receivedQty dari inventory
+                isNotInInventory: !inventoryItem, // Update flag
               };
             }
             return m;
@@ -4681,9 +4777,12 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
     const spk = spkData.find((s: any) => s.spkNo === production.spkNo || s.soNo === production.soNo);
     const productId = (production.productId || spk?.product_id || spk?.kode || '').toString().trim();
     
-    // Validasi stock material dari BOM
-    // Jika ada actual materials yang ditambahkan, skip validasi stock BOM (karena user menggunakan material lain)
+    // Info material BOM (tidak block, hanya kasih info)
+    // Jika ada actual materials yang ditambahkan, skip info BOM (karena user menggunakan material lain)
     const hasActualMaterials = actualMaterials.length > 0 && actualMaterials.some((m: any) => parseFloat(m.qtyUsed || '0') > 0);
+    
+    const missingBOMMaterials: string[] = [];
+    const insufficientBOMMaterials: string[] = [];
     
     if (productId && !hasActualMaterials) {
       const spkBOM = bomData.filter((b: any) => {
@@ -4691,7 +4790,7 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
         return bomProductId === productId;
       });
       
-      // Cek stock untuk setiap material
+      // Cek stock untuk setiap material BOM (hanya untuk info, tidak block)
       for (const bom of spkBOM) {
         const bomMaterialId = (bom.material_id || '').toString().trim();
         const material = materialsData.find((m: any) => {
@@ -4720,20 +4819,33 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
           // Cek apakah stock cukup (dengan tolerance 2%)
           const tolerance = requiredQty * 0.02;
           if (availableStock + tolerance < requiredQty) {
-            showAlert(
-              `⚠️ Stock material tidak cukup!\n\nMaterial: ${material.nama}\nButuh: ${requiredQty} ${material.satuan || 'PCS'}\nTersedia: ${availableStock} ${material.satuan || 'PCS'}\n\nQty Produced: ${qtyProducedNum} PCS\n\n💡 TIP: Anda dapat menggunakan material lain dari inventory dengan menambahkan "Actual Material Usage" di bawah ini.`, 
-              'Stock Insufficient'
-            );
-            return;
+            insufficientBOMMaterials.push(`${material.nama} (Butuh: ${requiredQty.toFixed(2)}, Tersedia: ${availableStock.toFixed(2)} ${material.satuan || 'PCS'})`);
           }
         } else {
           // Material tidak ada di inventory
-          showAlert(
-            `⚠️ Material tidak ditemukan di inventory!\n\nMaterial: ${material.nama} (${bomMaterialId})\nButuh: ${requiredQty} ${material.satuan || 'PCS'}\n\n💡 TIP: Anda dapat menggunakan material lain dari inventory dengan menambahkan "Actual Material Usage" di bawah ini.`,
-            'Material Not Found'
-          );
-          return;
+          missingBOMMaterials.push(`${material.nama} (${bomMaterialId}) - Butuh: ${requiredQty.toFixed(2)} ${material.satuan || 'PCS'}`);
         }
+      }
+      
+      // Kasih info kalau ada material BOM yang tidak tersedia (tidak block)
+      if (missingBOMMaterials.length > 0 || insufficientBOMMaterials.length > 0) {
+        let infoMessage = 'ℹ️ Material BOM tidak tersedia di inventory:\n\n';
+        
+        if (missingBOMMaterials.length > 0) {
+          infoMessage += '❌ Material tidak ditemukan:\n';
+          missingBOMMaterials.forEach(m => infoMessage += `  • ${m}\n`);
+          infoMessage += '\n';
+        }
+        
+        if (insufficientBOMMaterials.length > 0) {
+          infoMessage += '⚠️ Stock tidak cukup:\n';
+          insufficientBOMMaterials.forEach(m => infoMessage += `  • ${m}\n`);
+          infoMessage += '\n';
+        }
+        
+        infoMessage += '💡 Anda dapat menggunakan material lain yang tersedia dengan menambahkan "Actual Material Usage" di bawah ini.';
+        
+        showAlert(infoMessage, 'Material BOM Info');
       }
     }
     
@@ -4990,7 +5102,8 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
                     <tr key={idx} style={{ borderTop: '1px solid var(--border-color)' }}>
                       <td style={{ padding: '8px', fontSize: '12px' }}>{mat.materialName}</td>
                       <td style={{ padding: '8px', textAlign: 'right', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                        {mat.receivedQty || 0}
+                        {/* CRITICAL: Pastikan receivedQty = 0 jika material tidak ada di inventory */}
+                        {mat.isNotInInventory ? 0 : (mat.receivedQty || 0)}
                       </td>
                       <td style={{ padding: '8px', textAlign: 'right' }}>
                         <input
@@ -5028,6 +5141,21 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
                 </tbody>
               </table>
             </div>
+            {/* Info untuk material yang belum ada di inventory */}
+            {materialsUsed.some((mat: any) => mat.isNotInInventory) && (
+              <div style={{
+                marginTop: '8px',
+                padding: '8px 12px',
+                backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                border: '1px solid rgba(255, 193, 7, 0.3)',
+                borderRadius: '4px',
+                fontSize: '12px',
+                color: 'var(--warning)',
+              }}>
+                ⚠️ <strong>Info:</strong> Beberapa material belum tersedia di inventory (Received = 0). 
+                Mohon tunggu material masuk ke inventory terlebih dahulu, atau gunakan material lain yang tersedia melalui "Actual Material Usage" di bawah ini.
+              </div>
+            )}
           </div>
 
           <div style={{ marginBottom: '16px' }}>
