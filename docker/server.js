@@ -11,13 +11,13 @@ const app = express();
 const PORT = process.env.PORT || 8888;
 const DATA_DIR = path.join(__dirname, 'data');
 const ROOT_DIR = path.join(__dirname, '..');
-const UPDATES_DIR = path.join(__dirname, 'updates'); // Directory untuk update files
+const UPDATES_DIR = path.join(DATA_DIR, 'update'); // Simpan update files di data/update/
 const UPLOADS_DIR = path.join(__dirname, 'uploads'); // Directory untuk uploaded files (PDF, images, etc.)
 
 // Ensure data directory exists
 fs.mkdir(DATA_DIR, { recursive: true }).catch(console.error);
 
-// Ensure updates directory exists
+// Ensure update directory exists
 fs.mkdir(UPDATES_DIR, { recursive: true }).catch(console.error);
 
 // Ensure uploads directory exists
@@ -25,15 +25,31 @@ fs.mkdir(UPLOADS_DIR, { recursive: true }).catch(console.error);
 
 app.use(cors());
 
+// Error handler untuk body parser (untuk catch request yang terlalu besar)
+app.use((error, req, res, next) => {
+  if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
+    console.error(`[Server] ❌ Body parser error: ${error.message}`);
+    return res.status(400).json({ error: 'Request body too large or invalid. Max size: 100MB' });
+  }
+  next();
+});
+
 // Increase body size limit BEFORE other middleware
 // Must be set before express.json() middleware
-app.use(express.json({ 
-  limit: '100mb', // Increase to 100MB for large data sync
-  parameterLimit: 50000 
-}));
+// Limit besar untuk upload installer .exe (bisa sampai 500MB+)
+// Skip express.json() untuk upload-binary route (pakai express.raw() di route handler)
+app.use((req, res, next) => {
+  if (req.path === '/api/updates/upload-binary') {
+    return next(); // Skip JSON parsing untuk upload-binary
+  }
+  express.json({ 
+    limit: '1gb',
+    parameterLimit: 50000 
+  })(req, res, next);
+});
 app.use(express.urlencoded({ 
   extended: true, 
-  limit: '100mb',
+  limit: '1gb', // Increase to 1GB for large installer files
   parameterLimit: 50000 
 }));
 
@@ -58,6 +74,7 @@ app.get('/', (req, res) => {
 // IMPORTANT: didefinisikan SEBELUM route '/api/storage/:key' supaya
 // '/api/storage/all' TIDAK ketangkep sebagai ':key' = 'all'
 app.get('/api/storage/all', async (req, res) => {
+  const startTime = Date.now();
   try {
     console.log(`[Server] GET /api/storage/all - since: ${req.query.since || 0}`);
     const since = req.query.since ? parseInt(req.query.since) : 0; // Get only data changed since this timestamp
@@ -71,49 +88,66 @@ app.get('/api/storage/all', async (req, res) => {
     }
     
     const files = await fs.readdir(DATA_DIR);
+    const jsonFiles = files.filter(file => file.endsWith('.json'));
+    console.log(`[Server] Found ${jsonFiles.length} JSON files to process`);
+    
     const data = {};
     const timestamps = {};
     
-    for (const file of files) {
-      if (file.endsWith('.json')) {
-        const key = file.replace('.json', '');
-        try {
-          const content = await fs.readFile(path.join(DATA_DIR, file), 'utf8');
-          const parsed = JSON.parse(content);
-          
-          // Extract value and timestamp
-          // Handle both wrapped format {value, timestamp} and direct values
-          let fileTimestamp = 0;
-          let fileValue;
-          
-          if (parsed && typeof parsed === 'object' && parsed.value !== undefined) {
-            fileValue = parsed.value;
-            fileTimestamp = parsed.timestamp || parsed._timestamp || 0;
-          } else if (parsed && typeof parsed === 'object' && (parsed.timestamp || parsed._timestamp)) {
-            fileValue = parsed;
-            fileTimestamp = parsed.timestamp || parsed._timestamp || 0;
-          } else {
-            // Direct value (string, number, etc.)
-            fileValue = parsed;
-            fileTimestamp = 0;
-          }
-          
-          // Only include if changed since 'since' timestamp (incremental sync)
-          if (fileTimestamp > since || since === 0) {
-            data[key] = fileValue;
-            timestamps[key] = fileTimestamp;
-          }
-        } catch (error) {
-          // Skip invalid JSON files
-          console.warn(`Skipping invalid JSON file: ${file}`, error.message);
+    // OPTIMIZED: Read files in parallel instead of sequential
+    const filePromises = jsonFiles.map(async (file) => {
+      const key = file.replace('.json', '');
+      try {
+        const filePath = path.join(DATA_DIR, file);
+        const content = await fs.readFile(filePath, 'utf8');
+        const parsed = JSON.parse(content);
+        
+        // Extract value and timestamp
+        // Handle both wrapped format {value, timestamp} and direct values
+        let fileTimestamp = 0;
+        let fileValue;
+        
+        if (parsed && typeof parsed === 'object' && parsed.value !== undefined) {
+          fileValue = parsed.value;
+          fileTimestamp = parsed.timestamp || parsed._timestamp || 0;
+        } else if (parsed && typeof parsed === 'object' && (parsed.timestamp || parsed._timestamp)) {
+          fileValue = parsed;
+          fileTimestamp = parsed.timestamp || parsed._timestamp || 0;
+        } else {
+          // Direct value (string, number, etc.)
+          fileValue = parsed;
+          fileTimestamp = 0;
         }
+        
+        // Only include if changed since 'since' timestamp (incremental sync)
+        if (fileTimestamp > since || since === 0) {
+          return { key, value: fileValue, timestamp: fileTimestamp };
+        }
+        return null;
+      } catch (error) {
+        // Skip invalid JSON files
+        console.warn(`[Server] Skipping invalid JSON file: ${file}`, error.message);
+        return null;
+      }
+    });
+    
+    // Wait for all files to be read in parallel
+    const results = await Promise.all(filePromises);
+    
+    // Process results
+    for (const result of results) {
+      if (result) {
+        data[result.key] = result.value;
+        timestamps[result.key] = result.timestamp;
       }
     }
     
-    console.log(`[Server] Returning ${Object.keys(data).length} keys from /api/storage/all`);
+    const elapsedTime = Date.now() - startTime;
+    console.log(`[Server] ✅ Returning ${Object.keys(data).length} keys from /api/storage/all (took ${elapsedTime}ms)`);
     res.json({ data, timestamps, serverTime: Date.now() });
   } catch (error) {
-    console.error(`[Server] Error in /api/storage/all:`, error);
+    const elapsedTime = Date.now() - startTime;
+    console.error(`[Server] ❌ Error in /api/storage/all (took ${elapsedTime}ms):`, error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -614,56 +648,249 @@ app.post('/api/seedgt', async (req, res) => {
   }
 });
 
+// Seed Trucking database
+app.post('/api/seedtrucking', async (req, res) => {
+  try {
+    console.log('Starting Trucking seed process...');
+    
+    // Run seedtrucking script
+    const seedTruckingScriptPath = path.join(ROOT_DIR, 'scripts', 'seedtrucking.js');
+    
+    // Check if script exists
+    try {
+      await fs.access(seedTruckingScriptPath);
+    } catch {
+      return res.status(404).json({
+        success: false,
+        error: 'Trucking Seed script not found. Make sure scripts/seedtrucking.js exists.',
+      });
+    }
+
+    console.log('Running Trucking seed script:', seedTruckingScriptPath);
+    
+    const { stdout, stderr } = await execAsync(`node "${seedTruckingScriptPath}"`, {
+      cwd: ROOT_DIR,
+      maxBuffer: 1024 * 1024 * 10, // 10MB buffer
+      env: { ...process.env, SERVER_URL: `http://localhost:${PORT}` },
+    });
+
+    if (stderr && !stderr.includes('warning') && !stderr.includes('deprecated')) {
+      console.error('Trucking Seed stderr:', stderr);
+    }
+
+    console.log('Trucking Seed completed:', stdout);
+
+    // Get seed results
+    const result = {
+      success: true,
+      message: 'Trucking Seed completed successfully',
+      output: stdout,
+    };
+
+    res.json(result);
+  } catch (error) {
+    console.error('Trucking Seed error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message || 'Unknown error',
+      output: error.stdout || error.stderr || '',
+    });
+  }
+});
+
 // ============================================
 // AUTO-UPDATE ENDPOINTS
 // ============================================
 // IMPORTANT: Place specific routes BEFORE static file serving to avoid conflicts
 
+// Upload update files dengan raw binary (LEBIH CEPAT - tanpa base64 overhead)
+// express.raw() middleware harus di route handler untuk override express.json() global
+app.post('/api/updates/upload-binary', express.raw({ 
+  limit: '1gb', 
+  type: 'application/octet-stream' 
+}), async (req, res) => {
+  // Set timeout untuk endpoint ini (60 menit untuk upload file besar)
+  req.setTimeout(60 * 60 * 1000);
+  res.setTimeout(60 * 60 * 1000);
+  
+  try {
+    const fileName = req.headers['x-filename'] || req.query.filename || 'uploaded-file.exe';
+    
+    console.error(`[Server] 📤 Upload request: filename=${fileName}, body length=${req.body ? req.body.length : 0}, query=${JSON.stringify(req.query)}`);
+    
+    // Cek apakah body adalah Buffer (dari express.raw())
+    if (!req.body || !Buffer.isBuffer(req.body) || req.body.length === 0) {
+      console.error(`[Server] ❌ Invalid body: body=${req.body}, body type=${typeof req.body}, isBuffer=${Buffer.isBuffer(req.body)}, length=${req.body ? req.body.length : 0}`);
+      return res.status(400).json({ 
+        error: 'Request body is empty or invalid', 
+        bodyLength: req.body ? req.body.length : 0, 
+        bodyType: typeof req.body,
+        isBuffer: Buffer.isBuffer(req.body)
+      });
+    }
+    
+    // Ensure UPDATES_DIR exists
+    try {
+      await fs.access(UPDATES_DIR);
+    } catch {
+      await fs.mkdir(UPDATES_DIR, { recursive: true });
+    }
+    
+    // Save file langsung dari raw binary (SANGAT CEPAT)
+    const filePath = path.join(UPDATES_DIR, fileName);
+    
+    try {
+      await fs.writeFile(filePath, req.body);
+      const stats = await fs.stat(filePath);
+      
+      if (stats.size !== req.body.length) {
+        return res.status(500).json({ 
+          error: 'File write verification failed: size mismatch',
+          written: req.body.length,
+          read: stats.size
+        });
+      }
+      
+      res.json({ 
+        success: true, 
+        fileName: fileName,
+        size: stats.size,
+        path: path.resolve(filePath)
+      });
+    } catch (writeError) {
+      console.error(`[Server] ❌ Write error: ${writeError.message}`);
+      return res.status(500).json({ 
+        error: `Failed to write file: ${writeError.message}`
+      });
+    }
+  } catch (error) {
+    console.error(`[Server] ❌ Error: ${error.message}`);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Upload update files (latest.yml, installer.exe, etc.) - simple HTTP POST seperti data sync (LEGACY - pakai base64)
+app.post('/api/updates/upload', async (req, res) => {
+  // Set timeout untuk endpoint ini (60 menit untuk upload file besar)
+  req.setTimeout(60 * 60 * 1000);
+  res.setTimeout(60 * 60 * 1000);
+  
+  try {
+    // Check if body exists
+    if (!req.body) {
+      console.error(`[Server] ❌ Request body is missing`);
+      return res.status(400).json({ error: 'Request body is missing' });
+    }
+    
+    const { base64Data, fileName } = req.body;
+    
+    if (!base64Data || !fileName) {
+      return res.status(400).json({ error: 'base64Data and fileName are required' });
+    }
+    
+    if (typeof base64Data !== 'string' || base64Data.length === 0) {
+      console.error(`[Server] ❌ Invalid base64Data: type=${typeof base64Data}, length=${base64Data?.length || 0}`);
+      return res.status(400).json({ error: 'base64Data must be a non-empty string' });
+    }
+    
+    // Ensure UPDATES_DIR exists
+    try {
+      await fs.access(UPDATES_DIR);
+    } catch {
+      await fs.mkdir(UPDATES_DIR, { recursive: true });
+    }
+    
+    // Extract base64 data (remove data URL prefix if present)
+    let base64Content = base64Data;
+    if (base64Content.includes(',')) {
+      base64Content = base64Content.split(',')[1];
+    }
+    
+    // Convert base64 to buffer (optimize untuk file besar)
+    let buffer;
+    try {
+      // Pakai Buffer.from langsung - lebih cepat untuk file besar
+      buffer = Buffer.from(base64Content, 'base64');
+    } catch (error) {
+      console.error(`[Server] ❌ Base64 decode error: ${error.message}`);
+      return res.status(400).json({ error: `Invalid base64 data: ${error.message}` });
+    }
+    
+    if (buffer.length === 0) {
+      console.error(`[Server] ❌ Decoded buffer is empty`);
+      return res.status(400).json({ error: 'Decoded file is empty' });
+    }
+    
+    // Save file dengan writeFile langsung (lebih cepat dari streaming untuk file besar)
+    const filePath = path.join(UPDATES_DIR, fileName);
+    
+    try {
+      // Write langsung tanpa verify dulu (lebih cepat)
+      await fs.writeFile(filePath, buffer);
+      
+      // Verify setelah write (lebih cepat)
+      const verifyStats = await fs.stat(filePath);
+      if (verifyStats.size !== buffer.length) {
+        console.error(`[Server] ❌ Size mismatch! Written: ${buffer.length}, Read: ${verifyStats.size}, file: ${fileName}`);
+        return res.status(500).json({ 
+          error: 'File write verification failed: size mismatch',
+          written: buffer.length,
+          read: verifyStats.size
+        });
+      }
+    } catch (writeError) {
+      console.error(`[Server] ❌ Write error: ${writeError.message}, path: ${filePath}`);
+      return res.status(500).json({ 
+        error: `Failed to write file: ${writeError.message}`,
+        path: filePath
+      });
+    }
+    
+    const absolutePath = path.resolve(filePath);
+    
+    res.json({ 
+      success: true, 
+      fileName: fileName,
+      size: verifyStats.size,
+      path: absolutePath,
+      message: `File saved to: ${absolutePath}`
+    });
+  } catch (error) {
+    console.error(`[Server] ❌ Error: ${error.message}`);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Endpoint to get latest version info (with .yml extension)
 // MUST be placed BEFORE /api/updates/latest to handle .yml correctly
 app.get('/api/updates/latest.yml', async (req, res) => {
   try {
-    console.log(`[Server] ========================================`);
-    console.log(`[Server] GET /api/updates/latest.yml requested`);
-    console.log(`[Server] __dirname: ${__dirname}`);
-    console.log(`[Server] UPDATES_DIR: ${UPDATES_DIR}`);
-    
     const latestYmlPath = path.join(UPDATES_DIR, 'latest.yml');
-    console.log(`[Server] Looking for latest.yml at: ${latestYmlPath}`);
     
     try {
       // Check if file exists
-      const stats = await fs.stat(latestYmlPath);
-      console.log(`[Server] ✅ File exists! Size: ${stats.size} bytes, Modified: ${stats.mtime}`);
+      await fs.stat(latestYmlPath);
       
       const ymlContent = await fs.readFile(latestYmlPath, 'utf8');
-      console.log(`[Server] ✅ Read latest.yml, content length: ${ymlContent.length} bytes`);
-      console.log(`[Server] First 200 chars: ${ymlContent.substring(0, 200)}`);
       
       res.setHeader('Content-Type', 'text/yaml');
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cache-Control', 'no-cache');
       res.send(ymlContent);
-      console.log(`[Server] ✅ Sent latest.yml to client`);
     } catch (error) {
       // If latest.yml doesn't exist, return 404
-      console.error(`[Server] ❌ Error accessing latest.yml:`, error);
-      console.error(`[Server] Error code: ${error.code}, message: ${error.message}`);
-      console.error(`[Server] UPDATES_DIR: ${UPDATES_DIR}`);
-      console.error(`[Server] Full path: ${latestYmlPath}`);
+  
       
       // Try to list files in UPDATES_DIR for debugging
       try {
-        const files = await fs.readdir(UPDATES_DIR);
-        console.error(`[Server] Files in UPDATES_DIR (${files.length} files):`, files);
+        await fs.readdir(UPDATES_DIR);
       } catch (dirError) {
         console.error(`[Server] Cannot read UPDATES_DIR:`, dirError.message);
       }
       
       // Try to check if UPDATES_DIR exists
       try {
-        const dirStats = await fs.stat(UPDATES_DIR);
-        console.error(`[Server] UPDATES_DIR exists, isDirectory: ${dirStats.isDirectory()}`);
+        await fs.stat(UPDATES_DIR);
       } catch (dirError) {
         console.error(`[Server] UPDATES_DIR does not exist!`);
       }
@@ -675,7 +902,6 @@ app.get('/api/updates/latest.yml', async (req, res) => {
         updatesDir: UPDATES_DIR
       });
     }
-    console.log(`[Server] ========================================`);
   } catch (error) {
     console.error(`[Server] ❌ Error in /api/updates/latest.yml:`, error);
     res.status(500).json({ error: error.message });
@@ -685,28 +911,22 @@ app.get('/api/updates/latest.yml', async (req, res) => {
 // Endpoint to get latest version info (without .yml extension)
 app.get('/api/updates/latest', async (req, res) => {
   try {
-    console.log(`[Server] GET /api/updates/latest requested`);
     const latestYmlPath = path.join(UPDATES_DIR, 'latest.yml');
-    console.log(`[Server] Looking for latest.yml at: ${latestYmlPath}`);
     
     try {
       // Check if file exists
       await fs.access(latestYmlPath);
       const ymlContent = await fs.readFile(latestYmlPath, 'utf8');
-      console.log(`[Server] ✅ Found latest.yml, size: ${ymlContent.length} bytes`);
       
       res.setHeader('Content-Type', 'text/yaml');
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.send(ymlContent);
     } catch (error) {
       // If latest.yml doesn't exist, return 404
-      console.warn(`[Server] ❌ latest.yml not found at ${latestYmlPath}:`, error.message);
-      console.warn(`[Server] UPDATES_DIR: ${UPDATES_DIR}`);
       
       // Try to list files in UPDATES_DIR for debugging
       try {
-        const files = await fs.readdir(UPDATES_DIR);
-        console.log(`[Server] Files in UPDATES_DIR:`, files);
+        await fs.readdir(UPDATES_DIR);
       } catch (dirError) {
         console.error(`[Server] Cannot read UPDATES_DIR:`, dirError.message);
       }
@@ -723,15 +943,22 @@ app.get('/api/updates/latest', async (req, res) => {
 });
 
 // Serve update files (latest.yml, installer.exe, etc.) as static files
+// IMPORTANT: Serve from /api/updates/ path (not /updates/) to match electron-updater feed URL
 // Place AFTER API endpoints to avoid conflicts
-app.use('/updates', express.static(UPDATES_DIR, {
+app.use('/api/updates', express.static(UPDATES_DIR, {
   setHeaders: (res, filePath) => {
     // Set proper content type for YAML files
     if (filePath.endsWith('.yml') || filePath.endsWith('.yaml')) {
       res.setHeader('Content-Type', 'text/yaml');
     }
+    // Set proper content type for executable files
+    if (filePath.endsWith('.exe')) {
+      res.setHeader('Content-Type', 'application/octet-stream');
+    }
     // Allow CORS for update files
     res.setHeader('Access-Control-Allow-Origin', '*');
+    // Disable caching for update files
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   }
 }));
 
@@ -748,6 +975,7 @@ app.get('/health', (req, res) => {
       all: '/api/storage/all',
       seed: '/api/seed',
       seedGT: '/api/seedgt',
+      seedTrucking: '/api/seedtrucking',
       updates: '/api/updates/latest',
       updatesFiles: '/updates/*'
     }
@@ -757,11 +985,7 @@ app.get('/health', (req, res) => {
 // Ensure DATA_DIR exists before starting server
 fs.mkdir(DATA_DIR, { recursive: true })
   .then(() => {
-    console.log(`[Server] ✅ DATA_DIR created/verified: ${DATA_DIR}`);
     return fs.access(DATA_DIR);
-  })
-  .then(() => {
-    console.log(`[Server] ✅ DATA_DIR is accessible`);
   })
   .catch((error) => {
     console.error(`[Server] ❌ Error creating/accessing DATA_DIR: ${DATA_DIR}`, error);
@@ -770,32 +994,18 @@ fs.mkdir(DATA_DIR, { recursive: true })
 // Check UPDATES_DIR and latest.yml before starting server
 fs.mkdir(UPDATES_DIR, { recursive: true })
   .then(() => {
-    console.log(`[Server] ✅ UPDATES_DIR created/verified: ${UPDATES_DIR}`);
     return fs.readdir(UPDATES_DIR);
-  })
-  .then((files) => {
-    const hasLatestYml = files.includes('latest.yml');
-    if (hasLatestYml) {
-      console.log(`[Server] ✅ latest.yml found in UPDATES_DIR`);
-    } else {
-      console.warn(`[Server] ⚠️ latest.yml NOT found in UPDATES_DIR`);
-      console.warn(`[Server] ⚠️ Files in UPDATES_DIR:`, files.length > 0 ? files.join(', ') : '(empty)');
-      console.warn(`[Server] ⚠️ To enable auto-updates, copy latest.yml and installer files to: ${UPDATES_DIR}`);
-    }
   })
   .catch((error) => {
     console.error(`[Server] ❌ Error checking UPDATES_DIR: ${UPDATES_DIR}`, error);
   })
   .finally(() => {
-app.listen(PORT, '0.0.0.0', () => {
-      console.log(`[Server] ========================================`);
-      console.log(`[Server] Storage server running on port ${PORT}`);
-      console.log(`[Server] DATA_DIR: ${DATA_DIR}`);
-      console.log(`[Server] ROOT_DIR: ${ROOT_DIR}`);
-      console.log(`[Server] Update files directory: ${UPDATES_DIR}`);
-      console.log(`[Server] Update endpoint: http://localhost:${PORT}/api/updates/latest`);
-      console.log(`[Server] Update endpoint (with .yml): http://localhost:${PORT}/api/updates/latest.yml`);
-      console.log(`[Server] ========================================`);
+    const server = app.listen(PORT, '0.0.0.0', () => {
     });
-});
+    
+    // Set server timeout untuk upload file besar (60 menit)
+    server.timeout = 60 * 60 * 1000; // 60 menit
+    server.keepAliveTimeout = 60 * 60 * 1000; // 60 menit
+    server.headersTimeout = 60 * 60 * 1000; // 60 menit
+  });
 

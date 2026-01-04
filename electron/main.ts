@@ -819,7 +819,7 @@ ipcMain.handle('focus-main-window', async () => {
 });
 
 // Save PDF file with file picker
-ipcMain.handle('save-pdf', async (event, htmlContent: string, defaultFileName: string) => {
+ipcMain.handle('save-pdf', async (event, htmlContent: string, defaultFileName: string, pageSize: string = 'A4') => {
   let pdfWindow: BrowserWindow | null = null;
   let tempHtmlPath: string | undefined = undefined;
   try {
@@ -920,9 +920,16 @@ ipcMain.handle('save-pdf', async (event, htmlContent: string, defaultFileName: s
 
     console.log('Content loaded, generating PDF...');
 
-    // Generate PDF with Letter size
+    // Map page size to Electron format
+    // Supported: A4, A5, Letter, Legal, Tabloid, Ledger
+    const validPageSizes = ['A4', 'A5', 'Letter', 'Legal', 'Tabloid', 'Ledger'];
+    const selectedPageSize = validPageSizes.includes(pageSize) ? pageSize : 'A4';
+    
+    console.log(`Generating PDF with page size: ${selectedPageSize}`);
+
+    // Generate PDF with selected page size
     const pdfData = await pdfWindow.webContents.printToPDF({
-      pageSize: 'Letter',
+      pageSize: selectedPageSize as any,
       margins: {
         top: 0.4,
         bottom: 0.4,
@@ -1008,15 +1015,15 @@ autoUpdater.autoInstallOnAppQuit = true; // Auto install on quit
 
 // Set update server URL (only in production)
 // Note: Don't set in development to avoid certificate errors
+// Server URL akan di-set saat check-for-updates dipanggil (dari storage config)
 if (app.isPackaged) {
-  // Try to get update server URL from environment or config
-  // Default: use same server as storage server if available
-  const updateServerUrl = process.env.UPDATE_SERVER_URL || 
+  // Default server URL (akan di-override saat check-for-updates dengan server dari config)
+  const defaultServerUrl = process.env.UPDATE_SERVER_URL || 
     process.env.SERVER_URL || 
     'https://server-tljp.tail75a421.ts.net';
   
   // Remove port from Tailscale URLs
-  const cleanUrl = updateServerUrl.replace(/:\d+$/, '');
+  const cleanUrl = defaultServerUrl.replace(/:\d+$/, '');
   const isTailscale = cleanUrl.includes('.ts.net');
   const protocol = isTailscale ? 'https' : 'http';
   const baseUrl = cleanUrl.startsWith('http') ? cleanUrl : `${protocol}://${cleanUrl}`;
@@ -1026,13 +1033,14 @@ if (app.isPackaged) {
   const feedUrl = `${baseUrl}/api/updates/`;
   // Set feed URL with provider: generic
   // IMPORTANT: Set channel to 'latest' to avoid looking for app-update.yml locally
+  // Note: URL ini akan di-update saat check-for-updates dengan server dari storage config
   autoUpdater.setFeedURL({ 
     provider: 'generic',
     url: feedUrl,
     channel: 'latest'
   });
-  console.log(`[Auto-Updater] Update server: ${feedUrl}`);
-  console.log(`[Auto-Updater] Will check: ${feedUrl}latest.yml`);
+  console.log(`[Auto-Updater] Initial update server: ${feedUrl}`);
+  console.log(`[Auto-Updater] Will use server from storage config when checking for updates`);
   console.log(`[Auto-Updater] Certificate verification disabled for Tailscale funnel`);
   
   // Suppress local app-update.yml errors (file is on server, not local)
@@ -1115,6 +1123,46 @@ autoUpdater.on('update-downloaded', (info) => {
   }
 });
 
+// Helper function to get server URL from storage config
+async function getServerUrlFromConfig(): Promise<string | null> {
+  try {
+    // Get data directory
+    const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+    const dataDir = isDev 
+      ? path.join(__dirname, '..', 'data')
+      : path.join(process.resourcesPath || app.getAppPath(), 'data');
+    
+    const configPath = path.join(dataDir, 'localStorage', 'storage_config.json');
+    
+    try {
+      const configContent = await fs.promises.readFile(configPath, 'utf8');
+      const config = JSON.parse(configContent);
+      
+      // Extract serverUrl from config (handle both wrapped and direct format)
+      let serverUrl = null;
+      if (config && typeof config === 'object') {
+        if (config.value && config.value.serverUrl) {
+          serverUrl = config.value.serverUrl;
+        } else if (config.serverUrl) {
+          serverUrl = config.serverUrl;
+        }
+      }
+      
+      if (serverUrl) {
+        console.log(`[Auto-Updater] Found server URL from config: ${serverUrl}`);
+        return serverUrl;
+      }
+    } catch (error: any) {
+      // Config file doesn't exist or invalid, use default
+      console.log(`[Auto-Updater] Config file not found or invalid, using default server URL`);
+    }
+  } catch (error: any) {
+    console.log(`[Auto-Updater] Error reading config: ${error.message}`);
+  }
+  
+  return null;
+}
+
 // IPC handlers for update
 ipcMain.handle('check-for-updates', async () => {
   try {
@@ -1122,21 +1170,30 @@ ipcMain.handle('check-for-updates', async () => {
       return { success: false, message: 'Updates only available in production' };
     }
     
-    // Ensure feed URL is set before checking
-    const updateServerUrl = process.env.UPDATE_SERVER_URL || 
-      process.env.SERVER_URL || 
-      'https://server-tljp.tail75a421.ts.net';
+    // Try to get server URL from storage config first, then fallback to env/default
+    let updateServerUrl = await getServerUrlFromConfig();
     
-    const cleanUrl = updateServerUrl.replace(/:\d+$/, '');
+    if (!updateServerUrl) {
+      updateServerUrl = process.env.UPDATE_SERVER_URL || 
+        process.env.SERVER_URL || 
+        'https://server-tljp.tail75a421.ts.net';
+    }
+    
+    // Normalize URL: remove port, handle protocol
+    let cleanUrl = updateServerUrl.replace(/:\d+$/, '').replace(/^https?:\/\//, '');
     const isTailscale = cleanUrl.includes('.ts.net');
     const protocol = isTailscale ? 'https' : 'http';
-    const baseUrl = cleanUrl.startsWith('http') ? cleanUrl : `${protocol}://${cleanUrl}`;
+    const baseUrl = `${protocol}://${cleanUrl}`;
+    
+    // electron-updater akan append /latest.yml ke feed URL
+    // Jadi kita set ke /api/updates/ supaya jadi /api/updates/latest.yml
     const feedUrl = `${baseUrl}/api/updates/`;
     
     // Re-set feed URL to ensure it's correct
     autoUpdater.setFeedURL({ 
       provider: 'generic',
-      url: feedUrl 
+      url: feedUrl,
+      channel: 'latest'
     });
     
     console.log(`[Auto-Updater] Checking for updates from: ${feedUrl}latest.yml`);
@@ -1183,8 +1240,21 @@ ipcMain.handle('get-app-version', () => {
   return app.getVersion();
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   console.log('Electron app ready, creating window...');
+  
+  // Install React DevTools extension (only in development)
+  const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+  if (isDev) {
+    try {
+      const { default: installExtension, REACT_DEVELOPER_TOOLS } = require('electron-devtools-installer');
+      await installExtension(REACT_DEVELOPER_TOOLS)
+        .then((name: string) => console.log(`✓ Installed React DevTools: ${name}`))
+        .catch((err: Error) => console.log('⚠ Could not install React DevTools:', err.message));
+    } catch (error: any) {
+      console.log('⚠ Could not load electron-devtools-installer:', error?.message || error);
+    }
+  }
   
   // Handle certificate verification at session level (for all requests)
   // This suppresses certificate errors for Tailscale funnel

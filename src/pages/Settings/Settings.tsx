@@ -81,11 +81,23 @@ const Settings = () => {
   const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   useEffect(() => {
-    // Load app version
+    // Load app version (Electron atau Capacitor)
     if (window.electronAPI?.getAppVersion) {
+      // Desktop (Electron)
       window.electronAPI.getAppVersion().then((version: string) => {
         setAppVersion(version);
       });
+    } else if ((window as any).Capacitor) {
+      // Mobile (Capacitor) - get version from package.json via fetch
+      fetch('/package.json').then(res => res.json()).then((pkg: any) => {
+        setAppVersion(pkg.version || '1.0.0');
+      }).catch(() => {
+        // Fallback: use hardcoded version
+        setAppVersion('1.0.6');
+      });
+    } else {
+      // Web - use hardcoded version
+      setAppVersion('1.0.6');
     }
 
     // Listen for update status
@@ -323,10 +335,12 @@ const Settings = () => {
     setUpdateStatus(null);
     setUpdateProgress(null);
     try {
-      const result = await window.electronAPI.checkForUpdates();
-      if (!result.success) {
-        showAlert(result.message || 'Failed to check for updates', 'Error');
-        setCheckingUpdate(false);
+      if (window.electronAPI?.checkForUpdates) {
+        const result = await window.electronAPI.checkForUpdates();
+        if (!result.success) {
+          showAlert(result.message || 'Failed to check for updates', 'Error');
+          setCheckingUpdate(false);
+        }
       }
     } catch (error: any) {
       showAlert(`Error: ${error.message}`, 'Error');
@@ -335,31 +349,152 @@ const Settings = () => {
   };
 
   const handleDownloadUpdate = async () => {
-    if (!window.electronAPI?.downloadUpdate) return;
-    try {
-      const result = await window.electronAPI.downloadUpdate();
-      if (!result.success) {
-        showAlert(result.message || 'Failed to download update', 'Error');
+    // Desktop (Electron)
+    if (window.electronAPI?.downloadUpdate) {
+      try {
+        const result = await window.electronAPI.downloadUpdate();
+        if (!result.success) {
+          showAlert(result.message || 'Failed to download update', 'Error');
+        }
+      } catch (error: any) {
+        showAlert(`Error: ${error.message}`, 'Error');
       }
+      return;
+    }
+    
+    // Mobile (Capacitor) - download APK
+    if ((window as any).Capacitor) {
+      await downloadMobileUpdate();
+      return;
+    }
+    
+    showAlert('Download update not available', 'Information');
+  };
+
+  const downloadMobileUpdate = async () => {
+    try {
+      if (!updateStatus?.version) {
+        showAlert('No update available', 'Information');
+        return;
+      }
+      
+      // Get server URL
+      const config: any = await storageService.get('storage_config');
+      let serverUrl = 'https://server-tljp.tail75a421.ts.net';
+      
+      if (config && (config as any).serverUrl) {
+        serverUrl = (config as any).serverUrl.replace(/:\d+$/, '');
+      }
+      
+      // Find APK file name from latest.yml
+      const updateUrl = `${serverUrl}/api/updates/latest.yml`;
+      const response = await fetch(updateUrl);
+      const ymlContent = await response.text();
+      
+      // Parse APK filename from YAML
+      const apkMatch = ymlContent.match(/url:\s*([^\n]+\.apk)/);
+      if (!apkMatch) {
+        // Fallback: try to find any .apk file
+        const filesMatch = ymlContent.match(/- url:\s*([^\n]+)/g);
+        if (filesMatch) {
+          for (const match of filesMatch) {
+            if (match.includes('.apk')) {
+              const apkFile = match.replace(/- url:\s*/, '').trim();
+              await downloadAndInstallAPK(serverUrl, apkFile);
+              return;
+            }
+          }
+        }
+        throw new Error('APK file not found in update info');
+      }
+      
+      const apkFile = apkMatch[1].trim();
+      await downloadAndInstallAPK(serverUrl, apkFile);
     } catch (error: any) {
       showAlert(`Error: ${error.message}`, 'Error');
     }
   };
 
-  const handleInstallUpdate = async () => {
-    if (!window.electronAPI?.installUpdate) return;
-    showConfirm(
-      'Aplikasi akan restart untuk menginstall update. Lanjutkan?',
-      async () => {
-        try {
-          await window.electronAPI.installUpdate();
-        } catch (error: any) {
-          showAlert(`Error: ${error.message}`, 'Error');
+  const downloadAndInstallAPK = async (serverUrl: string, apkFile: string) => {
+    try {
+      setUpdateProgress({ percent: 0 });
+      
+      const apkUrl = `${serverUrl}/api/updates/${apkFile}`;
+      
+      // Download APK
+      const response = await fetch(apkUrl);
+      if (!response.ok) {
+        throw new Error('Failed to download APK');
+      }
+      
+      const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+      const reader = response.body?.getReader();
+      const chunks: Uint8Array[] = [];
+      let receivedLength = 0;
+      
+      if (!reader) {
+        throw new Error('Failed to read response');
+      }
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        chunks.push(value);
+        receivedLength += value.length;
+        
+        if (contentLength > 0) {
+          const percent = Math.round((receivedLength / contentLength) * 100);
+          setUpdateProgress({ percent });
         }
-      },
-      undefined,
-      'Confirm Update'
-    );
+      }
+      
+      // Combine chunks (fix type for Blob)
+      const blob = new Blob(chunks as BlobPart[], { type: 'application/vnd.android.package-archive' });
+      const url = URL.createObjectURL(blob);
+      
+      // Open APK for installation (Android will handle it)
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = apkFile;
+      link.click();
+      
+      setUpdateStatus({
+        status: 'downloaded',
+        message: 'APK downloaded. Please install manually.',
+        version: updateStatus?.version
+      });
+      setUpdateProgress(null);
+      
+      showAlert('APK downloaded. Please install it manually from your downloads folder.', 'Information');
+    } catch (error: any) {
+      showAlert(`Error downloading APK: ${error.message}`, 'Error');
+      setUpdateProgress(null);
+    }
+  };
+
+  const handleInstallUpdate = async () => {
+    // Desktop (Electron)
+    if (window.electronAPI?.installUpdate) {
+      showConfirm(
+        'Aplikasi akan restart untuk menginstall update. Lanjutkan?',
+        async () => {
+          try {
+            if (window.electronAPI?.installUpdate) {
+              await window.electronAPI.installUpdate();
+            }
+          } catch (error: any) {
+            showAlert(`Error: ${error.message}`, 'Error');
+          }
+        },
+        undefined,
+        'Confirm Update'
+      );
+      return;
+    }
+    
+    // Mobile - APK sudah di-download, user install manual
+    showAlert('Please install the downloaded APK manually from your downloads folder.', 'Information');
   };
 
   return (
