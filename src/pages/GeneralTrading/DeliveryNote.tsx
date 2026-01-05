@@ -6,10 +6,11 @@ import Input from '../../components/Input';
 import ScheduleTable from '../../components/ScheduleTable';
 import NotificationBell from '../../components/NotificationBell';
  import { storageService, extractStorageValue } from '../../services/storage';
-import { generateSuratJalanHtml } from '../../pdf/suratjalan-pdf-template';
+import { generateSuratJalanHtml, generateGTDeliveryNoteHtml } from '../../pdf/suratjalan-pdf-template';
 import { openPrintWindow } from '../../utils/actions';
 import { useDialog } from '../../hooks/useDialog';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
+import { PageSizeDialog, PageSize } from '../../components/PageSizeDialog';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
 import '../../styles/common.css';
@@ -18,8 +19,10 @@ import '../../styles/compact.css';
 interface DeliveryNoteItem {
   spkNo?: string;
   product: string;
+  productCode?: string; // Product code/kode
   qty: number;
   unit?: string;
+  soNo?: string; // SO number for this item
 }
 
 export interface DeliveryNote {
@@ -27,6 +30,10 @@ export interface DeliveryNote {
   sjNo?: string;
   soNo: string;
   customer: string;
+  customerAddress?: string; // Customer address untuk template Surat Jalan
+  customerPIC?: string; // PIC (Person In Charge) customer untuk template Surat Jalan (muncul di bawah alamat customer)
+  customerPhone?: string; // Customer phone untuk template Surat Jalan
+  picProgram?: string; // PIC Program untuk Template 2 (GT Delivery Note) - terpisah dari customerPIC
   product?: string; // Deprecated - use items instead
   qty?: number; // Deprecated - use items instead
   items?: DeliveryNoteItem[]; // Array of products for this delivery (required for new format)
@@ -40,6 +47,15 @@ export interface DeliveryNote {
   vehicleNo?: string;
   spkNo?: string; // Deprecated - use items instead
   deliveryDate?: string; // Delivery date from schedule
+  productCodeDisplay?: 'padCode' | 'productId'; // Pilihan untuk menampilkan Pad Code atau Product ID di template SJ (default: 'padCode')
+  specNote?: string; // Keterangan untuk template Surat Jalan (akan muncul di bagian Keterangan)
+  // Signature fields untuk Template 2 (GT Delivery Note)
+  senderName?: string; // Sender name untuk signature
+  senderTitle?: string; // Sender title untuk signature
+  senderDate?: string; // Sender date untuk signature
+  receiverName?: string; // Receiver name untuk signature
+  receiverTitle?: string; // Receiver title untuk signature
+  receiverDate?: string; // Receiver date untuk signature
 }
 
 // ActionMenu component untuk Delivery Note (dropdown 3 titik)
@@ -377,8 +393,10 @@ const DeliveryNote = () => {
     loadSPKData();
   }, []);
   const [showForm, setShowForm] = useState(false);
+  const [showCreateDeliveryNoteDialog, setShowCreateDeliveryNoteDialog] = useState(false);
   const [selectedDelivery, setSelectedDelivery] = useState<DeliveryNote | null>(null);
-  const [viewPdfData, setViewPdfData] = useState<{ html: string; sjNo: string } | null>(null);
+  const [viewPdfData, setViewPdfData] = useState<{ html: string; sjNo: string; templateType?: string } | null>(null);
+  const [templateType, setTemplateType] = useState<'template1' | 'template2'>('template1');
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [deliveryViewMode, setDeliveryViewMode] = useState<'cards' | 'table'>('cards');
@@ -396,6 +414,7 @@ const DeliveryNote = () => {
   });
   const [selectedSoProducts, setSelectedSoProducts] = useState<Array<{productName: string; productKode?: string; qty: number}>>([]);
   const [selectedItemsForDelivery, setSelectedItemsForDelivery] = useState<{ [key: string]: { product: string; productKode?: string; qty: number; soQty: number; soNo: string } }>({});
+  const [showPageSizeDialog, setShowPageSizeDialog] = useState(false);
   // Custom Dialog - menggunakan hook terpusat
   const { showAlert: showAlertBase, showConfirm: showConfirmBase, closeDialog, DialogComponent } = useDialog();
   
@@ -1373,22 +1392,7 @@ const DeliveryNote = () => {
   };
 
   const handleCreate = () => {
-    setCustomerInputValue('');
-    setSoInputValue('');
-    setSelectedDelivery(null);
-    setSelectedSoProducts([]);
-    setSelectedItemsForDelivery({});
-    setFormData({
-      soNo: '',
-      customer: '',
-      product: '',
-      qty: 0,
-      driver: '',
-      vehicleNo: '',
-      deliveryDate: '',
-      items: [],
-    });
-    setShowForm(true);
+    setShowCreateDeliveryNoteDialog(true);
   };
 
   const handleEdit = (item: DeliveryNote) => {
@@ -1982,13 +1986,14 @@ const DeliveryNote = () => {
   };
 
 
-  const generateSuratJalanHtmlContent = async (item: DeliveryNote): Promise<string> => {
+  const generateSuratJalanHtmlContent = async (item: DeliveryNote, template: 'template1' | 'template2' = 'template1'): Promise<string> => {
     // Load customer data untuk mendapatkan alamat, PIC, dan telepon
+    // Prioritaskan data dari delivery note, fallback ke customer data
     const customerData = customers.find(c => c.nama === item.customer);
     const customerName = item.customer || '-';
-    const customerPIC = customerData?.kontak || '-';
-    const customerPhone = customerData?.telepon || '-';
-    const customerAddress = customerData?.alamat || '-';
+    const customerPIC = item.customerPIC || customerData?.kontak || '-';
+    const customerPhone = item.customerPhone || customerData?.telepon || '-';
+    const customerAddress = item.customerAddress || customerData?.alamat || '-';
 
     // Load SO data untuk mendapatkan specNote dan items
     const soData = salesOrders.find(so => so.soNo === item.soNo);
@@ -2055,10 +2060,18 @@ const DeliveryNote = () => {
       customerPIC,
       customerPhone,
       customerAddress,
+      picProgram: item.picProgram, // PIC Program untuk Template 2
       product: item.items && item.items.length > 0 ? item.items[0].product : (item.product || ''),
       qtyProduced: soLines.length > 0 ? String(soLines[0].qty || 0) : String(qtyProduced), // Gunakan qty dari soLines[0], bukan total
       specNote,
       soLines, // Semua items dengan qty masing-masing
+      // Signature fields untuk Template 2
+      senderName: item.senderName,
+      senderTitle: item.senderTitle,
+      senderDate: item.senderDate,
+      receiverName: item.receiverName,
+      receiverTitle: item.receiverTitle,
+      receiverDate: item.receiverDate,
     };
 
     // Prepare SJ data
@@ -2069,7 +2082,18 @@ const DeliveryNote = () => {
       vehicleNo: item.vehicleNo || '',
     };
 
-    // Generate HTML using template
+    // Generate HTML using template berdasarkan pilihan
+    if (template === 'template2') {
+      return generateGTDeliveryNoteHtml({
+        logo,
+        company,
+        item: suratJalanItem,
+        sjData,
+        products,
+      });
+    }
+    
+    // Default: template1
     return generateSuratJalanHtml({
       logo,
       company,
@@ -2081,14 +2105,30 @@ const DeliveryNote = () => {
 
   const handleViewDetail = async (item: DeliveryNote) => {
     try {
-      const html = await generateSuratJalanHtmlContent(item);
-      setViewPdfData({ html, sjNo: item.sjNo || '' });
+      const html = await generateSuratJalanHtmlContent(item, templateType);
+      setViewPdfData({ html, sjNo: item.sjNo || '', templateType });
     } catch (error: any) {
       showAlert('Error', `Error generating Surat Jalan preview: ${error.message}`);
     }
   };
 
-  const handleSaveToPDF = async () => {
+  const handleTemplateChange = async (newTemplate: 'template1' | 'template2') => {
+    setTemplateType(newTemplate);
+    if (viewPdfData) {
+      // Reload dengan template baru
+      const currentDelivery = deliveries.find(d => d.sjNo === viewPdfData.sjNo);
+      if (currentDelivery) {
+        try {
+          const html = await generateSuratJalanHtmlContent(currentDelivery, newTemplate);
+          setViewPdfData({ html, sjNo: viewPdfData.sjNo, templateType: newTemplate });
+        } catch (error: any) {
+          showAlert('Error', `Error generating Surat Jalan preview: ${error.message}`);
+        }
+      }
+    }
+  };
+
+  const handleSaveToPDF = async (pageSize: PageSize = 'A5') => {
     if (!viewPdfData) return;
 
     try {
@@ -2098,7 +2138,7 @@ const DeliveryNote = () => {
       // Check if Electron API is available (for file picker)
       if (electronAPI && typeof electronAPI.savePdf === 'function') {
         // Electron: Use file picker to select save location, then convert HTML to PDF and save
-        const result = await electronAPI.savePdf(viewPdfData.html, fileName);
+        const result = await electronAPI.savePdf(viewPdfData.html, fileName, pageSize);
         if (result.success) {
           showAlert('Success', `PDF saved successfully to:\n${result.path}`);
           setViewPdfData(null);
@@ -2115,6 +2155,10 @@ const DeliveryNote = () => {
     } catch (error: any) {
       showAlert('Error', `Error saving PDF: ${error.message}`);
     }
+  };
+
+  const handleShowPageSizeDialog = () => {
+    setShowPageSizeDialog(true);
   };
 
   const handlePrint = async (item: DeliveryNote) => {
@@ -4363,6 +4407,68 @@ const DeliveryNote = () => {
       </Card>
 
       {/* Edit SJ Dialog */}
+      {/* Create Delivery Note Dialog */}
+      {showCreateDeliveryNoteDialog && (
+        <CreateDeliveryNoteDialog
+          deliveries={deliveries}
+          salesOrders={salesOrders}
+          customers={customers}
+          products={products}
+          onClose={() => setShowCreateDeliveryNoteDialog(false)}
+          onCreate={async (data) => {
+            try {
+              // Generate random SJ number
+              const now = new Date();
+              const year = String(now.getFullYear()).slice(-2);
+              const month = String(now.getMonth() + 1).padStart(2, '0');
+              const day = String(now.getDate()).padStart(2, '0');
+              const randomCode = Math.random().toString(36).substr(2, 5).toUpperCase();
+              const sjNo = `SJ-${year}${month}${day}-${randomCode}`;
+              
+              const newDelivery: DeliveryNote = {
+                id: Date.now().toString(),
+                sjNo,
+                soNo: data.soNo || '',
+                customer: data.customer || '',
+                customerAddress: data.customerAddress,
+                customerPIC: data.customerPIC,
+                customerPhone: data.customerPhone,
+                picProgram: data.picProgram,
+                items: data.items || [],
+                status: 'OPEN' as const,
+                driver: data.driver || '',
+                vehicleNo: data.vehicleNo || '',
+                deliveryDate: data.deliveryDate || undefined,
+                productCodeDisplay: data.productCodeDisplay,
+                specNote: data.specNote,
+                senderName: data.senderName,
+                senderTitle: data.senderTitle,
+                senderDate: data.senderDate,
+                receiverName: data.receiverName,
+                receiverTitle: data.receiverTitle,
+                receiverDate: data.receiverDate,
+              };
+              
+              const updated = [...deliveries, newDelivery];
+              await storageService.set('gt_delivery', updated);
+              setDeliveries(updated);
+              
+              // Update inventory - TAMBAHKAN OUTGOING untuk product yang dikirim
+              try {
+                await updateInventoryFromDelivery(newDelivery);
+              } catch (error: any) {
+                // Jangan block proses, tapi log error
+              }
+              
+              setShowCreateDeliveryNoteDialog(false);
+              showAlert('Success', `✅ Delivery Note created: ${sjNo}\n\nFrom SO: ${data.soNo}\nItems: ${data.items?.length || 0} product(s)\nTotal Qty: ${data.items?.reduce((sum: number, item: any) => sum + (item.qty || 0), 0) || 0} PCS\n✅ Inventory updated (outgoing)`);
+            } catch (error: any) {
+              showAlert('Error', `Error creating Delivery Note: ${error.message}`);
+            }
+          }}
+        />
+      )}
+
       {selectedDelivery && (
         <EditSJDialog
           delivery={selectedDelivery}
@@ -4401,7 +4507,7 @@ const DeliveryNote = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <h2>Preview Surat Jalan - {viewPdfData.sjNo}</h2>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <Button variant="primary" onClick={handleSaveToPDF}>
+                  <Button variant="primary" onClick={handleShowPageSizeDialog}>
                     💾 Save to PDF
                   </Button>
                   <Button variant="secondary" onClick={() => setViewPdfData(null)}>
@@ -4409,6 +4515,52 @@ const DeliveryNote = () => {
                   </Button>
                 </div>
               </div>
+              
+              {/* Template Selection */}
+              <div style={{ marginBottom: '16px', padding: '16px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <label style={{ display: 'block', marginBottom: '12px', fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>
+                  📄 Pilih Template Surat Jalan
+                </label>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    type="button"
+                    onClick={() => handleTemplateChange('template1')}
+                    style={{
+                      flex: 1,
+                      padding: '12px 16px',
+                      border: `2px solid ${templateType === 'template1' ? 'var(--primary-color)' : 'var(--border-color)'}`,
+                      borderRadius: '6px',
+                      backgroundColor: templateType === 'template1' ? 'var(--primary-color)' : 'var(--bg-primary)',
+                      color: templateType === 'template1' ? '#fff' : 'var(--text-primary)',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: templateType === 'template1' ? '600' : '400',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    Template 1 (Default)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTemplateChange('template2')}
+                    style={{
+                      flex: 1,
+                      padding: '12px 16px',
+                      border: `2px solid ${templateType === 'template2' ? 'var(--primary-color)' : 'var(--border-color)'}`,
+                      borderRadius: '6px',
+                      backgroundColor: templateType === 'template2' ? 'var(--primary-color)' : 'var(--bg-primary)',
+                      color: templateType === 'template2' ? '#fff' : 'var(--text-primary)',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: templateType === 'template2' ? '600' : '400',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    Template 2 (Delivery Note)
+                  </button>
+                </div>
+              </div>
+              
               <iframe
                 srcDoc={viewPdfData.html}
                 style={{
@@ -4426,16 +4578,63 @@ const DeliveryNote = () => {
 
       {/* Custom Dialog - menggunakan hook terpusat */}
       <DialogComponent />
+      {showPageSizeDialog && (
+        <PageSizeDialog
+          defaultSize="A5"
+          onConfirm={(size) => {
+            setShowPageSizeDialog(false);
+            handleSaveToPDF(size);
+          }}
+          onCancel={() => setShowPageSizeDialog(false)}
+        />
+      )}
     </div>
   );
 };
 
 // Edit SJ Dialog Component
 const EditSJDialog = ({ delivery, onClose, onSave }: { delivery: DeliveryNote; onClose: () => void; onSave: (data: Partial<DeliveryNote>) => void }) => {
+  const { showAlert: showAlertBase } = useDialog();
+  const showAlert = (title: string, message: string) => {
+    showAlertBase(message, title);
+  };
+  
   const [driver, setDriver] = useState(delivery.driver || '');
   const [vehicleNo, setVehicleNo] = useState(delivery.vehicleNo || '');
   const [deliveryDate, setDeliveryDate] = useState(delivery.deliveryDate ? delivery.deliveryDate.split('T')[0] : '');
+  const [customer, setCustomer] = useState(delivery.customer || '');
+  const [customerInputValue, setCustomerInputValue] = useState(delivery.customer || '');
+  const [customerAddress, setCustomerAddress] = useState(delivery.customerAddress || '');
+  const [customerPIC, setCustomerPIC] = useState(delivery.customerPIC || '');
+  const [customerPhone, setCustomerPhone] = useState(delivery.customerPhone || '');
+  const [picProgram, setPicProgram] = useState(delivery.picProgram || '');
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [soNo, setSoNo] = useState(delivery.soNo || '');
+  const [productCodeDisplay, setProductCodeDisplay] = useState<'padCode' | 'productId'>(delivery.productCodeDisplay || 'padCode');
+  const [specNote, setSpecNote] = useState(delivery.specNote || '');
+  const [items, setItems] = useState<DeliveryNoteItem[]>(delivery.items && delivery.items.length > 0 ? delivery.items : (delivery.product ? [{ product: delivery.product, qty: delivery.qty || 0, unit: 'PCS', spkNo: delivery.spkNo, soNo: delivery.soNo }] : []));
+  // Signature fields untuk Template 2
+  const [senderName, setSenderName] = useState(delivery.senderName || '');
+  const [senderTitle, setSenderTitle] = useState(delivery.senderTitle || '');
+  const [senderDate, setSenderDate] = useState(delivery.senderDate ? delivery.senderDate.split('T')[0] : '');
+  const [receiverName, setReceiverName] = useState(delivery.receiverName || '');
+  const [receiverTitle, setReceiverTitle] = useState(delivery.receiverTitle || '');
+  const [receiverDate, setReceiverDate] = useState(delivery.receiverDate ? delivery.receiverDate.split('T')[0] : '');
   const [signedFile, setSignedFile] = useState<File | null>(null);
+  const [products, setProducts] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [productSearch, setProductSearch] = useState<{ [key: number]: string }>({});
+  const [showProductDropdown, setShowProductDropdown] = useState<{ [key: number]: boolean }>({});
+  
+  useEffect(() => {
+    const loadData = async () => {
+      const productsData = await storageService.get<any[]>('gt_products') || [];
+      const customersData = await storageService.get<Customer[]>('gt_customers') || [];
+      setProducts(productsData);
+      setCustomers(customersData);
+    };
+    loadData();
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -4444,22 +4643,208 @@ const EditSJDialog = ({ delivery, onClose, onSave }: { delivery: DeliveryNote; o
     }
   };
 
+  const handleAddItem = () => {
+    setItems([...items, { product: '', qty: 0, unit: 'PCS', spkNo: '', soNo: soNo }]);
+  };
+
+  const handleRemoveItem = (index: number) => {
+    const updated = items.filter((_, idx) => idx !== index);
+    setItems(updated);
+    // Cleanup search state
+    const newSearch = { ...productSearch };
+    delete newSearch[index];
+    setProductSearch(newSearch);
+    const newDropdown = { ...showProductDropdown };
+    delete newDropdown[index];
+    setShowProductDropdown(newDropdown);
+  };
+
+  // Get filtered products for search
+  const getFilteredProducts = (index: number) => {
+    const search = productSearch[index] || '';
+    if (!search) return products.slice(0, 10);
+    
+    const searchLower = search.toLowerCase();
+    return products.filter((p: any) => {
+      const name = (p.nama || '').toLowerCase();
+      const code = (p.kode || p.product_id || '').toLowerCase();
+      return name.includes(searchLower) || code.includes(searchLower);
+    }).slice(0, 10);
+  };
+
+  const handleItemChange = (index: number, field: keyof DeliveryNoteItem, value: any) => {
+    const updated = [...items];
+    updated[index] = { ...updated[index], [field]: value };
+    setItems(updated);
+  };
+
+  // Handle product selection
+  const handleSelectProduct = (index: number, product: any) => {
+    const updated = [...items];
+    updated[index] = {
+      ...updated[index],
+      product: product.nama || '',
+      productCode: product.kode || product.product_id || '',
+      unit: product.unit || 'PCS',
+    };
+    setItems(updated);
+    // Clear search and close dropdown
+    setProductSearch({ ...productSearch, [index]: '' });
+    setShowProductDropdown({ ...showProductDropdown, [index]: false });
+  };
+
+  // Handle manual product input
+  const handleManualProductInput = (index: number, value: string) => {
+    const updated = [...items];
+    const productMatch = products.find((p: any) => 
+      p.nama?.toLowerCase() === value.toLowerCase() || 
+      p.kode?.toLowerCase() === value.toLowerCase()
+    );
+    updated[index] = {
+      ...updated[index],
+      product: value,
+      productCode: productMatch?.kode || productMatch?.product_id || updated[index].productCode,
+    };
+    setItems(updated);
+    setProductSearch({ ...productSearch, [index]: value });
+  };
+
+  // Handle customer input change with autocomplete
+  const handleCustomerInputChange = (text: string) => {
+    setCustomerInputValue(text);
+    setShowCustomerDropdown(true);
+    if (!text) {
+      setCustomer('');
+      setCustomerAddress('');
+      setCustomerPIC('');
+      setCustomerPhone('');
+      return;
+    }
+    const normalized = text.toLowerCase();
+    const matchedCustomer = customers.find(c => {
+      const label = `${c.kode || ''}${c.kode ? ' - ' : ''}${c.nama || ''}`.toLowerCase();
+      const code = (c.kode || '').toLowerCase();
+      const name = (c.nama || '').toLowerCase();
+      return label === normalized || code === normalized || name === normalized;
+    });
+    if (matchedCustomer) {
+      setCustomer(matchedCustomer.nama);
+      setCustomerAddress(matchedCustomer.alamat || '');
+      setCustomerPIC(matchedCustomer.kontak || '');
+      setCustomerPhone(matchedCustomer.telepon || '');
+    } else {
+      setCustomer(text);
+    }
+  };
+
+  // Get filtered customers for autocomplete
+  const getFilteredCustomers = () => {
+    if (!customerInputValue) return customers.slice(0, 10);
+    const searchLower = customerInputValue.toLowerCase();
+    return customers.filter(c => {
+      const label = `${c.kode || ''}${c.kode ? ' - ' : ''}${c.nama || ''}`.toLowerCase();
+      const code = (c.kode || '').toLowerCase();
+      const name = (c.nama || '').toLowerCase();
+      return label.includes(searchLower) || code.includes(searchLower) || name.includes(searchLower);
+    }).slice(0, 10);
+  };
+
+  // Handle customer selection from dropdown
+  const handleSelectCustomer = (selectedCustomer: any) => {
+    setCustomer(selectedCustomer.nama);
+    setCustomerAddress(selectedCustomer.alamat || '');
+    setCustomerPIC(selectedCustomer.kontak || '');
+    setCustomerPhone(selectedCustomer.telepon || '');
+    setCustomerInputValue(`${selectedCustomer.kode || ''}${selectedCustomer.kode ? ' - ' : ''}${selectedCustomer.nama}`);
+    setShowCustomerDropdown(false);
+  };
+
   const handleSave = async () => {
     let signedDocument = delivery.signedDocument;
     let signedDocumentName = delivery.signedDocumentName;
+    let signedDocumentPath: string | undefined = delivery.signedDocumentPath;
+    let signedDocumentType: 'pdf' | 'image' | undefined = delivery.signedDocumentType;
 
     const updateData: Partial<DeliveryNote> = {
       driver,
       vehicleNo,
       deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : undefined,
+      customer,
+      customerAddress: customerAddress || undefined,
+      customerPIC: customerPIC || undefined,
+      customerPhone: customerPhone || undefined,
+      picProgram: picProgram || undefined,
+      soNo,
+      productCodeDisplay: productCodeDisplay,
+      specNote: specNote || undefined,
+      items: items.length > 0 ? items : undefined,
+      // Signature fields untuk Template 2
+      senderName: senderName || undefined,
+      senderTitle: senderTitle || undefined,
+      senderDate: senderDate ? new Date(senderDate).toISOString() : undefined,
+      receiverName: receiverName || undefined,
+      receiverTitle: receiverTitle || undefined,
+      receiverDate: receiverDate ? new Date(receiverDate).toISOString() : undefined,
+      // Update deprecated fields for backward compatibility
+      product: items.length > 0 ? items[0].product : delivery.product,
+      qty: items.length > 0 ? items.reduce((sum, item) => sum + (item.qty || 0), 0) : delivery.qty,
     };
 
     if (signedFile) {
       const reader = new FileReader();
-      reader.onload = (e) => {
-        signedDocument = e.target?.result as string;
+      reader.onload = async (e) => {
+        const base64 = e.target?.result as string;
+        
+        // Deteksi tipe file
+        const isPDF = signedFile.name.toLowerCase().endsWith('.pdf') || signedFile.type === 'application/pdf';
+        
+        // Untuk PDF, simpan sebagai file di file system (karena terlalu besar untuk localStorage)
+        // Untuk image, tetap simpan sebagai base64 (lebih kecil)
+        if (isPDF) {
+          // PDF: Simpan sebagai file di Electron, atau base64 di mobile jika kecil
+          const electronAPI = (window as any).electronAPI;
+          if (electronAPI && typeof electronAPI.saveUploadedFile === 'function') {
+            try {
+              const result = await electronAPI.saveUploadedFile(base64, signedFile.name, 'pdf');
+              if (result.success) {
+                signedDocumentPath = result.path;
+                signedDocumentType = 'pdf';
+                signedDocument = undefined; // Clear base64 untuk PDF
+              } else {
+                showAlert('Error', `Failed to save PDF: ${result.error || 'Unknown error'}`);
+                return;
+              }
+            } catch (error: any) {
+              showAlert('Error', `Error saving PDF: ${error.message || 'Unknown error'}`);
+              return;
+            }
+          } else {
+            // Browser mode: coba simpan sebagai base64 jika kecil
+            const base64Size = base64.length;
+            if (base64Size > 5000000) { // 5MB limit
+              showAlert('Error', 'PDF terlalu besar (' + 
+                Math.round(base64Size / 1024 / 1024) + 'MB\n\nMaksimal ukuran: 5MB\n\nSilakan gunakan file PDF yang lebih kecil atau gunakan aplikasi desktop.');
+              return;
+            }
+            signedDocument = base64;
+            signedDocumentType = 'pdf';
+            signedDocumentPath = undefined;
+          }
+        } else {
+          // Image: Simpan sebagai base64 (biasanya lebih kecil)
+          signedDocument = base64;
+          signedDocumentType = 'image';
+          signedDocumentPath = undefined;
+        }
+        
         signedDocumentName = signedFile.name;
-        onSave({ ...updateData, signedDocument, signedDocumentName });
+        onSave({ 
+          ...updateData, 
+          signedDocument, 
+          signedDocumentName,
+          signedDocumentPath,
+          signedDocumentType,
+        });
       };
       reader.readAsDataURL(signedFile);
     } else {
@@ -4468,12 +4853,185 @@ const EditSJDialog = ({ delivery, onClose, onSave }: { delivery: DeliveryNote; o
   };
 
   return (
-    <div className="dialog-overlay" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%' }}>
+    <div className="dialog-overlay" onClick={() => { onClose(); }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
         <Card className="dialog-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <h2>Edit Surat Jalan - {delivery.sjNo}</h2>
-            <Button variant="secondary" onClick={onClose} style={{ padding: '6px 12px' }}>✕</Button>
+            <Button variant="secondary" onClick={() => { onClose(); }} style={{ padding: '6px 12px' }}>✕</Button>
+          </div>
+
+          <div style={{ marginBottom: '16px', position: 'relative' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+              Customer
+            </label>
+            <input
+              type="text"
+              list={`customer-list-edit-${delivery.id}`}
+              value={customerInputValue}
+              onChange={(e) => handleCustomerInputChange(e.target.value)}
+              onFocus={() => setShowCustomerDropdown(true)}
+              onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
+              placeholder="Type to search customer or enter manually"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-tertiary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            />
+            <datalist id={`customer-list-edit-${delivery.id}`}>
+              {customers.map((c: any) => (
+                <option key={c.id || c.nama} value={`${c.kode || ''}${c.kode ? ' - ' : ''}${c.nama || ''}`} />
+              ))}
+            </datalist>
+            {showCustomerDropdown && getFilteredCustomers().length > 0 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  backgroundColor: 'var(--bg-primary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '4px',
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                  zIndex: 1000,
+                  marginTop: '4px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                }}
+              >
+                {getFilteredCustomers().map((c: any) => (
+                  <div
+                    key={c.id || c.nama}
+                    onClick={() => handleSelectCustomer(c)}
+                    style={{
+                      padding: '8px 12px',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid var(--border-color)',
+                      fontSize: '13px',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--hover-bg)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--bg-primary)';
+                    }}
+                  >
+                    <div style={{ fontWeight: '500' }}>{c.nama}</div>
+                    {c.kode && (
+                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Code: {c.kode}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+              Customer Address
+            </label>
+            <textarea
+              value={customerAddress}
+              onChange={(e) => setCustomerAddress(e.target.value)}
+              placeholder="Enter customer address"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+                minHeight: '80px',
+                resize: 'vertical',
+                fontFamily: 'inherit',
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+                PIC (Person In Charge)
+              </label>
+              <Input
+                value={customerPIC}
+                onChange={setCustomerPIC}
+                placeholder="Enter PIC name"
+              />
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                PIC akan ditampilkan di template Surat Jalan
+              </div>
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+                Customer Phone
+              </label>
+              <Input
+                value={customerPhone}
+                onChange={setCustomerPhone}
+                placeholder="Enter customer phone"
+              />
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                Phone akan ditampilkan di template Surat Jalan
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+              PIC Program (Template 2 - GT Delivery Note)
+            </label>
+            <Input
+              value={picProgram}
+              onChange={setPicProgram}
+              placeholder="Enter PIC Program name"
+            />
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              PIC Program akan ditampilkan di bagian "PIC Program" pada Template 2 (GT Delivery Note). Bisa berbeda dari PIC di bawah alamat customer.
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+              SO No
+            </label>
+            <Input
+              value={soNo}
+              onChange={setSoNo}
+              placeholder="Enter SO number"
+            />
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+              Product Code Display (Template SJ)
+            </label>
+            <select
+              value={productCodeDisplay}
+              onChange={(e) => setProductCodeDisplay(e.target.value as 'padCode' | 'productId')}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-tertiary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            >
+              <option value="padCode">Pad Code (default, fallback ke Product ID jika tidak ada)</option>
+              <option value="productId">Product ID / SKU ID</option>
+            </select>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              Pilihan ini menentukan kode yang ditampilkan di kolom "PRODUCT CODE" pada template Surat Jalan
+            </div>
           </div>
 
           <div style={{ marginBottom: '16px' }}>
@@ -4518,6 +5076,252 @@ const EditSJDialog = ({ delivery, onClose, onSave }: { delivery: DeliveryNote; o
           </div>
 
           <div style={{ marginBottom: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <label style={{ fontSize: '14px', fontWeight: '500' }}>
+                Items
+              </label>
+              <Button variant="secondary" onClick={handleAddItem} style={{ fontSize: '12px', padding: '4px 8px' }}>
+                + Add Item
+              </Button>
+            </div>
+            <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '8px' }}>
+              {items.map((item, idx) => (
+                <div key={idx} style={{ marginBottom: '12px', padding: '8px', background: 'var(--bg-tertiary)', borderRadius: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <strong>Item {idx + 1}</strong>
+                    <Button variant="secondary" onClick={() => handleRemoveItem(idx)} style={{ fontSize: '11px', padding: '2px 6px', backgroundColor: '#f44336', color: 'white' }}>
+                      Remove
+                    </Button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                    <div style={{ position: 'relative' }}>
+                      <label style={{ fontSize: '12px', marginBottom: '4px', display: 'block' }}>
+                        Product
+                      </label>
+                      <input
+                        type="text"
+                        value={productSearch[idx] !== undefined ? productSearch[idx] : (item.product || '')}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setProductSearch({ ...productSearch, [idx]: value });
+                          setShowProductDropdown({ ...showProductDropdown, [idx]: true });
+                          handleManualProductInput(idx, value);
+                        }}
+                        onFocus={() => setShowProductDropdown({ ...showProductDropdown, [idx]: true })}
+                        onBlur={() => setTimeout(() => setShowProductDropdown({ ...showProductDropdown, [idx]: false }), 200)}
+                        placeholder="Type to search product or enter manually"
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '4px',
+                          backgroundColor: 'var(--bg-tertiary)',
+                          color: 'var(--text-primary)',
+                          fontSize: '13px',
+                        }}
+                      />
+                      {showProductDropdown[idx] && getFilteredProducts(idx).length > 0 && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            backgroundColor: 'var(--bg-primary)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '4px',
+                            maxHeight: '200px',
+                            overflowY: 'auto',
+                            zIndex: 1000,
+                            marginTop: '4px',
+                            boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                          }}
+                        >
+                          {getFilteredProducts(idx).map((p: any) => (
+                            <div
+                              key={p.id || p.nama}
+                              onClick={() => handleSelectProduct(idx, p)}
+                              style={{
+                                padding: '8px 12px',
+                                cursor: 'pointer',
+                                borderBottom: '1px solid var(--border-color)',
+                                fontSize: '12px',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--bg-primary)';
+                              }}
+                            >
+                              <div style={{ fontWeight: 500 }}>{p.nama || 'Unknown'}</div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                Code: {p.kode || p.product_id || '-'}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', marginBottom: '4px', display: 'block' }}>Product Code</label>
+                      <Input
+                        value={item.productCode || ''}
+                        onChange={(value) => handleItemChange(idx, 'productCode', value)}
+                        placeholder="Product code"
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', marginBottom: '4px', display: 'block' }}>Qty</label>
+                      <Input
+                        value={String(item.qty || 0)}
+                        onChange={(value) => handleItemChange(idx, 'qty', parseFloat(value) || 0)}
+                        placeholder="Quantity"
+                        type="number"
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', marginBottom: '4px', display: 'block' }}>Unit</label>
+                      <Input
+                        value={item.unit || 'PCS'}
+                        onChange={(value) => handleItemChange(idx, 'unit', value)}
+                        placeholder="Unit"
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', marginBottom: '4px', display: 'block' }}>SPK No</label>
+                      <Input
+                        value={item.spkNo || ''}
+                        onChange={(value) => handleItemChange(idx, 'spkNo', value)}
+                        placeholder="SPK number"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {items.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-secondary)' }}>
+                  No items. Click "Add Item" to add items.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+              Keterangan (akan muncul di template SJ)
+            </label>
+            <textarea
+              value={specNote}
+              onChange={(e) => setSpecNote(e.target.value)}
+              placeholder="Masukkan keterangan untuk Surat Jalan (No. SJ, Detail Product, dll)"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+                minHeight: '100px',
+                resize: 'vertical',
+                fontFamily: 'inherit',
+              }}
+            />
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              Keterangan ini akan ditampilkan di bagian "Keterangan" pada template Surat Jalan
+            </div>
+          </div>
+
+          {/* Signature Section untuk Template 2 (GT Delivery Note) */}
+          <div style={{ marginBottom: '16px', padding: '16px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+            <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: 'var(--text-primary)' }}>
+              📝 Signature Section (Template 2 - GT Delivery Note)
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              {/* Sender */}
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: '500', marginBottom: '8px' }}>Sender:</div>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Name</label>
+                  <Input
+                    value={senderName}
+                    onChange={setSenderName}
+                    placeholder="Sender name"
+                  />
+                </div>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Title</label>
+                  <Input
+                    value={senderTitle}
+                    onChange={setSenderTitle}
+                    placeholder="Sender title"
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Date</label>
+                  <input
+                    type="date"
+                    value={senderDate}
+                    onChange={(e) => setSenderDate(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '4px',
+                      backgroundColor: 'var(--bg-primary)',
+                      color: 'var(--text-primary)',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Receiver */}
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: '500', marginBottom: '8px' }}>Receiver:</div>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Name</label>
+                  <Input
+                    value={receiverName}
+                    onChange={setReceiverName}
+                    placeholder="Receiver name"
+                  />
+                </div>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Title</label>
+                  <Input
+                    value={receiverTitle}
+                    onChange={setReceiverTitle}
+                    placeholder="Receiver title"
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Date</label>
+                  <input
+                    type="date"
+                    value={receiverDate}
+                    onChange={(e) => setReceiverDate(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '4px',
+                      backgroundColor: 'var(--bg-primary)',
+                      color: 'var(--text-primary)',
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px' }}>
+              Field ini akan ditampilkan di bagian signature pada Template 2 (GT Delivery Note)
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
               Upload Signed Document
             </label>
@@ -4548,9 +5352,731 @@ const EditSJDialog = ({ delivery, onClose, onSave }: { delivery: DeliveryNote; o
           </div>
 
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-            <Button variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button variant="secondary" onClick={() => { onClose(); }}>Cancel</Button>
             <Button variant="primary" onClick={handleSave}>
               Save Changes
+            </Button>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+// Create Delivery Note Dialog Component
+const CreateDeliveryNoteDialog = ({
+  deliveries,
+  salesOrders,
+  customers,
+  products,
+  onClose,
+  onCreate
+}: {
+  deliveries: DeliveryNote[];
+  salesOrders: SalesOrder[];
+  customers: Customer[];
+  products: any[];
+  onClose: () => void;
+  onCreate: (data: {
+    soNo?: string;
+    customer?: string;
+    customerAddress?: string;
+    customerPIC?: string;
+    customerPhone?: string;
+    picProgram?: string;
+    items?: DeliveryNoteItem[];
+    driver?: string;
+    vehicleNo?: string;
+    deliveryDate?: string;
+    productCodeDisplay?: 'padCode' | 'productId';
+    specNote?: string;
+    senderName?: string;
+    senderTitle?: string;
+    senderDate?: string;
+    receiverName?: string;
+    receiverTitle?: string;
+    receiverDate?: string;
+  }) => Promise<void>;
+}) => {
+  const { showAlert: showAlertBase } = useDialog();
+  const showAlert = (title: string, message: string) => {
+    showAlertBase(message, title);
+  };
+
+  const [soNo, setSoNo] = useState('');
+  const [customer, setCustomer] = useState('');
+  const [customerInputValue, setCustomerInputValue] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
+  const [customerPIC, setCustomerPIC] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [picProgram, setPicProgram] = useState('');
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [driver, setDriver] = useState('');
+  const [vehicleNo, setVehicleNo] = useState('');
+  const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split('T')[0]);
+  const [productCodeDisplay, setProductCodeDisplay] = useState<'padCode' | 'productId'>('padCode');
+  const [specNote, setSpecNote] = useState('');
+  const [items, setItems] = useState<DeliveryNoteItem[]>([{ product: '', qty: 0, unit: 'PCS', spkNo: '', soNo: '' }]);
+  // Signature fields untuk Template 2
+  const [senderName, setSenderName] = useState('');
+  const [senderTitle, setSenderTitle] = useState('');
+  const [senderDate, setSenderDate] = useState('');
+  const [receiverName, setReceiverName] = useState('');
+  const [receiverTitle, setReceiverTitle] = useState('');
+  const [receiverDate, setReceiverDate] = useState('');
+  const [productSearch, setProductSearch] = useState<{ [key: number]: string }>({});
+  const [showProductDropdown, setShowProductDropdown] = useState<{ [key: number]: boolean }>({});
+
+  // Handle customer input change
+  const handleCustomerInputChange = (text: string) => {
+    setCustomerInputValue(text);
+    setShowCustomerDropdown(true);
+    if (!text) {
+      setCustomer('');
+      setCustomerAddress('');
+      setCustomerPIC('');
+      setCustomerPhone('');
+      return;
+    }
+    const normalized = text.toLowerCase();
+    const matchedCustomer = customers.find(c => {
+      const label = `${c.kode || ''}${c.kode ? ' - ' : ''}${c.nama || ''}`.toLowerCase();
+      const code = (c.kode || '').toLowerCase();
+      const name = (c.nama || '').toLowerCase();
+      return label === normalized || code === normalized || name === normalized;
+    });
+    if (matchedCustomer) {
+      setCustomer(matchedCustomer.nama);
+      setCustomerAddress(matchedCustomer.alamat || '');
+      setCustomerPIC(matchedCustomer.kontak || '');
+      setCustomerPhone(matchedCustomer.telepon || '');
+    } else {
+      setCustomer(text);
+    }
+  };
+
+  // Get filtered customers for autocomplete
+  const getFilteredCustomers = () => {
+    if (!customerInputValue) return customers.slice(0, 10);
+    const searchLower = customerInputValue.toLowerCase();
+    return customers.filter(c => {
+      const label = `${c.kode || ''}${c.kode ? ' - ' : ''}${c.nama || ''}`.toLowerCase();
+      const code = (c.kode || '').toLowerCase();
+      const name = (c.nama || '').toLowerCase();
+      return label.includes(searchLower) || code.includes(searchLower) || name.includes(searchLower);
+    }).slice(0, 10);
+  };
+
+  // Handle customer selection from dropdown
+  const handleSelectCustomer = (selectedCustomer: any) => {
+    setCustomer(selectedCustomer.nama);
+    setCustomerAddress(selectedCustomer.alamat || '');
+    setCustomerPIC(selectedCustomer.kontak || '');
+    setCustomerPhone(selectedCustomer.telepon || '');
+    setCustomerInputValue(`${selectedCustomer.kode || ''}${selectedCustomer.kode ? ' - ' : ''}${selectedCustomer.nama}`);
+    setShowCustomerDropdown(false);
+  };
+
+  // Handle SO selection - auto-populate customer and items
+  const handleSOChange = (soNoValue: string) => {
+    setSoNo(soNoValue);
+    const so = salesOrders.find(s => s.soNo === soNoValue);
+    if (so) {
+      setCustomer(so.customer || '');
+      setCustomerInputValue(so.customer || '');
+      // Load customer data
+      const customerData = customers.find(c => c.nama === so.customer);
+      if (customerData) {
+        setCustomerAddress(customerData.alamat || '');
+        setCustomerPIC(customerData.kontak || '');
+        setCustomerPhone(customerData.telepon || '');
+      }
+      // Auto-populate items from SO
+      if (so.items && so.items.length > 0) {
+        const soItems: DeliveryNoteItem[] = so.items.map((item: any) => ({
+          product: item.productName || item.product || '',
+          productCode: item.itemSku || item.sku || '',
+          qty: Number(item.qty || 0),
+          unit: 'PCS',
+          spkNo: item.spkNo || '',
+          soNo: soNoValue,
+        }));
+        setItems(soItems.length > 0 ? soItems : [{ product: '', qty: 0, unit: 'PCS', spkNo: '', soNo: soNoValue }]);
+      }
+    }
+  };
+
+  const handleAddItem = () => {
+    setItems([...items, { product: '', qty: 0, unit: 'PCS', spkNo: '', soNo: soNo }]);
+  };
+
+  const handleRemoveItem = (index: number) => {
+    const updated = items.filter((_, idx) => idx !== index);
+    setItems(updated);
+    const newSearch = { ...productSearch };
+    delete newSearch[index];
+    setProductSearch(newSearch);
+    const newDropdown = { ...showProductDropdown };
+    delete newDropdown[index];
+    setShowProductDropdown(newDropdown);
+  };
+
+  const getFilteredProducts = (index: number) => {
+    const search = productSearch[index] || '';
+    if (!search) return products.slice(0, 10);
+    const searchLower = search.toLowerCase();
+    return products.filter((p: any) => {
+      const name = (p.nama || '').toLowerCase();
+      const code = (p.kode || p.product_id || '').toLowerCase();
+      return name.includes(searchLower) || code.includes(searchLower);
+    }).slice(0, 10);
+  };
+
+  const handleItemChange = (index: number, field: keyof DeliveryNoteItem, value: any) => {
+    const updated = [...items];
+    updated[index] = { ...updated[index], [field]: value };
+    setItems(updated);
+  };
+
+  const handleSelectProduct = (index: number, product: any) => {
+    const updated = [...items];
+    updated[index] = {
+      ...updated[index],
+      product: product.nama || product.name || '',
+      productCode: product.kode || product.sku || product.product_id || '',
+      unit: 'PCS',
+    };
+    setItems(updated);
+    setProductSearch({ ...productSearch, [index]: product.nama || product.name || '' });
+    setShowProductDropdown({ ...showProductDropdown, [index]: false });
+  };
+
+  const handleManualProductInput = (index: number, value: string) => {
+    const updated = [...items];
+    updated[index] = { ...updated[index], product: value };
+    setItems(updated);
+  };
+
+  const handleSave = async () => {
+    if (!customer) {
+      showAlert('Error', 'Customer is required');
+      return;
+    }
+    if (items.length === 0 || items.every(item => !item.product || item.qty === 0)) {
+      showAlert('Error', 'At least one item with product and quantity is required');
+      return;
+    }
+
+    try {
+      await onCreate({
+        soNo,
+        customer,
+        customerAddress: customerAddress || undefined,
+        customerPIC: customerPIC || undefined,
+        customerPhone: customerPhone || undefined,
+        picProgram: picProgram || undefined,
+        items: items.filter(item => item.product && item.qty > 0),
+        driver: driver || undefined,
+        vehicleNo: vehicleNo || undefined,
+        deliveryDate: deliveryDate || undefined,
+        productCodeDisplay,
+        specNote: specNote || undefined,
+        senderName: senderName || undefined,
+        senderTitle: senderTitle || undefined,
+        senderDate: senderDate || undefined,
+        receiverName: receiverName || undefined,
+        receiverTitle: receiverTitle || undefined,
+        receiverDate: receiverDate || undefined,
+      });
+    } catch (error: any) {
+      showAlert('Error', `Error creating delivery note: ${error.message}`);
+    }
+  };
+
+  return (
+    <div className="dialog-overlay" onClick={onClose} style={{ zIndex: 10001 }}>
+      <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
+        <Card title="Create Delivery Note">
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+              SO No
+            </label>
+            <input
+              type="text"
+              list="so-list-create"
+              value={soNo}
+              onChange={(e) => handleSOChange(e.target.value)}
+              placeholder="Select or enter SO number"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-tertiary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            />
+            <datalist id="so-list-create">
+              {salesOrders.map((so: any) => (
+                <option key={so.id || so.soNo} value={so.soNo} />
+              ))}
+            </datalist>
+          </div>
+
+          <div style={{ marginBottom: '16px', position: 'relative' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+              Customer *
+            </label>
+            <input
+              type="text"
+              list={`customer-list-create`}
+              value={customerInputValue}
+              onChange={(e) => handleCustomerInputChange(e.target.value)}
+              onFocus={() => setShowCustomerDropdown(true)}
+              onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
+              placeholder="Type to search customer or enter manually"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-tertiary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            />
+            <datalist id={`customer-list-create`}>
+              {customers.map((c: any) => (
+                <option key={c.id || c.nama} value={`${c.kode || ''}${c.kode ? ' - ' : ''}${c.nama || ''}`} />
+              ))}
+            </datalist>
+            {showCustomerDropdown && getFilteredCustomers().length > 0 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  backgroundColor: 'var(--bg-primary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '4px',
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                  zIndex: 1000,
+                  marginTop: '4px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                }}
+              >
+                {getFilteredCustomers().map((c: any) => (
+                  <div
+                    key={c.id || c.nama}
+                    onClick={() => handleSelectCustomer(c)}
+                    style={{
+                      padding: '8px 12px',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid var(--border-color)',
+                      fontSize: '13px',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--hover-bg)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--bg-primary)';
+                    }}
+                  >
+                    <div style={{ fontWeight: '500' }}>{c.nama}</div>
+                    {c.kode && (
+                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Code: {c.kode}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+              Customer Address
+            </label>
+            <textarea
+              value={customerAddress}
+              onChange={(e) => setCustomerAddress(e.target.value)}
+              placeholder="Enter customer address"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+                minHeight: '80px',
+                resize: 'vertical',
+                fontFamily: 'inherit',
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+                PIC (Person In Charge)
+              </label>
+              <Input
+                value={customerPIC}
+                onChange={setCustomerPIC}
+                placeholder="Enter PIC name"
+              />
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                PIC akan ditampilkan di template Surat Jalan
+              </div>
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+                Customer Phone
+              </label>
+              <Input
+                value={customerPhone}
+                onChange={setCustomerPhone}
+                placeholder="Enter customer phone"
+              />
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                Phone akan ditampilkan di template Surat Jalan
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+              PIC Program (Template 2 - GT Delivery Note)
+            </label>
+            <Input
+              value={picProgram}
+              onChange={setPicProgram}
+              placeholder="Enter PIC Program name"
+            />
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              PIC Program akan ditampilkan di bagian "PIC Program" pada Template 2 (GT Delivery Note). Bisa berbeda dari PIC di bawah alamat customer.
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+              Product Code Display (Template SJ)
+            </label>
+            <select
+              value={productCodeDisplay}
+              onChange={(e) => setProductCodeDisplay(e.target.value as 'padCode' | 'productId')}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-tertiary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            >
+              <option value="padCode">Pad Code (default, fallback ke Product ID jika tidak ada)</option>
+              <option value="productId">Product ID / SKU ID</option>
+            </select>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              Pilihan ini menentukan kode yang ditampilkan di kolom "PRODUCT CODE" pada template Surat Jalan
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+              Driver
+            </label>
+            <Input
+              value={driver}
+              onChange={setDriver}
+              placeholder="Enter driver name"
+            />
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+              Vehicle No
+            </label>
+            <Input
+              value={vehicleNo}
+              onChange={setVehicleNo}
+              placeholder="Enter vehicle number"
+            />
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+              Tanggal Kirim (Delivery Date)
+            </label>
+            <input
+              type="date"
+              value={deliveryDate}
+              onChange={(e) => setDeliveryDate(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <label style={{ fontSize: '14px', fontWeight: '500' }}>
+                Items *
+              </label>
+              <Button variant="secondary" onClick={handleAddItem} style={{ fontSize: '12px', padding: '4px 8px' }}>
+                + Add Item
+              </Button>
+            </div>
+            <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '8px' }}>
+              {items.map((item, idx) => (
+                <div key={idx} style={{ marginBottom: '12px', padding: '8px', background: 'var(--bg-tertiary)', borderRadius: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <strong>Item {idx + 1}</strong>
+                    <Button variant="secondary" onClick={() => handleRemoveItem(idx)} style={{ fontSize: '11px', padding: '2px 6px', backgroundColor: '#f44336', color: 'white' }}>
+                      Remove
+                    </Button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                    <div style={{ position: 'relative' }}>
+                      <label style={{ fontSize: '12px', marginBottom: '4px', display: 'block' }}>
+                        Product
+                      </label>
+                      <input
+                        type="text"
+                        value={productSearch[idx] !== undefined ? productSearch[idx] : (item.product || '')}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setProductSearch({ ...productSearch, [idx]: value });
+                          setShowProductDropdown({ ...showProductDropdown, [idx]: true });
+                          handleManualProductInput(idx, value);
+                        }}
+                        onFocus={() => setShowProductDropdown({ ...showProductDropdown, [idx]: true })}
+                        onBlur={() => setTimeout(() => setShowProductDropdown({ ...showProductDropdown, [idx]: false }), 200)}
+                        placeholder="Type to search product or enter manually"
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '4px',
+                          backgroundColor: 'var(--bg-tertiary)',
+                          color: 'var(--text-primary)',
+                          fontSize: '13px',
+                        }}
+                      />
+                      {showProductDropdown[idx] && getFilteredProducts(idx).length > 0 && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            backgroundColor: 'var(--bg-primary)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '4px',
+                            maxHeight: '200px',
+                            overflowY: 'auto',
+                            zIndex: 1000,
+                            marginTop: '4px',
+                            boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                          }}
+                        >
+                          {getFilteredProducts(idx).map((p: any) => (
+                            <div
+                              key={p.id || p.nama}
+                              onClick={() => handleSelectProduct(idx, p)}
+                              style={{
+                                padding: '8px 12px',
+                                cursor: 'pointer',
+                                borderBottom: '1px solid var(--border-color)',
+                                fontSize: '12px',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--bg-primary)';
+                              }}
+                            >
+                              <div style={{ fontWeight: 500 }}>{p.nama || 'Unknown'}</div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                Code: {p.kode || p.product_id || '-'}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', marginBottom: '4px', display: 'block' }}>Product Code</label>
+                      <Input
+                        value={item.productCode || ''}
+                        onChange={(value) => handleItemChange(idx, 'productCode', value)}
+                        placeholder="Product code"
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', marginBottom: '4px', display: 'block' }}>Qty</label>
+                      <Input
+                        value={String(item.qty || 0)}
+                        onChange={(value) => handleItemChange(idx, 'qty', parseFloat(value) || 0)}
+                        placeholder="Quantity"
+                        type="number"
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', marginBottom: '4px', display: 'block' }}>Unit</label>
+                      <Input
+                        value={item.unit || 'PCS'}
+                        onChange={(value) => handleItemChange(idx, 'unit', value)}
+                        placeholder="Unit"
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', marginBottom: '4px', display: 'block' }}>SPK No</label>
+                      <Input
+                        value={item.spkNo || ''}
+                        onChange={(value) => handleItemChange(idx, 'spkNo', value)}
+                        placeholder="SPK number"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {items.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-secondary)' }}>
+                  No items. Click "Add Item" to add items.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+              Keterangan (akan muncul di template SJ)
+            </label>
+            <textarea
+              value={specNote}
+              onChange={(e) => setSpecNote(e.target.value)}
+              placeholder="Masukkan keterangan untuk Surat Jalan (No. SJ, Detail Product, dll)"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+                minHeight: '100px',
+                resize: 'vertical',
+                fontFamily: 'inherit',
+              }}
+            />
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              Keterangan ini akan ditampilkan di bagian "Keterangan" pada template Surat Jalan
+            </div>
+          </div>
+
+          {/* Signature Section untuk Template 2 (GT Delivery Note) */}
+          <div style={{ marginBottom: '16px', padding: '16px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+            <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: 'var(--text-primary)' }}>
+              📝 Signature Section (Template 2 - GT Delivery Note)
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              {/* Sender */}
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: '500', marginBottom: '8px' }}>Sender:</div>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Name</label>
+                  <Input
+                    value={senderName}
+                    onChange={setSenderName}
+                    placeholder="Sender name"
+                  />
+                </div>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Title</label>
+                  <Input
+                    value={senderTitle}
+                    onChange={setSenderTitle}
+                    placeholder="Sender title"
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Date</label>
+                  <input
+                    type="date"
+                    value={senderDate}
+                    onChange={(e) => setSenderDate(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '4px',
+                      backgroundColor: 'var(--bg-primary)',
+                      color: 'var(--text-primary)',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Receiver */}
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: '500', marginBottom: '8px' }}>Receiver:</div>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Name</label>
+                  <Input
+                    value={receiverName}
+                    onChange={setReceiverName}
+                    placeholder="Receiver name"
+                  />
+                </div>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Title</label>
+                  <Input
+                    value={receiverTitle}
+                    onChange={setReceiverTitle}
+                    placeholder="Receiver title"
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Date</label>
+                  <input
+                    type="date"
+                    value={receiverDate}
+                    onChange={(e) => setReceiverDate(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '4px',
+                      backgroundColor: 'var(--bg-primary)',
+                      color: 'var(--text-primary)',
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px' }}>
+              Field ini akan ditampilkan di bagian signature pada Template 2 (GT Delivery Note)
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+            <Button variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button variant="primary" onClick={handleSave}>
+              Create Delivery Note
             </Button>
           </div>
         </Card>

@@ -12,6 +12,11 @@
   --border-color: #2a2a2a;
   --text-primary: #e0e0e0;
   --text-secondary: #a0a0a0;
+  --text-inverse: #1a1a1a;
+  --text-on-error: #ffffff;
+  --text-on-success: #ffffff;
+  --text-on-primary: #ffffff;
+  --text-on-accent: #ffffff;
   --accent-color: #00d4ff;
   --accent-hover: #00b8e6;
   --success: #00ff88;
@@ -28,6 +33,11 @@
   --border-color: #d0d0d0;
   --text-primary: #1a1a1a;
   --text-secondary: #666666;
+  --text-inverse: #ffffff;
+  --text-on-error: #ffffff;
+  --text-on-success: #ffffff;
+  --text-on-primary: #ffffff;
+  --text-on-accent: #ffffff;
   --accent-color: #0066cc;
   --accent-hover: #0052a3;
   --success: #00aa55;

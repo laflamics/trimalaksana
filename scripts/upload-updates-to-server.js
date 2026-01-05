@@ -428,10 +428,15 @@ async function uploadFiles() {
       let filesToUpload = [];
       
       const allExeFiles = files.filter(f => f.endsWith('.exe'));
+      const allAppImageFiles = files.filter(f => f.endsWith('.AppImage'));
       if (allExeFiles.length > 0) {
         console.error(`🔍 Found ${allExeFiles.length} .exe files: ${allExeFiles.join(', ')}`);
       }
+      if (allAppImageFiles.length > 0) {
+        console.error(`🔍 Found ${allAppImageFiles.length} .AppImage files: ${allAppImageFiles.join(', ')}`);
+      }
       
+      // Handle Windows build (latest.yml)
       const latestYmlPath = path.join(RELEASE_DIR, 'latest.yml');
       if (fs.existsSync(latestYmlPath)) {
         const latestYmlContent = fs.readFileSync(latestYmlPath, 'utf8');
@@ -445,12 +450,46 @@ async function uploadFiles() {
           }
         }
         filesToUpload.push({ path: latestYmlPath, name: 'latest.yml' });
-      } else {
-        // Fallback: cari semua .exe files
-        const exeFiles = files.filter(f => f.endsWith('.exe'));
+      }
+      
+      // Handle Linux build (latest-linux.yml)
+      const latestLinuxYmlPath = path.join(RELEASE_DIR, 'latest-linux.yml');
+      if (fs.existsSync(latestLinuxYmlPath)) {
+        const latestLinuxYmlContent = fs.readFileSync(latestLinuxYmlPath, 'utf8');
+        const appImageMatch = latestLinuxYmlContent.match(/path:\s*(.+\.AppImage)/);
+        if (appImageMatch) {
+          const appImageFileName = appImageMatch[1].trim();
+          const appImagePath = path.join(RELEASE_DIR, appImageFileName);
+          if (fs.existsSync(appImagePath)) {
+            filesToUpload.push({ path: appImagePath, name: appImageFileName });
+            console.error(`✅ Found .AppImage file: ${appImageFileName}`);
+          }
+        } else {
+          // Fallback: cari semua .AppImage files
+          const appImageFiles = files.filter(f => f.endsWith('.AppImage') && !f.includes('unpacked'));
+          if (appImageFiles.length > 0) {
+            appImageFiles.forEach(appImageFile => {
+              filesToUpload.push({ path: path.join(RELEASE_DIR, appImageFile), name: appImageFile });
+            });
+          }
+        }
+        filesToUpload.push({ path: latestLinuxYmlPath, name: 'latest-linux.yml' });
+      }
+      
+      // Fallback: jika tidak ada latest.yml atau latest-linux.yml, cari file langsung
+      if (filesToUpload.length === 0) {
+        // Cari .exe files
+        const exeFiles = files.filter(f => f.endsWith('.exe') && !f.includes('blockmap') && !f.endsWith('.exe.patch'));
         if (exeFiles.length > 0) {
           exeFiles.forEach(exeFile => {
             filesToUpload.push({ path: path.join(RELEASE_DIR, exeFile), name: exeFile });
+          });
+        }
+        // Cari .AppImage files
+        const appImageFiles = files.filter(f => f.endsWith('.AppImage') && !f.includes('unpacked'));
+        if (appImageFiles.length > 0) {
+          appImageFiles.forEach(appImageFile => {
+            filesToUpload.push({ path: path.join(RELEASE_DIR, appImageFile), name: appImageFile });
           });
         }
       }
@@ -510,15 +549,19 @@ async function uploadFiles() {
     }
   
   // List files yang perlu di-upload
-  // HANYA upload file Windows: .exe, latest.yml, .exe.patch (blockmap tidak perlu)
-  // JANGAN upload file Linux/Mac: .snap, .AppImage, .dmg, dll
+  // Upload file Windows: .exe, latest.yml, .exe.patch (blockmap tidak perlu)
+  // Upload file Linux: .AppImage, latest-linux.yml
   const files = fs.readdirSync(RELEASE_DIR);
   let filesToUpload = [];
   
   // Debug: log semua file yang ada di release-build
   const allExeFiles = files.filter(f => f.endsWith('.exe'));
+  const allAppImageFiles = files.filter(f => f.endsWith('.AppImage'));
   if (allExeFiles.length > 0) {
     console.error(`🔍 Found ${allExeFiles.length} .exe files: ${allExeFiles.join(', ')}`);
+  }
+  if (allAppImageFiles.length > 0) {
+    console.error(`🔍 Found ${allAppImageFiles.length} .AppImage files: ${allAppImageFiles.join(', ')}`);
   }
   
   const latestYmlPath = path.join(RELEASE_DIR, 'latest.yml');
@@ -599,15 +642,85 @@ async function uploadFiles() {
       });
       console.error(`⚠️  Using fallback filter, found ${filesToUpload.length} files`);
     }
-  } else {
+  }
+  
+  // Handle Linux build (latest-linux.yml dan AppImage)
+  const latestLinuxYmlPath = path.join(RELEASE_DIR, 'latest-linux.yml');
+  if (fs.existsSync(latestLinuxYmlPath)) {
+    try {
+      const ymlContent = fs.readFileSync(latestLinuxYmlPath, 'utf8');
+      
+      // Parse file URLs dari latest-linux.yml
+      const urlPatterns = [
+        /-+\s*url:\s*([^\s\n]+)/g,
+        /url:\s*([^\s\n]+)/g,
+        /path:\s*([^\s\n]+)/g
+      ];
+      
+      const foundFiles = new Set();
+      
+      for (const pattern of urlPatterns) {
+        const matches = ymlContent.matchAll(pattern);
+        for (const match of matches) {
+          const fileName = match[1].trim();
+          if (fileName && fileName.endsWith('.AppImage')) {
+            foundFiles.add(fileName);
+          }
+        }
+      }
+      
+      // Tambahkan file yang ditemukan dari YAML jika file ada
+      foundFiles.forEach(fileName => {
+        const filePath = path.join(RELEASE_DIR, fileName);
+        if (fs.existsSync(filePath)) {
+          filesToUpload.push(fileName);
+          console.error(`✅ Found .AppImage file: ${fileName}`);
+        }
+      });
+      
+      // SELALU cari file .AppImage langsung di release-build (backup jika parsing gagal)
+      const appImageFiles = files.filter(f => 
+        f.endsWith('.AppImage') && 
+        !f.includes('unpacked')
+      );
+      
+      // Tambahkan .AppImage yang belum ada di filesToUpload
+      appImageFiles.forEach(appImageFile => {
+        if (!filesToUpload.includes(appImageFile)) {
+          filesToUpload.push(appImageFile);
+          console.error(`✅ Found .AppImage file: ${appImageFile}`);
+        }
+      });
+      
+      // Selalu include latest-linux.yml
+      filesToUpload.push('latest-linux.yml');
+    } catch (error) {
+      // Fallback: cari file AppImage secara langsung
+      const appImageFiles = files.filter(f => 
+        f.endsWith('.AppImage') && !f.includes('unpacked')
+      );
+      if (appImageFiles.length > 0) {
+        appImageFiles.forEach(appImageFile => {
+          filesToUpload.push(appImageFile);
+        });
+        filesToUpload.push('latest-linux.yml');
+        console.error(`⚠️  Using fallback filter for Linux, found ${appImageFiles.length} AppImage files`);
+      }
+    }
+  }
+  
+  // Jika tidak ada latest.yml atau latest-linux.yml, exit
+  if (filesToUpload.length === 0 && !fs.existsSync(latestYmlPath) && !fs.existsSync(latestLinuxYmlPath)) {
+    console.error(`⚠️  Tidak ada latest.yml atau latest-linux.yml ditemukan`);
     process.exit(0);
   }
   
-  // Filter ulang untuk memastikan hanya file Windows yang ter-upload
+  // Filter ulang untuk memastikan hanya file yang perlu di-upload
   filesToUpload = filesToUpload.filter(f => {
-    if (f === 'latest.yml') return true;
+    if (f === 'latest.yml' || f === 'latest-linux.yml') return true;
     if (f.endsWith('.exe') && !f.includes('blockmap') && !f.endsWith('.exe.patch')) return true;
     if (f.endsWith('.exe.patch')) return true;
+    if (f.endsWith('.AppImage')) return true;
     // Blockmap tidak perlu di-upload
     return false;
   });

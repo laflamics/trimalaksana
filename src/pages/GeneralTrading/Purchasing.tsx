@@ -89,20 +89,24 @@ const POActionMenu = ({
   item,
   hasGRN,
   hasPendingFinance,
-  onViewDetail,
+  onViewDetailPOSheet,
+  onViewDetailPOFull,
   onEdit,
   onCreateGRN,
-  onPrint,
+  onPrintPOFull,
+  onPrintPOSheet,
   onUpdateStatus,
   onDelete,
 }: {
   item: PurchaseOrder;
   hasGRN?: boolean;
   hasPendingFinance?: boolean;
-  onViewDetail?: () => void;
+  onViewDetailPOSheet?: () => void;
+  onViewDetailPOFull?: () => void;
   onEdit?: () => void;
   onCreateGRN?: () => void;
-  onPrint?: () => void;
+  onPrintPOFull?: () => void;
+  onPrintPOSheet?: () => void;
   onUpdateStatus?: () => void;
   onDelete?: () => void;
 }) => {
@@ -165,25 +169,49 @@ const POActionMenu = ({
             flexDirection: 'column',
           }}
         >
-          {onViewDetail && (
-            <button
-              onClick={() => { onViewDetail(); setShowMenu(false); }}
-              style={{
-                width: '100%',
-                textAlign: 'left',
-                padding: '6px 10px',
-                border: 'none',
-                background: 'transparent',
-                color: 'var(--text-primary)',
-                cursor: 'pointer',
-                fontSize: '11px',
-                borderRadius: '4px',
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-            >
-              👁️ View Detail
-            </button>
+          {(onViewDetailPOSheet || onViewDetailPOFull) && (
+            <>
+              {onViewDetailPOSheet && (
+                <button
+                  onClick={() => { onViewDetailPOSheet(); setShowMenu(false); }}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '6px 10px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    borderRadius: '4px',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  👁️ View Detail PO Sheet
+                </button>
+              )}
+              {onViewDetailPOFull && (
+                <button
+                  onClick={() => { onViewDetailPOFull(); setShowMenu(false); }}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '6px 10px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    borderRadius: '4px',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  👁️ View Detail PO
+                </button>
+              )}
+            </>
           )}
           {onEdit && item.status !== 'CLOSE' && (
             <button
@@ -238,25 +266,49 @@ const POActionMenu = ({
               ✓ GRN Created
             </div>
           )}
-          {onPrint && (
-            <button
-              onClick={() => { onPrint(); setShowMenu(false); }}
-              style={{
-                width: '100%',
-                textAlign: 'left',
-                padding: '6px 10px',
-                border: 'none',
-                background: 'transparent',
-                color: 'var(--text-primary)',
-                cursor: 'pointer',
-                fontSize: '11px',
-                borderRadius: '4px',
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-            >
-              🖨️ Print
-            </button>
+          {(onPrintPOFull || onPrintPOSheet) && (
+            <>
+              {onPrintPOSheet && (
+                <button
+                  onClick={() => { onPrintPOSheet(); setShowMenu(false); }}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '6px 10px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    borderRadius: '4px',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  🖨️ Print PO Sheet
+                </button>
+              )}
+              {onPrintPOFull && (
+                <button
+                  onClick={() => { onPrintPOFull(); setShowMenu(false); }}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '6px 10px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    borderRadius: '4px',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  🖨️ Print PO
+                </button>
+              )}
+            </>
           )}
           {onUpdateStatus && (
             <button
@@ -1015,6 +1067,8 @@ const Purchasing = () => {
       quality: item.quality || productData?.deskripsi || '', // Gunakan quality dari PO, fallback ke deskripsi
       score: item.score !== undefined && item.score !== null ? item.score : '', // Gunakan score dari PO
       qty: item.qty || 0,
+      unit: productData?.unit || 'PCS',
+      price: item.price || 0,
       keterangan: item.keterangan || item.purchaseReason || productData?.deskripsi || '', // Gunakan keterangan dari PO, fallback ke purchaseReason
     }];
 
@@ -1039,10 +1093,20 @@ const Purchasing = () => {
     });
   };
 
-  const handleViewDetail = async (item: PurchaseOrder) => {
+  const handleViewDetailPOSheet = async (item: PurchaseOrder) => {
     try {
       // Gunakan template sheet baru (format sesuai requirement)
       const html = await generatePOSheetHtmlContent(item);
+      setViewPdfData({ html, poNo: item.poNo });
+    } catch (error: any) {
+      showAlert(`Error generating PO Sheet preview: ${error.message}`, 'Error');
+    }
+  };
+
+  const handleViewDetailPOFull = async (item: PurchaseOrder) => {
+    try {
+      // Gunakan template PO full lengkap
+      const html = await generatePOHtmlContent(item);
       setViewPdfData({ html, poNo: item.poNo });
     } catch (error: any) {
       showAlert(`Error generating PO preview: ${error.message}`, 'Error');
@@ -1673,12 +1737,21 @@ const Purchasing = () => {
     }
   };
 
-  const handlePrint = async (item: PurchaseOrder) => {
+  const handlePrintPOFull = async (item: PurchaseOrder) => {
     try {
       const html = await generatePOHtmlContent(item);
       openPrintWindow(html);
     } catch (error: any) {
       showAlert(`Error generating PO PDF: ${error.message}`, 'Error');
+    }
+  };
+
+  const handlePrintPOSheet = async (item: PurchaseOrder) => {
+    try {
+      const html = await generatePOSheetHtmlContent(item);
+      openPrintWindow(html);
+    } catch (error: any) {
+      showAlert(`Error generating PO Sheet PDF: ${error.message}`, 'Error');
     }
   };
 
@@ -2237,10 +2310,12 @@ const Purchasing = () => {
             item={item}
             hasGRN={hasGRN}
             hasPendingFinance={hasPendingFinance}
-            onViewDetail={() => handleViewDetail(item)}
+            onViewDetailPOSheet={() => handleViewDetailPOSheet(item)}
+            onViewDetailPOFull={() => handleViewDetailPOFull(item)}
             onEdit={() => handleEdit(item)}
             onCreateGRN={() => handleCreateGRN(item)}
-            onPrint={() => handlePrint(item)}
+            onPrintPOFull={() => handlePrintPOFull(item)}
+            onPrintPOSheet={() => handlePrintPOSheet(item)}
             onUpdateStatus={() => handleUpdateStatus(item)}
             onDelete={() => handleDeletePO(item)}
           />
@@ -3199,7 +3274,7 @@ const Purchasing = () => {
                       <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-color)', justifyContent: 'flex-start' }}>
                         <Button
                           variant="secondary"
-                          onClick={() => handleViewDetail(item)}
+                          onClick={() => handleViewDetailPOSheet(item)}
                           style={{ fontSize: '10px', padding: '4px 8px', minHeight: '24px' }}
                         >
                           View

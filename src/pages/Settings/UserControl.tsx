@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import Table from '../../components/Table';
 import { storageService, BusinessType } from '../../services/storage';
+import { safeDeleteMultipleItems, filterActiveItems } from '../../utils/data-persistence-helper';
 import './UserControl.css';
 
 type BusinessId = BusinessType;
@@ -340,6 +341,7 @@ const getMenuCount = (menuAccess: Record<BusinessId, string[]>) =>
 const UserControl = () => {
   const [users, setUsers] = useState<UserAccess[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   // Custom Dialog state
   const [dialogState, setDialogState] = useState<{
     show: boolean;
@@ -409,33 +411,47 @@ const UserControl = () => {
     const oldPackagingData = (await storageService.get<UserAccess[]>(oldPackagingKey)) || [];
     const currentData = (await storageService.get<UserAccess[]>(storageKey)) || [];
     
+    // CRITICAL: Combine all data sources first
+    const allDataSources = [...currentData, ...oldPackagingData];
+    
     // Merge: Combine data from old key and current key, deduplicate by ID
+    // CRITICAL: Use Map to ensure ID uniqueness - last one wins if duplicate
     const mergedUsers = new Map<string, UserAccess>();
     
-    // Add current data first (priority)
-    currentData.forEach(user => {
+    // Add all users, keeping the one with latest updatedAt if duplicate
+    allDataSources.forEach(user => {
       if (user && user.id) {
-        mergedUsers.set(user.id, user);
-      }
-    });
-    
-    // Add old packaging data if not already exists
-    oldPackagingData.forEach(user => {
-      if (user && user.id && !mergedUsers.has(user.id)) {
-        mergedUsers.set(user.id, user);
+        const existing = mergedUsers.get(user.id);
+        if (!existing) {
+          mergedUsers.set(user.id, user);
+        } else {
+          // If duplicate, keep the one with latest updatedAt
+          const existingUpdatedAt = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+          const userUpdatedAt = user.updatedAt ? new Date(user.updatedAt).getTime() : 0;
+          if (userUpdatedAt > existingUpdatedAt) {
+            mergedUsers.set(user.id, user);
+          }
+        }
       }
     });
     
     const stored = Array.from(mergedUsers.values());
     
-    // If we merged data, save it back to unified key
+    // CRITICAL: Always save deduplicated data back to ensure consistency
+    // This prevents duplicates from accumulating
+    if (stored.length !== allDataSources.length) {
+      await storageService.set(storageKey, stored);
+      console.log(`[UserControl] Deduplicated: ${allDataSources.length} -> ${stored.length} users (removed ${allDataSources.length - stored.length} duplicates)`);
+    }
+    
+    // If we merged data from old key, save it back to unified key
     if (oldPackagingData.length > 0 && stored.length > currentData.length) {
       await storageService.set(storageKey, stored);
       console.log(`[UserControl] Migrated ${oldPackagingData.length} users from ${oldPackagingKey} to ${storageKey}`);
     }
     
-    // Filter out deleted users for display
-    const activeUsers = stored.filter(u => !u.deleted && !u.deletedAt);
+    // Filter out deleted users for display using filterActiveItems helper
+    const activeUsers = filterActiveItems(stored);
     setUsers(activeUsers);
     setSelectedUser((prev) => {
       if (!prev) {
@@ -530,8 +546,15 @@ const UserControl = () => {
         await storageService.set(storageKey, updated);
         
         // Filter active users for display
-        const activeUsers = updated.filter(u => !u.deleted);
+        const activeUsers = filterActiveItems(updated);
         setUsers(activeUsers);
+        
+        // Remove from selected if was selected
+        setSelectedUserIds(prev => {
+          const next = new Set(prev);
+          next.delete(user.id);
+          return next;
+        });
         
         setSelectedUser((prev) => {
           if (!prev || prev.id === user.id) {
@@ -540,12 +563,83 @@ const UserControl = () => {
           return prev;
         });
         
-        console.log(`[UserControl-Packaging] Safely deleted user ${user.fullName} (ID: ${user.id}) using tombstone pattern`);
+        console.log(`[UserControl] Safely deleted user ${user.fullName} (ID: ${user.id}) using tombstone pattern`);
       },
       undefined,
       'Confirm Delete'
     );
   };
+
+  // Handle bulk delete (multiple users)
+  const handleBulkDelete = async () => {
+    if (selectedUserIds.size === 0) {
+      showAlert('Pilih minimal satu user untuk dihapus.', 'Information');
+      return;
+    }
+
+    const selectedUsers = users.filter(u => selectedUserIds.has(u.id));
+    const userNames = selectedUsers.map(u => u.fullName).join(', ');
+    
+    showConfirm(
+      `Hapus ${selectedUserIds.size} user berikut?\n${userNames}`,
+      async () => {
+        const storageKey = 'userAccessControl';
+        
+        // Use safeDeleteMultipleItems for bulk delete with tombstone pattern
+        const userIds = Array.from(selectedUserIds);
+        const result = await safeDeleteMultipleItems(storageKey, userIds, 'id');
+        
+        if (result.failed > 0) {
+          showAlert(`Gagal menghapus ${result.failed} user. ${result.success} user berhasil dihapus.`, 'Warning');
+        } else {
+          showAlert(`Berhasil menghapus ${result.success} user.`, 'Success');
+        }
+        
+        // Reload users to refresh display
+        await loadUsers();
+        
+        // Clear selection
+        setSelectedUserIds(new Set());
+        
+        console.log(`[UserControl] Bulk deleted ${result.success} users using tombstone pattern`);
+      },
+      undefined,
+      'Confirm Bulk Delete'
+    );
+  };
+
+  // Handle select all checkbox
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedUserIds(new Set(filteredUsers.map(u => u.id)));
+    } else {
+      setSelectedUserIds(new Set());
+    }
+  };
+
+  // Handle individual checkbox
+  const handleSelectUserCheckbox = (userId: string, checked: boolean) => {
+    setSelectedUserIds(prev => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(userId);
+      } else {
+        next.delete(userId);
+      }
+      return next;
+    });
+  };
+
+  const allSelected = filteredUsers.length > 0 && selectedUserIds.size === filteredUsers.length;
+  const someSelected = selectedUserIds.size > 0 && selectedUserIds.size < filteredUsers.length;
+  const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
+
+  // Update indeterminate state of select all checkbox
+  useEffect(() => {
+    if (selectAllCheckboxRef.current) {
+      selectAllCheckboxRef.current.indeterminate = someSelected;
+    }
+  }, [someSelected]);
 
   const handleBusinessToggle = (businessId: BusinessId) => {
     setFormState((prev) => {
@@ -641,16 +735,40 @@ const UserControl = () => {
 
     setSaving(true);
     try {
+      // CRITICAL: Load all users (including deleted) from storage to check for duplicates
+      const storageKey = 'userAccessControl';
+      const allStoredUsers = (await storageService.get<UserAccess[]>(storageKey)) || [];
+      
       const timestamp = new Date().toISOString();
       const sanitizedAccess = sanitizeMenuAccess(formState.businessUnits, formState.menuAccess);
       const defaultBusiness = formState.defaultBusiness && formState.businessUnits.includes(formState.defaultBusiness as BusinessId)
         ? (formState.defaultBusiness as BusinessId)
         : formState.businessUnits[0];
 
+      // Generate or use existing ID
+      let userId = formState.id || `usr-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+      
+      // CRITICAL: Anti-duplicate check - ensure ID is unique
+      // Check if ID already exists (excluding current user if editing)
+      const existingUserWithId = allStoredUsers.find(u => u.id === userId && (!formState.id || u.id !== formState.id));
+      if (existingUserWithId) {
+        // If editing and ID matches, that's OK
+        // But if creating new or ID changed to existing one, generate new ID
+        if (!formState.id || userId !== formState.id) {
+          // Generate new unique ID
+          let attempts = 0;
+          while (allStoredUsers.some(u => u.id === userId) && attempts < 10) {
+            userId = `usr-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+            attempts++;
+          }
+          if (attempts >= 10) {
+            throw new Error('Gagal membuat ID unik. Silakan coba lagi.');
+          }
+        }
+      }
+
       const payload: UserAccess = {
-        id:
-          formState.id ||
-          `usr-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+        id: userId,
         fullName: formState.fullName.trim(),
         username: formState.username.trim(),
         email: formState.email.trim() || undefined,
@@ -663,23 +781,39 @@ const UserControl = () => {
         menuAccess: sanitizedAccess,
         notes: formState.notes.trim() || undefined,
         createdAt: formState.id
-          ? users.find((u) => u.id === formState.id)?.createdAt || timestamp
+          ? allStoredUsers.find((u) => u.id === formState.id)?.createdAt || timestamp
           : timestamp,
         updatedAt: timestamp,
       };
 
-      const updatedList = formState.id
-        ? users.map((user) => (user.id === payload.id ? payload : user))
-        : [...users, payload];
-
-      // FIXED: Use unified storage key 'userAccessControl' (without business prefix)
-      const storageKey = 'userAccessControl';
+      // CRITICAL: Deduplicate by ID - use Map to ensure uniqueness
+      const userMap = new Map<string, UserAccess>();
+      
+      // Add all existing users first (excluding the one being edited if editing)
+      allStoredUsers.forEach(user => {
+        if (user.id && user.id !== payload.id) {
+          userMap.set(user.id, user);
+        }
+      });
+      
+      // Add/update the current payload (this will overwrite if ID exists)
+      userMap.set(payload.id, payload);
+      
+      // Convert back to array
+      const updatedList = Array.from(userMap.values());
+      
+      // Save to storage
       await storageService.set(storageKey, updatedList);
-      setUsers(updatedList);
+      
+      // Filter active users for display
+      const activeUsers = filterActiveItems(updatedList);
+      setUsers(activeUsers);
       setSelectedUser(payload);
       setFormState(createEmptyForm());
       setFormVisible(false);
       showAlert('User access tersimpan ✅', 'Success');
+      
+      console.log(`[UserControl] Saved user ${payload.fullName} (ID: ${payload.id}) - ensured ID uniqueness`);
     } catch (error: any) {
       console.error(error);
       showAlert(`Gagal menyimpan user: ${error.message || error}`, 'Error');
@@ -694,6 +828,29 @@ const UserControl = () => {
   };
 
   const userColumns = [
+    {
+      key: 'select',
+      header: (
+        <input
+          type="checkbox"
+          ref={selectAllCheckboxRef}
+          checked={allSelected}
+          onChange={(e) => handleSelectAll(e.target.checked)}
+          onClick={(e) => e.stopPropagation()}
+        />
+      ),
+      render: (user: UserAccess) => (
+        <input
+          type="checkbox"
+          checked={selectedUserIds.has(user.id)}
+          onChange={(e) => {
+            e.stopPropagation();
+            handleSelectUserCheckbox(user.id, e.target.checked);
+          }}
+          onClick={(e) => e.stopPropagation()}
+        />
+      ),
+    },
     {
       key: 'fullName',
       header: 'User',
@@ -797,7 +954,16 @@ const UserControl = () => {
       <Card
         title="Daftar User"
         actions={
-          <div className="user-list-actions">
+          <div className="user-list-actions" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            {selectedUserIds.size > 0 && (
+              <Button
+                variant="danger"
+                onClick={handleBulkDelete}
+                style={{ marginRight: '8px' }}
+              >
+                Hapus {selectedUserIds.size} User
+              </Button>
+            )}
             <Input
               placeholder="Cari nama, username, role..."
               value={searchQuery}

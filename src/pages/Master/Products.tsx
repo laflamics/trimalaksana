@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import BOMDialog from '../../components/BOMDialog';
-import { storageService } from '../../services/storage';
+import { storageService, extractStorageValue } from '../../services/storage';
 import { useDialog } from '../../hooks/useDialog';
 import * as XLSX from 'xlsx';
 import '../../styles/common.css';
@@ -46,6 +46,7 @@ const Products = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<Product | null>(null);
   const [editingBOM, setEditingBOM] = useState<Product | null>(null);
+  const isSavingBOMRef = useRef(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
@@ -89,15 +90,20 @@ const Products = () => {
   });
 
   const loadProducts = useCallback(async () => {
-    const data = await storageService.get<Product[]>('products') || [];
-    const bom = await storageService.get<any[]>('bom') || [];
+    const data = extractStorageValue(await storageService.get<Product[]>('products'));
+    const bom = extractStorageValue(await storageService.get<any[]>('bom'));
+    
+    // Update bomData (simple update, no comparison needed for now)
     setBomData(bom);
+    
     // Ensure padCode is always present (even if empty string) for all products
     const productsWithPadCode = data.map((p, idx) => ({ 
       ...p, 
       no: idx + 1,
       padCode: p.padCode !== undefined ? p.padCode : '' // Ensure padCode always exists
     }));
+    
+    // Update products
     setProducts(productsWithPadCode);
   }, []);
 
@@ -119,16 +125,25 @@ const Products = () => {
       const changedKey = customEvent.detail?.key || '';
       const normalizedKey = changedKey.split('/').pop();
 
-      if (normalizedKey === 'bom' || normalizedKey === 'products') {
+      // Skip reload jika sedang save BOM (akan reload manual setelah save)
+      if ((normalizedKey === 'bom' || normalizedKey === 'products') && !isSavingBOMRef.current) {
         loadProducts();
       }
     };
 
     // Listen for BOM updates from other modules (e.g., PPIC)
+    // Jangan reload jika source adalah 'MasterProducts' atau sedang save BOM
     const handleBOMUpdate = (event: Event) => {
       const customEvent = event as CustomEvent<{ productId: string; bomItems: any[]; source: string }>;
-      console.log(`[Master Products] BOM updated from ${customEvent.detail?.source || 'unknown'}:`, customEvent.detail);
-      // Reload products to sync BOM changes
+      const source = customEvent.detail?.source || 'unknown';
+      
+      // Skip reload jika event berasal dari module ini sendiri atau sedang save BOM
+      if (source === 'MasterProducts' || isSavingBOMRef.current) {
+        return;
+      }
+      
+      console.log(`[Master Products] BOM updated from ${source}:`, customEvent.detail);
+      // Reload products to sync BOM changes dari module lain
       loadProducts();
     };
 
@@ -195,10 +210,58 @@ const Products = () => {
     }
   };
 
+  // Helper function untuk generate product_id dengan pattern FG-{customer code}-{sequence}
+  const generateProductId = useCallback((customerName: string): string => {
+    // Cari customer berdasarkan nama
+    const customer = customers.find(c => c.nama === customerName);
+    let customerCode = 'GEN'; // Default jika customer tidak ditemukan
+    
+    if (customer && customer.kode) {
+      // Ambil 3-4 karakter pertama dari kode customer, uppercase
+      customerCode = customer.kode.substring(0, 4).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (customerCode.length < 3) {
+        // Jika kurang dari 3 karakter, ambil dari nama customer
+        const nameParts = customer.nama.split(' ').filter(p => p.length > 0);
+        if (nameParts.length > 0) {
+          customerCode = nameParts.map(p => p[0]).join('').substring(0, 3).toUpperCase();
+        }
+      }
+    } else if (customerName) {
+      // Jika customer ada tapi tidak ada di master, ambil inisial dari nama
+      const nameParts = customerName.split(' ').filter(p => p.length > 0);
+      if (nameParts.length > 0) {
+        customerCode = nameParts.map(p => p[0]).join('').substring(0, 3).toUpperCase();
+      }
+    }
+    
+    // Cari sequence number terakhir untuk customer ini
+    const existingProducts = products.filter(p => {
+      const pid = (p.product_id || '').toString().trim();
+      return pid.startsWith(`FG-${customerCode}-`);
+    });
+    
+    // Extract sequence numbers
+    const sequences = existingProducts
+      .map(p => {
+        const pid = (p.product_id || '').toString().trim();
+        const match = pid.match(/FG-[A-Z0-9]+-(\d+)$/);
+        return match ? parseInt(match[1], 10) : 0;
+      })
+      .filter(n => !isNaN(n) && n > 0);
+    
+    // Get next sequence number
+    const nextSequence = sequences.length > 0 ? Math.max(...sequences) + 1 : 1;
+    
+    // Format: FG-{customerCode}-{5 digit sequence}
+    return `FG-${customerCode}-${String(nextSequence).padStart(5, '0')}`;
+  }, [customers, products]);
+
   const hasBOM = (product: Product): boolean => {
-    const productId = (product.product_id || product.kode || '').toString().trim();
+    const productId = (product.product_id || product.padCode || product.kode || '').toString().trim();
+    if (!productId) return false;
     return bomData.some(b => {
-      const bomProductId = (b.product_id || b.kode || '').toString().trim();
+      // Fallback: product_id -> padCode -> kode
+      const bomProductId = (b.product_id || b.padCode || b.kode || '').toString().trim();
       return bomProductId === productId;
     });
   };
@@ -287,6 +350,15 @@ const Products = () => {
       if (editingItem) {
         const updated = products.map(p => {
           if (p.id === editingItem.id) {
+            // Auto-generate product_id jika kosong
+            let productId = p.product_id;
+            if (!productId || productId.trim() === '') {
+              const customerName = (formData.customer || p.customer || '').trim();
+              if (customerName) {
+                productId = generateProductId(customerName);
+              }
+            }
+            
             // Create new object with all fields explicitly set
             const updatedProduct: Product = {
               id: editingItem.id,
@@ -303,7 +375,7 @@ const Products = () => {
               hargaFg: formData.hargaFg !== undefined ? Number(formData.hargaFg) : (p.hargaFg || 0),
               harga: formData.harga !== undefined ? Number(formData.harga) : (p.harga || 0),
               bom: formData.bom !== undefined ? formData.bom : (p.bom || []),
-              product_id: p.product_id,
+              product_id: productId,
               lastUpdate: new Date().toISOString(), 
               userUpdate: 'System', 
               ipAddress: '127.0.0.1' 
@@ -316,6 +388,13 @@ const Products = () => {
         await storageService.set('products', updated);
         setProducts(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
       } else {
+        // Auto-generate product_id untuk product baru jika kosong
+        let productId = '';
+        const customerName = (formData.customer || '').trim();
+        if (customerName) {
+          productId = generateProductId(customerName);
+        }
+        
         const newProduct: Product = {
           id: Date.now().toString(),
           no: products.length + 1,
@@ -331,6 +410,7 @@ const Products = () => {
           hargaFg: formData.hargaFg || 0,
           harga: formData.harga,
           bom: formData.bom,
+          product_id: productId || undefined,
           lastUpdate: new Date().toISOString(),
           userUpdate: 'System',
           ipAddress: '127.0.0.1',
@@ -609,17 +689,43 @@ const Products = () => {
     setEditingBOM(item);
   };
 
-  const handleSaveBOM = async (bomItems: any[]) => {
-    if (!editingBOM) return;
+  const handleSaveBOM = useCallback(async (bomItems: any[]) => {
+    // Get editingBOM dari closure, bukan dari dependency
+    const currentEditingBOM = editingBOM;
+    if (!currentEditingBOM) return;
 
+    isSavingBOMRef.current = true;
     try {
       // Load existing BOM
-      const existingBOM = await storageService.get<any[]>('bom') || [];
-      const productId = (editingBOM.product_id || editingBOM.kode || '').toString().trim();
+      const existingBOM = extractStorageValue(await storageService.get<any[]>('bom'));
+      let productId = (currentEditingBOM.product_id || currentEditingBOM.padCode || currentEditingBOM.kode || '').toString().trim();
+
+      // Auto-generate product_id jika kosong
+      if (!productId) {
+        const customerName = (currentEditingBOM.customer || '').trim();
+        if (customerName) {
+          productId = generateProductId(customerName);
+          
+          // Update product dengan product_id yang baru di-generate
+          const updatedProducts = products.map(p => 
+            p.id === currentEditingBOM.id
+              ? { ...p, product_id: productId }
+              : p
+          );
+          await storageService.set('products', updatedProducts);
+          setProducts(updatedProducts.map((p, idx) => ({ ...p, no: idx + 1 })));
+        } else {
+          showAlert('Product ID tidak ditemukan dan customer tidak ada. Tidak bisa menyimpan BOM.', 'Error');
+          setEditingBOM(null);
+          isSavingBOMRef.current = false;
+          return;
+        }
+      }
 
       // Remove old BOM items for this product (hapus semua yang product_id sama)
       const filteredBOM = existingBOM.filter(b => {
-        const bomProductId = (b.product_id || b.kode || '').toString().trim();
+        // Fallback: product_id -> padCode -> kode
+        const bomProductId = (b.product_id || b.padCode || b.kode || '').toString().trim();
         return bomProductId !== productId;
       });
 
@@ -628,7 +734,8 @@ const Products = () => {
       const materialIdSet = new Set<string>();
       const newBOMItems = bomItems
         .filter(item => {
-          const materialId = (item.material_id || '').toString().trim();
+          // Support both camelCase (dari BOMDialog) dan snake_case (backward compatibility)
+          const materialId = (item.materialId || item.material_id || '').toString().trim();
           if (!materialId) return false;
           if (materialIdSet.has(materialId)) {
             // Skip duplicate material_id
@@ -639,39 +746,47 @@ const Products = () => {
         })
         .map(item => ({
           id: item.id || `bom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          product_id: productId,
-          material_id: item.material_id,
+          product_id: productId,  // Tetap snake_case di storage untuk backward compatibility
+          material_id: (item.materialId || item.material_id || '').toString().trim(),  // Support both camelCase dan snake_case
           ratio: item.ratio || 1,
           created: item.id ? undefined : new Date().toISOString(),
         }));
 
       // Save to storage
+      // IMPORTANT: BOM harus selalu di-sync dengan timestamp baru
+      // storageService.set() akan handle timestamp, tapi kita pastikan data benar-benar berubah
       const updatedBOM = [...filteredBOM, ...newBOMItems];
       await storageService.set('bom', updatedBOM);
-      setBomData(updatedBOM);
+      // storageService.set() akan trigger 'app-storage-changed' event
+      // Event listener akan skip reload karena isSavingBOMRef.current = true
 
-      // Update product with BOM data
-      const updatedProducts = products.map(p =>
-        p.id === editingBOM.id
-          ? { ...p, bom: bomItems }
-          : p
-      );
-      await storageService.set('products', updatedProducts);
-      setProducts(updatedProducts);
-
-      // Broadcast event untuk sync ke PPIC dan module lain
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('bomUpdated', { 
-          detail: { productId, bomItems: newBOMItems, source: 'MasterProducts' } 
-        }));
-      }
-
-      showAlert(`BOM berhasil disimpan! (${newBOMItems.length} material)`, 'Success');
+      // Tampilkan pesan sukses dengan format sama seperti PPIC (sebelum close dialog)
+      const successMessage = `BOM berhasil disimpan untuk product: ${currentEditingBOM.nama || productId}\n\n(${newBOMItems.length} material)`;
+      showAlert(successMessage, 'Success');
+      
+      // Close dialog setelah alert ditampilkan
       setEditingBOM(null);
+      
+      // Reload data untuk update tampilan (setelah dialog ditutup)
+      setTimeout(async () => {
+        // Set flag false sebelum reload untuk allow reload
+        isSavingBOMRef.current = false;
+        await loadProducts();
+        
+        // Broadcast event untuk sync ke PPIC dan module lain (setelah reload)
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('bomUpdated', { 
+            detail: { productId, bomItems: newBOMItems, source: 'MasterProducts' } 
+          }));
+        }
+      }, 200);
     } catch (error: any) {
+      console.error('Error saving BOM:', error);
       showAlert(`Error saving BOM: ${error.message}`, 'Error');
+      setEditingBOM(null);
+      isSavingBOMRef.current = false;
     }
-  };
+  }, [showAlert, loadProducts, products, generateProductId]);
 
   const columns = [
     { 
@@ -1152,9 +1267,9 @@ const Products = () => {
 
       {editingBOM && (
         <BOMDialog
-          productId={editingBOM.id}
+          productId={editingBOM.product_id || editingBOM.padCode || editingBOM.kode || ''}
           productName={editingBOM.nama}
-          productKode={editingBOM.product_id || editingBOM.kode}
+          productKode={editingBOM.kode || editingBOM.product_id || editingBOM.padCode || ''}
           onClose={() => setEditingBOM(null)}
           onSave={handleSaveBOM}
         />

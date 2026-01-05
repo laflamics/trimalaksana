@@ -8,10 +8,11 @@ import ScheduleTable from '../../components/ScheduleTable';
 import NotificationBell from '../../components/NotificationBell';
 import { storageService } from '../../services/storage';
 import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
-import { generateSuratJalanHtml } from '../../pdf/suratjalan-pdf-template';
-import { openPrintWindow } from '../../utils/actions';
+import { generateSuratJalanHtml, generateSuratJalanRecapHtml } from '../../pdf/suratjalan-pdf-template';
+import { openPrintWindow, isMobile, isCapacitor } from '../../utils/actions';
 import { useDialog } from '../../hooks/useDialog';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
+import { PageSizeDialog, PageSize } from '../../components/PageSizeDialog';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
 import '../../styles/common.css';
@@ -58,6 +59,10 @@ interface DeliveryNote {
   lastUpdate?: string; // ISO date string untuk last update timestamp
   timestamp?: number; // Unix timestamp (milliseconds) untuk sync
   _timestamp?: number; // Backward compatibility timestamp
+  // SJ Recap fields
+  isRecap?: boolean; // Flag untuk menandai ini adalah SJ Recap
+  poNos?: string[]; // Array of PO numbers untuk SJ Recap
+  mergedSjNos?: string[]; // Array of SJ numbers yang di-merge menjadi SJ Recap ini
 }
 
 interface Customer {
@@ -391,13 +396,17 @@ const DeliveryNote = () => {
   const [salesOrders, setSalesOrders] = useState<SalesOrder[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'delivery' | 'schedule' | 'outstanding'>('delivery');
+  const [activeTab, setActiveTab] = useState<'delivery' | 'schedule' | 'outstanding' | 'recap'>('delivery');
   const [scheduleData, setScheduleData] = useState<any[]>([]);
   const [spkData, setSpkData] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [showCreateDeliveryNoteDialog, setShowCreateDeliveryNoteDialog] = useState(false);
+  const [initialDialogMode, setInitialDialogMode] = useState<'po' | 'so' | 'sj' | 'manual'>('po');
+  const [initialSelectedSJs, setInitialSelectedSJs] = useState<string[]>([]);
   const [selectedDelivery, setSelectedDelivery] = useState<DeliveryNote | null>(null);
+  const [showCreateSJRecapDialog, setShowCreateSJRecapDialog] = useState(false);
   const [viewPdfData, setViewPdfData] = useState<{ html: string; sjNo: string } | null>(null);
+  const [showPageSizeDialog, setShowPageSizeDialog] = useState(false);
   const [signatureViewer, setSignatureViewer] = useState<{ 
     data: string; 
     fileName: string; 
@@ -424,16 +433,52 @@ const DeliveryNote = () => {
   // Custom Dialog - menggunakan hook terpusat
   const { showAlert: showAlertBase, showConfirm: showConfirmBase, showPrompt: showPromptBase, closeDialog, DialogComponent } = useDialog();
   
+  // Guard untuk prevent dialog spam
+  const dialogGuardRef = useRef<{ lastCall: number; callCount: number }>({ lastCall: 0, callCount: 0 });
+  
   // Wrapper untuk kompatibilitas dengan urutan parameter yang berbeda
   const showAlert = (title: string, message: string) => {
+    // Prevent spam: max 1 call per 1000ms, max 2 calls total
+    const now = Date.now();
+    if (now - dialogGuardRef.current.lastCall < 1000) {
+      dialogGuardRef.current.callCount++;
+      if (dialogGuardRef.current.callCount >= 2) {
+        return; // Skip jika terlalu banyak calls
+      }
+    } else {
+      dialogGuardRef.current.callCount = 0;
+    }
+    dialogGuardRef.current.lastCall = now;
     showAlertBase(message, title);
   };
 
   const showConfirm = (title: string, message: string, onConfirm: () => void, onCancel?: () => void) => {
+    // Prevent spam: max 1 call per 1000ms, max 2 calls total
+    const now = Date.now();
+    if (now - dialogGuardRef.current.lastCall < 1000) {
+      dialogGuardRef.current.callCount++;
+      if (dialogGuardRef.current.callCount >= 2) {
+        return; // Skip jika terlalu banyak calls
+      }
+    } else {
+      dialogGuardRef.current.callCount = 0;
+    }
+    dialogGuardRef.current.lastCall = now;
     showConfirmBase(message, onConfirm, onCancel, title);
   };
 
   const showPrompt = (title: string, message: string, defaultValue: string, onConfirm: (value: string) => void, placeholder?: string) => {
+    // Prevent spam: max 1 call per 1000ms, max 2 calls total
+    const now = Date.now();
+    if (now - dialogGuardRef.current.lastCall < 1000) {
+      dialogGuardRef.current.callCount++;
+      if (dialogGuardRef.current.callCount >= 2) {
+        return; // Skip jika terlalu banyak calls
+      }
+    } else {
+      dialogGuardRef.current.callCount = 0;
+    }
+    dialogGuardRef.current.lastCall = now;
     showPromptBase(message, defaultValue, onConfirm, undefined, title, placeholder || '');
   };
 
@@ -446,6 +491,29 @@ const DeliveryNote = () => {
     };
   }, [signatureViewer?.blobUrl]);
 
+  // Guard untuk prevent storage event loops
+  const processingStorageEventRef = useRef(false);
+  // Debounce ref untuk loadNotifications
+  const loadNotificationsDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  // Guard untuk prevent recursive calls di loadNotifications
+  const loadingNotificationsRef = useRef(false);
+  // Flag untuk prevent storage event trigger saat save dari loadNotifications
+  const isSavingNotificationsRef = useRef(false);
+  // Ref untuk fallback interval
+  const fallbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Last load time untuk throttle
+  const lastLoadNotificationsTimeRef = useRef<number>(0);
+  // Guard untuk prevent interval multiple creation
+  const intervalCreatedRef = useRef(false);
+  // Debounce timer untuk storage events
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Storage event guard
+  const storageEventGuardRef = useRef<{ lastKey: string; lastTime: number; callCount: number }>({ 
+    lastKey: '', 
+    lastTime: 0, 
+    callCount: 0 
+  });
+  
   useEffect(() => {
     loadDeliveries();
     loadCustomers();
@@ -455,11 +523,30 @@ const DeliveryNote = () => {
     loadScheduleData();
     
     // Event-based updates: lebih efisien daripada polling
-    let debounceTimer: NodeJS.Timeout | null = null;
+    // CRITICAL: Move refs outside useEffect to prevent recreation on every render
     
     const handleStorageChange = (e: Event) => {
+      // Prevent recursive calls
+      if (processingStorageEventRef.current) {
+        return;
+      }
+      
       const customEvent = e as CustomEvent<{ key?: string }>;
       const key = customEvent.detail?.key || '';
+      
+      // Prevent spam: max 1 call per key per 1 second
+      const now = Date.now();
+      if (storageEventGuardRef.current.lastKey === key && 
+          now - storageEventGuardRef.current.lastTime < 1000) {
+        storageEventGuardRef.current.callCount++;
+        if (storageEventGuardRef.current.callCount > 5) {
+          return; // Skip jika terlalu banyak calls untuk key yang sama
+        }
+      } else {
+        storageEventGuardRef.current.callCount = 0;
+        storageEventGuardRef.current.lastKey = key;
+      }
+      storageEventGuardRef.current.lastTime = now;
       
       // Hanya reload jika ada perubahan di data yang relevan
       if (
@@ -470,49 +557,88 @@ const DeliveryNote = () => {
         key === 'productionNotifications' ||
         key === 'deliveryNotifications'
       ) {
-        // Debounce: tunggu 300ms sebelum reload
-        if (debounceTimer) {
-          clearTimeout(debounceTimer);
+        // Skip jika sedang save dari loadNotifications sendiri (prevent loop)
+        if (key === 'deliveryNotifications' && isSavingNotificationsRef.current) {
+          return;
         }
-        debounceTimer = setTimeout(() => {
-          if (key === 'delivery' || key === 'deliveryNotes') {
-            loadDeliveries();
+        
+        // Debounce: tunggu 1000ms sebelum reload (increased untuk prevent spam)
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current);
+        }
+        debounceTimerRef.current = setTimeout(() => {
+          processingStorageEventRef.current = true;
+          try {
+            if (key === 'delivery' || key === 'deliveryNotes') {
+              loadDeliveries();
+            } else if (key === 'salesOrders') {
+              loadSalesOrders();
+            } else if (key === 'schedule') {
+              loadScheduleData();
+            } else if (key === 'productionNotifications' || key === 'deliveryNotifications') {
+              // Throttle: minimal 3 detik antara calls untuk notifications
+              const now = Date.now();
+              if (now - lastLoadNotificationsTimeRef.current < 3000) {
+                return;
+              }
+              // Debounce loadNotifications untuk prevent loops
+              if (loadNotificationsDebounceRef.current) {
+                clearTimeout(loadNotificationsDebounceRef.current);
+              }
+              loadNotificationsDebounceRef.current = setTimeout(() => {
+                lastLoadNotificationsTimeRef.current = Date.now();
+                loadNotifications();
+                loadNotificationsDebounceRef.current = null;
+              }, 1500); // 1.5 second debounce
+            }
+          } finally {
+            // Reset guard after a short delay to allow processing
+            setTimeout(() => {
+              processingStorageEventRef.current = false;
+            }, 200);
           }
-          if (key === 'salesOrders') {
-            loadSalesOrders();
-          }
-          if (key === 'schedule') {
-            loadScheduleData();
-          }
-          if (key === 'productionNotifications' || key === 'deliveryNotifications') {
-            loadNotifications();
-          }
-          debounceTimer = null;
-        }, 300);
+          debounceTimerRef.current = null;
+        }, 1000); // Increased debounce time to 1 second
       }
     };
     
     // Fallback polling: hanya jika event listener tidak tersedia atau untuk safety net
-    // Interval lebih panjang (15 detik) sebagai backup
-    const fallbackInterval = setInterval(() => {
-      loadDeliveries();
-      loadNotifications();
-      loadScheduleData();
-    }, 15000); // Increased to 15 seconds as fallback
+    // CRITICAL: Hanya create interval jika belum ada (prevent multiple intervals)
+    if (!intervalCreatedRef.current && !fallbackIntervalRef.current) {
+      intervalCreatedRef.current = true;
+      fallbackIntervalRef.current = setInterval(() => {
+        loadDeliveries();
+        loadNotifications();
+        loadScheduleData();
+      }, 60000); // Increased to 60 seconds to reduce load
+    }
     
     if (typeof window !== 'undefined') {
       window.addEventListener('app-storage-changed', handleStorageChange as EventListener);
     }
     
-    return () => {
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
-      }
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('app-storage-changed', handleStorageChange as EventListener);
-      }
-      clearInterval(fallbackInterval);
-    };
+      return () => {
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current);
+          debounceTimerRef.current = null;
+        }
+        if (loadNotificationsDebounceRef.current) {
+          clearTimeout(loadNotificationsDebounceRef.current);
+          loadNotificationsDebounceRef.current = null;
+        }
+        if (typeof window !== 'undefined') {
+          window.removeEventListener('app-storage-changed', handleStorageChange as EventListener);
+        }
+        if (fallbackIntervalRef.current) {
+          clearInterval(fallbackIntervalRef.current);
+          fallbackIntervalRef.current = null;
+        }
+        intervalCreatedRef.current = false;
+        loadingNotificationsRef.current = false; // Reset guard on unmount
+        isSavingNotificationsRef.current = false;
+        processingStorageEventRef.current = false;
+        storageEventGuardRef.current = { lastKey: '', lastTime: 0, callCount: 0 };
+      };
   }, []);
 
   const loadScheduleData = async () => {
@@ -523,17 +649,40 @@ const DeliveryNote = () => {
     // Ensure spk is always an array
     spk = Array.isArray(spk) ? spk : [];
     
-    // 🚀 OPTIMASI: Hanya update state jika benar-benar ada perubahan
+    // 🚀 OPTIMASI: Shallow comparison instead of JSON.stringify (much faster)
     setScheduleData((prev: any[]) => {
-      if (JSON.stringify(prev) === JSON.stringify(schedule)) {
-        return prev;
+      if (prev.length !== schedule.length) {
+        return schedule;
+      }
+      if (prev.length === 0) {
+        return prev; // Both empty, no change
+      }
+      // Quick check: compare first and last items
+      const prevFirst = prev[0];
+      const newFirst = schedule[0];
+      const prevLast = prev[prev.length - 1];
+      const newLast = schedule[schedule.length - 1];
+      if (prevFirst?.id === newFirst?.id && prevLast?.id === newLast?.id) {
+        return prev; // Likely same data
       }
       return schedule;
     });
     
+    // 🚀 OPTIMASI: Shallow comparison instead of JSON.stringify (much faster)
     setSpkData((prev: any[]) => {
-      if (JSON.stringify(prev) === JSON.stringify(spk)) {
-        return prev;
+      if (prev.length !== spk.length) {
+        return spk;
+      }
+      if (prev.length === 0) {
+        return prev; // Both empty, no change
+      }
+      // Quick check: compare first and last items
+      const prevFirst = prev[0];
+      const newFirst = spk[0];
+      const prevLast = prev[prev.length - 1];
+      const newLast = spk[spk.length - 1];
+      if (prevFirst?.spkNo === newFirst?.spkNo && prevLast?.spkNo === newLast?.spkNo) {
+        return prev; // Likely same data
       }
       return spk;
     });
@@ -541,10 +690,21 @@ const DeliveryNote = () => {
 
   const loadCustomers = async () => {
     const data = await storageService.get<Customer[]>('customers') || [];
-    // 🚀 OPTIMASI: Hanya update state jika benar-benar ada perubahan
+    // 🚀 OPTIMASI: Shallow comparison instead of JSON.stringify (much faster)
     setCustomers((prev: Customer[]) => {
-      if (JSON.stringify(prev) === JSON.stringify(data)) {
-        return prev; // No change, return previous state
+      if (prev.length !== data.length) {
+        return data;
+      }
+      if (prev.length === 0) {
+        return prev; // Both empty, no change
+      }
+      // Quick check: compare first and last items
+      const prevFirst = prev[0];
+      const newFirst = data[0];
+      const prevLast = prev[prev.length - 1];
+      const newLast = data[data.length - 1];
+      if (prevFirst?.id === newFirst?.id && prevLast?.id === newLast?.id) {
+        return prev; // Likely same data
       }
       return data;
     });
@@ -718,10 +878,21 @@ const DeliveryNote = () => {
 
   const loadProducts = async () => {
     const data = await storageService.get<any[]>('products') || [];
-    // 🚀 OPTIMASI: Hanya update state jika benar-benar ada perubahan
+    // 🚀 OPTIMASI: Shallow comparison instead of JSON.stringify (much faster)
     setProducts((prev: any[]) => {
-      if (JSON.stringify(prev) === JSON.stringify(data)) {
-        return prev; // No change, return previous state
+      if (prev.length !== data.length) {
+        return data;
+      }
+      if (prev.length === 0) {
+        return prev; // Both empty, no change
+      }
+      // Quick check: compare first and last items
+      const prevFirst = prev[0];
+      const newFirst = data[0];
+      const prevLast = prev[prev.length - 1];
+      const newLast = data[data.length - 1];
+      if (prevFirst?.id === newFirst?.id && prevLast?.id === newLast?.id) {
+        return prev; // Likely same data
       }
       return data;
     });
@@ -732,10 +903,21 @@ const DeliveryNote = () => {
     // Ensure data is always an array
     data = Array.isArray(data) ? data : [];
     const filteredData = data.filter(so => so.status === 'OPEN' || so.status === 'CLOSE');
-    // 🚀 OPTIMASI: Hanya update state jika benar-benar ada perubahan
+    // 🚀 OPTIMASI: Shallow comparison instead of JSON.stringify (much faster)
     setSalesOrders((prev: SalesOrder[]) => {
-      if (JSON.stringify(prev) === JSON.stringify(filteredData)) {
-        return prev; // No change, return previous state
+      if (prev.length !== filteredData.length) {
+        return filteredData;
+      }
+      if (prev.length === 0) {
+        return prev; // Both empty, no change
+      }
+      // Quick check: compare first and last items
+      const prevFirst = prev[0];
+      const newFirst = filteredData[0];
+      const prevLast = prev[prev.length - 1];
+      const newLast = filteredData[filteredData.length - 1];
+      if (prevFirst?.soNo === newFirst?.soNo && prevLast?.soNo === newLast?.soNo) {
+        return prev; // Likely same data
       }
       return filteredData;
     });
@@ -749,43 +931,385 @@ const DeliveryNote = () => {
     // Log tombstone info for debugging
     const deletedCount = data.length - activeDeliveries.length;
     if (deletedCount > 0) {
-      console.log(`[DeliveryNote] Loaded ${activeDeliveries.length} active deliveries, ${deletedCount} tombstones hidden`);
+      // Removed console.log for performance
     }
     
-    // 🚀 OPTIMASI: Hanya update state jika benar-benar ada perubahan
+    // 🚀 OPTIMASI: Shallow comparison instead of JSON.stringify (much faster)
     setDeliveries((prev: DeliveryNote[]) => {
-      if (JSON.stringify(prev) === JSON.stringify(activeDeliveries)) {
-        return prev; // No change, return previous state
+      if (prev.length !== activeDeliveries.length) {
+        return activeDeliveries;
+      }
+      if (prev.length === 0) {
+        return prev; // Both empty, no change
+      }
+      // Quick check: compare first and last items
+      const prevFirst = prev[0];
+      const newFirst = activeDeliveries[0];
+      const prevLast = prev[prev.length - 1];
+      const newLast = activeDeliveries[activeDeliveries.length - 1];
+      if (prevFirst?.id === newFirst?.id && prevLast?.id === newLast?.id) {
+        return prev; // Likely same data
       }
       return activeDeliveries;
     });
   };
 
-  const loadNotifications = async () => {
-    // Load notifications dari PPIC (delivery schedule)
-    let deliveryNotifications = await storageService.get<any[]>('deliveryNotifications') || [];
-    // Ensure deliveryNotifications is always an array
-    deliveryNotifications = Array.isArray(deliveryNotifications) ? deliveryNotifications : [];
+  // Group notifications berdasarkan sjGroupId dari schedule
+  // IMPORTANT: Setiap notification sekarang per SPK (bukan per group)
+  // Grouping hanya untuk display, tapi setiap notification tetap represent 1 SPK
+  const groupNotificationsByDelivery = async (notifications: any[]) => {
+    // Load schedule untuk mendapatkan sjGroupId
+    const scheduleList = await storageService.get<any[]>('schedule') || [];
     
-    // Filter out deleted notifications (tombstone pattern)
-    const initialCount = deliveryNotifications.length;
-    deliveryNotifications = deliveryNotifications.filter((n: any) => {
-      const isDeleted = n.deleted === true || n.deleted === 'true' || n.deletedAt;
-      if (isDeleted) {
+    // Helper function untuk match SPK (handle batch format)
+    const matchSPK = (spk1: string, spk2: string): boolean => {
+      if (!spk1 || !spk2) return false;
+      if (spk1 === spk2) return true;
+      // Support both formats: old format (strip) and new format (slash)
+      const normalize = (spk: string) => {
+        // Convert to slash format for comparison
+        return spk.replace(/-/g, '/');
+      };
+      const normalized1 = normalize(spk1);
+      const normalized2 = normalize(spk2);
+      if (normalized1 === normalized2) return true;
+      // IMPORTANT: Match batch suffix (SPK/251212/NY530-A vs SPK/251212/NY530)
+      // Tapi JANGAN match base SPK saja (SPK/251212/NY530 vs SPK/251212/UTCCE)
+      // Split menjadi parts
+      const parts1 = normalized1.split('/');
+      const parts2 = normalized2.split('/');
+      
+      // Harus punya minimal 3 parts untuk match (SPK/251212/XXX)
+      if (parts1.length < 3 || parts2.length < 3) {
+        // Jika kurang dari 3 parts, hanya exact match
+        return normalized1 === normalized2;
       }
-      return !isDeleted;
+      
+      // Match jika 3 parts pertama sama (SPK/251212/XXX)
+      // Ini untuk handle batch suffix seperti SPK/251212/NY530-A vs SPK/251212/NY530
+      const base1 = parts1.slice(0, 3).join('/'); // SPK/251212/NY530
+      const base2 = parts2.slice(0, 3).join('/'); // SPK/251212/NY530
+      
+      if (base1 === base2) {
+        // Base sama, ini batch dari SPK yang sama
+        return true;
+      }
+      
+      // Jangan match jika base berbeda (SPK/251212/NY530 vs SPK/251212/UTCCE)
+      return false;
+    };
+    
+    // Enrich setiap notification dengan sjGroupId dari schedule
+    // IMPORTANT: Setiap notification sekarang punya spkNo (single), bukan spkNos (array)
+    const enrichedNotifications = notifications.map((notif: any) => {
+      // Handle format: spkNo (single SPK per notification) atau spkNos (old format)
+      const spkNo = notif.spkNo || (notif.spkNos && notif.spkNos.length > 0 ? notif.spkNos[0] : null);
+      
+      if (!spkNo) {
+        return {
+          ...notif,
+          sjGroupId: null,
+        };
+      }
+      
+      // PRIORITAS 1: Gunakan sjGroupId yang sudah ada di notification (dari PPIC)
+      let sjGroupId: string | null = notif.sjGroupId || null;
+      
+      // PRIORITAS 2: Jika tidak ada di notification, ambil dari deliveryBatches di notification
+      if (!sjGroupId && notif.deliveryBatches && Array.isArray(notif.deliveryBatches) && notif.deliveryBatches.length > 0) {
+        const batchWithGroup = notif.deliveryBatches.find((db: any) => db.sjGroupId);
+        if (batchWithGroup && batchWithGroup.sjGroupId) {
+          sjGroupId = batchWithGroup.sjGroupId;
+        }
+      }
+      
+      // PRIORITAS 3: Fallback ke schedule (jika masih belum ada)
+      if (!sjGroupId) {
+        // Cari schedule yang match dengan SPK dari notification
+        const relatedSchedule = scheduleList.find((s: any) => {
+          if (!s.spkNo) return false;
+          return matchSPK(s.spkNo, spkNo);
+        });
+        
+        // Ambil sjGroupId dari deliveryBatches di schedule
+        if (relatedSchedule && relatedSchedule.deliveryBatches && relatedSchedule.deliveryBatches.length > 0) {
+          // Cari batch yang match dengan SPK ini
+          const matchingBatch = relatedSchedule.deliveryBatches.find((db: any) => {
+            // Jika batch punya spkNo, match dengan SPK dari notification
+            if (db.spkNo) {
+              return matchSPK(db.spkNo, spkNo);
+            }
+            // Jika tidak ada spkNo di batch, cek apakah batch punya sjGroupId
+            return db.sjGroupId;
+          });
+          
+          if (matchingBatch && matchingBatch.sjGroupId) {
+            sjGroupId = matchingBatch.sjGroupId;
+          } else if (relatedSchedule.deliveryBatches[0]?.sjGroupId) {
+            sjGroupId = relatedSchedule.deliveryBatches[0].sjGroupId;
+          }
+        }
+      }
+      
+      // Enrich delivery date dari schedule berdasarkan sjGroupId atau SPK
+      let deliveryDate: string | null = null;
+      let enrichedDeliveryBatches = notif.deliveryBatches || [];
+      
+      // Jika punya sjGroupId, cari batch dengan sjGroupId yang sama di schedule
+      if (sjGroupId) {
+        const scheduleWithGroup = scheduleList.find((s: any) => {
+          return s.deliveryBatches?.some((db: any) => db.sjGroupId === sjGroupId);
+        });
+        
+        if (scheduleWithGroup && scheduleWithGroup.deliveryBatches) {
+          const matchingBatch = scheduleWithGroup.deliveryBatches.find((db: any) => db.sjGroupId === sjGroupId);
+          if (matchingBatch && matchingBatch.deliveryDate) {
+            deliveryDate = matchingBatch.deliveryDate;
+            enrichedDeliveryBatches = [{ deliveryDate, sjGroupId, qty: matchingBatch.qty }];
+          }
+        }
+      }
+      
+      // Fallback: jika tidak ada sjGroupId atau tidak ditemukan, cari dari schedule berdasarkan SPK
+      if (!deliveryDate) {
+        const relatedSchedule = scheduleList.find((s: any) => {
+          if (!s.spkNo) return false;
+          return matchSPK(s.spkNo, spkNo);
+        });
+        
+        if (relatedSchedule && relatedSchedule.deliveryBatches && relatedSchedule.deliveryBatches.length > 0) {
+          // Ambil batch pertama yang match dengan SPK atau batch pertama
+          const matchingBatch = relatedSchedule.deliveryBatches.find((db: any) => {
+            if (db.spkNo) {
+              return matchSPK(db.spkNo, spkNo);
+            }
+            return true;
+          });
+          
+          if (matchingBatch && matchingBatch.deliveryDate) {
+            deliveryDate = matchingBatch.deliveryDate;
+            enrichedDeliveryBatches = [{ 
+              deliveryDate, 
+              sjGroupId: matchingBatch.sjGroupId || sjGroupId,
+              qty: matchingBatch.qty 
+            }];
+          } else if (relatedSchedule.deliveryBatches[0]?.deliveryDate) {
+            deliveryDate = relatedSchedule.deliveryBatches[0].deliveryDate;
+            enrichedDeliveryBatches = [{ 
+              deliveryDate, 
+              sjGroupId: relatedSchedule.deliveryBatches[0].sjGroupId || sjGroupId,
+              qty: relatedSchedule.deliveryBatches[0].qty 
+            }];
+          }
+        }
+      }
+      
+      // Jika masih belum ada delivery date, gunakan yang ada di notification
+      if (!deliveryDate && notif.deliveryBatches && notif.deliveryBatches.length > 0) {
+        enrichedDeliveryBatches = notif.deliveryBatches;
+      }
+      
+      return {
+        ...notif,
+        spkNo: spkNo, // Ensure single SPK format
+        sjGroupId, // Tambahkan sjGroupId ke notification
+        deliveryBatches: enrichedDeliveryBatches, // Enrich deliveryBatches dari schedule
+      };
     });
     
-    if (initialCount > deliveryNotifications.length) {
+    // Group berdasarkan sjGroupId (jika ada)
+    // IMPORTANT: Setiap sjGroupId yang berbeda harus jadi notifikasi terpisah
+    const groups: { [key: string]: any[] } = {};
+    const ungrouped: any[] = [];
+    
+    enrichedNotifications.forEach((notif: any) => {
+      if (notif.sjGroupId) {
+        // Group berdasarkan sjGroupId
+        // IMPORTANT: Setiap sjGroupId yang berbeda akan jadi group terpisah
+        if (!groups[notif.sjGroupId]) {
+          groups[notif.sjGroupId] = [];
+        }
+        groups[notif.sjGroupId].push(notif);
+      } else {
+        // Tidak punya sjGroupId, tidak digroup (single notification)
+        ungrouped.push(notif);
+      }
+    });
+    
+    // Removed console.log for performance
+    
+    // Convert groups to array of grouped notifications
+    const groupedResults: any[] = [];
+    
+    // Process grouped notifications (yang punya sjGroupId)
+    // IMPORTANT: Setiap entry di groups = 1 notifikasi terpisah (bukan digabung semua)
+    Object.entries(groups).forEach(([sjGroupId, group]) => {
+      if (group.length === 1) {
+        // Single notification dalam group
+        // IMPORTANT: Enrich delivery date dari schedule berdasarkan sjGroupId
+        const singleNotif = group[0];
+        let deliveryDate: string | null = null;
+        
+        // Cari schedule yang punya batch dengan sjGroupId ini
+        const scheduleWithGroup = scheduleList.find((s: any) => {
+          return s.deliveryBatches?.some((db: any) => db.sjGroupId === sjGroupId);
+        });
+        
+        if (scheduleWithGroup && scheduleWithGroup.deliveryBatches) {
+          const matchingBatch = scheduleWithGroup.deliveryBatches.find((db: any) => db.sjGroupId === sjGroupId);
+          if (matchingBatch && matchingBatch.deliveryDate) {
+            deliveryDate = matchingBatch.deliveryDate;
+          }
+        }
+        
+        // Fallback: ambil dari notification deliveryBatches
+        if (!deliveryDate && singleNotif.deliveryBatches && singleNotif.deliveryBatches.length > 0) {
+          const matchingBatch = singleNotif.deliveryBatches.find((db: any) => db.sjGroupId === sjGroupId);
+          if (matchingBatch && matchingBatch.deliveryDate) {
+            deliveryDate = matchingBatch.deliveryDate;
+          } else {
+            deliveryDate = singleNotif.deliveryBatches[0].deliveryDate;
+          }
+        }
+        
+        // Update notification dengan delivery date yang benar
+        groupedResults.push({
+          ...singleNotif,
+          deliveryBatches: deliveryDate ? [{ deliveryDate, sjGroupId }] : (singleNotif.deliveryBatches || []),
+        });
+      } else {
+        // Multiple notifications dengan sjGroupId yang sama - create grouped notification
+        const firstNotif = group[0];
+        
+        // Get delivery date dari batch pertama yang punya sjGroupId ini
+        let groupDeliveryDate: string | null = null;
+        const scheduleWithGroup = scheduleList.find((s: any) => {
+          return s.deliveryBatches?.some((db: any) => db.sjGroupId === sjGroupId);
+        });
+        
+        if (scheduleWithGroup && scheduleWithGroup.deliveryBatches) {
+          const matchingBatch = scheduleWithGroup.deliveryBatches.find((db: any) => db.sjGroupId === sjGroupId);
+          if (matchingBatch && matchingBatch.deliveryDate) {
+            groupDeliveryDate = matchingBatch.deliveryDate;
+          }
+        }
+        
+        // Fallback: ambil dari firstNotif
+        if (!groupDeliveryDate && firstNotif.deliveryBatches && firstNotif.deliveryBatches.length > 0) {
+          groupDeliveryDate = firstNotif.deliveryBatches[0].deliveryDate;
+        }
+        
+        // IMPORTANT: Jangan gabung quantity! Setiap SPK punya 1 product dengan quantity sendiri
+        // totalQty hanya untuk display, tapi items tetap terpisah per SPK
+        groupedResults.push({
+          ...firstNotif,
+          id: `grouped-${sjGroupId}-${firstNotif.id}`,
+          isGrouped: true,
+          sjGroupId, // Simpan sjGroupId untuk reference
+          groupedNotifications: group, // Store all notifications in this group (setiap notification = 1 SPK = 1 product)
+          totalQty: group.reduce((sum: number, n: any) => sum + (n.qty || 0), 0), // Total untuk display saja
+          deliveryBatches: groupDeliveryDate ? [{ deliveryDate: groupDeliveryDate, sjGroupId }] : [],
+        });
+      }
+    });
+    
+    // Add ungrouped notifications (yang tidak punya sjGroupId)
+    // IMPORTANT: Enrich delivery date dari schedule untuk ungrouped notifications juga
+    const enrichedUngrouped = ungrouped.map((notif: any) => {
+      const spkNo = notif.spkNo || (notif.spkNos && notif.spkNos.length > 0 ? notif.spkNos[0] : null);
+      if (!spkNo) return notif;
+      
+      // Cari schedule yang match dengan SPK ini
+      const relatedSchedule = scheduleList.find((s: any) => {
+        if (!s.spkNo) return false;
+        return matchSPK(s.spkNo, spkNo);
+      });
+      
+      // Ambil delivery date dari schedule
+      let deliveryDate: string | null = null;
+      if (relatedSchedule && relatedSchedule.deliveryBatches && relatedSchedule.deliveryBatches.length > 0) {
+        // Ambil batch pertama yang match dengan SPK atau batch pertama
+        const matchingBatch = relatedSchedule.deliveryBatches.find((db: any) => {
+          if (db.spkNo) {
+            return matchSPK(db.spkNo, spkNo);
+          }
+          return true; // Ambil batch pertama jika tidak ada spkNo
+        });
+        
+        if (matchingBatch && matchingBatch.deliveryDate) {
+          deliveryDate = matchingBatch.deliveryDate;
+        } else if (relatedSchedule.deliveryBatches[0]?.deliveryDate) {
+          deliveryDate = relatedSchedule.deliveryBatches[0].deliveryDate;
+        }
+      }
+      
+      // Update notification dengan delivery date dari schedule jika belum ada
+      if (deliveryDate && (!notif.deliveryBatches || notif.deliveryBatches.length === 0)) {
+        return {
+          ...notif,
+          deliveryBatches: [{ deliveryDate }],
+        };
+      }
+      
+      return notif;
+    });
+    
+    return [...groupedResults, ...enrichedUngrouped];
+  };
+  
+  const loadNotifications = async () => {
+    // Prevent recursive calls
+    if (loadingNotificationsRef.current) {
+      return;
     }
     
-    // 🚀 OPTIMASI: Hanya update state jika benar-benar ada perubahan
-    setNotifications((prev: any[]) => {
-      if (JSON.stringify(prev) === JSON.stringify(deliveryNotifications)) {
-        return prev; // No change, return previous state
-      }
-      return deliveryNotifications;
-    });
+    // Throttle: minimal 2 detik antara calls
+    const now = Date.now();
+    if (now - lastLoadNotificationsTimeRef.current < 2000) {
+      return;
+    }
+    lastLoadNotificationsTimeRef.current = now;
+    
+    loadingNotificationsRef.current = true;
+    
+    try {
+      // Load notifications dari PPIC (delivery schedule)
+      let deliveryNotifications = await storageService.get<any[]>('deliveryNotifications') || [];
+      // Ensure deliveryNotifications is always an array
+      deliveryNotifications = Array.isArray(deliveryNotifications) ? deliveryNotifications : [];
+      
+      // Filter out deleted notifications (tombstone pattern)
+      deliveryNotifications = deliveryNotifications.filter((n: any) => {
+        const isDeleted = n.deleted === true || n.deleted === 'true' || n.deletedAt;
+        return !isDeleted;
+      });
+      
+      // 🚀 OPTIMASI: Shallow comparison instead of JSON.stringify (much faster)
+      setNotifications((prev: any[]) => {
+        // Quick check: length and first/last item comparison
+        if (prev.length !== deliveryNotifications.length) {
+          return deliveryNotifications;
+        }
+        // If same length, check if arrays are actually different
+        if (prev.length === 0 && deliveryNotifications.length === 0) {
+          return prev; // Both empty, no change
+        }
+        // Compare first and last items as quick check
+        const prevFirst = prev[0];
+        const newFirst = deliveryNotifications[0];
+        const prevLast = prev[prev.length - 1];
+        const newLast = deliveryNotifications[deliveryNotifications.length - 1];
+        
+        if (prevFirst?.id === newFirst?.id && prevLast?.id === newLast?.id) {
+          // Likely same data, but do a more thorough check for critical fields
+          const prevIds = new Set(prev.map((n: any) => n.id));
+          const newIds = new Set(deliveryNotifications.map((n: any) => n.id));
+          if (prevIds.size === newIds.size && [...prevIds].every(id => newIds.has(id))) {
+            return prev; // Same IDs, likely no change
+          }
+        }
+        return deliveryNotifications;
+      });
     // 🚀 OPTIMASI: Comment out heavy logging untuk performa
     // console.log('🔍 [Delivery Note] Loaded notifications from storage:', deliveryNotifications.length, deliveryNotifications.map((n: any) => ({
     //   id: n.id,
@@ -807,36 +1331,21 @@ const DeliveryNote = () => {
     // });
     // console.log('🔍 [Delivery Note] All SPKs in notifications:', allSpks);
     
-    // Load schedule data untuk enrich deliveryBatches jika belum ada
-    let scheduleList = await storageService.get<any[]>('schedule') || [];
-    // Ensure scheduleList is always an array
-    scheduleList = Array.isArray(scheduleList) ? scheduleList : [];
-    
-    // Load deliveries untuk cek apakah sudah dibuat
-    let currentDeliveries = await storageService.get<any[]>('delivery') || [];
-    // Ensure currentDeliveries is always an array
-    currentDeliveries = Array.isArray(currentDeliveries) ? currentDeliveries : [];
-    // Filter out deleted deliveries
-    currentDeliveries = currentDeliveries.filter((d: any) => {
-      const isDeleted = d.deleted === true || d.deleted === 'true' || d.deletedAt;
-      if (isDeleted) {
-      }
-      return !isDeleted;
-    });
-    
-    // Load inventory dan SPK data untuk cek stockFulfilled (harus di-load sebelum production & QC check)
-    let inventoryData = await storageService.get<any[]>('inventory') || [];
-    inventoryData = Array.isArray(inventoryData) ? inventoryData : [];
-    let spkData = await storageService.get<any[]>('spk') || [];
-    spkData = Array.isArray(spkData) ? spkData : [];
-    
-    // Cek status production dan QC untuk setiap notification
-    let productionList = await storageService.get<any[]>('production') || [];
-    // Ensure productionList is always an array
-    productionList = Array.isArray(productionList) ? productionList : [];
-    let qcList = await storageService.get<any[]>('qc') || [];
-    // Ensure qcList is always an array
-    qcList = Array.isArray(qcList) ? qcList : [];
+    // 🚀 OPTIMASI: Batch load semua data sekaligus untuk reduce storage calls
+    const [scheduleList, currentDeliveries, inventoryData, spkData, productionList, qcList] = await Promise.all([
+      storageService.get<any[]>('schedule').then(data => Array.isArray(data) ? data : []),
+      storageService.get<any[]>('delivery').then(data => {
+        const deliveries = Array.isArray(data) ? data : [];
+        return deliveries.filter((d: any) => {
+          const isDeleted = d.deleted === true || d.deleted === 'true' || d.deletedAt;
+          return !isDeleted;
+        });
+      }),
+      storageService.get<any[]>('inventory').then(data => Array.isArray(data) ? data : []),
+      storageService.get<any[]>('spk').then(data => Array.isArray(data) ? data : []),
+      storageService.get<any[]>('production').then(data => Array.isArray(data) ? data : []),
+      storageService.get<any[]>('qc').then(data => Array.isArray(data) ? data : [])
+    ]);
     
     // Helper function untuk match SPK (handle batch format dan SJ suffix)
     // IMPORTANT: Match harus exact atau dengan batch suffix, TIDAK berdasarkan base SPK saja
@@ -1247,31 +1756,57 @@ const DeliveryNote = () => {
     const currentStorageNotifications = await storageService.get<any[]>('deliveryNotifications') || [];
     const currentStorageCount = currentStorageNotifications.length;
     
+    // 🚀 OPTIMASI: Shallow comparison instead of JSON.stringify (much faster)
     // Cek apakah ada perubahan yang perlu disimpan
-    const hasChanges = JSON.stringify(cleanedNotifications) !== JSON.stringify(currentStorageNotifications);
+    const hasChanges = (() => {
+      if (cleanedNotifications.length !== currentStorageNotifications.length) {
+        return true;
+      }
+      // Quick check: compare IDs of first and last items
+      if (cleanedNotifications.length === 0) {
+        return false;
+      }
+      const cleanedIds = new Set(cleanedNotifications.map((n: any) => n.id));
+      const currentIds = new Set(currentStorageNotifications.map((n: any) => n.id));
+      if (cleanedIds.size !== currentIds.size) {
+        return true;
+      }
+      // Check if all IDs match
+      for (const id of cleanedIds) {
+        if (!currentIds.has(id)) {
+          return true;
+        }
+      }
+      // If IDs match, check status of first few items as quick check
+      const checkCount = Math.min(5, cleanedNotifications.length);
+      for (let i = 0; i < checkCount; i++) {
+        const cleaned = cleanedNotifications[i];
+        const current = currentStorageNotifications.find((n: any) => n.id === cleaned.id);
+        if (!current || cleaned.status !== current.status) {
+          return true;
+        }
+      }
+      return false;
+    })();
     
     if (hasChanges) {
-      // 🚀 OPTIMASI: Kurangi console.log untuk performa
-      // console.log(`💾 [Storage] Saving notifications to storage:`);
-      // console.log(`  Current in storage: ${currentStorageCount} notifications`);
-      // console.log(`  After cleanup: ${cleanedNotifications.length} notifications`);
-      // console.log(`  Cleaning ${currentStorageCount} → ${cleanedNotifications.length} notifications`);
-      // cleanedNotifications.forEach((n: any, idx: number) => {
-      //   console.log(`    [${idx}] SPK: ${n.spkNo}, sjGroupId: ${n.sjGroupId || 'null'}, status: ${n.status}, id: ${n.id}`);
-      // });
+      // Set flag untuk prevent storage event trigger loop
+      isSavingNotificationsRef.current = true;
       
-      // IMPORTANT: Pastikan semua notifications penting (READY_TO_SHIP, WAITING_PRODUCTION, WAITING_QC) tersimpan
-      const importantNotifications = cleanedNotifications.filter((n: any) => 
-        n.status === 'READY_TO_SHIP' || n.status === 'WAITING_PRODUCTION' || n.status === 'WAITING_QC'
-      );
-      
-      await storageService.set('deliveryNotifications', cleanedNotifications);
+      try {
+        await storageService.set('deliveryNotifications', cleanedNotifications);
+      } finally {
+        // Reset flag setelah delay untuk allow processing
+        setTimeout(() => {
+          isSavingNotificationsRef.current = false;
+        }, 500);
+      }
       
       // Verify setelah save
       const verifyNotifications = await storageService.get<any[]>('deliveryNotifications') || [];
       // console.log(`✅ [Storage] Verified after save: ${verifyNotifications.length} notifications in storage`);
       if (verifyNotifications.length !== cleanedNotifications.length) {
-        console.error(`❌ [Storage] MISMATCH! Expected ${cleanedNotifications.length} but got ${verifyNotifications.length} notifications in storage!`);
+        // Removed console.error for performance
         // verifyNotifications.forEach((n: any, idx: number) => {
         //   console.log(`    [${idx}] SPK: ${n.spkNo}, sjGroupId: ${n.sjGroupId || 'null'}, status: ${n.status}, id: ${n.id}`);
         // });
@@ -1309,7 +1844,7 @@ const DeliveryNote = () => {
     // Karena setiap sjGroupId = 1 delivery note terpisah
     // Deduplicate hanya jika SPK SAMA DAN sjGroupId SAMA (true duplicate)
     
-    const deduplicatedNotifications = readyNotifications.reduce((acc: any[], notif: any, currentIndex: number) => {
+    const deduplicatedNotifications = readyNotifications.reduce((acc: any[], notif: any) => {
       const spkNo = notif.spkNo || (notif.spkNos && notif.spkNos.length > 0 ? notif.spkNos[0] : null);
       if (!spkNo) {
         acc.push(notif);
@@ -1369,338 +1904,46 @@ const DeliveryNote = () => {
     // Group notifications berdasarkan sjGroupId dari schedule
     const groupedNotifications = await groupNotificationsByDelivery(deduplicatedNotifications);
     
-    // 🚀 OPTIMASI: Hanya update state jika benar-benar ada perubahan untuk mencegah re-render loop
+    // 🚀 OPTIMASI: Shallow comparison instead of JSON.stringify (much faster)
+    // Hanya update state jika benar-benar ada perubahan untuk mencegah re-render loop
     setNotifications((prev: any[]) => {
-      if (JSON.stringify(prev) === JSON.stringify(groupedNotifications)) {
-        return prev; // No change, return previous state
+      // Quick check: length
+      if (prev.length !== groupedNotifications.length) {
+        return groupedNotifications;
+      }
+      // If same length, check if arrays are actually different
+      if (prev.length === 0 && groupedNotifications.length === 0) {
+        return prev; // Both empty, no change
+      }
+      // Compare first and last items as quick check
+      const prevFirst = prev[0];
+      const newFirst = groupedNotifications[0];
+      const prevLast = prev[prev.length - 1];
+      const newLast = groupedNotifications[groupedNotifications.length - 1];
+      
+      if (prevFirst?.id === newFirst?.id && prevLast?.id === newLast?.id) {
+        // Likely same data, but do a more thorough check for critical fields
+        const prevIds = new Set(prev.map((n: any) => n.id));
+        const newIds = new Set(groupedNotifications.map((n: any) => n.id));
+        if (prevIds.size === newIds.size && [...prevIds].every(id => newIds.has(id))) {
+          return prev; // Same IDs, likely no change
+        }
       }
       return groupedNotifications;
     });
-  };
-
-  // Group notifications berdasarkan sjGroupId dari schedule
-  // IMPORTANT: Setiap notification sekarang per SPK (bukan per group)
-  // Grouping hanya untuk display, tapi setiap notification tetap represent 1 SPK
-  const groupNotificationsByDelivery = async (notifications: any[]) => {
-    // Load schedule untuk mendapatkan sjGroupId
-    const scheduleList = await storageService.get<any[]>('schedule') || [];
-    
-    // Helper function untuk match SPK (handle batch format)
-    const matchSPK = (spk1: string, spk2: string): boolean => {
-      if (!spk1 || !spk2) return false;
-      if (spk1 === spk2) return true;
-      // Support both formats: old format (strip) and new format (slash)
-      const normalize = (spk: string) => {
-        // Convert to slash format for comparison
-        return spk.replace(/-/g, '/');
-      };
-      const normalized1 = normalize(spk1);
-      const normalized2 = normalize(spk2);
-      if (normalized1 === normalized2) return true;
-      // IMPORTANT: Match batch suffix (SPK/251212/NY530-A vs SPK/251212/NY530)
-      // Tapi JANGAN match base SPK saja (SPK/251212/NY530 vs SPK/251212/UTCCE)
-      // Split menjadi parts
-      const parts1 = normalized1.split('/');
-      const parts2 = normalized2.split('/');
-      
-      // Harus punya minimal 3 parts untuk match (SPK/251212/XXX)
-      if (parts1.length < 3 || parts2.length < 3) {
-        // Jika kurang dari 3 parts, hanya exact match
-        return normalized1 === normalized2;
-      }
-      
-      // Match jika 3 parts pertama sama (SPK/251212/XXX)
-      // Ini untuk handle batch suffix seperti SPK/251212/NY530-A vs SPK/251212/NY530
-      const base1 = parts1.slice(0, 3).join('/'); // SPK/251212/NY530
-      const base2 = parts2.slice(0, 3).join('/'); // SPK/251212/NY530
-      
-      if (base1 === base2) {
-        // Base sama, ini batch dari SPK yang sama
-        return true;
-      }
-      
-      // Jangan match jika base berbeda (SPK/251212/NY530 vs SPK/251212/UTCCE)
-      return false;
-    };
-    
-    // Enrich setiap notification dengan sjGroupId dari schedule
-    // IMPORTANT: Setiap notification sekarang punya spkNo (single), bukan spkNos (array)
-    const enrichedNotifications = notifications.map((notif: any) => {
-      // Handle format: spkNo (single SPK per notification) atau spkNos (old format)
-      const spkNo = notif.spkNo || (notif.spkNos && notif.spkNos.length > 0 ? notif.spkNos[0] : null);
-      
-      if (!spkNo) {
-        return {
-          ...notif,
-          sjGroupId: null,
-        };
-      }
-      
-      // PRIORITAS 1: Gunakan sjGroupId yang sudah ada di notification (dari PPIC)
-      let sjGroupId: string | null = notif.sjGroupId || null;
-      
-      // PRIORITAS 2: Jika tidak ada di notification, ambil dari deliveryBatches di notification
-      if (!sjGroupId && notif.deliveryBatches && Array.isArray(notif.deliveryBatches) && notif.deliveryBatches.length > 0) {
-        const batchWithGroup = notif.deliveryBatches.find((db: any) => db.sjGroupId);
-        if (batchWithGroup && batchWithGroup.sjGroupId) {
-          sjGroupId = batchWithGroup.sjGroupId;
-        }
-      }
-      
-      // PRIORITAS 3: Fallback ke schedule (jika masih belum ada)
-      if (!sjGroupId) {
-        // Cari schedule yang match dengan SPK dari notification
-        const relatedSchedule = scheduleList.find((s: any) => {
-          if (!s.spkNo) return false;
-          return matchSPK(s.spkNo, spkNo);
-        });
-        
-        // Ambil sjGroupId dari deliveryBatches di schedule
-        if (relatedSchedule && relatedSchedule.deliveryBatches && relatedSchedule.deliveryBatches.length > 0) {
-          // Cari batch yang match dengan SPK ini
-          const matchingBatch = relatedSchedule.deliveryBatches.find((db: any) => {
-            // Jika batch punya spkNo, match dengan SPK dari notification
-            if (db.spkNo) {
-              return matchSPK(db.spkNo, spkNo);
-            }
-            // Jika tidak ada spkNo di batch, cek apakah batch punya sjGroupId
-            return db.sjGroupId;
-          });
-          
-          if (matchingBatch && matchingBatch.sjGroupId) {
-            sjGroupId = matchingBatch.sjGroupId;
-          } else if (relatedSchedule.deliveryBatches[0]?.sjGroupId) {
-            sjGroupId = relatedSchedule.deliveryBatches[0].sjGroupId;
-          }
-        }
-      }
-      
-      // Enrich delivery date dari schedule berdasarkan sjGroupId atau SPK
-      let deliveryDate: string | null = null;
-      let enrichedDeliveryBatches = notif.deliveryBatches || [];
-      
-      // Jika punya sjGroupId, cari batch dengan sjGroupId yang sama di schedule
-      if (sjGroupId) {
-        const scheduleWithGroup = scheduleList.find((s: any) => {
-          return s.deliveryBatches?.some((db: any) => db.sjGroupId === sjGroupId);
-        });
-        
-        if (scheduleWithGroup && scheduleWithGroup.deliveryBatches) {
-          const matchingBatch = scheduleWithGroup.deliveryBatches.find((db: any) => db.sjGroupId === sjGroupId);
-          if (matchingBatch && matchingBatch.deliveryDate) {
-            deliveryDate = matchingBatch.deliveryDate;
-            enrichedDeliveryBatches = [{ deliveryDate, sjGroupId, qty: matchingBatch.qty }];
-          }
-        }
-      }
-      
-      // Fallback: jika tidak ada sjGroupId atau tidak ditemukan, cari dari schedule berdasarkan SPK
-      if (!deliveryDate) {
-        const relatedSchedule = scheduleList.find((s: any) => {
-          if (!s.spkNo) return false;
-          return matchSPK(s.spkNo, spkNo);
-        });
-        
-        if (relatedSchedule && relatedSchedule.deliveryBatches && relatedSchedule.deliveryBatches.length > 0) {
-          // Ambil batch pertama yang match dengan SPK atau batch pertama
-          const matchingBatch = relatedSchedule.deliveryBatches.find((db: any) => {
-            if (db.spkNo) {
-              return matchSPK(db.spkNo, spkNo);
-            }
-            return true;
-          });
-          
-          if (matchingBatch && matchingBatch.deliveryDate) {
-            deliveryDate = matchingBatch.deliveryDate;
-            enrichedDeliveryBatches = [{ 
-              deliveryDate, 
-              sjGroupId: matchingBatch.sjGroupId || sjGroupId,
-              qty: matchingBatch.qty 
-            }];
-          } else if (relatedSchedule.deliveryBatches[0]?.deliveryDate) {
-            deliveryDate = relatedSchedule.deliveryBatches[0].deliveryDate;
-            enrichedDeliveryBatches = [{ 
-              deliveryDate, 
-              sjGroupId: relatedSchedule.deliveryBatches[0].sjGroupId || sjGroupId,
-              qty: relatedSchedule.deliveryBatches[0].qty 
-            }];
-          }
-        }
-      }
-      
-      // Jika masih belum ada delivery date, gunakan yang ada di notification
-      if (!deliveryDate && notif.deliveryBatches && notif.deliveryBatches.length > 0) {
-        enrichedDeliveryBatches = notif.deliveryBatches;
-      }
-      
-      return {
-        ...notif,
-        spkNo: spkNo, // Ensure single SPK format
-        sjGroupId, // Tambahkan sjGroupId ke notification
-        deliveryBatches: enrichedDeliveryBatches, // Enrich deliveryBatches dari schedule
-      };
-    });
-    
-    // Group berdasarkan sjGroupId (jika ada)
-    // IMPORTANT: Setiap sjGroupId yang berbeda harus jadi notifikasi terpisah
-    const groups: { [key: string]: any[] } = {};
-    const ungrouped: any[] = [];
-    
-    enrichedNotifications.forEach((notif: any) => {
-      if (notif.sjGroupId) {
-        // Group berdasarkan sjGroupId
-        // IMPORTANT: Setiap sjGroupId yang berbeda akan jadi group terpisah
-        if (!groups[notif.sjGroupId]) {
-          groups[notif.sjGroupId] = [];
-        }
-        groups[notif.sjGroupId].push(notif);
-      } else {
-        // Tidak punya sjGroupId, tidak digroup (single notification)
-        ungrouped.push(notif);
-      }
-    });
-    
-    // DEBUG: Log ungrouped notifications juga
-    if (ungrouped.length > 0) {
-      console.log('🔍 [Delivery Note] Ungrouped notifications (no sjGroupId):', ungrouped.map((n: any) => ({
-        id: n.id,
-        spkNo: n.spkNo,
-        sjGroupId: n.sjGroupId || 'null',
-      })));
+    } catch (error: any) {
+      // Error handling - silent fail untuk prevent spam
+    } finally {
+      loadingNotificationsRef.current = false; // Reset guard
     }
-    
-    // Convert groups to array of grouped notifications
-    const groupedResults: any[] = [];
-    
-    // Process grouped notifications (yang punya sjGroupId)
-    // IMPORTANT: Setiap entry di groups = 1 notifikasi terpisah (bukan digabung semua)
-    Object.entries(groups).forEach(([sjGroupId, group]) => {
-      if (group.length === 1) {
-        // Single notification dalam group
-        // IMPORTANT: Enrich delivery date dari schedule berdasarkan sjGroupId
-        const singleNotif = group[0];
-        let deliveryDate: string | null = null;
-        
-        // Cari schedule yang punya batch dengan sjGroupId ini
-        const scheduleWithGroup = scheduleList.find((s: any) => {
-          return s.deliveryBatches?.some((db: any) => db.sjGroupId === sjGroupId);
-        });
-        
-        if (scheduleWithGroup && scheduleWithGroup.deliveryBatches) {
-          const matchingBatch = scheduleWithGroup.deliveryBatches.find((db: any) => db.sjGroupId === sjGroupId);
-          if (matchingBatch && matchingBatch.deliveryDate) {
-            deliveryDate = matchingBatch.deliveryDate;
-          }
-        }
-        
-        // Fallback: ambil dari notification deliveryBatches
-        if (!deliveryDate && singleNotif.deliveryBatches && singleNotif.deliveryBatches.length > 0) {
-          const matchingBatch = singleNotif.deliveryBatches.find((db: any) => db.sjGroupId === sjGroupId);
-          if (matchingBatch && matchingBatch.deliveryDate) {
-            deliveryDate = matchingBatch.deliveryDate;
-          } else {
-            deliveryDate = singleNotif.deliveryBatches[0].deliveryDate;
-          }
-        }
-        
-        // Update notification dengan delivery date yang benar
-        groupedResults.push({
-          ...singleNotif,
-          deliveryBatches: deliveryDate ? [{ deliveryDate, sjGroupId }] : (singleNotif.deliveryBatches || []),
-        });
-      } else {
-        // Multiple notifications dengan sjGroupId yang sama - create grouped notification
-        const firstNotif = group[0];
-        
-        // Get delivery date dari batch pertama yang punya sjGroupId ini
-        let groupDeliveryDate: string | null = null;
-        const scheduleWithGroup = scheduleList.find((s: any) => {
-          return s.deliveryBatches?.some((db: any) => db.sjGroupId === sjGroupId);
-        });
-        
-        if (scheduleWithGroup && scheduleWithGroup.deliveryBatches) {
-          const matchingBatch = scheduleWithGroup.deliveryBatches.find((db: any) => db.sjGroupId === sjGroupId);
-          if (matchingBatch && matchingBatch.deliveryDate) {
-            groupDeliveryDate = matchingBatch.deliveryDate;
-          }
-        }
-        
-        // Fallback: ambil dari firstNotif
-        if (!groupDeliveryDate && firstNotif.deliveryBatches && firstNotif.deliveryBatches.length > 0) {
-          groupDeliveryDate = firstNotif.deliveryBatches[0].deliveryDate;
-        }
-        
-        // IMPORTANT: Jangan gabung quantity! Setiap SPK punya 1 product dengan quantity sendiri
-        // totalQty hanya untuk display, tapi items tetap terpisah per SPK
-        groupedResults.push({
-          ...firstNotif,
-          id: `grouped-${sjGroupId}-${firstNotif.id}`,
-          isGrouped: true,
-          sjGroupId, // Simpan sjGroupId untuk reference
-          groupedNotifications: group, // Store all notifications in this group (setiap notification = 1 SPK = 1 product)
-          totalQty: group.reduce((sum: number, n: any) => sum + (n.qty || 0), 0), // Total untuk display saja
-          deliveryBatches: groupDeliveryDate ? [{ deliveryDate: groupDeliveryDate, sjGroupId }] : [],
-        });
-      }
-    });
-    
-    // Add ungrouped notifications (yang tidak punya sjGroupId)
-    // IMPORTANT: Enrich delivery date dari schedule untuk ungrouped notifications juga
-    const enrichedUngrouped = ungrouped.map((notif: any) => {
-      const spkNo = notif.spkNo || (notif.spkNos && notif.spkNos.length > 0 ? notif.spkNos[0] : null);
-      if (!spkNo) return notif;
-      
-      // Cari schedule yang match dengan SPK ini
-      const relatedSchedule = scheduleList.find((s: any) => {
-        if (!s.spkNo) return false;
-        return matchSPK(s.spkNo, spkNo);
-      });
-      
-      // Ambil delivery date dari schedule
-      let deliveryDate: string | null = null;
-      if (relatedSchedule && relatedSchedule.deliveryBatches && relatedSchedule.deliveryBatches.length > 0) {
-        // Ambil batch pertama yang match dengan SPK atau batch pertama
-        const matchingBatch = relatedSchedule.deliveryBatches.find((db: any) => {
-          if (db.spkNo) {
-            return matchSPK(db.spkNo, spkNo);
-          }
-          return true; // Ambil batch pertama jika tidak ada spkNo
-        });
-        
-        if (matchingBatch && matchingBatch.deliveryDate) {
-          deliveryDate = matchingBatch.deliveryDate;
-        } else if (relatedSchedule.deliveryBatches[0]?.deliveryDate) {
-          deliveryDate = relatedSchedule.deliveryBatches[0].deliveryDate;
-        }
-      }
-      
-      // Update notification dengan delivery date dari schedule jika belum ada
-      if (deliveryDate && (!notif.deliveryBatches || notif.deliveryBatches.length === 0)) {
-        return {
-          ...notif,
-          deliveryBatches: [{ deliveryDate }],
-        };
-      }
-      
-      return notif;
-    });
-    
-    groupedResults.push(...enrichedUngrouped);
-    
-    // IMPORTANT: Setiap entry di groupedResults = 1 notifikasi terpisah
-    // Jika ada 2 sjGroupId berbeda, akan ada 2 notifikasi terpisah
-    return groupedResults;
   };
 
   // Update inventory saat delivery note dibuat - TAMBAHKAN OUTGOING untuk product
   const updateInventoryFromDelivery = async (delivery: DeliveryNote) => {
     try {
-      console.log('🔍 [Delivery Inventory] Starting update for delivery:', delivery.sjNo, delivery);
-      
+      // Removed console.log for performance
       const inventory = await storageService.get<any[]>('inventory') || [];
       const productsList = await storageService.get<any[]>('products') || [];
-      
-      console.log(`🔍 [Delivery Inventory] Loaded ${inventory.length} inventory items, ${productsList.length} products`);
       
       // Process items (new format) atau single product (old format)
       const itemsToProcess = delivery.items && delivery.items.length > 0
@@ -1709,10 +1952,10 @@ const DeliveryNote = () => {
           ? [{ product: delivery.product, qty: delivery.qty || 0 }]
           : [];
 
-      console.log(`🔍 [Delivery Inventory] Items to process:`, itemsToProcess);
+      // Removed console.log for performance
 
       if (itemsToProcess.length === 0) {
-        console.warn('⚠️ [Delivery Inventory] No items to process in delivery note');
+        // Removed console.warn for performance
         return;
       }
 
@@ -1721,10 +1964,10 @@ const DeliveryNote = () => {
         const qtyDelivered = item.qty || 0;
         const fromInventory = item.fromInventory === true; // Explicit check untuk boolean
 
-        console.log(`🔍 [Delivery Inventory] Processing: ${productName}, Qty: ${qtyDelivered}, From Inventory: ${fromInventory}`);
+        // Removed console.log for performance
 
         if (!productName || qtyDelivered <= 0) {
-          console.warn(`⚠️ [Delivery Inventory] Skip: invalid product name or qty (${productName}, ${qtyDelivered})`);
+          // Removed console.warn for performance
           continue;
         }
 
@@ -1732,7 +1975,7 @@ const DeliveryNote = () => {
         // Tidak peduli apakah manual input atau tidak, tetap update inventory (outgoing dan onGoing)
         // Jika manual input, tetap update inventory untuk tracking
         if (!fromInventory) {
-          console.log(`ℹ️ [Delivery Inventory] Product "${productName}" adalah manual input, tapi tetap update inventory karena SJ sudah di-upload.`);
+          // Removed console.log for performance
         }
 
         // Find product dari master untuk mendapatkan product_id/kode
@@ -1747,13 +1990,13 @@ const DeliveryNote = () => {
 
         let productCode: string;
         if (!product) {
-          console.warn(`⚠️ [Delivery Inventory] Product not found in master: "${productName}". Akan menggunakan productName sebagai codeItem.`);
+          // Removed console.warn for performance
           // Gunakan productName sebagai codeItem jika tidak ditemukan di master
           productCode = productName.trim();
         } else {
           productCode = (product.product_id || product.kode || '').toString().trim();
         }
-        console.log(`🔍 [Delivery Inventory] ${product ? `Found product: ${product.nama}` : 'Product not in master'} (Code: ${productCode})`);
+        // Removed console.log for performance
         
         // Find product inventory - prioritas: gunakan inventoryId jika ada (dari selection)
         let existingProductInventory: any = null;
@@ -1762,7 +2005,7 @@ const DeliveryNote = () => {
           // Jika ada inventoryId, langsung gunakan itu (lebih akurat)
           existingProductInventory = inventory.find((inv: any) => inv.id === item.inventoryId);
           if (existingProductInventory) {
-            console.log(`✅ [Delivery Inventory] Found inventory by ID: ${item.inventoryId}`);
+            // Removed console.log for performance
           }
         }
         
@@ -1799,7 +2042,7 @@ const DeliveryNote = () => {
           const processedSPKs = existingProductInventory.processedSPKs || [];
           // Cek apakah SPK atau delivery+SPK key sudah pernah diproses
           if (processedSPKs.includes(deliverySpkKey) || (spkNo && processedSPKs.includes(spkNo))) {
-            console.warn(`⚠️ [Delivery Inventory] SPK ${spkNo} (key: ${deliverySpkKey}) sudah pernah diproses untuk product ${productCode} (OUTGOING). Skip update.`);
+            // Removed console.warn for performance
             continue; // Skip product ini, lanjut ke product berikutnya
           }
         }
@@ -1807,8 +2050,9 @@ const DeliveryNote = () => {
         if (existingProductInventory) {
           // Update existing product inventory - TAMBAHKAN OUTGOING dan KURANGI ON GOING (production stock)
           const oldOutgoing = existingProductInventory.outgoing || 0;
-          const oldReceive = existingProductInventory.receive || 0;
-          const oldStock = existingProductInventory.nextStock || 0;
+          // Removed unused variables for performance
+          // const oldReceive = existingProductInventory.receive || 0;
+          // const oldStock = existingProductInventory.nextStock || 0;
           const oldOnGoing = existingProductInventory.onGoing || existingProductInventory.on_going || existingProductInventory.productionStock || 0;
           const newOutgoing = oldOutgoing + qtyDelivered;
           
@@ -1841,16 +2085,10 @@ const DeliveryNote = () => {
             newOutgoing +
             (existingProductInventory.return || 0);
           existingProductInventory.lastUpdate = new Date().toISOString();
-          console.log(`✅ [Delivery Inventory] Product inventory updated (OUTGOING from SPK ${spkNo}):`);
-          console.log(`   Product: ${productName} (${productCode})`);
-          console.log(`   SPK: ${spkNo} (key: ${deliverySpkKey} untuk OUTGOING tracking - support batch)`);
-          console.log(`   Outgoing: ${oldOutgoing} → ${newOutgoing} (+${qtyDelivered})`);
-          console.log(`   On Going (Production Stock): ${oldOnGoing} → ${newOnGoing} (-${qtyDelivered})`);
-          console.log(`   Receive: ${oldReceive}`);
-          console.log(`   NextStock: ${oldStock} → ${existingProductInventory.nextStock}`);
+          // Removed console.log for performance
         } else {
           // Create new product inventory entry dengan outgoing (jika product belum ada di inventory)
-          console.warn(`⚠️ [Delivery Inventory] Product inventory not found: ${productName} (${productCode}). Creating new entry.`);
+          // Removed console.warn for performance
           const newInventoryEntry = {
             id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
             supplierName: delivery.customer || '',
@@ -1871,20 +2109,18 @@ const DeliveryNote = () => {
             lastUpdate: new Date().toISOString(),
           };
           inventory.push(newInventoryEntry);
-          console.log(`✅ [Delivery Inventory] New product inventory created (OUTGOING from SPK ${spkNo}):`);
-          console.log(`   Product: ${productName} (${productCode})`);
-          console.log(`   SPK: ${spkNo} (key: ${deliverySpkKey} untuk OUTGOING tracking - support batch)`);
-          console.log(`   Outgoing: ${qtyDelivered}`);
-          console.log(`   On Going: 0 (new entry)`);
-          console.log(`   NextStock: ${0 - qtyDelivered}`);
+          // Removed console.log for performance
         }
       }
 
       // Save updated inventory
       await storageService.set('inventory', inventory);
-      console.log('✅ [Delivery Inventory] Inventory saved successfully');
+      // Removed console.log for performance
     } catch (error: any) {
-      console.error('❌ [Delivery Inventory] Error updating inventory from delivery:', error);
+      // Only log errors in development
+      if (process.env.NODE_ENV === 'development') {
+        // Removed console.error for performance
+      }
       showAlert('Error', `Error updating inventory: ${error.message}`);
       throw error;
     }
@@ -2312,6 +2548,11 @@ const DeliveryNote = () => {
             showAlert('Error', `Gagal memuat file: ${loadError.message}`);
             return;
           }
+        } else if (isMobile() || isCapacitor()) {
+          // Di mobile, file yang disimpan sebagai path tidak bisa di-load
+          // Tapi seharusnya di mobile file disimpan sebagai base64, jadi ini tidak seharusnya terjadi
+          showAlert('Error', 'File disimpan sebagai file system path, tetapi tidak bisa diakses di mobile.\n\nFile ini mungkin dibuat di aplikasi desktop. Silakan buka di aplikasi desktop untuk melihat file.');
+          return;
         } else {
           showAlert('Error', 'File disimpan sebagai file system, tetapi Electron API tidak tersedia.');
           return;
@@ -2407,10 +2648,13 @@ const DeliveryNote = () => {
               throw new Error(result?.error || 'Failed to load file from file system');
             }
           } catch (loadError: any) {
-            console.error('Error loading file from file system:', loadError);
             showAlert('Error', `Gagal memuat file: ${loadError.message}`);
             return;
           }
+        } else if (isMobile() || isCapacitor()) {
+          // Di mobile, file yang disimpan sebagai path tidak bisa di-load
+          showAlert('Error', 'File disimpan sebagai file system path, tetapi tidak bisa diakses di mobile.\n\nFile ini mungkin dibuat di aplikasi desktop. Silakan buka di aplikasi desktop untuk download file.');
+          return;
         } else {
           showAlert('Error', 'File disimpan sebagai file system, tetapi Electron API tidak tersedia.');
           return;
@@ -2496,41 +2740,60 @@ const DeliveryNote = () => {
         let signedDocumentPath: string | undefined;
         
         if (isPDF) {
-          // PDF: Simpan sebagai file dan simpan path-nya saja
+          // PDF: Simpan sebagai file di Electron, atau base64 di mobile jika kecil
           const electronAPI = (window as any).electronAPI;
           
           // Cek apakah Electron API tersedia
-          if (!electronAPI) {
-            throw new Error('⚠️ Electron API tidak tersedia.\n\nPastikan aplikasi berjalan di Electron app, bukan di browser.\n\nJika sudah di Electron, silakan:\n1. Tutup aplikasi Electron\n2. Buka kembali aplikasi Electron\n3. Coba upload lagi');
-          }
-          
-          if (typeof electronAPI.saveUploadedFile !== 'function') {
-            throw new Error('⚠️ Fungsi saveUploadedFile tidak tersedia.\n\nSilakan:\n1. Tutup aplikasi Electron\n2. Buka kembali aplikasi Electron\n3. Coba upload lagi');
-          }
-          
-          try {
-            const result = await electronAPI.saveUploadedFile(base64, file.name, 'pdf');
-            if (result && result.success) {
-              signedDocumentPath = result.path;
-              // Simpan path sebagai reference, bukan base64
-              signedDocument = `file://${result.path}`;
+          if (electronAPI && typeof electronAPI.saveUploadedFile === 'function') {
+            // Electron: Simpan sebagai file di file system
+            try {
+              const result = await electronAPI.saveUploadedFile(base64, file.name, 'pdf');
+              if (result && result.success) {
+                signedDocumentPath = result.path;
+                // Simpan path sebagai reference, bukan base64
+                signedDocument = `file://${result.path}`;
+              } else {
+                throw new Error(result?.error || 'Failed to save PDF file');
+              }
+            } catch (fileError: any) {
+              // Cek apakah error karena handler tidak terdaftar
+              const errorMessage = fileError.message || String(fileError);
+              if (errorMessage.includes('No handler registered') || 
+                  errorMessage.includes('handler registered') ||
+                  errorMessage.includes('Error invoking remote method')) {
+                throw new Error('⚠️ Handler Electron belum terdaftar.\n\nSilakan:\n1. Tutup aplikasi Electron (tutup semua window)\n2. Buka kembali aplikasi Electron dari shortcut/start menu\n3. Tunggu aplikasi selesai loading\n4. Coba upload PDF lagi\n\nJika masih error, hubungi administrator.');
+              }
+              
+              // Jangan fallback ke base64 untuk PDF - langsung error atau retry
+              // PDF harus disimpan di file system, tidak boleh di localStorage
+              throw new Error(`❌ Gagal menyimpan PDF ke file system.\n\nError: ${errorMessage}\n\nSilakan:\n1. Restart aplikasi Electron\n2. Pastikan folder data/uploads bisa diakses\n3. Coba upload lagi`);
+            }
+          } else if (isMobile() || isCapacitor()) {
+            // Mobile/Capacitor: Simpan sebagai base64 jika file kecil (< 5MB)
+            // Untuk file besar, show error
+            const base64Size = base64.length;
+            const maxSize = 5 * 1024 * 1024; // 5MB
+            
+            if (base64Size < maxSize) {
+              // File kecil, simpan sebagai base64
+              signedDocument = base64;
+              signedDocumentPath = undefined;
             } else {
-              throw new Error(result?.error || 'Failed to save PDF file');
+              throw new Error('⚠️ File PDF terlalu besar untuk disimpan di mobile.\n\nUkuran file: ' + 
+                Math.round(base64Size / 1024 / 1024) + 'MB\n\nMaksimal ukuran: 5MB\n\nSilakan gunakan file PDF yang lebih kecil atau gunakan aplikasi desktop.');
             }
-          } catch (fileError: any) {
-            console.error('Error saving PDF to file system:', fileError);
+          } else {
+            // Browser mode: coba simpan sebagai base64 jika kecil
+            const base64Size = base64.length;
+            const maxSize = 5 * 1024 * 1024; // 5MB
             
-            // Cek apakah error karena handler tidak terdaftar
-            const errorMessage = fileError.message || String(fileError);
-            if (errorMessage.includes('No handler registered') || 
-                errorMessage.includes('handler registered') ||
-                errorMessage.includes('Error invoking remote method')) {
-              throw new Error('⚠️ Handler Electron belum terdaftar.\n\nSilakan:\n1. Tutup aplikasi Electron (tutup semua window)\n2. Buka kembali aplikasi Electron dari shortcut/start menu\n3. Tunggu aplikasi selesai loading\n4. Coba upload PDF lagi\n\nJika masih error, hubungi administrator.');
+            if (base64Size < maxSize) {
+              signedDocument = base64;
+              signedDocumentPath = undefined;
+            } else {
+              throw new Error('⚠️ File PDF terlalu besar untuk disimpan di browser.\n\nUkuran file: ' + 
+                Math.round(base64Size / 1024 / 1024) + 'MB\n\nMaksimal ukuran: 5MB\n\nSilakan gunakan aplikasi Electron desktop untuk file besar.');
             }
-            
-            // Jangan fallback ke base64 untuk PDF - langsung error atau retry
-            // PDF harus disimpan di file system, tidak boleh di localStorage
-            throw new Error(`❌ Gagal menyimpan PDF ke file system.\n\nError: ${errorMessage}\n\nSilakan:\n1. Restart aplikasi Electron\n2. Pastikan folder data/uploads bisa diakses\n3. Coba upload lagi`);
           }
         } else {
           // Image: Simpan sebagai base64 (biasanya lebih kecil)
@@ -2604,7 +2867,6 @@ const DeliveryNote = () => {
         // IMPORTANT: Hapus notification HANYA setelah signed document di-upload (SJ sudah jadi)
         // Cari notification yang terkait dengan delivery note ini berdasarkan SPK
         const deliveryNotifications = await storageService.get<any[]>('deliveryNotifications') || [];
-        const deliverySjNo = uploadedDelivery?.sjNo;
         const deliveryItems = uploadedDelivery?.items || [];
         const deliverySpkNos = deliveryItems.map((item: any) => item.spkNo).filter(Boolean);
         
@@ -2612,7 +2874,6 @@ const DeliveryNote = () => {
         // Match berdasarkan SPK yang ada di delivery items
         const updatedNotifications = deliveryNotifications.map((n: any) => {
           const notifSpkNo = n.spkNo || (n.spkNos && n.spkNos.length > 0 ? n.spkNos[0] : null);
-          const notifSjGroupId = n.sjGroupId || (n.deliveryBatches && n.deliveryBatches[0]?.sjGroupId) || null;
           
           // Match jika SPK ada di delivery items
           const spkMatches = deliverySpkNos.some((deliverySpk: string) => {
@@ -2623,7 +2884,8 @@ const DeliveryNote = () => {
           
           // Jika SPK match, mark notification sebagai DELIVERY_CREATED dan deleted
           if (spkMatches && n.status !== 'DELIVERY_CREATED' && !n.deleted) {
-            console.log(`  ✅ Marking notification ${n.id} (SPK: ${notifSpkNo}, sjGroupId: ${notifSjGroupId || 'null'}) as deleted (SJ ${deliverySjNo} completed with signed document)`);
+            // Removed console.log for performance
+            // console.log(`  ✅ Marking notification ${n.id} (SPK: ${notifSpkNo}, sjGroupId: ${notifSjGroupId || 'null'}) as deleted (SJ ${deliverySjNo} completed with signed document)`);
             return { 
               ...n, 
               status: 'DELIVERY_CREATED',
@@ -2635,8 +2897,16 @@ const DeliveryNote = () => {
         });
         
         // Save updated notifications
-        await storageService.set('deliveryNotifications', updatedNotifications);
-        console.log(`💾 [SJ Upload] Updated notifications: ${deliveryNotifications.length} → ${updatedNotifications.length} (removed ${deliveryNotifications.length - updatedNotifications.length} completed notifications)`);
+        // Set flag untuk prevent storage event trigger loop
+        isSavingNotificationsRef.current = true;
+        try {
+          await storageService.set('deliveryNotifications', updatedNotifications);
+        } finally {
+          // Reset flag setelah delay untuk allow processing
+          setTimeout(() => {
+            isSavingNotificationsRef.current = false;
+          }, 500);
+        }
         
         // Sync ke server di background (non-blocking, tidak throw error jika gagal)
         setTimeout(() => {
@@ -2654,50 +2924,57 @@ const DeliveryNote = () => {
             await updateInventoryFromDelivery(updatedDelivery);
           }
         } catch (error: any) {
-          console.error('❌ Error updating inventory from delivery note:', error);
-          // Jangan block proses, tapi log error
+          // Removed console.error for performance - error handling tetap berjalan
+          // Jangan block proses
         }
 
         // IMPORTANT: Finance notification (SUPPLIER_PAYMENT) hanya dibuat saat GRN dibuat di Purchasing module
         // Upload signed document di Delivery Note hanya untuk membuat invoice notification, bukan payment notification
 
-        // Create notification untuk Accounting - Customer Invoice
-        // IMPORTANT: Ambil SPK hanya dari items di SJ, bukan semua SPK dari SO
-        // Setiap SJ punya items sendiri, jadi SPK juga harus sesuai dengan items di SJ tersebut
-        const itemsInSJ = item.items && Array.isArray(item.items) && item.items.length > 0
-          ? item.items
-          : (item.product ? [{ product: item.product, qty: item.qty || 0, unit: 'PCS', spkNo: item.spkNo }] : []);
+        // IMPORTANT: SJ Recap tidak trigger invoice notification
+        // Invoice punya cara sendiri untuk merge data dari SJ
+        // SJ Recap hanya untuk merge print, tidak mempengaruhi invoice flow
+        let alertMsg = `✅ Surat Jalan (yang sudah di TTD) uploaded: ${file.name}\n\n✅ Status updated to CLOSE\n✅ Inventory updated (onGoing reduced, outgoing increased)`;
         
-        // Ambil SPK hanya dari items di SJ
-        const spkNosFromSJ = itemsInSJ
-          .map((itm: any) => itm.spkNo)
-          .filter((spk: string) => spk) // Filter yang ada spkNo
-          .join(', ');
-        
-        // Cari SO untuk mendapatkan PO Customer No
-        const salesOrders = await storageService.get<any[]>('salesOrders') || [];
-        const so = salesOrders.find((s: any) => s.soNo === item.soNo);
-        const poCustomerNo = so?.poCustomerNo || so?.soNo || '-';
+        if (!item.isRecap) {
+          // Create notification untuk Accounting - Customer Invoice (HANYA untuk non-Recap SJ)
+          // IMPORTANT: Ambil SPK hanya dari items di SJ, bukan semua SPK dari SO
+          // Setiap SJ punya items sendiri, jadi SPK juga harus sesuai dengan items di SJ tersebut
+          const itemsInSJ = item.items && Array.isArray(item.items) && item.items.length > 0
+            ? item.items
+            : (item.product ? [{ product: item.product, qty: item.qty || 0, unit: 'PCS', spkNo: item.spkNo }] : []);
+          
+          // Ambil SPK hanya dari items di SJ
+          const spkNosFromSJ = itemsInSJ
+            .map((itm: any) => itm.spkNo)
+            .filter((spk: string) => spk) // Filter yang ada spkNo
+            .join(', ');
+          
+          // Cari SO untuk mendapatkan PO Customer No
+          const salesOrders = await storageService.get<any[]>('salesOrders') || [];
+          const so = salesOrders.find((s: any) => s.soNo === item.soNo);
+          const poCustomerNo = so?.poCustomerNo || so?.soNo || '-';
 
-        const invoiceNotifications = await storageService.get<any[]>('invoiceNotifications') || [];
-        const newInvoiceNotification = {
-          id: `${Date.now()}-${item.sjNo}`,
-          type: 'CUSTOMER_INVOICE',
-          sjNo: item.sjNo,
-          soNo: item.soNo,
-          poCustomerNo: poCustomerNo,
-          spkNos: spkNosFromSJ, // Hanya SPK dari items di SJ, bukan semua SPK dari SO
-          customer: item.customer,
-          items: itemsInSJ, // Items sesuai dengan SJ
-          totalQty: itemsInSJ.reduce((sum: number, itm: any) => sum + (itm.qty || 0), 0),
-          status: 'PENDING',
-          created: new Date().toISOString(),
-        };
+          const invoiceNotifications = await storageService.get<any[]>('invoiceNotifications') || [];
+          const newInvoiceNotification = {
+            id: `${Date.now()}-${item.sjNo}`,
+            type: 'CUSTOMER_INVOICE',
+            sjNo: item.sjNo,
+            soNo: item.soNo,
+            poCustomerNo: poCustomerNo,
+            spkNos: spkNosFromSJ, // Hanya SPK dari items di SJ, bukan semua SPK dari SO
+            customer: item.customer,
+            items: itemsInSJ, // Items sesuai dengan SJ
+            totalQty: itemsInSJ.reduce((sum: number, itm: any) => sum + (itm.qty || 0), 0),
+            status: 'PENDING',
+            created: new Date().toISOString(),
+          };
 
-        // Update notifications - hanya invoice notification (finance notification dibuat saat GRN di Purchasing)
-        await storageService.set('invoiceNotifications', [...invoiceNotifications, newInvoiceNotification]);
-
-        let alertMsg = `✅ Surat Jalan (yang sudah di TTD) uploaded: ${file.name}\n\n✅ Status updated to CLOSE\n✅ Inventory updated (onGoing reduced, outgoing increased)\n📧 Notification sent to Accounting - Customer Invoice tab`;
+          // Update notifications - hanya invoice notification (finance notification dibuat saat GRN di Purchasing)
+          await storageService.set('invoiceNotifications', [...invoiceNotifications, newInvoiceNotification]);
+          
+          alertMsg += `\n📧 Notification sent to Accounting - Customer Invoice tab`;
+        }
         showAlert('Success', alertMsg);
       };
       reader.readAsDataURL(file);
@@ -2777,6 +3054,7 @@ const DeliveryNote = () => {
     // Gunakan soLines[0].qty untuk baris pertama, dan soLines.slice(1) untuk extra rows
     const suratJalanItem = {
       soNo: item.soNo || '',
+      soNos: item.soNos || [], // Pass soNos untuk SJ Recap
       customer: customerName,
       customerPIC,
       customerPhone,
@@ -2802,6 +3080,18 @@ const DeliveryNote = () => {
       ...suratJalanItem,
       productCodeDisplay: item.productCodeDisplay || 'padCode',
     };
+    
+    // Use recap template if this is a recap SJ
+    if (item.isRecap) {
+      return generateSuratJalanRecapHtml({
+        logo,
+        company,
+        item: itemWithDisplay,
+        sjData,
+        products,
+      });
+    }
+    
     return generateSuratJalanHtml({
       logo,
       company,
@@ -2820,7 +3110,7 @@ const DeliveryNote = () => {
     }
   };
 
-  const handleSaveToPDF = async () => {
+  const handleSaveToPDF = async (pageSize: PageSize = 'A5') => {
     if (!viewPdfData) return;
 
     try {
@@ -2830,7 +3120,7 @@ const DeliveryNote = () => {
       // Check if Electron API is available (for file picker)
       if (electronAPI && typeof electronAPI.savePdf === 'function') {
         // Electron: Use file picker to select save location, then convert HTML to PDF and save
-        const result = await electronAPI.savePdf(viewPdfData.html, fileName);
+        const result = await electronAPI.savePdf(viewPdfData.html, fileName, pageSize);
         if (result.success) {
           showAlert('Success', `PDF saved successfully to:\n${result.path}`);
           setViewPdfData(null);
@@ -2839,6 +3129,11 @@ const DeliveryNote = () => {
           showAlert('Error', `Error saving PDF: ${result.error || 'Unknown error'}`);
         }
         // If canceled, do nothing (user closed dialog)
+      } else if (isMobile() || isCapacitor()) {
+        // Mobile/Capacitor: Open print dialog atau preview window
+        // Di mobile, print dialog biasanya bisa save as PDF
+        openPrintWindow(viewPdfData.html, { autoPrint: false });
+        showAlert('Info', 'Gunakan menu print di browser untuk menyimpan sebagai PDF');
       } else {
         // Browser: Open print dialog, user can select "Save as PDF"
         openPrintWindow(viewPdfData.html);
@@ -2846,6 +3141,10 @@ const DeliveryNote = () => {
     } catch (error: any) {
       showAlert('Error', `Error saving PDF: ${error.message}`);
     }
+  };
+
+  const handleShowPageSizeDialog = () => {
+    setShowPageSizeDialog(true);
   };
 
   const handlePrint = async (item: DeliveryNote) => {
@@ -2864,7 +3163,8 @@ const DeliveryNote = () => {
     // IMPORTANT: Prevent multiple calls untuk notification yang sama
     const notifId = notif.id || `${notif.soNo}-${notif.spkNo || notif.spkNos?.join('-') || 'unknown'}`;
     if (isProcessingNotification === notifId) {
-      console.log('⚠️ [Delivery Note] Already processing notification:', notifId);
+      // Removed console.log for performance
+      // console.log('⚠️ [Delivery Note] Already processing notification:', notifId);
       return;
     }
     
@@ -3080,7 +3380,8 @@ const DeliveryNote = () => {
 
           // NOTE (Packaging): Schedule delivery validation DISABLED - semua SPK bisa langsung dibuat Delivery Note
           // Tidak perlu cek schedule, langsung lanjut ke inventory check
-          console.log('[DeliveryNote] ⚠️ Schedule validation SKIPPED for Packaging - all SPKs accepted');
+          // Removed console.log for performance
+          // console.log('[DeliveryNote] ⚠️ Schedule validation SKIPPED for Packaging - all SPKs accepted');
 
           // Validate inventory stock - cek apakah barang sudah ada di inventory (onGoing stock)
           const inventory = await storageService.get<any[]>('inventory') || [];
@@ -3111,17 +3412,7 @@ const DeliveryNote = () => {
           // IMPORTANT: Gunakan quantity yang sama dengan yang akan digunakan saat create delivery items
           const spksToValidate: Array<{ spkNo: string; product: string; productCode?: string; productId?: string; qty: number }> = [];
           
-          // DEBUG: Log notification untuk validasi
-          console.log('🔍 [Delivery Note] Validating inventory for notification:', {
-            id: notif.id,
-            isGrouped: notif.isGrouped,
-            spkNo: notif.spkNo,
-            product: notif.product,
-            productId: notif.productId,
-            qty: notif.qty,
-            hasDeliveryBatches: !!notif.deliveryBatches,
-            hasGroupedNotifications: !!notif.groupedNotifications,
-          });
+          // Removed console.log for performance
           
           // Load SPK data untuk mendapatkan quantity yang tepat
           const spkListData = await storageService.get<any[]>('spk') || [];
@@ -3139,7 +3430,7 @@ const DeliveryNote = () => {
                 return Array.isArray(extracted) ? extracted : [];
               }
             } catch (e) {
-              console.warn('[DeliveryNote] Error loading schedule from localStorage:', e);
+              // Removed console.warn for performance
             }
             return [];
           })();
@@ -3251,7 +3542,7 @@ const DeliveryNote = () => {
               
               if (!spkNo) {
                 // Jika tidak ada SPK, skip validasi (tidak bisa validate tanpa SPK)
-                console.log('⚠️ [Delivery Note] No SPK found for validation, skipping');
+                // Removed console.log for performance
                 return;
               }
               
@@ -3287,19 +3578,18 @@ const DeliveryNote = () => {
             }
           }
           
-          // DEBUG: Log SPKs to validate
-          console.log('🔍 [Delivery Note] SPKs to validate:', spksToValidate);
+          // Removed console.log for performance
           
           // Validate setiap SPK (per SPK, bukan per product)
           // IMPORTANT: Cek current stock (nextStock atau receive), bukan onGoing
           // onGoing hanya dipotong setelah upload SJ
           for (const spkItem of spksToValidate) {
-            console.log(`🔍 [Delivery Note] Validating SPK: ${spkItem.spkNo}, Product: ${spkItem.product} (Code: ${spkItem.productCode}), Required: ${spkItem.qty}`);
+            // Removed console.log for performance
             
             const invItem = findInventoryByProduct(spkItem.productCode, spkItem.product);
             
             if (!invItem) {
-              console.log(`❌ [Delivery Note] Product not found in inventory: ${spkItem.product} (Code: ${spkItem.productCode}) for SPK ${spkItem.spkNo}`);
+              // Removed console.log for performance
               insufficientStock.push({
                 product: `${spkItem.product} (SPK: ${spkItem.spkNo})`,
                 required: spkItem.qty,
@@ -3308,13 +3598,7 @@ const DeliveryNote = () => {
               continue;
             }
             
-            console.log(`✅ [Delivery Note] Product found in inventory:`, {
-              codeItem: invItem.codeItem,
-              description: invItem.description,
-              receive: invItem.receive,
-              onGoing: invItem.onGoing || invItem.on_going || invItem.productionStock,
-              nextStock: invItem.nextStock,
-            });
+            // Removed console.log for performance
             
             // Cek available stock untuk product yang sudah selesai produksi dan QC PASS
             // Untuk product yang sudah selesai produksi, bisa ada di:
@@ -3362,28 +3646,23 @@ const DeliveryNote = () => {
             };
             
             const availableStock = getAvailableStock(invItem);
-            console.log(`📊 [Delivery Note] Available stock: ${availableStock}, Required: ${spkItem.qty} for SPK ${spkItem.spkNo}`);
+            // Removed console.log for performance
             
             // Cek apakah product ada di inventory dengan stock yang cukup
             // Untuk product yang sudah selesai produksi dan QC PASS, seharusnya sudah ada di inventory
             if (availableStock < spkItem.qty) {
-              console.log(`❌ [Delivery Note] Insufficient stock: ${spkItem.product} (SPK: ${spkItem.spkNo}) - Required: ${spkItem.qty}, Available: ${availableStock}`);
+              // Removed console.log for performance
               insufficientStock.push({
                 product: `${spkItem.product} (SPK: ${spkItem.spkNo})`,
                 required: spkItem.qty,
                 available: availableStock,
               });
             } else {
-              console.log(`✅ [Delivery Note] Stock sufficient: ${spkItem.product} (SPK: ${spkItem.spkNo}) - Required: ${spkItem.qty}, Available: ${availableStock}`);
+              // Removed console.log for performance
             }
           }
           
-          // DEBUG: Log validation result
-          console.log('🔍 [Delivery Note] Validation result:', {
-            spksToValidateCount: spksToValidate.length,
-            insufficientStockCount: insufficientStock.length,
-            insufficientStock,
-          });
+          // Removed console.log for performance
           
           if (insufficientStock.length > 0) {
             const errorMsg = insufficientStock.map(item => 
@@ -3439,24 +3718,21 @@ const DeliveryNote = () => {
             }
           }
           
-          console.log('Delivery Date:', deliveryDate, 'from notification:', notif);
+          // Removed console.log for performance
 
           // Create Delivery Note with multiple items
           // IMPORTANT: Handle grouped notification dengan benar - ambil semua SPK dan products
           const deliveryItems: DeliveryNoteItem[] = [];
           
-          console.log('🔍 [Delivery Note] Creating items from notification:', notif);
-          console.log('   isGrouped:', notif.isGrouped);
-          console.log('   products:', notif.products);
-          console.log('   deliveryBatches:', notif.deliveryBatches);
-          console.log('   groupedNotifications:', notif.groupedNotifications);
+          // Removed console.log for performance
           
           // PRIORITAS 1: Jika punya groupedNotifications, ambil quantity dari schedule berdasarkan sjGroupId
           // IMPORTANT: SPK itu 1 product 1, jadi setiap SPK punya quantity sendiri dari schedule
           // IMPORTANT: Items harus diambil dari SPK data, bukan dari SO
           if (notif.groupedNotifications && Array.isArray(notif.groupedNotifications) && notif.groupedNotifications.length > 0) {
-            console.log('   ✅ Using groupedNotifications, count:', notif.groupedNotifications.length);
-            console.log('   📦 sjGroupId:', notif.sjGroupId);
+            // Removed console.log for performance
+            // console.log('   ✅ Using groupedNotifications, count:', notif.groupedNotifications.length);
+            // console.log('   📦 sjGroupId:', notif.sjGroupId);
             
             // Load schedule dan SPK data untuk mendapatkan data yang tepat
             const scheduleList = await storageService.get<any[]>('schedule') || [];
@@ -3504,7 +3780,7 @@ const DeliveryNote = () => {
                   
                   if (matchingBatch) {
                     batchQty = matchingBatch.qty || 0;
-                    console.log(`   ✅ Found batch with sjGroupId ${notif.sjGroupId} for SPK ${spkNo}: qty = ${batchQty}`);
+                    // Removed console.log for performance
                   }
                 }
                 
@@ -3527,14 +3803,14 @@ const DeliveryNote = () => {
                     const firstBatch = relatedSchedule.deliveryBatches[0];
                     batchQty = firstBatch?.qty || 0;
                   }
-                  console.log(`   ⚠️ Using batch from schedule for SPK ${spkNo}: qty = ${batchQty}`);
+                  // Removed console.log for performance
                 }
               }
               
               // Fallback: ambil dari SPK qty jika tidak ada dari schedule
               if (batchQty === 0) {
                 batchQty = spkData?.qty || n.qty || 0;
-                console.log(`   ⚠️ Using SPK qty for SPK ${spkNo}: qty = ${batchQty}`);
+                // Removed console.log for performance
               }
               
               // IMPORTANT: Setiap SPK = 1 item dengan quantity sendiri (tidak digabung)
@@ -3554,15 +3830,14 @@ const DeliveryNote = () => {
                 soNo: spkData?.soNo || n.soNo || notif.soNo || '', // Dari SPK data
                 fromInventory: true, // IMPORTANT: Dari SO/SPK berarti dari inventory (production stock)
               });
-              console.log(`   ✅ Added from groupedNotification (SPK-based): ${productName} (SPK: ${spkNo}) - Qty: ${batchQty} from schedule`);
+              // Removed console.log for performance
             });
           }
           // PRIORITAS 2: Jika punya products array, gunakan itu dengan matching dari deliveryBatches
           // IMPORTANT: Items harus diambil dari SPK data, bukan dari SO
           else if (notif.products && Array.isArray(notif.products) && notif.products.length > 0) {
             // New format: products array dengan spkNo, product, productId
-            console.log('   ✅ Using products array, count:', notif.products.length);
-            console.log('   📦 deliveryBatches:', JSON.stringify(notif.deliveryBatches, null, 2));
+            // Removed console.log for performance
             
             // Load SPK data untuk mendapatkan data yang tepat
             const spkListData = await storageService.get<any[]>('spk') || [];
@@ -3604,7 +3879,7 @@ const DeliveryNote = () => {
                 
                 if (matchingBatch) {
                   batchQty = matchingBatch.qty || 0;
-                  console.log(`   ✅ Found batch from schedule for SPK ${spkNo}: qty = ${batchQty}`);
+                  // Removed console.log for performance
                 }
               }
               
@@ -3625,12 +3900,12 @@ const DeliveryNote = () => {
                 
                 if (matchingBatch) {
                   batchQty = matchingBatch.qty || 0;
-                  console.log(`   ✅ Found batch from notification for SPK ${spkNo}: qty = ${batchQty}`);
+                  // Removed console.log for performance
                 } else {
                   // Fallback: match berdasarkan index (asumsi urutan sama)
                   if (productIdx < notif.deliveryBatches.length) {
                     batchQty = notif.deliveryBatches[productIdx].qty || 0;
-                    console.log(`   ⚠️ Using index fallback for SPK ${spkNo} (idx: ${productIdx}): qty = ${batchQty}`);
+                    // Removed console.log for performance
                   }
                 }
               }
@@ -3638,7 +3913,7 @@ const DeliveryNote = () => {
               // Fallback: ambil dari SPK qty jika tidak ada dari schedule
               if (batchQty === 0) {
                 batchQty = spkData?.qty || p.qty || 0;
-                console.log(`   ⚠️ Using SPK qty for SPK ${spkNo}: qty = ${batchQty}`);
+                // Removed console.log for performance
               }
               
               // Find product code from products list (untuk productCode)
@@ -3657,12 +3932,12 @@ const DeliveryNote = () => {
                 soNo: spkData?.soNo || notif.soNo || '', // Dari SPK data
                 fromInventory: true, // IMPORTANT: Dari SO/SPK berarti dari inventory (production stock)
               });
-              console.log(`   ✅ Added from products array (SPK-based): ${productName} (SPK: ${spkNo}) - Qty: ${batchQty}`);
+              // Removed console.log for performance
             });
           } else if (notif.isGrouped && notif.groupedNotifications) {
             // Untuk grouped notification, ambil dari groupedNotifications
             // IMPORTANT: Setiap notification dalam group = 1 SPK dengan 1 product (format baru)
-            console.log('   Using groupedNotifications, count:', notif.groupedNotifications.length);
+            // Removed console.log for performance
             
             // Load SPK dan schedule data sekali untuk semua notifications dalam group
             const spkListData = await storageService.get<any[]>('spk') || [];
@@ -3675,7 +3950,7 @@ const DeliveryNote = () => {
               const productId = n.productId || '';
               
               if (!spkNo) {
-                console.warn(`   ⚠️ Notification dalam group tidak punya SPK, skip`);
+                // Removed console.warn for performance
                 return;
               }
               
@@ -3704,7 +3979,7 @@ const DeliveryNote = () => {
                   
                   if (matchingBatch) {
                     batchQty = matchingBatch.qty || 0;
-                    console.log(`   ✅ Found batch from schedule for SPK ${spkNo} (sjGroupId: ${notif.sjGroupId}): qty = ${batchQty}`);
+                    // Removed console.log for performance
                   }
                 }
               }
@@ -3720,7 +3995,7 @@ const DeliveryNote = () => {
                 
                 if (matchingBatch) {
                   batchQty = matchingBatch.qty || 0;
-                  console.log(`   ✅ Found batch from notification for SPK ${spkNo}: qty = ${batchQty}`);
+                  // Removed console.log for performance
                 } else {
                   // Fallback: gunakan batch pertama
                   batchQty = n.deliveryBatches[0].qty || 0;
@@ -3741,14 +4016,14 @@ const DeliveryNote = () => {
                 
                 if (matchingBatch) {
                   batchQty = matchingBatch.qty || 0;
-                  console.log(`   ✅ Found batch from grouped notification for SPK ${spkNo}: qty = ${batchQty}`);
+                  // Removed console.log for performance
                 }
               }
               
               // Fallback: ambil dari notification qty
               if (batchQty === 0) {
                 batchQty = n.qty || 0;
-                console.log(`   ⚠️ Using notification qty for SPK ${spkNo}: qty = ${batchQty}`);
+                // Removed console.log for performance
               }
               
               // Find product code from products list
@@ -3767,16 +4042,16 @@ const DeliveryNote = () => {
                 soNo: spkData?.soNo || n.soNo || notif.soNo || '',
                 fromInventory: true, // IMPORTANT: Dari SO/SPK berarti dari inventory (production stock)
               });
-              console.log(`   ✅ Added from grouped notification (SPK-based): ${productName} (SPK: ${spkNo}) - Qty: ${batchQty}`);
+              // Removed console.log for performance
             });
           } else {
             // Untuk single notification (tidak grouped)
             const n = notif;
-            console.log('   ⚠️ Single notification, checking products array...');
+            // Removed console.log for performance
             // Handle new format dengan products array atau old format
             if (n.products && Array.isArray(n.products) && n.products.length > 0) {
               // New format: products array dengan spkNo, product, productId
-              console.log('   ✅ Single notification has products array, count:', n.products.length);
+              // Removed console.log for performance
               n.products.forEach((p: any, productIdx: number) => {
                 // Cari qty dari deliveryBatches untuk product ini
                 let batchQty = 0;
@@ -3794,12 +4069,12 @@ const DeliveryNote = () => {
                   
                   if (matchingBatch) {
                     batchQty = matchingBatch.qty || 0;
-                    console.log(`   ✅ Found batch for product ${p.product} (productId: ${p.productId}): qty = ${batchQty}`);
+                    // Removed console.log for performance
                   } else {
                     // Fallback: match berdasarkan index (asumsi urutan sama)
                     if (productIdx < n.deliveryBatches.length) {
                       batchQty = n.deliveryBatches[productIdx].qty || 0;
-                      console.log(`   ⚠️ Using index fallback for product ${p.product} (idx: ${productIdx}): qty = ${batchQty}`);
+                      // Removed console.log for performance
                     }
                   }
                 }
@@ -3808,7 +4083,7 @@ const DeliveryNote = () => {
                 if (batchQty === 0) {
                   const totalQty = n.qty || 0;
                   batchQty = n.products.length > 0 ? Math.round(totalQty / n.products.length) : totalQty;
-                  console.log(`   ⚠️ Using qty division fallback for product ${p.product}: qty = ${batchQty} (total: ${totalQty} / ${n.products.length})`);
+                  // Removed console.log for performance
                 }
                 
                 deliveryItems.push({
@@ -3851,7 +4126,7 @@ const DeliveryNote = () => {
                   // Fallback: bagi qty total dengan jumlah SPK (HARUS DIHINDARI, seharusnya sudah ada di deliveryBatches)
                   if (batchQty === 0) {
                     batchQty = spkList.length > 1 ? (qty / spkList.length) : qty;
-                    console.warn(`   ⚠️ Using qty division fallback for SPK ${spk}: qty = ${batchQty} (total: ${qty} / ${spkList.length})`);
+                    // Removed console.warn for performance
                   }
                   
                   deliveryItems.push({
@@ -3877,11 +4152,11 @@ const DeliveryNote = () => {
                     });
                     if (matchingBatch && matchingBatch.qty) {
                       batchQty = matchingBatch.qty;
-                      console.log(`   ✅ Found batch for SPK ${n.spkNo}: qty = ${batchQty}`);
+                      // Removed console.log for performance
                     } else {
                       // Fallback: ambil batch pertama
                       batchQty = n.deliveryBatches[0].qty || batchQty;
-                      console.log(`   ⚠️ Using first batch for SPK ${n.spkNo}: qty = ${batchQty}`);
+                      // Removed console.log for performance
                     }
                   } else {
                     // Jika tidak ada SPK, ambil batch pertama
@@ -3896,7 +4171,7 @@ const DeliveryNote = () => {
                   unit: 'PCS',
                   fromInventory: true, // IMPORTANT: Dari SO/SPK berarti dari inventory (production stock)
                 });
-                console.log(`   ✅ Added single item (SPK-based): ${productName} (SPK: ${n.spkNo}) - Qty: ${batchQty}`);
+                // Removed console.log for performance
               }
             }
           }
@@ -3904,7 +4179,7 @@ const DeliveryNote = () => {
           // IMPORTANT: Pastikan semua items dibuat dengan benar
           // Jika deliveryItems kosong, coba buat dari notif.products atau notif.spkNos
           if (deliveryItems.length === 0) {
-            console.warn('⚠️ [Delivery Note] deliveryItems kosong, coba buat dari notif.products atau notif.spkNos');
+            // Removed console.warn for performance
             if (notif.products && Array.isArray(notif.products)) {
               notif.products.forEach((p: any) => {
                 deliveryItems.push({
@@ -3938,11 +4213,12 @@ const DeliveryNote = () => {
             }
           }
           
-          console.log('✅ [Delivery Note] Created deliveryItems:', deliveryItems);
-          console.log('   Total items:', deliveryItems.length);
-          deliveryItems.forEach((item, idx) => {
-            console.log(`   Item ${idx + 1}: ${item.product} (SPK: ${item.spkNo}) - Qty: ${item.qty}`);
-          });
+          // Removed console.log for performance
+          // console.log('✅ [Delivery Note] Created deliveryItems:', deliveryItems);
+          // console.log('   Total items:', deliveryItems.length);
+          // deliveryItems.forEach((item, idx) => {
+          //   console.log(`   Item ${idx + 1}: ${item.product} (SPK: ${item.spkNo}) - Qty: ${item.qty}`);
+          // });
           
           // Generate random SJ number
           const now = new Date();
@@ -3976,13 +4252,14 @@ const DeliveryNote = () => {
           // IMPORTANT: Jangan hapus notification saat create delivery note
           // Notification hanya akan dihapus setelah signed document di-upload (SJ sudah jadi)
           // Ini memastikan jika delivery note belum upload signed doc, notification tetap ada
-          console.log(`💾 [Delivery Create] Created delivery note ${sjNo} from ${notificationsToProcess.length} notification(s)`);
-          console.log(`  Notifications will be removed only after signed document is uploaded (SJ is complete)`);
-          console.log(`  Processing notifications:`, notificationsToProcess.map((n: any) => ({
-            id: n.id,
-            spkNo: n.spkNo,
-            sjGroupId: n.sjGroupId || 'null',
-          })));
+          // Removed console.log for performance
+          // console.log(`💾 [Delivery Create] Created delivery note ${sjNo} from ${notificationsToProcess.length} notification(s)`);
+          // console.log(`  Notifications will be removed only after signed document is uploaded (SJ is complete)`);
+          // console.log(`  Processing notifications:`, notificationsToProcess.map((n: any) => ({
+          //   id: n.id,
+          //   spkNo: n.spkNo,
+          //   sjGroupId: n.sjGroupId || 'null',
+          // })));
 
           const itemCount = deliveryItems.length;
           const totalQty = deliveryItems.reduce((sum, item) => sum + (item.qty || 0), 0);
@@ -4100,12 +4377,12 @@ const DeliveryNote = () => {
             
             showAlert('Success', `✅ Delivery Note ${item.sjNo || item.id} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`);
             
-            console.log(`[DeliveryNote] Safely deleted DN ${item.sjNo || item.id} (ID: ${item.id}) using tombstone pattern`);
+            // Removed console.log for performance
           } else {
             showAlert('Error', `❌ Error deleting delivery note ${item.sjNo || item.id}. Please try again.`);
           }
         } catch (error: any) {
-          console.error('[DeliveryNote] Error in safe delete:', error);
+          // Removed console.error for performance
           showAlert('Error', `❌ Error deleting delivery note: ${error.message}`);
         } finally {
           setIsProcessingAction(null);
@@ -4311,9 +4588,38 @@ const DeliveryNote = () => {
     // Ensure deliveries is always an array
     let filtered = Array.isArray(deliveries) ? deliveries : [];
     
-    // Tab filter - Outstanding tab hanya show status OPEN
+    // IMPORTANT: Tab Delivery Note tidak show SJ yang sudah di-merge (deleted)
+    // SJ yang di-merge hanya muncul di tab Recap sebagai bagian dari SJ Recap
+    if (activeTab === 'delivery') {
+      // Filter out deleted items (SJ yang sudah di-merge ke Recap)
+      filtered = filtered.filter(delivery => !delivery.deleted);
+    }
+    
+    // Tab filter - Outstanding tab hanya show status OPEN, Recap tab show semua (termasuk SJ Recap)
     if (activeTab === 'outstanding') {
-      filtered = filtered.filter(delivery => delivery.status === 'OPEN');
+      filtered = filtered.filter(delivery => delivery.status === 'OPEN' && !delivery.deleted);
+    } else if (activeTab === 'recap') {
+      // Recap tab: show SJ Recap dan SJ yang CLOSE tapi belum di-merge
+      // SJ yang sudah di-merge (deleted) tidak muncul di tab Delivery Note, tapi muncul di Recap sebagai bagian dari SJ Recap
+      // Cari semua SJ Recap untuk cek mergedSjNos
+      const allRecaps = filtered.filter(d => d.isRecap);
+      const allMergedSjNos = new Set<string>();
+      allRecaps.forEach(recap => {
+        if (recap.mergedSjNos && Array.isArray(recap.mergedSjNos)) {
+          recap.mergedSjNos.forEach(sjNo => allMergedSjNos.add(sjNo));
+        }
+      });
+      
+      filtered = filtered.filter(delivery => {
+        // Show SJ Recap
+        if (delivery.isRecap) return true;
+        // Show SJ yang CLOSE dan belum di-merge (tidak ada di mergedSjNos dari SJ Recap manapun)
+        if (delivery.status === 'CLOSE' && !delivery.deleted) {
+          const sjNo = delivery.sjNo || '';
+          return !allMergedSjNos.has(sjNo); // Hanya show yang belum di-merge
+        }
+        return false;
+      });
     }
     
     // Apply search filter
@@ -4367,13 +4673,19 @@ const DeliveryNote = () => {
 
     filteredDeliveries.forEach((delivery) => {
       if (!delivery) return;
+      // IMPORTANT: Skip deleted items (SJ yang sudah di-merge ke Recap)
+      // Tab Delivery Note tidak show SJ yang sudah di-merge
+      if (delivery.deleted) return;
       // Use soNos if available (multi-SO), otherwise use soNo
-      const soNos = delivery.soNos && delivery.soNos.length > 0 ? delivery.soNos : [delivery.soNo || 'NO_SO'];
+      // Untuk SJ Recap, selalu gunakan soNos jika ada
+      const soNos = (delivery.isRecap && delivery.soNos && delivery.soNos.length > 0) 
+        ? delivery.soNos 
+        : (delivery.soNos && delivery.soNos.length > 0 ? delivery.soNos : [delivery.soNo || 'NO_SO']);
       const soNosKey = soNos.sort().join(',');
       const key = `${soNosKey}|${delivery.customer || '-'}`;
       if (!groups[key]) {
         groups[key] = {
-          soNo: soNos.length > 1 ? soNos.join(', ') : (delivery.soNo || '-'),
+          soNo: (delivery.isRecap && soNos.length > 0) ? soNos.join(', ') : (soNos.length > 1 ? soNos.join(', ') : (delivery.soNo || '-')),
           customer: delivery.customer || '-',
           deliveries: [],
           statusSummary: { DRAFT: 0, OPEN: 0, CLOSE: 0 },
@@ -4636,8 +4948,32 @@ const DeliveryNote = () => {
   };
 
   const columns = [
-    { key: 'sjNo', header: 'SJ No (Surat Jalan No)' },
-    { key: 'soNo', header: 'SO No' },
+    { 
+      key: 'sjNo', 
+      header: 'SJ No (Surat Jalan No)',
+      render: (item: DeliveryNote) => {
+        if (item.isRecap) {
+          return <span style={{ fontWeight: 600, color: '#9C27B0' }}>{item.sjNo} (RECAP)</span>;
+        }
+        return item.sjNo || '-';
+      }
+    },
+    { 
+      key: 'soNo', 
+      header: 'SO No',
+      render: (item: DeliveryNote) => {
+        if (item.isRecap) {
+          if (item.soNos && item.soNos.length > 0) {
+            return <span>SO: {item.soNos.join(', ')}</span>;
+          } else if (item.soNo) {
+            return <span>SO: {item.soNo}</span>;
+          } else if (item.mergedSjNos && item.mergedSjNos.length > 0) {
+            return <span>Merged from: {item.mergedSjNos.join(', ')}</span>;
+          }
+        }
+        return item.soNo || '-';
+      }
+    },
     { key: 'customer', header: 'Customer' },
     {
       key: 'product',
@@ -4787,10 +5123,127 @@ const DeliveryNote = () => {
         </div>
       </div>
 
+      {showCreateSJRecapDialog && (
+        <CreateSJRecapDialog
+          deliveries={deliveries}
+          onClose={() => setShowCreateSJRecapDialog(false)}
+          onCreate={async (data: { sjNos: string[]; soNos: string[]; customer: string; deliveryDate: string; specNote?: string }) => {
+            try {
+              // Generate SJ Recap number
+              const now = new Date();
+              const year = String(now.getFullYear()).slice(-2);
+              const month = String(now.getMonth() + 1).padStart(2, '0');
+              const day = String(now.getDate()).padStart(2, '0');
+              const randomCode = Math.random().toString(36).substr(2, 5).toUpperCase();
+              const sjNo = `SJ-${year}${month}${day}-${randomCode}`;
+              
+              // Load all deliveries untuk merge items
+              const allDeliveries = await storageService.get<DeliveryNote[]>('delivery') || [];
+              const selectedDeliveries = allDeliveries.filter(d => data.sjNos.includes(d.sjNo || ''));
+              
+              // Merge items dari semua SJ yang dipilih
+              const mergedItems: DeliveryNoteItem[] = [];
+              selectedDeliveries.forEach(delivery => {
+                if (delivery.items && delivery.items.length > 0) {
+                  delivery.items.forEach(item => {
+                    // Cari item yang sama (berdasarkan product dan productCode tanpa description)
+                    const baseProductCode = item.productCode?.replace(/\s*\([^)]*\)/g, '').trim() || '';
+                    const existingItem = mergedItems.find(i => {
+                      const iBaseCode = i.productCode?.replace(/\s*\([^)]*\)/g, '').trim() || '';
+                      return i.product === item.product && 
+                        iBaseCode === baseProductCode &&
+                        i.unit === item.unit;
+                    });
+                    
+                    if (existingItem) {
+                      // Jika item sudah ada, tambahkan qty dan update description dengan SJ number
+                      existingItem.qty += item.qty;
+                      // Extract existing SJ numbers dari description
+                      const existingSJs: string[] = existingItem.productCode?.match(/\(([^)]+)\)/g) || [];
+                      const sjNoToAdd = `(${delivery.sjNo})`;
+                      if (!existingSJs.includes(sjNoToAdd)) {
+                        existingSJs.push(sjNoToAdd);
+                      }
+                      // Rebuild productCode dengan base code + semua SJ numbers
+                      const baseCode = existingItem.productCode?.replace(/\s*\([^)]*\)/g, '').trim() || '';
+                      existingItem.productCode = baseCode ? `${baseCode} ${existingSJs.join(' ')}` : existingSJs.join(' ');
+                    } else {
+                      // Item baru, tambahkan dengan description SJ
+                      const baseCode = baseProductCode;
+                      const sjDesc = `(${delivery.sjNo})`;
+                      mergedItems.push({
+                        ...item,
+                        productCode: baseCode ? `${baseCode} ${sjDesc}` : sjDesc,
+                      });
+                    }
+                  });
+                }
+              });
+              
+              // Buat SJ Recap baru
+              // IMPORTANT: SJ Recap status tetap CLOSE (tidak mengubah status SJ yang di-merge)
+              // SJ Recap hanya untuk merge print, tidak mempengaruhi status atau trigger invoice
+              const newRecap: DeliveryNote = {
+                id: Date.now().toString(),
+                sjNo: sjNo,
+                soNo: data.soNos && data.soNos.length > 0 ? data.soNos[0] : (selectedDeliveries[0]?.soNo || ''),
+                soNos: data.soNos && Array.isArray(data.soNos) && data.soNos.length > 0 ? data.soNos : undefined,
+                customer: data.customer,
+                items: mergedItems,
+                status: 'CLOSE', // Status tetap CLOSE (tidak mengubah status SJ yang di-merge)
+                deliveryDate: data.deliveryDate,
+                specNote: data.specNote || '',
+                isRecap: true,
+                mergedSjNos: data.sjNos,
+                created: new Date().toISOString(),
+                lastUpdate: new Date().toISOString(),
+                timestamp: Date.now(),
+                _timestamp: Date.now(),
+              };
+              
+              // IMPORTANT: Soft delete SJ yang di-merge (hanya untuk tab Recap)
+              // SJ yang di-merge tidak muncul di tab Delivery Note, hanya muncul di tab Recap sebagai bagian dari SJ Recap
+              const updatedDeliveries = allDeliveries.map(d => {
+                if (data.sjNos.includes(d.sjNo || '')) {
+                  return {
+                    ...d,
+                    deleted: true,
+                    deletedAt: new Date().toISOString(),
+                    lastUpdate: new Date().toISOString(),
+                    timestamp: Date.now(),
+                    _timestamp: Date.now(),
+                  };
+                }
+                return d;
+              });
+              
+              // Tambahkan SJ Recap baru
+              updatedDeliveries.push(newRecap);
+              
+              await storageService.set('delivery', updatedDeliveries);
+              
+              // IMPORTANT: Reload deliveries untuk memastikan filterActiveItems bekerja dengan benar
+              // Ini memastikan SJ yang di-merge (deleted) tidak muncul di tab Delivery Note
+              await loadDeliveries();
+              setShowCreateSJRecapDialog(false);
+              showAlert('Success', `✅ SJ Recap created: ${sjNo}\n\nMerged ${data.sjNos.length} SJ(s)`);
+            } catch (error: any) {
+              showAlert('Error', `Error creating SJ Recap: ${error.message}`);
+            }
+          }}
+        />
+      )}
+
       {showCreateDeliveryNoteDialog && (
         <CreateDeliveryNoteDialog
           deliveries={deliveries}
-          onClose={() => setShowCreateDeliveryNoteDialog(false)}
+          initialMode={initialDialogMode}
+          initialSelectedSJs={initialSelectedSJs}
+          onClose={() => {
+            setShowCreateDeliveryNoteDialog(false);
+            setInitialDialogMode('po');
+            setInitialSelectedSJs([]);
+          }}
           onCreate={async (data: { poNos?: string[]; soNos?: string[]; sjNos?: string[]; manualData?: any }) => {
             try {
               if (data.sjNos && data.sjNos.length > 0) {
@@ -4864,7 +5317,6 @@ const DeliveryNote = () => {
                 const selectedPOItems = poData.filter((po: any) => data.poNos!.includes(po.poNo));
                 
                 // Ambil SO dari PO
-                const soData = await storageService.get<any[]>('salesOrders') || [];
                 const soNos: string[] = [];
                 const allItems: DeliveryNoteItem[] = [];
                 
@@ -5012,7 +5464,7 @@ const DeliveryNote = () => {
               await loadDeliveries();
               setShowCreateDeliveryNoteDialog(false);
             } catch (error: any) {
-              console.error('Error creating delivery note:', error);
+              // Removed console.error for performance
               showAlert('Error', `Gagal membuat Delivery Note: ${error.message || 'Unknown error'}`);
             }
           }}
@@ -5683,6 +6135,12 @@ const DeliveryNote = () => {
           >
             Schedule
           </button>
+          <button
+            className={`tab-button ${activeTab === 'recap' ? 'active' : ''}`}
+            onClick={() => setActiveTab('recap')}
+          >
+            Recap ({(Array.isArray(deliveries) ? deliveries : []).filter(d => d.status === 'CLOSE').length})
+          </button>
         </div>
 
         <div className="tab-content">
@@ -5799,7 +6257,26 @@ const DeliveryNote = () => {
                                     </div>
                                     <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                                       SO{' '}
-                                      {delivery.soNos && Array.isArray(delivery.soNos) && delivery.soNos.length > 1 ? (
+                                      {delivery.isRecap && delivery.soNos && Array.isArray(delivery.soNos) && delivery.soNos.length > 0 ? (
+                                        // Untuk SJ Recap, selalu tampilkan semua SO
+                                        delivery.soNos.map((soNo, idx) => (
+                                          <span key={idx}>
+                                            <a
+                                              href="#"
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                // Navigate to Sales Orders module with SO number in state
+                                                navigate('/packaging/sales-orders', { state: { highlightSO: soNo } });
+                                              }}
+                                              style={{ color: '#2196F3', textDecoration: 'underline', cursor: 'pointer' }}
+                                            >
+                                              {soNo}
+                                            </a>
+                                            {delivery.soNos && idx < delivery.soNos.length - 1 ? ', ' : ''}
+                                          </span>
+                                        ))
+                                      ) : delivery.soNos && Array.isArray(delivery.soNos) && delivery.soNos.length > 1 ? (
+                                        // Untuk non-Recap dengan multiple SO
                                         delivery.soNos.map((soNo, idx) => (
                                           <span key={idx}>
                                             <a
@@ -5978,6 +6455,235 @@ const DeliveryNote = () => {
               onScheduleClick={handleScheduleClick}
             />
           )}
+          {activeTab === 'recap' && (
+            <>
+              <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by SJ No, SO No, Customer, Product, Status, Driver, Vehicle No, SPK No..."
+                  style={{
+                    flex: '1 1 260px',
+                    padding: '8px 12px',
+                    background: 'var(--bg-tertiary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '6px',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                    fontFamily: 'inherit',
+                  }}
+                />
+                <Button 
+                  variant="primary" 
+                  onClick={() => setShowCreateSJRecapDialog(true)}
+                  style={{ backgroundColor: '#9C27B0', color: 'white' }}
+                >
+                  + Create SJ Recap
+                </Button>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button
+                    onClick={() => setDeliveryViewMode('cards')}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '20px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: deliveryViewMode === 'cards' ? 'var(--accent-color)' : 'transparent',
+                      color: deliveryViewMode === 'cards' ? '#fff' : 'var(--text-secondary)',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Card View
+                  </button>
+                  <button
+                    onClick={() => setDeliveryViewMode('table')}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '20px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: deliveryViewMode === 'table' ? 'var(--accent-color)' : 'transparent',
+                      color: deliveryViewMode === 'table' ? '#fff' : 'var(--text-secondary)',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Table View
+                  </button>
+                </div>
+              </div>
+              {deliveryViewMode === 'cards' ? (
+                groupedDeliveries.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {groupedDeliveries.map((group, idx) => {
+                      const latestLabel = group.latestTimestamp
+                        ? formatDateSimple(new Date(group.latestTimestamp).toISOString())
+                        : '-';
+                      
+                      // Warna selang-seling untuk SO card - lebih jelas perbedaannya
+                      const cardBgColors = [
+                        'var(--bg-primary)', // Default
+                        'rgba(33, 150, 243, 0.25)', // Light blue - lebih jelas
+                        'rgba(76, 175, 80, 0.25)', // Light green - lebih jelas
+                        'rgba(255, 152, 0, 0.25)', // Light orange - lebih jelas
+                        'rgba(156, 39, 176, 0.25)', // Light purple - lebih jelas
+                      ];
+                      const cardBgColor = cardBgColors[idx % cardBgColors.length];
+                      
+                      return (
+                        <div key={`${group.soNo}-${group.customer}-${group.latestTimestamp}`} style={{ backgroundColor: cardBgColor, borderRadius: '8px', padding: '1px' }}>
+                          <Card>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-start' }}>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>SO No</div>
+                                <div style={{ fontSize: '20px', fontWeight: 600 }}>{group.soNo}</div>
+                                <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{group.customer}</div>
+                              </div>
+                              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                {['OPEN', 'DRAFT', 'CLOSE'].map(status => (
+                                  group.statusSummary[status] ? (
+                                    <span key={status} className={`status-badge status-${status.toLowerCase()}`} style={{ fontSize: '12px' }}>
+                                      {status}: {group.statusSummary[status]}
+                                    </span>
+                                  ) : null
+                                ))}
+                              </div>
+                            </div>
+                          <div style={{ marginTop: '12px', display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                            <div><strong>{group.deliveries.length}</strong> SJ</div>
+                            <div><strong>{group.totalQty}</strong> PCS total</div>
+                            <div>Last update: {latestLabel}</div>
+                          </div>
+                          <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+                            {group.deliveries.map((delivery) => (
+                              <div
+                                key={delivery.id}
+                                style={{
+                                  border: '1px solid var(--border-color)',
+                                  borderRadius: '10px',
+                                  padding: '12px',
+                                  background: 'var(--bg-primary)',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '8px',
+                                }}
+                              >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                                  <div>
+                                    <div style={{ fontSize: '14px', fontWeight: 600 }}>
+                                      {delivery.sjNo || 'Belum Generate SJ'}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                      SO{' '}
+                                      {delivery.isRecap && delivery.soNos && Array.isArray(delivery.soNos) && delivery.soNos.length > 0 ? (
+                                        // Untuk SJ Recap, selalu tampilkan semua SO
+                                        delivery.soNos.map((soNo, idx) => (
+                                          <span key={idx}>
+                                            <a
+                                              href="#"
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                navigate('/packaging/sales-orders', { state: { highlightSO: soNo } });
+                                              }}
+                                              style={{ color: '#2196F3', textDecoration: 'underline', cursor: 'pointer' }}
+                                            >
+                                              {soNo}
+                                            </a>
+                                            {delivery.soNos && idx < delivery.soNos.length - 1 ? ', ' : ''}
+                                          </span>
+                                        ))
+                                      ) : delivery.soNos && Array.isArray(delivery.soNos) && delivery.soNos.length > 1 ? (
+                                        // Untuk non-Recap dengan multiple SO
+                                        delivery.soNos.map((soNo, idx) => (
+                                          <span key={idx}>
+                                            <a
+                                              href="#"
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                navigate('/packaging/sales-orders', { state: { highlightSO: soNo } });
+                                              }}
+                                              style={{ color: '#2196F3', textDecoration: 'underline', cursor: 'pointer' }}
+                                            >
+                                              {soNo}
+                                            </a>
+                                            {delivery.soNos && idx < delivery.soNos.length - 1 ? ', ' : ''}
+                                          </span>
+                                        ))
+                                      ) : (
+                                        <a
+                                          href="#"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            navigate('/packaging/sales-orders', { state: { highlightSO: delivery.soNo } });
+                                          }}
+                                          style={{ color: '#2196F3', textDecoration: 'underline', cursor: 'pointer' }}
+                                        >
+                                          {delivery.soNo}
+                                        </a>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <span className={`status-badge status-${delivery.status.toLowerCase()}`}>
+                                    {delivery.status}
+                                  </span>
+                                </div>
+                                
+                                {delivery.items && delivery.items.length > 0 && (
+                                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                    <div style={{ marginBottom: '4px', fontWeight: 500 }}>Items:</div>
+                                    {delivery.items.slice(0, 3).map((item, itemIdx) => (
+                                      <div key={itemIdx} style={{ marginLeft: '8px', marginBottom: '2px' }}>
+                                        • {item.product} - {item.qty} {item.unit || 'PCS'}
+                                        {item.spkNo && ` (SPK: ${item.spkNo})`}
+                                      </div>
+                                    ))}
+                                    {delivery.items.length > 3 && (
+                                      <div style={{ marginLeft: '8px', fontStyle: 'italic' }}>
+                                        + {delivery.items.length - 3} item lainnya
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                
+                                {delivery.driver && (
+                                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                    Driver: {delivery.driver}
+                                  </div>
+                                )}
+                                
+                                {delivery.vehicleNo && (
+                                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                    Kendaraan: {delivery.vehicleNo}
+                                  </div>
+                                )}
+                                
+                                {delivery.deliveryDate && (
+                                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                    Delivery Date: {formatDateSimple(delivery.deliveryDate)}
+                                  </div>
+                                )}
+                                
+                                <div style={{ marginTop: '8px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                  {renderDeliveryActions(delivery, { allowWrap: true })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </Card>
+                      </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+                    Tidak ada SJ yang sudah CLOSE
+                  </div>
+                )
+              ) : (
+                <Table columns={columns} data={filteredDeliveries} emptyMessage="No closed deliveries" />
+              )}
+            </>
+          )}
         </div>
       </Card>
 
@@ -6034,7 +6740,7 @@ const DeliveryNote = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <h2>Preview Surat Jalan - {viewPdfData.sjNo}</h2>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <Button variant="primary" onClick={handleSaveToPDF}>
+                  <Button variant="primary" onClick={handleShowPageSizeDialog}>
                     💾 Save to PDF
                   </Button>
                   <Button variant="secondary" onClick={() => {
@@ -6062,6 +6768,16 @@ const DeliveryNote = () => {
 
       {/* Custom Dialog - menggunakan hook terpusat */}
       <DialogComponent />
+      {showPageSizeDialog && (
+        <PageSizeDialog
+          defaultSize="A5"
+          onConfirm={(size) => {
+            setShowPageSizeDialog(false);
+            handleSaveToPDF(size);
+          }}
+          onCancel={() => setShowPageSizeDialog(false)}
+        />
+      )}
 
       {/* Custom Signature Viewer Modal */}
       {signatureViewer && (
@@ -6462,7 +7178,7 @@ const EditSJDialog = ({ delivery, onClose, onSave }: { delivery: DeliveryNote; o
         // Untuk PDF, simpan sebagai file di file system (karena terlalu besar untuk localStorage)
         // Untuk image, tetap simpan sebagai base64 (lebih kecil)
         if (isPDF) {
-          // PDF: Simpan sebagai file dan simpan path-nya saja
+          // PDF: Simpan sebagai file di Electron, atau base64 di mobile jika kecil
           const electronAPI = (window as any).electronAPI;
           if (electronAPI && typeof electronAPI.saveUploadedFile === 'function') {
             try {
@@ -6472,22 +7188,33 @@ const EditSJDialog = ({ delivery, onClose, onSave }: { delivery: DeliveryNote; o
                 // Simpan path sebagai reference, bukan base64
                 signedDocument = `file://${result.path}`;
                 signedDocumentType = 'pdf';
-                console.log(`[EditSJ] PDF saved to file system: ${result.path}`);
               } else {
                 throw new Error(result.error || 'Failed to save PDF file');
               }
             } catch (fileError: any) {
-              console.error('Error saving PDF to file system:', fileError);
               // Fallback: coba simpan sebagai base64 jika file system gagal (untuk file kecil)
               if (base64.length < 5000000) { // 5MB limit
                 signedDocument = base64;
                 signedDocumentType = 'pdf';
                 signedDocumentPath = undefined;
-                console.warn('[EditSJ] Fallback: Saving PDF as base64 (file system failed)');
               } else {
                 showAlert('Error', `PDF terlalu besar untuk disimpan. Error: ${fileError.message}`);
                 return;
               }
+            }
+          } else if (isMobile() || isCapacitor()) {
+            // Mobile/Capacitor: Simpan sebagai base64 jika file kecil (< 5MB)
+            const base64Size = base64.length;
+            const maxSize = 5 * 1024 * 1024; // 5MB
+            
+            if (base64Size < maxSize) {
+              signedDocument = base64;
+              signedDocumentType = 'pdf';
+              signedDocumentPath = undefined;
+            } else {
+              showAlert('Error', '⚠️ File PDF terlalu besar untuk disimpan di mobile.\n\nUkuran file: ' + 
+                Math.round(base64Size / 1024 / 1024) + 'MB\n\nMaksimal ukuran: 5MB\n\nSilakan gunakan file PDF yang lebih kecil atau gunakan aplikasi desktop.');
+              return;
             }
           } else {
             // Browser mode: coba simpan sebagai base64 jika kecil
@@ -6495,7 +7222,6 @@ const EditSJDialog = ({ delivery, onClose, onSave }: { delivery: DeliveryNote; o
               signedDocument = base64;
               signedDocumentType = 'pdf';
               signedDocumentPath = undefined;
-              console.warn('[EditSJ] Browser mode: Saving PDF as base64 (may exceed quota)');
             } else {
               showAlert('Error', 'PDF terlalu besar untuk disimpan di browser mode. Silakan gunakan Electron app.');
               return;
@@ -6890,20 +7616,29 @@ const EditSJDialog = ({ delivery, onClose, onSave }: { delivery: DeliveryNote; o
 const CreateDeliveryNoteDialog = ({
   deliveries,
   onClose,
-  onCreate
+  onCreate,
+  initialMode = 'po',
+  initialSelectedSJs = []
 }: {
   deliveries: DeliveryNote[];
   onClose: () => void;
   onCreate: (data: { poNos?: string[]; soNos?: string[]; sjNos?: string[]; manualData?: any }) => Promise<void>;
+  initialMode?: 'po' | 'so' | 'sj' | 'manual';
+  initialSelectedSJs?: string[];
 }) => {
+  const { showAlert: showAlertBase } = useDialog();
+  const showAlert = (title: string, message: string) => {
+    showAlertBase(message, title);
+  };
+  
   const [purchaseOrderList, setPurchaseOrderList] = useState<any[]>([]);
   const [salesOrderList, setSalesOrderList] = useState<any[]>([]);
   const [deliveryNoteList, setDeliveryNoteList] = useState<any[]>([]);
   const [selectedPOs, setSelectedPOs] = useState<string[]>([]);
   const [selectedSOs, setSelectedSOs] = useState<string[]>([]);
-  const [selectedSJs, setSelectedSJs] = useState<string[]>([]);
+  const [selectedSJs, setSelectedSJs] = useState<string[]>(initialSelectedSJs);
   const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState<'po' | 'so' | 'sj' | 'manual'>('po');
+  const [mode, setMode] = useState<'po' | 'so' | 'sj' | 'manual'>(initialMode);
   
   // Auto-populated data dari PO yang dipilih
   const [autoPOCustomer, setAutoPOCustomer] = useState('');
@@ -6974,7 +7709,7 @@ const CreateDeliveryNoteDialog = ({
         setCustomersList(custData || []);
         setProductsList(prodData || []);
       } catch (error: any) {
-        console.error('Error loading data:', error);
+        // Removed console.error for performance
       } finally {
         setLoading(false);
       }
@@ -7104,11 +7839,11 @@ const CreateDeliveryNoteDialog = ({
   const handleCreate = async () => {
     if (mode === 'po') {
       if (selectedPOs.length === 0) {
-        alert('Pilih minimal 1 Purchase Order');
+        showAlert('Validation Error', '⚠️ Pilih minimal 1 Purchase Order');
         return;
       }
       if (!autoPOCustomer || autoPOItems.length === 0) {
-        alert('Tunggu data dimuat dari PO yang dipilih');
+        showAlert('Loading', '⏳ Tunggu data dimuat dari PO yang dipilih');
         return;
       }
       await onCreate({ 
@@ -7123,11 +7858,11 @@ const CreateDeliveryNoteDialog = ({
       });
     } else if (mode === 'so') {
       if (selectedSOs.length === 0) {
-        alert('Pilih minimal 1 Sales Order');
+        showAlert('Validation Error', '⚠️ Pilih minimal 1 Sales Order');
         return;
       }
       if (!autoSOCustomer || autoSOItems.length === 0) {
-        alert('Tunggu data dimuat dari SO yang dipilih');
+        showAlert('Loading', '⏳ Tunggu data dimuat dari SO yang dipilih');
         return;
       }
       await onCreate({ 
@@ -7140,9 +7875,28 @@ const CreateDeliveryNoteDialog = ({
           specNote: specNote || undefined,
         }
       });
+    } else if (mode === 'sj') {
+      if (selectedSJs.length === 0) {
+        showAlert('Validation Error', '⚠️ Pilih minimal 1 Surat Jalan');
+        return;
+      }
+      if (!autoSJCustomer || autoSJItems.length === 0) {
+        showAlert('Loading', '⏳ Tunggu data dimuat dari SJ yang dipilih');
+        return;
+      }
+      await onCreate({ 
+        sjNos: selectedSJs,
+        manualData: {
+          customer: autoSJCustomer,
+          items: autoSJItems,
+          deliveryDate,
+          productCodeDisplay: productCodeDisplay,
+          specNote: specNote || undefined,
+        }
+      });
     } else {
       if (!manualCustomer || manualItems.length === 0 || manualItems.some(item => !item.product || item.qty <= 0)) {
-        alert('Isi customer dan minimal 1 item dengan product dan qty > 0');
+        showAlert('Validation Error', '⚠️ Isi customer dan minimal 1 item dengan product dan qty > 0');
         return;
       }
       await onCreate({ 
@@ -7574,6 +8328,278 @@ const CreateDeliveryNoteDialog = ({
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
             <Button variant="secondary" onClick={onClose}>Cancel</Button>
             <Button variant="primary" onClick={handleCreate}>Create Delivery Note</Button>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+// Create SJ Recap Dialog Component
+const CreateSJRecapDialog: React.FC<{
+  deliveries: DeliveryNote[];
+  onClose: () => void;
+  onCreate: (data: { sjNos: string[]; soNos: string[]; customer: string; deliveryDate: string; specNote?: string }) => void;
+}> = ({ deliveries, onClose, onCreate }) => {
+  const { showAlert: showAlertBase } = useDialog();
+  const showAlert = (title: string, message: string) => {
+    showAlertBase(message, title);
+  };
+
+  const [selectedSONos, setSelectedSONos] = useState<string[]>([]);
+  const [selectedSJs, setSelectedSJs] = useState<string[]>([]);
+  const [customer, setCustomer] = useState('');
+  const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split('T')[0]);
+  const [specNote, setSpecNote] = useState('');
+  const [sjList, setSjList] = useState<DeliveryNote[]>([]);
+  const [salesOrders, setSalesOrders] = useState<SalesOrder[]>([]);
+  const [searchSO, setSearchSO] = useState('');
+
+  useEffect(() => {
+    const loadData = async () => {
+      const soData = await storageService.get<SalesOrder[]>('salesOrders') || [];
+      setSalesOrders(soData);
+      
+      // Filter SJ yang sudah CLOSE dan belum di-merge
+      const closedSJs = deliveries.filter(d => 
+        d.status === 'CLOSE' && 
+        d.sjNo && 
+        !d.isRecap &&
+        !d.deleted
+      );
+      setSjList(closedSJs);
+    };
+    loadData();
+  }, [deliveries]);
+
+  // Auto-filter SJ dan set customer ketika SO dipilih
+  useEffect(() => {
+    if (selectedSONos.length > 0) {
+      // Filter SJ berdasarkan SO yang dipilih
+      const filteredSJs = sjList.filter(sj => {
+        const sjSoNo = sj.soNo || '';
+        const sjSoNos = sj.soNos || [];
+        return selectedSONos.includes(sjSoNo) || 
+               sjSoNos.some(so => selectedSONos.includes(so));
+      });
+      
+      // Auto-select semua SJ yang match dengan SO yang dipilih
+      const sjNosToSelect = filteredSJs.map(sj => sj.sjNo || '').filter(Boolean);
+      setSelectedSJs(sjNosToSelect);
+      
+      // Auto-set customer dari SO pertama yang dipilih
+      const firstSO = salesOrders.find(so => selectedSONos.includes(so.soNo));
+      if (firstSO?.customer) {
+        setCustomer(firstSO.customer);
+      }
+    } else {
+      setSelectedSJs([]);
+      setCustomer('');
+    }
+  }, [selectedSONos, sjList, salesOrders]);
+
+  const handleCreate = () => {
+    if (selectedSONos.length === 0) {
+      showAlert('Validation Error', 'Please select at least one SO');
+      return;
+    }
+    if (selectedSJs.length === 0) {
+      showAlert('Validation Error', 'No CLOSE SJ found for selected SO(s)');
+      return;
+    }
+    if (!customer) {
+      showAlert('Validation Error', 'Customer not found for selected SO(s)');
+      return;
+    }
+    if (!deliveryDate) {
+      showAlert('Validation Error', 'Please select delivery date');
+      return;
+    }
+    onCreate({
+      sjNos: selectedSJs,
+      soNos: selectedSONos,
+      customer,
+      deliveryDate,
+      specNote,
+    });
+  };
+
+  const filteredSOs = useMemo(() => {
+    if (!searchSO) return salesOrders;
+    const query = searchSO.toLowerCase();
+    return salesOrders.filter(so => 
+      (so.soNo || '').toLowerCase().includes(query) ||
+      (so.customer || '').toLowerCase().includes(query)
+    );
+  }, [salesOrders, searchSO]);
+
+  // Get SJs untuk SO yang dipilih
+  const soBasedSJs = useMemo(() => {
+    if (selectedSONos.length === 0) return [];
+    return sjList.filter(sj => {
+      const sjSoNo = sj.soNo || '';
+      const sjSoNos = sj.soNos || [];
+      return selectedSONos.includes(sjSoNo) || 
+             sjSoNos.some(so => selectedSONos.includes(so));
+    });
+  }, [sjList, selectedSONos]);
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 10000,
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: '90%',
+          width: '1000px',
+          maxHeight: '90vh',
+          overflow: 'auto',
+        }}
+      >
+        <Card>
+          <h2 style={{ marginBottom: '20px' }}>Create SJ Recap</h2>
+          
+          {/* SO Selection */}
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
+              Select SO Number(s) *
+            </label>
+            <input
+              type="text"
+              value={searchSO}
+              onChange={(e) => setSearchSO(e.target.value)}
+              placeholder="Search SO..."
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                marginBottom: '8px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            />
+            <div style={{ 
+              maxHeight: '200px', 
+              overflowY: 'auto', 
+              border: '1px solid var(--border-color)', 
+              borderRadius: '4px',
+              padding: '8px'
+            }}>
+              {filteredSOs.length > 0 ? (
+                filteredSOs.map(so => (
+                  <label key={so.id} style={{ display: 'flex', alignItems: 'center', padding: '4px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedSONos.includes(so.soNo)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedSONos([...selectedSONos, so.soNo]);
+                        } else {
+                          setSelectedSONos(selectedSONos.filter(s => s !== so.soNo));
+                        }
+                      }}
+                      style={{ marginRight: '8px' }}
+                    />
+                    <span>{so.soNo} - {so.customer}</span>
+                  </label>
+                ))
+              ) : (
+                <div style={{ padding: '8px', color: 'var(--text-secondary)' }}>No SO found</div>
+              )}
+            </div>
+          </div>
+
+          {/* Auto-selected SJs Info */}
+          {selectedSONos.length > 0 && (
+            <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '4px' }}>
+              <div style={{ fontWeight: 600, marginBottom: '8px' }}>
+                Selected SO: {selectedSONos.join(', ')}
+              </div>
+              {customer && (
+                <div style={{ marginBottom: '8px', fontSize: '13px' }}>
+                  Customer: <strong>{customer}</strong>
+                </div>
+              )}
+              {soBasedSJs.length > 0 ? (
+                <div style={{ fontSize: '13px' }}>
+                  Found <strong>{soBasedSJs.length}</strong> CLOSE SJ(s) from selected SO(s):
+                  <div style={{ marginTop: '4px', marginLeft: '8px', fontSize: '12px' }}>
+                    {soBasedSJs.map(sj => (
+                      <div key={sj.id}>• {sj.sjNo} ({sj.items?.length || 0} items)</div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ fontSize: '13px', color: '#f44336' }}>
+                  ⚠️ No CLOSE SJ found for selected SO(s)
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Delivery Date */}
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
+              Delivery Date *
+            </label>
+            <input
+              type="date"
+              value={deliveryDate}
+              onChange={(e) => setDeliveryDate(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            />
+          </div>
+
+          {/* Spec Note */}
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
+              Keterangan
+            </label>
+            <textarea
+              value={specNote}
+              onChange={(e) => setSpecNote(e.target.value)}
+              placeholder="Keterangan (optional)"
+              rows={3}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+                fontFamily: 'inherit',
+                resize: 'vertical',
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+            <Button variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button variant="primary" onClick={handleCreate}>Create SJ Recap</Button>
           </div>
         </Card>
       </div>

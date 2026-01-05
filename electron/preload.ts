@@ -12,7 +12,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   loadAllStorage: () => ipcRenderer.invoke('load-all-storage'),
   deleteStorage: (key: string) => ipcRenderer.invoke('delete-storage', key),
   // Save PDF with file picker
-  savePdf: (htmlContent: string, defaultFileName: string) => ipcRenderer.invoke('save-pdf', htmlContent, defaultFileName),
+  savePdf: (htmlContent: string, defaultFileName: string, pageSize?: string) => ipcRenderer.invoke('save-pdf', htmlContent, defaultFileName, pageSize),
   focusMainWindow: () => ipcRenderer.invoke('focus-main-window'),
   // Update API
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),

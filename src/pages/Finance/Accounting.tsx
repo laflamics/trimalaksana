@@ -9,6 +9,7 @@ import { generateInvoiceHtml } from '../../pdf/invoice-pdf-template';
 import { openPrintWindow } from '../../utils/actions';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
 import { useDialog } from '../../hooks/useDialog';
+import { PageSizeDialog, PageSize } from '../../components/PageSizeDialog';
 import '../../styles/common.css';
 
 // Invoice Action Menu Component (similar to DeliveryActionMenu)
@@ -220,6 +221,7 @@ const Accounting = () => {
   const [expenses, setExpenses] = useState<any[]>([]);
   const [invoiceNotifications, setInvoiceNotifications] = useState<any[]>([]);
   const [viewPdfData, setViewPdfData] = useState<{ html: string; invoiceNo: string } | null>(null);
+  const [showPageSizeDialog, setShowPageSizeDialog] = useState(false);
   const [toast, setToast] = useState<{ message: string; variant: 'success' | 'error' | 'info' } | null>(null);
   const [viewSJData, setViewSJData] = useState<{ signedDocument: string; signedDocumentName: string; sjNo: string } | null>(null);
   const [viewPaymentProofData, setViewPaymentProofData] = useState<{ paymentProof: string; paymentProofName: string; invoiceNo: string } | null>(null);
@@ -1232,7 +1234,7 @@ const Accounting = () => {
     }
   };
 
-  const handleSaveToPDF = async () => {
+  const handleSaveToPDF = async (pageSize: PageSize = 'A4') => {
     if (!viewPdfData) return;
 
     try {
@@ -1240,7 +1242,7 @@ const Accounting = () => {
       const fileName = `${viewPdfData.invoiceNo}.pdf`;
 
       if (electronAPI && typeof electronAPI.savePdf === 'function') {
-        const result = await electronAPI.savePdf(viewPdfData.html, fileName);
+        const result = await electronAPI.savePdf(viewPdfData.html, fileName, pageSize);
         if (result.success) {
           showToast(`PDF saved successfully to:\n${result.path}`, 'success');
           setViewPdfData(null);
@@ -1253,6 +1255,10 @@ const Accounting = () => {
     } catch (error: any) {
       showToast(`Error saving PDF: ${error.message}`, 'error');
     }
+  };
+
+  const handleShowPageSizeDialog = () => {
+    setShowPageSizeDialog(true);
   };
 
   const handlePrintInvoice = async (item: any) => {
@@ -1751,7 +1757,7 @@ const Accounting = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <h2>Preview Invoice - {viewPdfData.invoiceNo}</h2>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <Button variant="primary" onClick={handleSaveToPDF}>
+                  <Button variant="primary" onClick={handleShowPageSizeDialog}>
                     💾 Save to PDF
                   </Button>
                   <Button variant="secondary" onClick={() => setViewPdfData(null)}>
@@ -1945,6 +1951,16 @@ const Accounting = () => {
       {/* Edit Invoice Dialog */}
       {/* Custom Dialog - menggunakan hook terpusat */}
       <DialogComponent />
+      {showPageSizeDialog && (
+        <PageSizeDialog
+          defaultSize="A4"
+          onConfirm={(size) => {
+            setShowPageSizeDialog(false);
+            handleSaveToPDF(size);
+          }}
+          onCancel={() => setShowPageSizeDialog(false)}
+        />
+      )}
 
       {showCreateInvoiceDialog && (
         <CreateInvoiceDialog

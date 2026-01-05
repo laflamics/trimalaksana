@@ -74,6 +74,10 @@ interface Product {
   hargaFg?: number;
   hargaSales?: number;
   padCode?: string; // PAD Code untuk product
+  kategori?: string; // Kategori product
+  lastUpdate?: string; // Last update timestamp
+  userUpdate?: string; // User yang update
+  ipAddress?: string; // IP address
 }
 
 interface Material {
@@ -827,12 +831,16 @@ const SalesOrders = () => {
         item.bom = [];
         setProductInputValue(prev => ({ ...prev, [index]: '' }));
       } else {
-        const product = products.find(p => 
-          (p.product_id || p.kode) === value || p.nama === value
-        );
+        const product = products.find(p => {
+          const pId = String(p.product_id || p.kode || '').trim();
+          const pName = String(p.nama || '').trim();
+          const searchValue = String(value || '').trim();
+          return pId === searchValue || pId.toLowerCase() === searchValue.toLowerCase() || pName.toLowerCase() === searchValue.toLowerCase();
+        });
         if (product) {
-          item.productId = product.product_id || product.kode;
-          item.productKode = product.product_id || product.kode;
+          const productIdValue = String(product.product_id || product.kode || '').trim();
+          item.productId = productIdValue;
+          item.productKode = productIdValue;
           item.productName = product.nama;
           item.unit = product.satuan || 'PCS';
           const hargaFromMaster = product.hargaSales || product.hargaFg || (product as any).harga || 0;
@@ -841,27 +849,38 @@ const SalesOrders = () => {
           // Auto-fill padCode dari master product
           item.padCode = product.padCode || '';
 
+          // Load BOM dengan matching yang konsisten
+          // Pastikan selalu set BOM, meskipun kosong
           const productBOM = bomData.filter(b => {
-            const bomProductId = (b.product_id || b.kode || '').toString().trim();
-            return bomProductId === (product.product_id || product.kode || '').toString().trim();
+            const bomProductId = String(b.product_id || b.kode || '').trim();
+            return bomProductId === productIdValue && bomProductId !== '';
           }).map(bom => {
-            const material = materials.find(m => (m.material_id || m.kode || '').toString().trim() === (bom.material_id || '').toString().trim());
+            const bomMaterialId = String(bom.material_id || '').trim();
+            const material = materials.find(m => {
+              const mId = String(m.material_id || m.kode || '').trim();
+              return mId === bomMaterialId && mId !== '';
+            });
             return {
-              materialName: (material?.nama || bom.material_id || '').toString(),
-              materialId: (bom.material_id || '').toString(),
+              materialName: (material?.nama || bom.material_id || bomMaterialId || '').toString(),
+              materialId: bomMaterialId,
               unit: material?.satuan || 'PCS',
               qty: (item.qty || 0) * (bom.ratio || 1),
               ratio: bom.ratio || 1,
               pricePerUnit: material?.priceMtr || material?.harga || 0,
             };
           });
-          item.bom = productBOM;
+          // Selalu set BOM, meskipun array kosong (untuk product tanpa BOM)
+          item.bom = productBOM || [];
           const label = `${product.product_id || product.kode || ''}${product.product_id || product.kode ? ' - ' : ''}${product.nama || ''}`;
           setProductInputValue(prev => ({ ...prev, [index]: label.trim() }));
         } else {
-          item.productId = value;
-          item.productKode = value;
-          item.productName = value;
+          // Convert ke string untuk konsistensi
+          const productIdValue = String(value || '').trim();
+          item.productId = productIdValue;
+          item.productKode = productIdValue;
+          item.productName = String(value || '');
+          // Set BOM kosong untuk product yang tidak ditemukan
+          item.bom = [];
           setProductInputValue(prev => ({ ...prev, [index]: value || '' }));
         }
       }
@@ -869,14 +888,14 @@ const SalesOrders = () => {
       setFormData(prev => ({ ...prev, items: newItems }));
       return;
     } else if (field === 'qty') {
-      // Biarkan string kosong tetap string kosong (akan di-handle di onBlur)
+      // Convert ke number - jangan biarkan string kosong
       if (value === '' || value === null || value === undefined) {
-        item.qty = '' as any;
+        item.qty = 0;
       } else {
         const numValue = Number(value);
         item.qty = isNaN(numValue) ? 0 : numValue;
       }
-      const qtyNum = typeof item.qty === 'string' ? 0 : (item.qty || 0);
+      const qtyNum = item.qty || 0;
       const priceNum = typeof item.price === 'string' ? 0 : (item.price || 0);
       item.total = qtyNum * priceNum;
       // Update BOM qty
@@ -887,15 +906,15 @@ const SalesOrders = () => {
         }));
       }
     } else if (field === 'price') {
-      // Biarkan string kosong tetap string kosong (akan di-handle di onBlur)
+      // Convert ke number - jangan biarkan string kosong
       if (value === '' || value === null || value === undefined) {
-        item.price = '' as any;
+        item.price = 0;
       } else {
         const numValue = Number(value);
         item.price = isNaN(numValue) ? 0 : numValue;
       }
-      const qtyNum = typeof item.qty === 'string' ? 0 : (item.qty || 0);
-      const priceNum = typeof item.price === 'string' ? 0 : (item.price || 0);
+      const qtyNum = item.qty || 0;
+      const priceNum = item.price || 0;
       item.total = qtyNum * priceNum;
     } else {
       (item as any)[field] = value;
@@ -921,7 +940,9 @@ const SalesOrders = () => {
       return label === normalized || code === normalized || name === normalized;
     });
     if (matchedProduct) {
-      handleUpdateItem(index, 'productId', matchedProduct.product_id || matchedProduct.kode);
+      // Convert ke string untuk konsistensi
+      const productIdValue = String(matchedProduct.product_id || matchedProduct.kode || '').trim();
+      handleUpdateItem(index, 'productId', productIdValue);
     } else {
       handleUpdateItem(index, 'productName', text);
     }
@@ -1061,14 +1082,16 @@ const SalesOrders = () => {
             (p.product_id || p.kode) === value || p.nama === value
           );
           if (product) {
-            item.productId = product.product_id || product.kode;
-            item.productKode = product.product_id || product.kode;
+            // Convert ke string untuk konsistensi
+            const productIdValue = String(product.product_id || product.kode || '').trim();
+            item.productId = productIdValue;
+            item.productKode = productIdValue;
             item.productName = product.nama;
             item.unit = product.satuan || 'PCS';
             const hargaFromMaster = product.hargaSales || product.hargaFg || (product as any).harga || 0;
             item.price = Number(hargaFromMaster) || 0;
             // Hitung total dengan discount per item
-            const qtyNum = typeof item.qty === 'string' ? 0 : (item.qty || 0);
+            const qtyNum = item.qty || 0;
             const priceNum = item.price || 0;
             const discountPercent = item.discountPercent || 0;
             const subtotal = qtyNum * priceNum;
@@ -1099,8 +1122,8 @@ const SalesOrders = () => {
           item.qty = Number(value) || 0;
         }
         // Hitung total dengan discount per item
-        const qtyNum = typeof item.qty === 'string' ? 0 : (item.qty || 0);
-        const priceNum = typeof item.price === 'string' ? 0 : (item.price || 0);
+        const qtyNum = item.qty || 0;
+        const priceNum = item.price || 0;
         const discountPercent = item.discountPercent || 0;
         const subtotal = qtyNum * priceNum;
         item.total = subtotal * (1 - discountPercent / 100);
@@ -1114,8 +1137,8 @@ const SalesOrders = () => {
           item.price = Number(value) || 0;
         }
         // Hitung total dengan discount per item
-        const qtyNum = typeof item.qty === 'string' ? 0 : (item.qty || 0);
-        const priceNum = typeof item.price === 'string' ? 0 : (item.price || 0);
+        const qtyNum = item.qty || 0;
+        const priceNum = item.price || 0;
         const discountPercent = item.discountPercent || 0;
         const subtotal = qtyNum * priceNum;
         item.total = subtotal * (1 - discountPercent / 100);
@@ -1130,8 +1153,8 @@ const SalesOrders = () => {
           item.discountPercent = Math.max(0, Math.min(100, discountNum)); // Clamp 0-100
         }
         // Recalculate total dengan discount
-        const qtyNum = typeof item.qty === 'string' ? 0 : (item.qty || 0);
-        const priceNum = typeof item.price === 'string' ? 0 : (item.price || 0);
+        const qtyNum = item.qty || 0;
+        const priceNum = item.price || 0;
         const discountPercent = item.discountPercent || 0;
         const subtotal = qtyNum * priceNum;
         item.total = subtotal * (1 - discountPercent / 100);
@@ -1332,7 +1355,17 @@ const SalesOrders = () => {
       showAlert('Please add at least one product', 'Validation Error');
       return;
     }
-    if (formData.items.some(item => !item.productId || item.qty <= 0)) {
+    // Validate items: productId harus ada, qty harus > 0
+    if (formData.items.some(item => {
+      // Check productId - harus ada dan tidak kosong (bisa string atau number, termasuk 0)
+      const productId = item.productId;
+      if (productId === undefined || productId === null || productId === '' || (typeof productId === 'string' && productId.trim() === '')) {
+        return true;
+      }
+      // Handle qty - sekarang selalu number
+      const qtyNum = item.qty || 0;
+      return qtyNum <= 0;
+    })) {
       showAlert('Please fill all product fields and ensure qty > 0', 'Validation Error');
       return;
     }
@@ -1422,11 +1455,11 @@ const SalesOrders = () => {
         );
         await storageService.set('salesOrders', updated);
         setOrders(updated);
-        showAlert(`SO ${formDataWithPadCode.soNo} updated successfully`, 'Success');
+        showAlert(`SO ${formDataWithPadCode.soNo || 'N/A'} updated successfully`, 'Success');
       } else {
         const newOrder: SalesOrder = {
           id: Date.now().toString(),
-          soNo: formDataWithPadCode.soNo.trim(),
+          soNo: (formDataWithPadCode.soNo || '').trim(),
           customer: formDataWithPadCode.customer || '',
           customerKode: formDataWithPadCode.customerKode || '',
           paymentTerms: formDataWithPadCode.paymentTerms || 'TOP',
@@ -1560,10 +1593,11 @@ const SalesOrders = () => {
     const itemsWithBOM = await Promise.all((item.items || []).map(async (itm) => {
       // Update padCode from master product if productId exists
       if (itm.productId || itm.productKode) {
-        const productId = itm.productId || itm.productKode;
-        const masterProduct = products.find(p => 
-          (p.product_id || p.kode) === productId
-        );
+        const productId = (itm.productId || itm.productKode || '').toString().trim();
+        const masterProduct = products.find(p => {
+          const pId = (p.product_id || p.kode || '').toString().trim();
+          return pId === productId && pId !== '';
+        });
         if (masterProduct && masterProduct.padCode) {
           itm.padCode = masterProduct.padCode;
         } else if (!itm.padCode) {
@@ -1576,19 +1610,23 @@ const SalesOrders = () => {
       }
       
       // Load BOM for this product
-      const productId = itm.productId || itm.productKode;
+      const productId = (itm.productId || itm.productKode || '').toString().trim();
       const productBOM = bomData.filter(b => {
         const bomProductId = (b.product_id || b.kode || '').toString().trim();
-        return bomProductId === productId;
+        return bomProductId === productId && bomProductId !== '';
       });
       
       if (productBOM.length > 0) {
         const bomItems = productBOM.map(bom => {
-          const material = materials.find(m => (m.material_id || m.kode) === bom.material_id);
+          const material = materials.find(m => {
+            const mId = (m.material_id || m.kode || '').toString().trim();
+            const bomId = (bom.material_id || '').toString().trim();
+            return mId === bomId && mId !== '';
+          });
           return {
             materialId: bom.material_id,
-            materialName: material?.nama || '',
-            unit: material?.kode || '',
+            materialName: material?.nama || bom.material_id || '',
+            unit: material?.satuan || 'PCS',
             qty: (itm.qty || 0) * (bom.ratio || 1),
             ratio: bom.ratio || 1,
             pricePerUnit: material?.priceMtr || material?.harga || 0,
@@ -3148,8 +3186,9 @@ const SalesOrders = () => {
                               Select
                             </Button>
                             {item.productId && (
-                              <Button
-                                variant="secondary"
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
                                 onClick={() => {
                                   navigate('/packaging/master/inventory', { 
                                     state: { highlightProduct: item.productId } 
@@ -3159,7 +3198,7 @@ const SalesOrders = () => {
                                 title="Buka Inventory untuk product ini"
                               >
                                 📊
-                              </Button>
+                              </button>
                             )}
                           </div>
                         </td>
@@ -3724,7 +3763,11 @@ const SalesOrders = () => {
                         const handleSelect = () => {
                           if (showProductDialog !== null) {
                             const index = showProductDialog;
-                            handleUpdateItem(index, 'productId', prod.product_id || prod.kode);
+                            // Pastikan productId tidak undefined/null - convert ke string untuk konsistensi
+                            const productIdToSet = String(prod.product_id || prod.kode || '').trim();
+                            if (productIdToSet) {
+                              handleUpdateItem(index, 'productId', productIdToSet);
+                            }
                             // Also update padCode from master product
                             if (prod.padCode) {
                               const currentItems = formData.items || [];

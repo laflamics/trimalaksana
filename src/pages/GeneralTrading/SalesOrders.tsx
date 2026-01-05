@@ -10,6 +10,7 @@ import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
 import { useDialog } from '../../hooks/useDialog';
 import { generateQuotationHtml } from '../../pdf/quotation-pdf-template';
+import { PageSizeDialog, PageSize } from '../../components/PageSizeDialog';
 import '../../styles/common.css';
 import '../../styles/compact.css';
 
@@ -394,6 +395,9 @@ const SalesOrders = () => {
   const [showMatchSODialog, setShowMatchSODialog] = useState<SalesOrder | null>(null);
   const [viewPdfData, setViewPdfData] = useState<{ html: string; soNo: string } | null>(null);
   const [viewQuotationPdfData, setViewQuotationPdfData] = useState<{ html: string; quoteNo: string } | null>(null);
+  const [showPageSizeDialog, setShowPageSizeDialog] = useState(false);
+  const [showQuotationPageSizeDialog, setShowQuotationPageSizeDialog] = useState(false);
+  const [pendingPdfAction, setPendingPdfAction] = useState<'so' | 'quotation' | null>(null);
   
   // Filter & Search
   const [activeTab, setActiveTab] = useState<'all' | 'outstanding' | 'quotation'>('all');
@@ -1903,7 +1907,7 @@ const SalesOrders = () => {
   };
 
   // Handle Save Quotation to PDF
-  const handleSaveQuotationToPDF = async () => {
+  const handleSaveQuotationToPDF = async (pageSize: PageSize = 'A4') => {
     if (!viewQuotationPdfData) return;
 
     try {
@@ -1913,7 +1917,7 @@ const SalesOrders = () => {
       // Check if Electron API is available (for file picker)
       if (electronAPI && typeof electronAPI.savePdf === 'function') {
         // Electron: Use file picker to select save location, then convert HTML to PDF and save
-        const result = await electronAPI.savePdf(viewQuotationPdfData.html, fileName);
+        const result = await electronAPI.savePdf(viewQuotationPdfData.html, fileName, pageSize);
         if (result.success) {
           showAlert(`PDF saved successfully to:\n${result.path}`, 'Success');
           setViewQuotationPdfData(null);
@@ -1926,13 +1930,12 @@ const SalesOrders = () => {
         openPrintWindow(viewQuotationPdfData.html);
       }
     } catch (error: any) {
-      console.error('Error saving PDF:', error);
       showAlert(`Error: ${error.message || 'Unknown error'}`, 'Error');
     }
   };
 
   // Handle Save SO to PDF
-  const handleSaveSOToPDF = async () => {
+  const handleSaveSOToPDF = async (pageSize: PageSize = 'A4') => {
     if (!viewPdfData) return;
 
     try {
@@ -1942,7 +1945,7 @@ const SalesOrders = () => {
       // Check if Electron API is available (for file picker)
       if (electronAPI && typeof electronAPI.savePdf === 'function') {
         // Electron: Use file picker to select save location, then convert HTML to PDF and save
-        const result = await electronAPI.savePdf(viewPdfData.html, fileName);
+        const result = await electronAPI.savePdf(viewPdfData.html, fileName, pageSize);
         if (result.success) {
           showAlert(`PDF saved successfully to:\n${result.path}`, 'Success');
           setViewPdfData(null);
@@ -1955,9 +1958,18 @@ const SalesOrders = () => {
         openPrintWindow(viewPdfData.html);
       }
     } catch (error: any) {
-      console.error('Error saving PDF:', error);
       showAlert(`Error: ${error.message || 'Unknown error'}`, 'Error');
     }
+  };
+
+  const handleShowQuotationPageSizeDialog = () => {
+    setPendingPdfAction('quotation');
+    setShowQuotationPageSizeDialog(true);
+  };
+
+  const handleShowSOPageSizeDialog = () => {
+    setPendingPdfAction('so');
+    setShowPageSizeDialog(true);
   };
 
   // Handle Match SO dengan Quotation
@@ -4807,7 +4819,7 @@ const SalesOrders = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <h2>Preview Quotation - {viewQuotationPdfData.quoteNo}</h2>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <Button variant="primary" onClick={handleSaveQuotationToPDF}>
+                  <Button variant="primary" onClick={handleShowQuotationPageSizeDialog}>
                     💾 Save to PDF
                   </Button>
                   <Button variant="secondary" onClick={() => setViewQuotationPdfData(null)}>
@@ -4864,7 +4876,7 @@ const SalesOrders = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <h2>Preview SO - {viewPdfData.soNo}</h2>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <Button variant="primary" onClick={handleSaveSOToPDF}>
+                  <Button variant="primary" onClick={handleShowSOPageSizeDialog}>
                     💾 Save to PDF
                   </Button>
                   <Button variant="secondary" onClick={() => setViewPdfData(null)}>
@@ -5679,6 +5691,38 @@ const SalesOrders = () => {
 
       {/* Custom Dialog - menggunakan hook terpusat */}
       <DialogComponent />
+      {showPageSizeDialog && (
+        <PageSizeDialog
+          defaultSize="A4"
+          onConfirm={(size) => {
+            setShowPageSizeDialog(false);
+            if (pendingPdfAction === 'so') {
+              handleSaveSOToPDF(size);
+            }
+            setPendingPdfAction(null);
+          }}
+          onCancel={() => {
+            setShowPageSizeDialog(false);
+            setPendingPdfAction(null);
+          }}
+        />
+      )}
+      {showQuotationPageSizeDialog && (
+        <PageSizeDialog
+          defaultSize="A4"
+          onConfirm={(size) => {
+            setShowQuotationPageSizeDialog(false);
+            if (pendingPdfAction === 'quotation') {
+              handleSaveQuotationToPDF(size);
+            }
+            setPendingPdfAction(null);
+          }}
+          onCancel={() => {
+            setShowQuotationPageSizeDialog(false);
+            setPendingPdfAction(null);
+          }}
+        />
+      )}
     </div>
   );
 };

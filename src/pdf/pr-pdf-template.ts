@@ -60,7 +60,7 @@ export function generatePRHtml({
   <style>
     @page { 
       size: Letter; 
-      margin: 12mm; 
+      margin: 10mm; 
     }
     
     /* Ensure images load properly for PDF */
@@ -79,17 +79,17 @@ export function generatePRHtml({
     }
     body { 
       font-family: Arial, sans-serif; 
-      font-size: 12px; 
+      font-size: 11px; 
       color: #000; 
-      padding: 8mm 10mm 14mm 10mm; 
+      padding: 5mm 8mm 10mm 8mm; 
     }
     @media print {
       @page { 
         size: Letter; 
-        margin: 12mm; 
+        margin: 10mm; 
       }
       body { 
-        padding: 8mm 10mm 14mm 10mm; 
+        padding: 5mm 8mm 10mm 8mm; 
       }
       .header-logo {
         -webkit-print-color-adjust: exact;
@@ -110,7 +110,7 @@ export function generatePRHtml({
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      margin-bottom: 4px;
+      margin-bottom: 2px;
     }
 
     .header-left {
@@ -121,7 +121,7 @@ export function generatePRHtml({
     }
 
     .header-logo {
-      height: 90px;
+      height: 70px;
       width: auto;
       max-width: 100%;
       object-fit: contain;
@@ -141,11 +141,11 @@ export function generatePRHtml({
     .header-center-text {
       flex: 1;
       text-align: center;
-      line-height: 1.3;
-      font-size: 12px;
-      padding: 0 20px;
-      padding-bottom: 6px;
-      margin-bottom: 4px;
+      line-height: 1.2;
+      font-size: 11px;
+      padding: 0 15px;
+      padding-bottom: 4px;
+      margin-bottom: 2px;
       position: relative;
     }
 
@@ -162,14 +162,14 @@ export function generatePRHtml({
     .header-center-text .company-name {
       font-weight: 700;
       text-align: center;
-      font-size: 22px;
-      margin-bottom: 2px;
+      font-size: 18px;
+      margin-bottom: 1px;
     }
 
     .header-center-text .company-address {
-      font-size: 11px;
+      font-size: 10px;
       text-align: center;
-      line-height: 1.4;
+      line-height: 1.3;
     }
 
     .header-center-text .company-address-line {
@@ -188,8 +188,8 @@ export function generatePRHtml({
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      margin-top: 4px;
-      margin-bottom: 12px;
+      margin-top: 2px;
+      margin-bottom: 8px;
     }
 
     .pr-title-wrapper .pr-spacer-left {
@@ -210,20 +210,20 @@ export function generatePRHtml({
 
     .pr-title-section .pr-title {
       font-weight: 700;
-      font-size: 20px;
-      letter-spacing: 1px;
-      margin-bottom: 4px;
+      font-size: 16px;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
       text-transform: uppercase;
     }
 
     .pr-title-section .pr-number {
       font-weight: 600;
-      font-size: 12px;
+      font-size: 11px;
     }
     .order-details { 
       display: table; 
       width: 100%; 
-      margin: 15px 0 20px 0; 
+      margin: 8px 0 12px 0; 
       border-collapse: separate;
       border-spacing: 0;
     }
@@ -231,16 +231,16 @@ export function generatePRHtml({
       display: table-cell;
       width: 50%; 
       vertical-align: top;
-      padding-right: 15px;
+      padding-right: 12px;
     }
     .order-details-right {
       padding-right: 0;
-      padding-left: 15px;
+      padding-left: 12px;
     }
     .order-detail-row { 
-      margin: 4px 0; 
-      font-size: 12px; 
-      line-height: 1.5;
+      margin: 2px 0; 
+      font-size: 11px; 
+      line-height: 1.4;
       display: block;
     }
     .order-detail-label { 
@@ -250,36 +250,36 @@ export function generatePRHtml({
       vertical-align: top;
     }
     .item-intro { 
-      margin: 10px 0 8px 0; 
-      font-size: 12px; 
+      margin: 6px 0 4px 0; 
+      font-size: 11px; 
     }
     .item-table { 
       width: 100%; 
       border-collapse: collapse; 
-      margin: 10px 0 15px 0; 
-      font-size: 11px; 
+      margin: 6px 0 10px 0; 
+      font-size: 10px; 
       table-layout: auto;
     }
     .item-table th, .item-table td { 
       border: 1px solid #000; 
-      padding: 6px 8px; 
+      padding: 4px 6px; 
       text-align: center; 
       vertical-align: middle;
       white-space: nowrap;
-      height: 35px;
+      height: 28px;
     }
     .item-table th { 
       background-color: #f0f0f0; 
       font-weight: bold; 
-      font-size: 11px;
+      font-size: 10px;
       text-transform: uppercase;
     }
     .item-table td { 
-      font-size: 11px;
+      font-size: 10px;
     }
     .item-table .text-left { 
       text-align: left; 
-      padding-left: 6px;
+      padding-left: 4px;
       white-space: normal;
       word-wrap: break-word;
     }
@@ -294,13 +294,13 @@ export function generatePRHtml({
     .summary-section { 
       display: flex; 
       justify-content: space-between; 
-      margin-top: 15px; 
+      margin-top: 8px; 
       align-items: flex-start;
     }
     .summary-row { 
-      margin: 4px 0; 
-      font-size: 12px; 
-      line-height: 1.5;
+      margin: 2px 0; 
+      font-size: 11px; 
+      line-height: 1.4;
       display: table;
       width: 100%;
       max-width: 400px;
@@ -329,22 +329,22 @@ export function generatePRHtml({
     }
     .note-label { 
       font-weight: 700; 
-      margin-bottom: 4px;
-      font-size: 11px;
+      margin-bottom: 2px;
+      font-size: 10px;
     }
     .note-text { 
-      font-size: 11px;
-      line-height: 1.4;
-      margin-bottom: 8px;
-      padding-bottom: 1.4em;
-      min-height: 2.8em;
+      font-size: 10px;
+      line-height: 1.3;
+      margin-bottom: 4px;
+      padding-bottom: 1em;
+      min-height: 2em;
     }
     .signature-section {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      gap: 20px;
-      margin-top: 20px;
+      gap: 15px;
+      margin-top: 10px;
       margin-left: 0;
       margin-right: 0;
       padding-left: 0;
@@ -359,21 +359,21 @@ export function generatePRHtml({
     }
     .approval-table th, .approval-table td { 
       border: 1px solid #000; 
-      padding: 4px; 
+      padding: 3px; 
       text-align: center; 
-      font-size: 11px; 
-      height: 30px; 
+      font-size: 10px; 
+      height: 24px; 
       vertical-align: middle;
       width: 150px;
     }
     .approval-table tbody tr:nth-child(1) td {
-      height: 50px;
+      height: 40px;
     }
     .approval-table tbody tr:nth-child(2) td {
-      height: 30px;
+      height: 24px;
     }
     .approval-table tbody tr:nth-child(3) td {
-      height: 20px;
+      height: 18px;
     }
     .approval-table th { 
       background-color: #f0f0f0; 
@@ -469,7 +469,7 @@ export function generatePRHtml({
           </tr>
         `;
       }).join('') : '<tr><td colspan="7" style="text-align:center;">No items</td></tr>'}
-      ${enrichedLines.length > 0 ? Array(4).fill(0).map(() => `
+      ${enrichedLines.length > 0 && enrichedLines.length <= 8 ? Array(Math.max(0, 8 - enrichedLines.length)).fill(0).map(() => `
         <tr>
           <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
         </tr>

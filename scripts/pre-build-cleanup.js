@@ -1,14 +1,23 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync, spawn } = require('child_process');
+const os = require('os');
 
 const releaseDir = path.join(__dirname, '..', 'release-build');
+const isWindows = os.platform() === 'win32';
 
 console.log('🧹 Pre-build cleanup: Killing processes and cleaning files...\n');
 
 // 1. Kill semua proses yang mungkin lock file
 async function killAllProcesses() {
   console.log('🔪 Killing processes...');
+  
+  if (!isWindows) {
+    // Linux/Mac: skip process killing (tidak perlu untuk build)
+    console.log('  ℹ️  Skipping process kill on non-Windows platform\n');
+    return;
+  }
+  
   const processes = [
     'PT.Trima Laksana Jaya Pratama.exe',
     'electron.exe'
@@ -75,37 +84,63 @@ function deleteInstallerFiles() {
       const filePath = path.join(releaseDir, file);
       console.log(`  🎯 Deleting: ${file}`);
       
-      // Method 1: PowerShell (paling powerful)
-      try {
-        execSync(`powershell -Command "$f='${filePath.replace(/'/g, "''")}'; if (Test-Path $f) { Remove-Item $f -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 500 }"`, {
-          stdio: 'ignore',
-          timeout: 3000
-        });
-        if (!fs.existsSync(filePath)) {
+      if (isWindows) {
+        // Windows: pakai PowerShell atau CMD
+        // Method 1: PowerShell (paling powerful)
+        try {
+          execSync(`powershell -Command "$f='${filePath.replace(/'/g, "''")}'; if (Test-Path $f) { Remove-Item $f -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 500 }"`, {
+            stdio: 'ignore',
+            timeout: 3000
+          });
+          if (!fs.existsSync(filePath)) {
+            console.log(`    ✓ Deleted: ${file}`);
+            continue;
+          }
+        } catch (e) {}
+        
+        // Method 2: CMD del dengan force
+        try {
+          execSync(`cmd /c "del /F /Q "${filePath}" 2>nul"`, {
+            stdio: 'ignore',
+            timeout: 2000
+          });
+          if (!fs.existsSync(filePath)) {
+            console.log(`    ✓ Deleted: ${file}`);
+            continue;
+          }
+        } catch (e) {}
+      } else {
+        // Linux/Mac: pakai fs.unlinkSync atau rm command
+        try {
+          fs.unlinkSync(filePath);
           console.log(`    ✓ Deleted: ${file}`);
           continue;
+        } catch (e) {
+          // Fallback: pakai rm command
+          try {
+            execSync(`rm -f "${filePath}"`, {
+              stdio: 'ignore',
+              timeout: 2000
+            });
+            if (!fs.existsSync(filePath)) {
+              console.log(`    ✓ Deleted: ${file}`);
+              continue;
+            }
+          } catch (e2) {}
         }
-      } catch (e) {}
+      }
       
-      // Method 2: CMD del dengan force
-      try {
-        execSync(`cmd /c "del /F /Q "${filePath}" 2>nul"`, {
-          stdio: 'ignore',
-          timeout: 2000
-        });
-        if (!fs.existsSync(filePath)) {
-          console.log(`    ✓ Deleted: ${file}`);
-          continue;
-        }
-      } catch (e) {}
-      
-      // Method 3: Rename dulu, baru delete
+      // Method 3: Rename dulu, baru delete (cross-platform)
       try {
         const tempPath = filePath + '.tmp.' + Date.now();
         fs.renameSync(filePath, tempPath);
         setTimeout(() => {
           try {
-            execSync(`powershell -Command "Remove-Item -Path '${tempPath.replace(/'/g, "''")}' -Force -ErrorAction SilentlyContinue"`, { stdio: 'ignore' });
+            if (isWindows) {
+              execSync(`powershell -Command "Remove-Item -Path '${tempPath.replace(/'/g, "''")}' -Force -ErrorAction SilentlyContinue"`, { stdio: 'ignore' });
+            } else {
+              fs.unlinkSync(tempPath);
+            }
           } catch (e) {}
         }, 100);
         console.log(`    ⚠ Renamed (will delete later): ${file}`);
@@ -141,10 +176,17 @@ function deleteLockedFolders() {
           }
           
           try {
-            execSync(`powershell -Command "Remove-Item -Path '${itemPath.replace(/'/g, "''")}' -Recurse -Force -ErrorAction SilentlyContinue"`, {
-              stdio: 'ignore',
-              timeout: 2000
-            });
+            if (isWindows) {
+              execSync(`powershell -Command "Remove-Item -Path '${itemPath.replace(/'/g, "''")}' -Recurse -Force -ErrorAction SilentlyContinue"`, {
+                stdio: 'ignore',
+                timeout: 2000
+              });
+            } else {
+              execSync(`rm -rf "${itemPath}"`, {
+                stdio: 'ignore',
+                timeout: 2000
+              });
+            }
             console.log(`  ✓ Removed folder: ${item}`);
           } catch (e) {
             console.log(`  ⚠ Could not remove folder: ${item}`);

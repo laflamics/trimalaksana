@@ -3,6 +3,7 @@ import { autoUpdater } from 'electron-updater';
 import * as path from 'path';
 import * as http from 'http';
 import * as fs from 'fs';
+import * as os from 'os';
 import { pathToFileURL } from 'url';
 
 // Disable certificate verification for Tailscale funnel (self-signed certificates)
@@ -24,6 +25,32 @@ function createWindow() {
   console.log('preload path:', preloadPath);
   console.log('preload exists:', fs.existsSync(preloadPath));
   
+  // CRITICAL FIX: Set app icon correctly for both dev and production
+  let iconPath: string | undefined;
+  if (app.isPackaged) {
+    // Production: icon is in resources (electron-builder puts it there)
+    iconPath = path.join(process.resourcesPath || app.getAppPath(), 'public', 'noxtiz.ico');
+    // Fallback: try app path if resourcesPath doesn't work
+    if (!fs.existsSync(iconPath)) {
+      iconPath = path.join(app.getAppPath(), 'public', 'noxtiz.ico');
+    }
+    // If still not found, try dist/public
+    if (!fs.existsSync(iconPath)) {
+      iconPath = path.join(__dirname, '..', 'public', 'noxtiz.ico');
+    }
+  } else {
+    // Development: icon is in project root
+    iconPath = path.join(__dirname, '..', 'public', 'noxtiz.ico');
+  }
+  
+  // Only set icon if file exists
+  if (!iconPath || !fs.existsSync(iconPath)) {
+    console.warn(`[Main] Icon not found at ${iconPath}, using default Electron icon`);
+    iconPath = undefined; // Let Electron use default icon
+  } else {
+    console.log(`[Main] Using icon: ${iconPath}`);
+  }
+  
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -38,8 +65,16 @@ function createWindow() {
     titleBarStyle: 'default',
     backgroundColor: '#0a0a0a',
     show: true,
-    icon: path.join(__dirname, '..', 'public', 'noxtiz.ico'), // Set app icon
+    icon: iconPath, // Set app icon (will be undefined if not found, using default)
   });
+  
+  // CRITICAL FIX: Also set app icon for taskbar (Windows)
+  // For Windows, icon is embedded in executable by electron-builder
+  // But we can also set it explicitly for better compatibility
+  if (iconPath && fs.existsSync(iconPath)) {
+    app.dock?.setIcon(iconPath); // macOS dock icon
+    // For Windows, icon is already set via BrowserWindow icon property above
+  }
 
   // Handle certificate errors for Tailscale funnel
   mainWindow.webContents.on('certificate-error', (event, url, error, certificate, callback) => {
@@ -474,13 +509,27 @@ ipcMain.handle('save-storage', async (event, key: string, value: any) => {
       return { success: true, path: '', skipped: true };
     }
     
-    // Determine directory based on key prefix
+    // CRITICAL FIX: Handle key with prefix format (general-trading/gt_products)
+    // Extract actual key and determine directory
+    let actualKey = key;
     let dataDir: string;
-    if (key.startsWith('gt_')) {
-      // GT data goes to general-trading subdirectory
+    
+    if (key.includes('/')) {
+      // Key has prefix format: "general-trading/gt_products" or "trucking/trucking_orders"
+      const parts = key.split('/');
+      const prefix = parts[0]; // "general-trading" or "trucking"
+      actualKey = parts[parts.length - 1]; // "gt_products" or "trucking_orders"
+      
+      // Use the prefix as subdirectory
+      dataDir = path.join(__dirname, '..', 'data', 'localStorage', prefix);
+    } else if (key.startsWith('gt_')) {
+      // GT key without prefix: "gt_products" -> save to general-trading/
       dataDir = path.join(__dirname, '..', 'data', 'localStorage', 'general-trading');
+    } else if (key.startsWith('trucking_')) {
+      // Trucking key without prefix: "trucking_orders" -> save to trucking/
+      dataDir = path.join(__dirname, '..', 'data', 'localStorage', 'trucking');
     } else {
-      // Regular data goes to localStorage root
+      // Regular data (packaging) goes to localStorage root
       dataDir = path.join(__dirname, '..', 'data', 'localStorage');
     }
     
@@ -498,7 +547,8 @@ ipcMain.handle('save-storage', async (event, key: string, value: any) => {
       await fs.promises.mkdir(dataDir, { recursive: true });
     }
     
-    const filePath = path.join(dataDir, `${key}.json`);
+    // Use actualKey (without prefix) for filename
+    const filePath = path.join(dataDir, `${actualKey}.json`);
     await fs.promises.writeFile(filePath, JSON.stringify(value, null, 2), 'utf8');
     
     return { success: true, path: filePath };
@@ -528,15 +578,57 @@ ipcMain.handle('load-storage', async (event, key: string) => {
       dataDir = path.join(process.resourcesPath || app.getAppPath(), 'data');
     }
     
-    const filePath = path.join(dataDir, 'localStorage', `${key}.json`);
+    // CRITICAL FIX: For GT/Trucking, check subdirectories (general-trading/, trucking/)
+    // Try multiple paths: root, general-trading/, trucking/
+    let filePath = path.join(dataDir, 'localStorage', `${key}.json`);
+    let fileFound = false;
     
-    // Check if file exists
-    try {
-      await fs.promises.access(filePath);
-    } catch {
-      // File doesn't exist, return null
-      console.log(`[load-storage] File not found: ${filePath}`);
-      return { success: true, data: null };
+    // If key starts with gt_, try general-trading subdirectory first
+    if (key.startsWith('gt_')) {
+      const gtPath = path.join(dataDir, 'localStorage', 'general-trading', `${key}.json`);
+      try {
+        await fs.promises.access(gtPath);
+        filePath = gtPath; // File exists in subdirectory, use it
+        fileFound = true;
+      } catch {
+        // File doesn't exist in subdirectory, try root
+      }
+    }
+    
+    // If key starts with trucking_, try trucking subdirectory
+    if (!fileFound && key.startsWith('trucking_')) {
+      const truckingPath = path.join(dataDir, 'localStorage', 'trucking', `${key}.json`);
+      try {
+        await fs.promises.access(truckingPath);
+        filePath = truckingPath; // File exists in subdirectory, use it
+        fileFound = true;
+      } catch {
+        // File doesn't exist in subdirectory, try root
+      }
+    }
+    
+    // Also try with prefix format (general-trading/gt_products)
+    if (!fileFound && key.includes('/')) {
+      const prefixedPath = path.join(dataDir, 'localStorage', `${key}.json`);
+      try {
+        await fs.promises.access(prefixedPath);
+        filePath = prefixedPath; // File exists with prefix format, use it
+        fileFound = true;
+      } catch {
+        // File doesn't exist with prefix, continue with original path
+      }
+    }
+    
+    // Check if file exists (final check)
+    if (!fileFound) {
+      try {
+        await fs.promises.access(filePath);
+        fileFound = true;
+      } catch {
+        // File doesn't exist, return null
+        console.log(`[load-storage] File not found: ${key} (tried root and subdirectories)`);
+        return { success: true, data: null };
+      }
     }
     
     // Retry logic for file reading (handle file locks)
@@ -602,51 +694,72 @@ ipcMain.handle('load-storage', async (event, key: string) => {
   }
 });
 
-// Load all storage files
+// Load all storage files (including subdirectories for GT/Trucking)
 ipcMain.handle('load-all-storage', async () => {
   try {
     const dataDir = path.join(__dirname, '..', 'data', 'localStorage');
     await fs.promises.mkdir(dataDir, { recursive: true });
     
-    const files = await fs.promises.readdir(dataDir);
-    const jsonFiles = files.filter(f => f.endsWith('.json'));
-    
     const data: Record<string, any> = {};
-    for (const file of jsonFiles) {
-      const key = file.replace('.json', '');
-      const filePath = path.join(dataDir, file);
+    
+    // Helper function to load files from a directory recursively
+    const loadDirectory = async (dir: string, prefix: string = '') => {
       try {
-        const content = await fs.promises.readFile(filePath, 'utf8');
-        try {
-          data[key] = JSON.parse(content);
-        } catch (parseError: any) {
-          console.error(`[WATCH] Error reading ${file}:`, parseError);
-          // Try to fix corrupted JSON by removing trailing content after valid JSON
-          try {
-            // Find the last valid closing brace/bracket
-            let lastValidIndex = content.lastIndexOf('}');
-            if (lastValidIndex === -1) {
-              lastValidIndex = content.lastIndexOf(']');
+        const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+        
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          
+          if (entry.isDirectory()) {
+            // Recursively load subdirectories (e.g., general-trading/, trucking/)
+            const subPrefix = prefix ? `${prefix}/${entry.name}` : entry.name;
+            await loadDirectory(fullPath, subPrefix);
+          } else if (entry.isFile() && entry.name.endsWith('.json')) {
+            // Load JSON file
+            const key = prefix ? `${prefix}/${entry.name.replace('.json', '')}` : entry.name.replace('.json', '');
+            try {
+              const content = await fs.promises.readFile(fullPath, 'utf8');
+              try {
+                data[key] = JSON.parse(content);
+              } catch (parseError: any) {
+                console.error(`[WATCH] Error reading ${entry.name}:`, parseError);
+                // Try to fix corrupted JSON by removing trailing content after valid JSON
+                try {
+                  // Find the last valid closing brace/bracket
+                  let lastValidIndex = content.lastIndexOf('}');
+                  if (lastValidIndex === -1) {
+                    lastValidIndex = content.lastIndexOf(']');
+                  }
+                  if (lastValidIndex > 0) {
+                    const cleanedContent = content.substring(0, lastValidIndex + 1);
+                    // Try to parse cleaned content
+                    const parsed = JSON.parse(cleanedContent);
+                    // If successful, save the cleaned version
+                    await fs.promises.writeFile(fullPath, JSON.stringify(parsed, null, 2), 'utf8');
+                    console.log(`[WATCH] Fixed corrupted JSON in ${entry.name}`);
+                    data[key] = parsed;
+                  } else {
+                    console.error(`[WATCH] Cannot fix ${entry.name}: no valid JSON structure found`);
+                  }
+                } catch (fixError) {
+                  console.error(`[WATCH] Failed to fix ${entry.name}:`, fixError);
+                }
+              }
+            } catch (error) {
+              console.error(`[WATCH] Error reading file ${entry.name}:`, error);
             }
-            if (lastValidIndex > 0) {
-              const cleanedContent = content.substring(0, lastValidIndex + 1);
-              // Try to parse cleaned content
-              const parsed = JSON.parse(cleanedContent);
-              // If successful, save the cleaned version
-              await fs.promises.writeFile(filePath, JSON.stringify(parsed, null, 2), 'utf8');
-              console.log(`[WATCH] Fixed corrupted JSON in ${file}`);
-              data[key] = parsed;
-            } else {
-              console.error(`[WATCH] Cannot fix ${file}: no valid JSON structure found`);
-            }
-          } catch (fixError) {
-            console.error(`[WATCH] Failed to fix ${file}:`, fixError);
           }
         }
-      } catch (error) {
-        console.error(`[WATCH] Error reading file ${file}:`, error);
+      } catch (error: any) {
+        // Ignore errors for directories that don't exist or can't be read
+        if (error.code !== 'ENOENT') {
+          console.error(`[WATCH] Error reading directory ${dir}:`, error);
+        }
       }
-    }
+    };
+    
+    // Load root directory and all subdirectories
+    await loadDirectory(dataDir);
     
     return { success: true, data };
   } catch (error: any) {
@@ -655,16 +768,53 @@ ipcMain.handle('load-all-storage', async () => {
   }
 });
 
-// Delete storage file
+// Delete storage file (including subdirectories for GT/Trucking)
 ipcMain.handle('delete-storage', async (event, key: string) => {
   try {
-    const filePath = path.join(__dirname, '..', 'data', 'localStorage', `${key}.json`);
-    await fs.promises.unlink(filePath);
+    // Get data directory
+    const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+    const dataDir = isDev 
+      ? path.join(__dirname, '..', 'data')
+      : path.join(process.resourcesPath || app.getAppPath(), 'data');
+    
+    // CRITICAL FIX: Try multiple paths for GT/Trucking
+    const pathsToTry: string[] = [];
+    
+    // Root path
+    pathsToTry.push(path.join(dataDir, 'localStorage', `${key}.json`));
+    
+    // If key starts with gt_, try general-trading subdirectory
+    if (key.startsWith('gt_')) {
+      pathsToTry.push(path.join(dataDir, 'localStorage', 'general-trading', `${key}.json`));
+    }
+    
+    // If key starts with trucking_, try trucking subdirectory
+    if (key.startsWith('trucking_')) {
+      pathsToTry.push(path.join(dataDir, 'localStorage', 'trucking', `${key}.json`));
+    }
+    
+    // If key has prefix format (general-trading/gt_products), try that path
+    if (key.includes('/')) {
+      pathsToTry.push(path.join(dataDir, 'localStorage', `${key}.json`));
+    }
+    
+    // Try to delete from all possible paths
+    let deleted = false;
+    for (const filePath of pathsToTry) {
+      try {
+        await fs.promises.unlink(filePath);
+        deleted = true;
+        console.log(`[delete-storage] Deleted ${key} from ${filePath}`);
+      } catch (error: any) {
+        if (error.code !== 'ENOENT') {
+          // Only log non-ENOENT errors
+          console.warn(`[delete-storage] Error deleting ${key} from ${filePath}:`, error.message);
+        }
+      }
+    }
+    
     return { success: true };
   } catch (error: any) {
-    if (error.code === 'ENOENT') {
-      return { success: true }; // File doesn't exist, consider it deleted
-    }
     console.error(`Error deleting ${key}:`, error);
     return { success: false, error: error.message };
   }
@@ -1240,8 +1390,63 @@ ipcMain.handle('get-app-version', () => {
   return app.getVersion();
 });
 
+// Function to create desktop shortcut (Windows only, for portable builds)
+async function createDesktopShortcut() {
+  if (process.platform !== 'win32' || !app.isPackaged) {
+    return; // Only for Windows production builds
+  }
+  
+  try {
+    const desktopPath = path.join(os.homedir(), 'Desktop');
+    const shortcutPath = path.join(desktopPath, 'PT.Trima Laksana Jaya Pratama.lnk');
+    
+    // Check if shortcut already exists
+    if (fs.existsSync(shortcutPath)) {
+      console.log('[Shortcut] Desktop shortcut already exists');
+      return;
+    }
+    
+    // Get executable path
+    const exePath = process.execPath;
+    
+    // Get icon path (try multiple locations)
+    let iconPath = path.join(process.resourcesPath || app.getAppPath(), 'public', 'noxtiz.ico');
+    if (!fs.existsSync(iconPath)) {
+      iconPath = path.join(app.getAppPath(), 'public', 'noxtiz.ico');
+    }
+    if (!fs.existsSync(iconPath)) {
+      iconPath = exePath; // Fallback to executable icon (should be embedded)
+    }
+    
+    // Use PowerShell to create shortcut (Windows native method)
+    const psScript = `
+      $WshShell = New-Object -ComObject WScript.Shell
+      $Shortcut = $WshShell.CreateShortcut("${shortcutPath.replace(/\\/g, '\\\\')}")
+      $Shortcut.TargetPath = "${exePath.replace(/\\/g, '\\\\')}"
+      $Shortcut.WorkingDirectory = "${path.dirname(exePath).replace(/\\/g, '\\\\')}"
+      $Shortcut.IconLocation = "${iconPath.replace(/\\/g, '\\\\')}"
+      $Shortcut.Description = "PT.Trima Laksana Jaya Pratama - ERP System"
+      $Shortcut.Save()
+    `;
+    
+    const { exec } = require('child_process');
+    exec(`powershell -Command "${psScript.replace(/"/g, '\\"')}"`, (error: any) => {
+      if (error) {
+        console.error('[Shortcut] Error creating desktop shortcut:', error);
+      } else {
+        console.log('[Shortcut] Desktop shortcut created successfully');
+      }
+    });
+  } catch (error) {
+    console.error('[Shortcut] Error creating desktop shortcut:', error);
+  }
+}
+
 app.whenReady().then(async () => {
   console.log('Electron app ready, creating window...');
+  
+  // Create desktop shortcut (Windows only, portable builds)
+  await createDesktopShortcut();
   
   // Install React DevTools extension (only in development)
   const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;

@@ -40,7 +40,7 @@
 
 .btn-danger {
   background: var(--error);
-  color: white;
+  color: var(--text-on-error);
   border-color: var(--error);
 }
 

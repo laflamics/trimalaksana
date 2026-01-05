@@ -3,6 +3,24 @@ import { useState } from 'react';
 import Card from '../components/Card';
 import Button from '../components/Button';
 
+// Platform detection utility
+export const isElectron = (): boolean => {
+  return typeof window !== 'undefined' && !!(window as any).electronAPI;
+};
+
+export const isMobile = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  // Check if running in Capacitor (mobile)
+  const capacitor = (window as any).Capacitor;
+  if (capacitor) return true;
+  // Fallback: check user agent
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+};
+
+export const isCapacitor = (): boolean => {
+  return typeof window !== 'undefined' && !!(window as any).Capacitor;
+};
+
 export const showNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
   // Simple notification - can be enhanced with toast library
   console.log(`[${type.toUpperCase()}] ${message}`);

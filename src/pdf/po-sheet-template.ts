@@ -19,10 +19,13 @@ interface POSheetParams {
     quality?: string;
     score?: string | number;
     qty: number;
+    unit?: string;
+    price?: number;
     keterangan?: string;
   }>;
   companyName: string;
   companyAddress: string;
+  logo?: string;
   page?: number;
   totalPages?: number;
 }
@@ -37,9 +40,37 @@ export function generatePOSheetHtml({
   items,
   companyName,
   companyAddress,
+  logo,
   page = 1,
   totalPages = 1,
 }: POSheetParams): string {
+  // Logo fallback
+  const logoSrc = logo || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzAwN2JmZiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LXNpemU9IjE0IiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkxPR088L3RleHQ+PC9zdmc+';
+  
+  // Split address menjadi 2 baris
+  let addressLine1 = '';
+  let addressLine2 = '';
+  const kabupatenIndex = companyAddress.toLowerCase().indexOf('kabupaten');
+  if (kabupatenIndex !== -1) {
+    addressLine1 = companyAddress.substring(0, kabupatenIndex).trim();
+    addressLine2 = companyAddress.substring(kabupatenIndex).trim();
+  } else {
+    const words = companyAddress.split(/\s+/);
+    if (words.length > 8) {
+      const midPoint = Math.ceil(words.length / 2);
+      addressLine1 = words.slice(0, midPoint).join(' ');
+      addressLine2 = words.slice(midPoint).join(' ');
+    } else {
+      addressLine1 = companyAddress;
+      addressLine2 = '';
+    }
+  }
+  
+  // HTML escape utility
+  const htmlEscape = (s: any) => {
+    if (s === undefined || s === null) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  };
   const html = `<!doctype html>
 <html>
 <head>
@@ -48,7 +79,7 @@ export function generatePOSheetHtml({
   <style>
     @page { 
       size: A4 landscape; 
-      margin: 12mm; 
+      margin: 8mm; 
     }
     
     * {
@@ -65,37 +96,34 @@ export function generatePOSheetHtml({
     
     body { 
       font-family: Arial, sans-serif; 
-      font-size: 13px; 
+      font-size: 11px; 
       color: #000; 
-      padding: 8mm; 
+      padding: 3mm 6mm; 
     }
     
     @media print {
       @page { 
         size: A4 landscape; 
-        margin: 12mm; 
+        margin: 8mm; 
       }
       body { 
-        padding: 8mm; 
+        padding: 3mm 6mm; 
       }
     }
     
     .title {
       text-align: center;
-      font-size: 20px;
+      font-size: 16px;
       font-weight: bold;
-      margin-bottom: 15px;
-      padding-bottom: 10px;
-      border-bottom: 2px solid #000;
+      margin-bottom: 6px;
+      margin-top: 2px;
     }
     
     .header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-bottom: 15px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid #000;
+      margin-bottom: 6px;
     }
     
     .header-left {
@@ -111,15 +139,15 @@ export function generatePOSheetHtml({
     
     .header-row {
       display: flex;
-      margin-bottom: 6px;
-      font-size: 13px;
+      margin-bottom: 2px;
+      font-size: 11px;
       align-items: center;
     }
     
     .header-row-right {
       display: table;
-      margin-bottom: 6px;
-      font-size: 13px;
+      margin-bottom: 2px;
+      font-size: 11px;
       margin-left: auto;
       table-layout: fixed;
       width: 280px;
@@ -158,34 +186,34 @@ export function generatePOSheetHtml({
     }
     
     .table-container {
-      margin: 15px 0;
+      margin: 6px 0;
     }
     
     .item-table {
       width: 100%;
       border-collapse: collapse;
-      margin: 10px 0;
-      font-size: 12px;
+      margin: 4px 0;
+      font-size: 10px;
     }
     
     .item-table th,
     .item-table td {
       border: 1px solid #000;
-      padding: 8px 10px;
+      padding: 4px 6px;
       text-align: left;
       vertical-align: middle;
-      min-height: 35px;
+      min-height: 28px;
     }
     
     .item-table th {
       background-color: #f0f0f0;
       font-weight: bold;
       text-align: center;
-      font-size: 12px;
+      font-size: 10px;
     }
     
     .item-table td {
-      font-size: 12px;
+      font-size: 10px;
     }
     
     .item-table .col-no {
@@ -208,43 +236,164 @@ export function generatePOSheetHtml({
     }
     
     .item-table .col-qty {
-      width: 9%;
+      width: 8%;
+      text-align: right;
+    }
+    
+    .item-table .col-unit {
+      width: 6%;
+      text-align: center;
+    }
+    
+    .item-table .col-price {
+      width: 12%;
       text-align: right;
     }
     
     .item-table .col-keterangan {
-      width: 36%;
+      width: 25%;
     }
     
-    .footer {
-      margin-top: 20px;
-      padding-top: 10px;
-      border-top: 1px solid #000;
+    /* Header: Logo kiri, Company name + address center, garis sejajar dengan panjang alamat */
+    .header-kop {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 2px;
+      margin-top: 0;
+    }
+
+    .header-kop-left {
+      width: 20%;
+      flex-shrink: 0;
+      position: relative;
+      z-index: 1;
+    }
+
+    .header-kop-logo {
+      height: 70px;
+      width: auto;
+      max-width: 100%;
+      object-fit: contain;
+      position: relative;
+      z-index: 0;
+      opacity: 1;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      display: block;
+    }
+
+    .header-kop-logo[src=""],
+    .header-kop-logo:not([src]) {
+      display: none;
+    }
+
+    .header-kop-center {
+      flex: 1;
       text-align: center;
-      font-size: 12px;
+      line-height: 1.2;
+      font-size: 11px;
+      padding: 0 15px;
+      padding-bottom: 2px;
+      margin-bottom: 1px;
+      position: relative;
+    }
+
+    .header-kop-center::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      border-bottom: 2px solid #000;
+    }
+
+    .header-kop-center .company-name {
+      font-weight: 700;
+      text-align: center;
+      font-size: 18px;
+      margin-bottom: 1px;
+    }
+
+    .header-kop-center .company-address {
+      font-size: 10px;
+      text-align: center;
+      line-height: 1.3;
+    }
+
+    .header-kop-center .company-address-line {
+      display: block;
+    }
+
+    .header-kop-right {
+      width: 20%;
+      flex-shrink: 0;
     }
     
-    .footer-company {
+    /* Signature table untuk Prepare, Check, Approve */
+    .signature-table {
+      width: 50%;
+      border-collapse: collapse;
+      margin-top: 6px;
+      margin-left: auto;
+      margin-right: 0;
+      table-layout: fixed;
+    }
+    
+    .signature-table th,
+    .signature-table td {
+      border: 1px solid #000;
+      padding: 3px;
+      text-align: center;
+      font-size: 9px;
+      height: 24px;
+    }
+    
+    .signature-table th {
+      background-color: #f0f0f0;
       font-weight: bold;
-      font-size: 14px;
-      margin-bottom: 4px;
+      height: 24px;
     }
     
-    .footer-address {
-      font-size: 12px;
-      line-height: 1.4;
+    .signature-table th:nth-child(1),
+    .signature-table th:nth-child(2),
+    .signature-table th:nth-child(3) {
+      width: 33.33%;
+    }
+    
+    .signature-table tbody tr:nth-child(1) td {
+      height: 40px;
+    }
+    
+    .signature-table tbody tr:nth-child(2) td {
+      height: 24px;
     }
     
     .page-info {
       text-align: right;
-      font-size: 11px;
-      margin-top: 10px;
+      font-size: 10px;
+      margin-top: 6px;
       color: #666;
     }
   </style>
 </head>
 <body>
-  <div class="title">PURCHASE ORDER SHEET</div>
+  <div class="header-kop">
+    <div class="header-kop-left">
+      <img src="${logoSrc}" class="header-kop-logo" alt="Logo" onerror="this.style.display='none'; this.onerror=null;" />
+    </div>
+    <div class="header-kop-center">
+      <div class="company-name">${htmlEscape(companyName)}</div>
+      <div class="company-address">
+        ${addressLine1 ? `<span class="company-address-line">${htmlEscape(addressLine1)}</span>` : ''}
+        ${addressLine2 ? `<span class="company-address-line">${htmlEscape(addressLine2)}</span>` : ''}
+      </div>
+    </div>
+    <div class="header-kop-right"></div>
+  </div>
+
+  <div class="title">PURCHASE REQUISITION</div>
   
   <div class="header">
     <div class="header-left">
@@ -289,38 +438,59 @@ export function generatePOSheetHtml({
           <th class="col-quality">Quality</th>
           <th class="col-score">Score</th>
           <th class="col-qty">Qty</th>
+          <th class="col-unit">Unit</th>
+          <th class="col-price">Harga Satuan</th>
           <th class="col-keterangan">Keterangan</th>
         </tr>
       </thead>
       <tbody>
-        ${items.length > 0 ? items.map(item => `
+        ${items.length > 0 ? items.map(item => {
+          const price = typeof item.price === 'number' ? item.price : 0;
+          return `
           <tr>
             <td class="col-no">${item.no}</td>
             <td class="col-item">${item.item || ''}</td>
             <td class="col-quality">${item.quality || ''}</td>
             <td class="col-score">${item.score !== undefined && item.score !== null ? item.score : ''}</td>
-            <td class="col-qty">${typeof item.qty === 'number' ? item.qty.toLocaleString('id-ID') : item.qty || ''}</td>
+            <td class="col-qty">${typeof item.qty === 'number' ? item.qty.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 3 }) : item.qty || ''}</td>
+            <td class="col-unit">${item.unit || ''}</td>
+            <td class="col-price">${price > 0 ? `Rp ${price.toLocaleString('id-ID')}` : ''}</td>
             <td class="col-keterangan">${item.keterangan || ''}</td>
           </tr>
-        `).join('') : ''}
-        ${Array(Math.max(0, 10 - items.length)).fill(0).map((_, idx) => `
+        `;
+        }).join('') : ''}
+        ${items.length > 0 && items.length <= 12 ? Array(Math.max(0, 12 - items.length)).fill(0).map((_, idx) => `
           <tr>
             <td class="col-no">${items.length + idx + 1}</td>
             <td class="col-item"></td>
             <td class="col-quality"></td>
             <td class="col-score"></td>
             <td class="col-qty"></td>
+            <td class="col-unit"></td>
+            <td class="col-price"></td>
             <td class="col-keterangan"></td>
           </tr>
-        `).join('')}
+        `).join('') : ''}
       </tbody>
     </table>
   </div>
   
-  <div class="footer">
-    <div class="footer-company">${companyName}</div>
-    <div class="footer-address">${companyAddress}</div>
-  </div>
+  <table class="signature-table">
+    <thead>
+      <tr>
+        <th>Prepare</th>
+        <th>Check</th>
+        <th>Approve</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${Array(2).fill(0).map(() => `
+        <tr>
+          <td></td><td></td><td></td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
   
   ${totalPages > 1 ? `<div class="page-info">Page ${page} of ${totalPages}</div>` : ''}
 </body>

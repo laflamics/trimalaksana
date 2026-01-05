@@ -36,13 +36,46 @@ class StorageService {
   private syncInProgress = false;
   private autoSyncInterval: NodeJS.Timeout | null = null;
   private autoSyncEnabled = false;
-  private autoSyncIntervalMs = 300000; // Default: sync setiap 5 menit (increased from 30s untuk reduce race conditions)
+  private autoSyncIntervalMs = 10000; // Default: sync setiap 10 detik untuk real-time sync antar PC
   private syncStatus: SyncStatus = 'idle';
   private syncStatusListeners: ((status: SyncStatus) => void)[] = [];
   private retryCount = 0;
   private maxRetries = 3;
-  private baseRetryDelay = 1000; // 1 second
-  private fetchTimeout = 10000; // 10 seconds timeout untuk fetch request
+  private baseRetryDelay = 2000; // 2 seconds (ditingkatkan dari 1s untuk mengurangi spam retry)
+  private lastErrorTime = 0;
+  private errorThrottleMs = 5000; // Hanya log error setiap 5 detik untuk menghindari spam
+  // Timeout untuk fetch request: lebih lama di mobile karena network bisa lebih lambat
+  // Ditingkatkan untuk menghindari timeout error yang sering terjadi
+  private fetchTimeout = (() => {
+    // Check if running on mobile/Capacitor
+    const isMobile = typeof window !== 'undefined' && 
+      (!!(window as any).Capacitor || 
+       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+    return isMobile ? 45000 : 30000; // 45 seconds untuk mobile, 30 seconds untuk desktop (ditingkatkan dari 15s/10s)
+  })();
+  
+  // Timeout khusus untuk first sync atau data banyak (butuh waktu lebih lama)
+  private getSyncTimeout(isFirstSync: boolean = false, dataSize?: number): number {
+    const isMobile = typeof window !== 'undefined' && 
+      (!!(window as any).Capacitor || 
+       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+    
+    if (isFirstSync) {
+      // First sync: 60 detik untuk desktop, 90 detik untuk mobile
+      return isMobile ? 90000 : 60000; // 90 seconds untuk mobile, 60 seconds untuk desktop
+    }
+    
+    // Jika data banyak (lebih dari 50 keys atau lebih dari 5MB), pakai timeout lebih lama
+    if (dataSize !== undefined) {
+      const estimatedSizeMB = dataSize / (1024 * 1024); // Rough estimate
+      if (dataSize > 50 || estimatedSizeMB > 5) {
+        // Data banyak: pakai timeout lebih lama (45s mobile, 30s desktop)
+        return isMobile ? 60000 : 45000; // 60 seconds untuk mobile, 45 seconds untuk desktop
+      }
+    }
+    
+    return this.fetchTimeout; // Normal sync pakai timeout biasa (30s desktop, 45s mobile)
+  }
   private storageEventName = 'app-storage-changed';
 
   // Debug logger - only logs when DEBUG is true
@@ -228,10 +261,14 @@ class StorageService {
   private isKeyForCurrentBusiness(key: string): boolean {
     const business = this.getBusinessContext();
     
-    // Packaging: no prefix
+    // Packaging: handle both formats (with and without prefix for backward compatibility)
     if (business === 'packaging') {
-      // Only sync keys without prefix (packaging data)
-      return !key.includes('/') || key.startsWith('storage_config');
+      // Normalize key first: remove packaging/ prefix if present
+      const normalizedKey = key.startsWith('packaging/') ? key.replace('packaging/', '') : key;
+      // Only sync keys without prefix (packaging data) - but allow packaging/ prefix for backward compatibility
+      // Key dengan prefix packaging/ akan dinormalisasi jadi tanpa prefix saat sync
+      return (!normalizedKey.includes('/') || key.startsWith('storage_config')) && 
+             (normalizedKey === key || key.startsWith('packaging/'));
     }
     
     // General Trading & Trucking: must have prefix
@@ -282,7 +319,18 @@ class StorageService {
       const electronAPI = (window as any).electronAPI;
       if (electronAPI && electronAPI.loadStorage) {
         try {
-          const result = await electronAPI.loadStorage(storageKey);
+          // CRITICAL FIX: For packaging, try both formats (with and without prefix) for backward compatibility
+          let result = await electronAPI.loadStorage(storageKey);
+          const business = this.getBusinessContext();
+          if (business === 'packaging' && (!result.success || result.data === null)) {
+            // Try with packaging/ prefix (backward compatibility)
+            const prefixedKey = `packaging/${key}`;
+            const prefixedResult = await electronAPI.loadStorage(prefixedKey);
+            if (prefixedResult.success && prefixedResult.data !== null) {
+              result = prefixedResult;
+              this.log(`[Storage.get] Found ${key} with prefix packaging/ (backward compatibility)`);
+            }
+          }
           if (result.success && result.data !== null) {
             const data = result.data;
             // Extract value if wrapped with timestamp or value wrapper
@@ -345,7 +393,22 @@ class StorageService {
       }
       
       // Fallback to localStorage (instant, no retry needed)
-      const value = localStorage.getItem(storageKey);
+      // CRITICAL FIX: For packaging, try both formats (with and without prefix) for backward compatibility
+      let value = localStorage.getItem(storageKey);
+      const business = this.getBusinessContext();
+      if (business === 'packaging' && !value) {
+        // Try with packaging/ prefix (backward compatibility)
+        const prefixedKey = `packaging/${key}`;
+        const prefixedValue = localStorage.getItem(prefixedKey);
+        if (prefixedValue) {
+          value = prefixedValue;
+          this.log(`[Storage.get] Found ${key} in localStorage with prefix packaging/ (backward compatibility)`);
+          // Migrate to new format (without prefix) for consistency
+          localStorage.setItem(storageKey, prefixedValue);
+          localStorage.removeItem(prefixedKey);
+          this.log(`[Storage.get] Migrated ${key} from packaging/ prefix to direct key`);
+        }
+      }
       if (value) {
         try {
           const parsed = JSON.parse(value);
@@ -479,7 +542,14 @@ class StorageService {
         const normalizedExisting = normalizeForComparison(existingValue);
         const normalizedNew = normalizeForComparison(value);
         
-        if (JSON.stringify(normalizedExisting) === JSON.stringify(normalizedNew)) {
+        // IMPORTANT: Untuk BOM, selalu anggap data berubah karena BOM bisa di-update dari PC lain
+        // BOM perlu selalu di-sync untuk memastikan semua PC mendapat update terbaru
+        const isBOMKey = key === 'bom' || key.endsWith('/bom') || key.includes('bom');
+        
+        if (isBOMKey) {
+          // BOM selalu dianggap berubah untuk memastikan sync
+          dataChanged = true;
+        } else if (JSON.stringify(normalizedExisting) === JSON.stringify(normalizedNew)) {
           // Data tidak berubah, gunakan timestamp yang lama
           dataChanged = false;
         }
@@ -544,6 +614,25 @@ class StorageService {
     // Hanya update localStorage dan push ke server jika data berubah
     if (dataChanged) {
       localStorage.setItem(storageKey, JSON.stringify(dataWithTimestamp));
+      
+      // CRITICAL FIX: For packaging, remove old key with prefix (migration)
+      const business = this.getBusinessContext();
+      if (business === 'packaging') {
+        const prefixedKey = `packaging/${key}`;
+        if (localStorage.getItem(prefixedKey)) {
+          localStorage.removeItem(prefixedKey);
+          this.log(`[Storage.set] Removed old key with prefix packaging/ for ${key} (migration)`);
+        }
+        // Also remove from file storage if Electron
+        if (electronAPI && electronAPI.deleteStorage) {
+          try {
+            await electronAPI.deleteStorage(prefixedKey);
+          } catch (error) {
+            // Silent fail - migration cleanup
+          }
+        }
+      }
+      
       this.dispatchStorageEvent(storageKey, value);
       
       // If server mode is active, also push to server (async, don't wait)
@@ -776,21 +865,25 @@ class StorageService {
       const timestamps: Record<string, number> = {};
       
       // Helper function to process a key-value pair
-      const processKeyValue = (key: string, valueStr: string | null, source: 'localStorage' | 'fileStorage') => {
+      const processKeyValue = (key: string, valueStr: string | null, _source: 'localStorage' | 'fileStorage') => {
         if (!key || key.startsWith('storage_config')) return;
         
-        // Filter by business context
-        if (!this.isKeyForCurrentBusiness(key)) {
-          return;
-        }
-        
-        // Normalize key: remove path separators (e.g., "general-trading/gt_products" -> "gt_products")
+        // CRITICAL FIX: Normalize key FIRST before checking business context
+        // This handles packaging keys with prefix "packaging/" (backward compatibility)
         let normalizedKey = key;
-        if (key.includes('/')) {
+        const business = this.getBusinessContext();
+        
+        // For packaging: normalize "packaging/salesOrders" -> "salesOrders" BEFORE business check
+        if (business === 'packaging' && key.startsWith('packaging/')) {
+          normalizedKey = key.replace('packaging/', '');
+          this.log(`[Storage] Normalizing packaging key: "${key}" -> "${normalizedKey}"`);
+        } else if (key.includes('/')) {
+          // For GT/Trucking: normalize "general-trading/gt_products" -> "gt_products"
           const parts = key.split('/');
           normalizedKey = parts[parts.length - 1];
           this.log(`[Storage] Normalizing sync key: "${key}" -> "${normalizedKey}"`);
         }
+        
         // Remove .json extension if present
         normalizedKey = normalizedKey.replace(/\.json$/, '');
         
@@ -798,6 +891,13 @@ class StorageService {
         if (normalizedKey.includes('/')) {
           console.warn(`[Storage] Key still contains path separator: "${normalizedKey}", fixing...`);
           normalizedKey = normalizedKey.split('/').pop() || normalizedKey;
+        }
+        
+        // Filter by business context (using normalized key for packaging check)
+        // For packaging: check if normalized key is valid (no prefix)
+        // For GT/Trucking: check if original key has correct prefix
+        if (!this.isKeyForCurrentBusiness(key)) {
+          return;
         }
         
         if (!valueStr) return;
@@ -833,15 +933,24 @@ class StorageService {
           timestamp = Date.now();
         }
         
-        // Sync strategy: 
-        // 1. If first sync (lastSyncTimestamp === 0), sync ALL data
-        // 2. If data is newer than last sync, sync it (incremental)
-        // 3. Also sync if we're not sure (timestamp is 0 or missing) - this handles offline data
+        // Sync strategy (incremental sync - hanya sync data yang berubah):
+        // 1. If first sync (lastSyncTimestamp === 0), sync ALL data (user baru)
+        // 2. If data is newer than last sync (timestamp > lastSyncTimestamp), sync it (data baru/berubah)
+        // 3. JANGAN sync data lama yang timestamp 0 atau missing (sudah ada di server, tidak berubah)
+        //    Kecuali jika ini first sync, semua data harus di-sync untuk memastikan server punya data lengkap
         const lastSyncTimestamp = this.getLastSyncTimestamp();
-        const shouldSync = lastSyncTimestamp === 0 || // First sync: sync all
-                          timestamp > lastSyncTimestamp || // Data is newer than last sync
-                          timestamp === 0 || // No timestamp (old data or offline data) - sync to be safe
-                          !timestamp; // Missing timestamp - sync to be safe
+        const isFirstSync = lastSyncTimestamp === 0;
+        
+        // Hanya sync jika:
+        // - First sync: sync semua (termasuk data lama tanpa timestamp)
+        // - Bukan first sync: hanya sync data yang timestamp > lastSyncTimestamp (data baru/berubah)
+        const shouldSync = isFirstSync || // First sync: sync all (termasuk data lama)
+                          (timestamp > 0 && timestamp > lastSyncTimestamp); // Data baru/berubah dengan timestamp valid
+        
+        // Log untuk debugging (hanya jika banyak data yang akan di-sync)
+        if (shouldSync && !isFirstSync) {
+          this.log(`[Storage] Will sync ${normalizedKey}: timestamp ${timestamp} > lastSync ${lastSyncTimestamp}`);
+        }
         
         if (shouldSync) {
           // Use normalized key for server sync
@@ -900,6 +1009,8 @@ class StorageService {
       
       // Handle signedDocumentPath: upload file to server and get server path
       // This is needed for PDF files that are stored locally but need to be synced to server
+      // NOTE: Di mobile, PDF disimpan sebagai base64 di signedDocument, bukan signedDocumentPath
+      // Jadi logic ini hanya jalan di Electron desktop
       if (localData['delivery'] && Array.isArray(localData['delivery']) && config.serverUrl) {
         const electronAPI = (window as any).electronAPI;
         if (electronAPI && electronAPI.loadUploadedFile) {
@@ -982,12 +1093,25 @@ class StorageService {
             // Continue with original data if processing fails
           }
         }
+        // Di mobile: Jika ada signedDocument (base64) yang besar, tetap sync karena sudah di-limit 5MB
+        // Base64 akan di-sync sebagai bagian dari signedDocument field
       }
 
-      // Reduced logging untuk performa - hanya log jika ada perubahan signifikan
-      if (Object.keys(localData).length > 0) {
-        this.log(`[Storage] Total keys to sync: ${Object.keys(localData).length}`);
-        this.log(`[Storage] Keys: ${Object.keys(localData).slice(0, 5).join(', ')}${Object.keys(localData).length > 5 ? '...' : ''}`);
+      // Log untuk debugging - show incremental sync info
+      const keysToSync = Object.keys(localData);
+      const isFirstSync = this.getLastSyncTimestamp() === 0;
+      if (keysToSync.length > 0) {
+        if (isFirstSync) {
+          console.log(`[Storage] 🔄 First sync: syncing ${keysToSync.length} keys (all data)`);
+        } else {
+          console.log(`[Storage] 🔄 Incremental sync: syncing ${keysToSync.length} changed keys (out of total)`);
+          if (keysToSync.length > 10) {
+            console.warn(`[Storage] ⚠️ Warning: ${keysToSync.length} keys to sync - mungkin ada masalah dengan timestamp tracking`);
+          }
+        }
+        this.log(`[Storage] Keys to sync: ${keysToSync.slice(0, 10).join(', ')}${keysToSync.length > 10 ? `... (${keysToSync.length} total)` : ''}`);
+      } else {
+        console.log(`[Storage] ✅ No changes to sync (incremental sync working correctly)`);
       }
 
       // Only sync if there's data to sync
@@ -1008,34 +1132,57 @@ class StorageService {
                                 errorMessage?.includes('Failed to fetch') ||
                                 errorMessage?.includes('NetworkError');
       
+      // Throttle error logging untuk menghindari spam di console
+      const now = Date.now();
+      const shouldLogError = now - this.lastErrorTime > this.errorThrottleMs;
+      
       if (isConnectionError) {
-        console.warn(`⚠️ Sync error (connection): ${errorMessage}`);
+        if (shouldLogError) {
+          console.warn(`⚠️ Sync error (connection): ${errorMessage}`);
+          this.lastErrorTime = now;
+        }
         this.setSyncStatus('error');
         // Untuk connection error, kurangi retry atau skip retry jika sudah terlalu banyak
         if (this.retryCount < this.maxRetries) {
           const delay = this.baseRetryDelay * Math.pow(2, this.retryCount);
           this.retryCount++;
+          if (shouldLogError) {
+            console.log(`[Storage] Retrying sync in ${delay}ms (attempt ${this.retryCount}/${this.maxRetries})...`);
+          }
           setTimeout(() => {
             this.syncInProgress = false;
             this.syncToServer();
           }, delay);
           return; // Don't reset syncInProgress yet
         } else {
+          if (shouldLogError) {
+            console.warn(`[Storage] Max retries reached (${this.maxRetries}). Stopping retry.`);
+          }
           this.retryCount = 0; // Reset after max retries
         }
       } else {
         // Error lainnya (bukan connection error)
+        if (shouldLogError) {
+          console.error(`❌ Sync error: ${errorMessage}`);
+          this.lastErrorTime = now;
+        }
         this.setSyncStatus('error');
         // Retry dengan exponential backoff
         if (this.retryCount < this.maxRetries) {
           const delay = this.baseRetryDelay * Math.pow(2, this.retryCount);
           this.retryCount++;
+          if (shouldLogError) {
+            console.log(`[Storage] Retrying sync in ${delay}ms (attempt ${this.retryCount}/${this.maxRetries})...`);
+          }
           setTimeout(() => {
             this.syncInProgress = false;
             this.syncToServer();
           }, delay);
           return; // Don't reset syncInProgress yet
         } else {
+          if (shouldLogError) {
+            console.warn(`[Storage] Max retries reached (${this.maxRetries}). Stopping retry.`);
+          }
           this.retryCount = 0; // Reset after max retries
         }
       }
@@ -1047,7 +1194,7 @@ class StorageService {
   }
 
   // Helper method for sync with retry
-  private async syncToServerWithRetry(serverUrl: string, localData: Record<string, any>, _timestamps: Record<string, number>): Promise<void> {
+  private async syncToServerWithRetry(serverUrl: string, localData: Record<string, any>, _timestamps: Record<string, number>, isFirstSync: boolean = false): Promise<void> {
     // CRITICAL: Ensure localData is a valid object
     if (!localData || typeof localData !== 'object' || Array.isArray(localData)) {
       console.warn('[Storage] Invalid localData format in syncToServerWithRetry:', typeof localData, Array.isArray(localData));
@@ -1084,8 +1231,11 @@ class StorageService {
       normalizedData[normalizedKey] = valueToSend;
     }
     
-    // If data is too large, sync in batches
+    // Estimate data size untuk menentukan timeout
+    const dataSizeEstimate = JSON.stringify(normalizedData).length;
     const keys = Object.keys(normalizedData);
+    
+    // If data is too large, sync in batches
     const BATCH_SIZE = 20; // Reduce batch size to 20 keys to avoid payload too large
     
     if (keys.length > BATCH_SIZE) {
@@ -1096,9 +1246,13 @@ class StorageService {
           batchData[key] = normalizedData[key];
         });
         
-        // Create AbortController untuk timeout
+        // Estimate batch size untuk timeout
+        const batchSizeEstimate = JSON.stringify(batchData).length;
+        
+        // Create AbortController untuk timeout (lebih lama untuk first sync atau data banyak)
+        const syncTimeout = this.getSyncTimeout(isFirstSync, batchSizeEstimate);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), this.fetchTimeout);
+        const timeoutId = setTimeout(() => controller.abort(), syncTimeout);
         
         try {
           const response = await fetch(`${serverUrl}/api/storage/sync`, {
@@ -1129,7 +1283,10 @@ class StorageService {
         } catch (error: any) {
           clearTimeout(timeoutId); // Clear timeout jika error
           if (error.name === 'AbortError' || error.message?.includes('timeout') || error.message?.includes('TIMED_OUT')) {
-            throw new Error(`Connection timeout: Server tidak merespons dalam ${this.fetchTimeout}ms. Pastikan server tersedia dan koneksi internet stabil.`);
+            const timeoutMsg = isFirstSync 
+              ? `Connection timeout: Server tidak merespons dalam ${syncTimeout}ms (first sync dengan data banyak). Pastikan server tersedia dan koneksi internet stabil.`
+              : `Connection timeout: Server tidak merespons dalam ${syncTimeout}ms. Pastikan server tersedia dan koneksi internet stabil.`;
+            throw new Error(timeoutMsg);
           }
           if (error.message?.includes('Failed to fetch') || error.message?.includes('ERR_CONNECTION_TIMED_OUT') || error.message?.includes('NetworkError')) {
             throw new Error(`Koneksi gagal: Server tidak dapat dijangkau. Pastikan server berjalan dan koneksi internet stabil.`);
@@ -1140,9 +1297,10 @@ class StorageService {
       }
     } else {
       // Small data, sync all at once
-      // Create AbortController untuk timeout
+      // Create AbortController untuk timeout (lebih lama untuk first sync atau data banyak)
+      const syncTimeout = this.getSyncTimeout(isFirstSync, dataSizeEstimate);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.fetchTimeout);
+      const timeoutId = setTimeout(() => controller.abort(), syncTimeout);
       
       try {
         const response = await fetch(`${serverUrl}/api/storage/sync`, {
@@ -1173,7 +1331,10 @@ class StorageService {
       } catch (error: any) {
         clearTimeout(timeoutId); // Clear timeout jika error
         if (error.name === 'AbortError' || error.message?.includes('timeout') || error.message?.includes('TIMED_OUT')) {
-          throw new Error(`Connection timeout: Server tidak merespons dalam ${this.fetchTimeout}ms. Pastikan server tersedia dan koneksi internet stabil.`);
+          const timeoutMsg = isFirstSync 
+            ? `Connection timeout: Server tidak merespons dalam ${syncTimeout}ms (first sync dengan data banyak). Pastikan server tersedia dan koneksi internet stabil.`
+            : `Connection timeout: Server tidak merespons dalam ${syncTimeout}ms. Pastikan server tersedia dan koneksi internet stabil.`;
+          throw new Error(timeoutMsg);
         }
         if (error.message?.includes('Failed to fetch') || error.message?.includes('ERR_CONNECTION_TIMED_OUT') || error.message?.includes('NetworkError')) {
           throw new Error(`Koneksi gagal: Server tidak dapat dijangkau. Pastikan server berjalan dan koneksi internet stabil.`);
@@ -1197,10 +1358,12 @@ class StorageService {
       }
 
       // Test server connection first with health check
+      const isFirstSync = this.getLastSyncTimestamp() === 0;
+      const healthTimeout = this.getSyncTimeout(isFirstSync);
       try {
         const healthUrl = `${config.serverUrl}/health`;
         const healthController = new AbortController();
-        const healthTimeoutId = setTimeout(() => healthController.abort(), this.fetchTimeout);
+        const healthTimeoutId = setTimeout(() => healthController.abort(), healthTimeout);
         
         const healthResponse = await fetch(healthUrl, {
           method: 'GET',
@@ -1218,7 +1381,7 @@ class StorageService {
         }
       } catch (healthError: any) {
         if (healthError.name === 'AbortError') {
-          console.warn(`[Storage] Server health check timeout: Server tidak merespons dalam ${this.fetchTimeout}ms`);
+          console.warn(`[Storage] Server health check timeout: Server tidak merespons dalam ${healthTimeout}ms${isFirstSync ? ' (first sync)' : ''}`);
         } else {
           console.warn(`[Storage] Server health check error:`, healthError);
         }
@@ -1229,11 +1392,12 @@ class StorageService {
       const lastSyncTimestamp = this.getLastSyncTimestamp();
       const sinceParam = lastSyncTimestamp > 0 ? `?since=${lastSyncTimestamp}` : '';
       const url = `${config.serverUrl}/api/storage/all${sinceParam}`;
-      this.log(`[Storage] Syncing from server: ${url}`);
+      this.log(`[Storage] Syncing from server: ${url}${isFirstSync ? ' (FIRST SYNC - longer timeout)' : ''}`);
       
-      // Create AbortController untuk timeout
+      // Create AbortController untuk timeout (lebih lama untuk first sync)
+      const syncTimeout = this.getSyncTimeout(isFirstSync);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.fetchTimeout);
+      const timeoutId = setTimeout(() => controller.abort(), syncTimeout);
       
       let response: Response;
       try {
@@ -1267,7 +1431,10 @@ class StorageService {
       } catch (error: any) {
         clearTimeout(timeoutId); // Clear timeout jika error
         if (error.name === 'AbortError' || error.message?.includes('timeout') || error.message?.includes('TIMED_OUT')) {
-          throw new Error(`Connection timeout: Server tidak merespons dalam ${this.fetchTimeout}ms. Pastikan server tersedia dan koneksi internet stabil.`);
+          const timeoutMsg = isFirstSync 
+            ? `Connection timeout: Server tidak merespons dalam ${syncTimeout}ms (first sync dengan data banyak). Pastikan server tersedia dan koneksi internet stabil.`
+            : `Connection timeout: Server tidak merespons dalam ${syncTimeout}ms. Pastikan server tersedia dan koneksi internet stabil.`;
+          throw new Error(timeoutMsg);
         }
         if (error.message?.includes('Failed to fetch') || error.message?.includes('ERR_CONNECTION_TIMED_OUT') || error.message?.includes('NetworkError')) {
           throw new Error(`Koneksi gagal: Server tidak dapat dijangkau. Pastikan server berjalan dan koneksi internet stabil.`);
@@ -1316,7 +1483,8 @@ class StorageService {
           // CRITICAL: Handle case where server sends deleted key (deleted: true, value: null)
           // Server mengirim format: {deleted: true, value: null, timestamp: ...}
           // Atau server mengirim langsung null jika key sudah di-delete
-          if (serverValue === null || (serverValue && typeof serverValue === 'object' && serverValue.deleted === true && serverValue.value === null)) {
+          const serverValueObj = serverValue as any;
+          if (serverValue === null || (serverValue && typeof serverValue === 'object' && serverValueObj.deleted === true && serverValueObj.value === null)) {
             // Key sudah di-delete di server, hapus dari local storage
             this.log(`[Storage] Server indicates key ${key} is deleted, removing from local storage`);
             localStorage.removeItem(key);
@@ -1344,10 +1512,10 @@ class StorageService {
           }
           
           // Extract value if serverValue is a wrapper object
-          let actualServerValue = serverValue;
+          let actualServerValue: any = serverValue;
           if (serverValue && typeof serverValue === 'object' && 'value' in serverValue && !Array.isArray(serverValue)) {
             // Server mengirim wrapper object {value: ..., timestamp: ...}
-            actualServerValue = serverValue.value;
+            actualServerValue = (serverValue as any).value;
           }
           
           // Get local value - check file storage first (Electron), then localStorage
@@ -1689,6 +1857,14 @@ class StorageService {
       const config = this.getConfig();
       if (!config.serverUrl) return;
       
+      // CRITICAL: Skip old deprecated keys yang sudah tidak digunakan
+      // Key lama seperti packaging_userAccessControl sudah diganti dengan userAccessControl
+      const deprecatedKeys = ['packaging_userAccessControl', 'general-trading_userAccessControl', 'trucking_userAccessControl'];
+      if (deprecatedKeys.includes(key) || deprecatedKeys.includes(serverKey)) {
+        // Skip sync untuk key lama - sudah tidak digunakan lagi
+        return;
+      }
+      
       // Add timeout untuk prevent hanging jika server tidak respond
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
@@ -1720,48 +1896,104 @@ class StorageService {
         // Merge if both exist
         if (localValue && serverValue) {
           const merged = this.mergeData(serverValue, localValue, serverTimestamp, localTimestamp);
+          
+          // CRITICAL: Deduplicate array data sebelum save (especially for userAccessControl)
+          let finalMerged = merged;
+          if (Array.isArray(merged) && storageKey === 'userAccessControl') {
+            // Deduplicate by ID - use Map to ensure uniqueness
+            const deduplicatedMap = new Map<string | number, any>();
+            merged.forEach((item: any) => {
+              if (item && item.id) {
+                const existing = deduplicatedMap.get(item.id);
+                // Keep the one with latest updatedAt if duplicate
+                const existingUpdatedAt = existing?.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+                const itemUpdatedAt = item.updatedAt ? new Date(item.updatedAt).getTime() : 0;
+                if (!existing || itemUpdatedAt > existingUpdatedAt) {
+                  deduplicatedMap.set(item.id, item);
+                }
+              }
+            });
+            finalMerged = Array.from(deduplicatedMap.values());
+          }
+          
           // Save merged result locally
-          const finalTimestamp = Math.max(serverTimestamp, localTimestamp);
-          const dataToSave = {
-            value: merged,
-            timestamp: finalTimestamp,
-            _timestamp: finalTimestamp,
+          const mergedTimestamp = Math.max(serverTimestamp, localTimestamp);
+          const mergedDataToSave = {
+            value: finalMerged,
+            timestamp: mergedTimestamp,
+            _timestamp: mergedTimestamp,
           };
-          localStorage.setItem(storageKey, JSON.stringify(dataToSave));
+          localStorage.setItem(storageKey, JSON.stringify(mergedDataToSave));
           
           // Also save to file storage if Electron
-          const electronAPI = (window as any).electronAPI;
-          if (electronAPI && electronAPI.saveStorage) {
+          const mergedElectronAPI = (window as any).electronAPI;
+          if (mergedElectronAPI && mergedElectronAPI.saveStorage) {
             try {
-              await electronAPI.saveStorage(storageKey, dataToSave);
+              await mergedElectronAPI.saveStorage(storageKey, mergedDataToSave);
             } catch (error) {
               // Silent fail for file storage
             }
           }
           
-          // Dispatch event untuk notify components bahwa data updated
-          this.dispatchStorageEvent(storageKey, merged);
+          // CRITICAL: Prevent infinite loop - don't dispatch event if data hasn't changed
+          // Compare with current localStorage value to prevent unnecessary events
+          const currentStored = localStorage.getItem(storageKey);
+          if (currentStored) {
+            try {
+              const currentParsed = JSON.parse(currentStored);
+              const currentValue = currentParsed.value !== undefined ? currentParsed.value : currentParsed;
+              // Only dispatch if data actually changed
+              if (JSON.stringify(currentValue) !== JSON.stringify(finalMerged)) {
+                this.dispatchStorageEvent(storageKey, finalMerged);
+              }
+            } catch {
+              // If comparison fails, dispatch anyway to be safe
+              this.dispatchStorageEvent(storageKey, finalMerged);
+            }
+          } else {
+            // No current data, safe to dispatch
+            this.dispatchStorageEvent(storageKey, finalMerged);
+          }
         } else if (serverValue && !localValue) {
           // Server has data but local doesn't - save it
-          const dataToSave = {
-            value: serverValue,
+          // CRITICAL: Deduplicate array data sebelum save (especially for userAccessControl)
+          let finalServerValue = serverValue;
+          if (Array.isArray(serverValue) && storageKey === 'userAccessControl') {
+            // Deduplicate by ID - use Map to ensure uniqueness
+            const deduplicatedMap = new Map<string | number, any>();
+            serverValue.forEach((item: any) => {
+              if (item && item.id) {
+                const existing = deduplicatedMap.get(item.id);
+                // Keep the one with latest updatedAt if duplicate
+                const existingUpdatedAt = existing?.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+                const itemUpdatedAt = item.updatedAt ? new Date(item.updatedAt).getTime() : 0;
+                if (!existing || itemUpdatedAt > existingUpdatedAt) {
+                  deduplicatedMap.set(item.id, item);
+                }
+              }
+            });
+            finalServerValue = Array.from(deduplicatedMap.values());
+          }
+          
+          const serverDataToSave = {
+            value: finalServerValue,
             timestamp: serverTimestamp,
             _timestamp: serverTimestamp,
           };
-          localStorage.setItem(storageKey, JSON.stringify(dataToSave));
+          localStorage.setItem(storageKey, JSON.stringify(serverDataToSave));
           
           // Also save to file storage if Electron
-          const electronAPI = (window as any).electronAPI;
-          if (electronAPI && electronAPI.saveStorage) {
+          const serverElectronAPI = (window as any).electronAPI;
+          if (serverElectronAPI && serverElectronAPI.saveStorage) {
             try {
-              await electronAPI.saveStorage(storageKey, dataToSave);
+              await serverElectronAPI.saveStorage(storageKey, serverDataToSave);
             } catch (error) {
               // Silent fail for file storage
             }
           }
           
           // Dispatch event untuk notify components bahwa data updated
-          this.dispatchStorageEvent(storageKey, serverValue);
+          this.dispatchStorageEvent(storageKey, finalServerValue);
         }
       } else {
         // Other non-200 responses - log warning but don't block

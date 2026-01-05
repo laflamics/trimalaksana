@@ -13,6 +13,7 @@ export interface SyncOperation {
   priority: SyncPriority;
   timestamp: number;
   retryCount: number;
+  metadata?: any; // Conflict resolution metadata
 }
 
 export interface ConflictResolution {
@@ -97,22 +98,36 @@ class PackagingSync {
 
   /**
    * Update data dengan instant local update + background sync
+   * CRITICAL: Proper timestamp handling to prevent multi-device conflicts
    */
   async updateData(key: string, data: any, priority: SyncPriority = 'MEDIUM'): Promise<void> {
-    // 1. Update local storage immediately (0ms lag)
+    // 1. Generate high-precision timestamp with device ID
+    const timestamp = Date.now();
+    const deviceId = this.getDeviceId();
+    const preciseTimestamp = timestamp + (Math.random() * 0.999); // Add microsecond precision
+    
+    // 2. Wrap data with conflict resolution metadata
     const wrappedData = {
       value: data,
-      timestamp: Date.now(),
-      synced: false
+      timestamp: preciseTimestamp,
+      deviceId: deviceId,
+      lastUpdated: new Date(timestamp).toISOString(),
+      synced: false,
+      version: this.generateVersion(key, data)
     };
     
-    localStorage.setItem(key, JSON.stringify(wrappedData));
+    // 3. Check for existing data and handle conflicts
+    const existingData = this.getExistingData(key);
+    const resolvedData = await this.resolveConflicts(key, existingData, wrappedData);
     
-    // 2. Trigger UI update immediately
-    this.emitStorageChange(key, data);
+    // 4. Update local storage immediately (0ms lag)
+    localStorage.setItem(key, JSON.stringify(resolvedData));
     
-    // 3. Queue for background sync
-    this.queueSync(key, data, priority);
+    // 5. Trigger UI update immediately
+    this.emitStorageChange(key, resolvedData.value);
+    
+    // 6. Queue for background sync with conflict resolution info
+    this.queueSync(key, resolvedData.value, priority, resolvedData);
   }
 
   /**
@@ -139,19 +154,409 @@ class PackagingSync {
   }
 
   /**
-   * Queue sync operation
+   * Get device ID for conflict resolution
    */
-  private queueSync(key: string, data: any, priority: SyncPriority) {
+  private getDeviceId(): string {
+    let deviceId = localStorage.getItem('device_id');
+    if (!deviceId) {
+      deviceId = 'device-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('device_id', deviceId);
+    }
+    return deviceId;
+  }
+
+  /**
+   * Generate version hash for data
+   */
+  private generateVersion(key: string, data: any): string {
+    const dataString = JSON.stringify(data);
+    let hash = 0;
+    for (let i = 0; i < dataString.length; i++) {
+      const char = dataString.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(36);
+  }
+
+  /**
+   * Get existing data from localStorage
+   */
+  private getExistingData(key: string): any {
+    try {
+      const stored = localStorage.getItem(key);
+      if (!stored) return null;
+      return JSON.parse(stored);
+    } catch (error) {
+      console.error(`[PackagingSync] Error reading existing data for ${key}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * CRITICAL: Resolve conflicts between existing and new data
+   * Prevents data corruption from timestamp conflicts between devices
+   * SPECIAL HANDLING for deletion conflicts
+   */
+  private async resolveConflicts(key: string, existingData: any, newData: any): Promise<any> {
+    // No existing data - no conflict
+    if (!existingData) {
+      return newData;
+    }
+
+    // Same device - no conflict (sequential updates)
+    if (existingData.deviceId === newData.deviceId) {
+      return newData;
+    }
+
+    // Different devices - potential conflict
+    const existingTimestamp = existingData.timestamp || 0;
+    const newTimestamp = newData.timestamp || 0;
+
+    console.log(`[PackagingSync] Conflict detected for ${key}:`);
+    console.log(`  Existing: ${existingTimestamp} (${existingData.deviceId})`);
+    console.log(`  New: ${newTimestamp} (${newData.deviceId})`);
+
+    // CRITICAL: Check for deletion conflicts
+    const existingHasDeletions = this.hasDeletions(existingData.value);
+    const newHasDeletions = this.hasDeletions(newData.value);
+
+    if (existingHasDeletions || newHasDeletions) {
+      console.log(`[PackagingSync] Deletion conflict detected - applying deletion-aware resolution`);
+      return await this.resolveDeletionConflicts(key, existingData, newData);
+    }
+
+    // Apply normal conflict resolution strategy based on data type
+    const resolvedData = await this.applyConflictResolution(key, existingData, newData);
+    
+    console.log(`[PackagingSync] Conflict resolved using strategy: ${resolvedData.conflictResolution}`);
+    return resolvedData;
+  }
+
+  /**
+   * Check if data contains deleted items
+   */
+  private hasDeletions(data: any): boolean {
+    if (!Array.isArray(data)) return false;
+    return data.some((item: any) => item.deleted === true || item.deletedAt);
+  }
+
+  /**
+   * CRITICAL: Resolve deletion conflicts between devices
+   * Ensures deleted items stay deleted and proper tombstone handling
+   */
+  private async resolveDeletionConflicts(key: string, existingData: any, newData: any): Promise<any> {
+    const existingItems = Array.isArray(existingData.value) ? existingData.value : [];
+    const newItems = Array.isArray(newData.value) ? newData.value : [];
+
+    console.log(`[PackagingSync] Resolving deletion conflicts for ${key}`);
+    console.log(`  Existing items: ${existingItems.length}`);
+    console.log(`  New items: ${newItems.length}`);
+
+    // Create a map of all items by ID
+    const itemMap = new Map<string, any>();
+    
+    // Process existing items first
+    existingItems.forEach((item: any) => {
+      const itemId = this.getItemId(item);
+      if (itemId) {
+        itemMap.set(itemId, {
+          ...item,
+          source: 'existing',
+          timestamp: existingData.timestamp,
+          deviceId: existingData.deviceId
+        });
+      }
+    });
+
+    // Process new items and handle conflicts
+    newItems.forEach((item: any) => {
+      const itemId = this.getItemId(item);
+      if (!itemId) return;
+
+      const existingItem = itemMap.get(itemId);
+      
+      if (!existingItem) {
+        // New item - add it
+        itemMap.set(itemId, {
+          ...item,
+          source: 'new',
+          timestamp: newData.timestamp,
+          deviceId: newData.deviceId
+        });
+      } else {
+        // Conflict resolution for same item
+        const resolvedItem = this.resolveSingleItemDeletionConflict(existingItem, {
+          ...item,
+          source: 'new',
+          timestamp: newData.timestamp,
+          deviceId: newData.deviceId
+        });
+        
+        itemMap.set(itemId, resolvedItem);
+      }
+    });
+
+    // Convert back to array
+    const resolvedItems = Array.from(itemMap.values()).map(item => {
+      // Remove conflict resolution metadata
+      const { source, ...cleanItem } = item;
+      return cleanItem;
+    });
+
+    return {
+      ...newData,
+      value: resolvedItems,
+      conflictResolution: 'deletionAware',
+      conflictTimestamp: Date.now(),
+      deletionConflictsResolved: true
+    };
+  }
+
+  /**
+   * Resolve deletion conflict for a single item
+   */
+  private resolveSingleItemDeletionConflict(existingItem: any, newItem: any): any {
+    const existingDeleted = existingItem.deleted === true || existingItem.deletedAt;
+    const newDeleted = newItem.deleted === true || newItem.deletedAt;
+
+    // Case 1: Both deleted - use latest deletion timestamp
+    if (existingDeleted && newDeleted) {
+      const existingDeletionTime = existingItem.deletedTimestamp || existingItem.timestamp;
+      const newDeletionTime = newItem.deletedTimestamp || newItem.timestamp;
+      
+      return newDeletionTime > existingDeletionTime ? newItem : existingItem;
+    }
+
+    // Case 2: Only existing is deleted - deletion wins (tombstone preservation)
+    if (existingDeleted && !newDeleted) {
+      console.log(`[PackagingSync] Preserving deletion for item ${this.getItemId(existingItem)}`);
+      return {
+        ...newItem, // Keep any updates
+        deleted: true,
+        deletedAt: existingItem.deletedAt,
+        deletedTimestamp: existingItem.deletedTimestamp,
+        deletedBy: existingItem.deletedBy || existingItem.deviceId,
+        resurrectionPrevented: true
+      };
+    }
+
+    // Case 3: Only new is deleted - deletion wins
+    if (!existingDeleted && newDeleted) {
+      console.log(`[PackagingSync] Applying deletion for item ${this.getItemId(newItem)}`);
+      return newItem;
+    }
+
+    // Case 4: Neither deleted - normal conflict resolution (latest timestamp)
+    return newItem.timestamp > existingItem.timestamp ? newItem : existingItem;
+  }
+
+  /**
+   * Get item ID from various ID fields
+   */
+  private getItemId(item: any): string | null {
+    return item.id || item._id || item.code || item.number || 
+           item.soNo || item.spkNo || item.poNo || item.grnNo || 
+           item.sjNo || item.invoiceNo || null;
+  }
+
+  /**
+   * Apply conflict resolution strategy based on data type
+   */
+  private async applyConflictResolution(key: string, existingData: any, newData: any): Promise<any> {
+    const existingValue = existingData.value;
+    const newValue = newData.value;
+
+    // Strategy 1: Production data - additive merge for quantities
+    if (key === 'production' && Array.isArray(existingValue) && Array.isArray(newValue)) {
+      return this.resolveProductionConflicts(existingData, newData);
+    }
+
+    // Strategy 2: Inventory data - recalculate from operations
+    if (key === 'inventory' && Array.isArray(existingValue) && Array.isArray(newValue)) {
+      return this.resolveInventoryConflicts(existingData, newData);
+    }
+
+    // Strategy 3: Sales Orders - merge compatible changes
+    if (key === 'salesOrders' && Array.isArray(existingValue) && Array.isArray(newValue)) {
+      return this.resolveSalesOrderConflicts(existingData, newData);
+    }
+
+    // Strategy 4: Default - Last Write Wins (latest timestamp)
+    if (newData.timestamp > existingData.timestamp) {
+      return {
+        ...newData,
+        conflictResolution: 'lastWriteWins',
+        conflictTimestamp: Date.now(),
+        previousVersion: {
+          timestamp: existingData.timestamp,
+          deviceId: existingData.deviceId,
+          version: existingData.version
+        }
+      };
+    } else {
+      // Keep existing data (it's newer)
+      console.log(`[PackagingSync] Keeping existing data - newer timestamp`);
+      return existingData;
+    }
+  }
+
+  /**
+   * Resolve production conflicts - additive merge for quantities
+   */
+  private resolveProductionConflicts(existingData: any, newData: any): any {
+    const existingProductions = existingData.value || [];
+    const newProductions = newData.value || [];
+
+    // Find productions that exist in both datasets
+    const mergedProductions = [...existingProductions];
+    
+    newProductions.forEach((newProd: any) => {
+      const existingIndex = mergedProductions.findIndex((existing: any) => existing.id === newProd.id);
+      
+      if (existingIndex >= 0) {
+        const existingProd = mergedProductions[existingIndex];
+        
+        // CRITICAL: For production quantities, add them together (both devices produced)
+        if (existingProd.qtyProduced && newProd.qtyProduced) {
+          mergedProductions[existingIndex] = {
+            ...existingProd,
+            ...newProd,
+            qtyProduced: (existingProd.qtyProduced || 0) + (newProd.qtyProduced || 0),
+            progress: (existingProd.progress || 0) + (newProd.qtyProduced || 0),
+            conflictResolved: true,
+            mergedOperations: [
+              { deviceId: existingData.deviceId, qty: existingProd.qtyProduced, timestamp: existingData.timestamp },
+              { deviceId: newData.deviceId, qty: newProd.qtyProduced, timestamp: newData.timestamp }
+            ]
+          };
+        } else {
+          // No quantity conflict - use latest timestamp
+          mergedProductions[existingIndex] = newData.timestamp > existingData.timestamp ? newProd : existingProd;
+        }
+      } else {
+        // New production - add it
+        mergedProductions.push(newProd);
+      }
+    });
+
+    return {
+      ...newData,
+      value: mergedProductions,
+      conflictResolution: 'productionAdditive',
+      conflictTimestamp: Date.now()
+    };
+  }
+
+  /**
+   * Resolve inventory conflicts - recalculate from operations
+   */
+  private resolveInventoryConflicts(existingData: any, newData: any): any {
+    const existingInventory = existingData.value || [];
+    const newInventory = newData.value || [];
+
+    const mergedInventory = [...existingInventory];
+
+    newInventory.forEach((newItem: any) => {
+      const existingIndex = mergedInventory.findIndex((existing: any) => 
+        existing.id === newItem.id || existing.codeItem === newItem.codeItem
+      );
+
+      if (existingIndex >= 0) {
+        const existingItem = mergedInventory[existingIndex];
+        
+        // CRITICAL: Recalculate inventory from base + all operations
+        const baseStock = existingItem.stockPremonth || 0;
+        const totalReceive = Math.max(existingItem.receive || 0, newItem.receive || 0);
+        const totalOutgoing = Math.max(existingItem.outgoing || 0, newItem.outgoing || 0);
+        const totalReturn = Math.max(existingItem.return || 0, newItem.return || 0);
+        
+        mergedInventory[existingIndex] = {
+          ...existingItem,
+          ...newItem,
+          receive: totalReceive,
+          outgoing: totalOutgoing,
+          return: totalReturn,
+          nextStock: baseStock + totalReceive - totalOutgoing + totalReturn,
+          conflictResolved: true,
+          lastCalculated: new Date().toISOString(),
+          operations: [
+            { type: 'RECEIVE', qty: totalReceive, source: 'merged' },
+            { type: 'OUTGOING', qty: totalOutgoing, source: 'merged' },
+            { type: 'RETURN', qty: totalReturn, source: 'merged' }
+          ]
+        };
+      } else {
+        mergedInventory.push(newItem);
+      }
+    });
+
+    return {
+      ...newData,
+      value: mergedInventory,
+      conflictResolution: 'inventoryRecalculate',
+      conflictTimestamp: Date.now()
+    };
+  }
+
+  /**
+   * Resolve sales order conflicts - merge compatible changes
+   */
+  private resolveSalesOrderConflicts(existingData: any, newData: any): any {
+    const existingSOs = existingData.value || [];
+    const newSOs = newData.value || [];
+
+    const mergedSOs = [...existingSOs];
+
+    newSOs.forEach((newSO: any) => {
+      const existingIndex = mergedSOs.findIndex((existing: any) => existing.id === newSO.id);
+
+      if (existingIndex >= 0) {
+        const existingSO = mergedSOs[existingIndex];
+        
+        // Merge compatible changes (confirmation + customer updates)
+        mergedSOs[existingIndex] = {
+          ...existingSO,
+          ...newSO,
+          // Keep confirmation if either device confirmed
+          confirmed: existingSO.confirmed || newSO.confirmed,
+          confirmedAt: existingSO.confirmedAt || newSO.confirmedAt,
+          // Use latest customer info
+          customer: newData.timestamp > existingData.timestamp ? newSO.customer : existingSO.customer,
+          conflictResolved: true,
+          mergedChanges: {
+            existingDevice: existingData.deviceId,
+            newDevice: newData.deviceId,
+            mergedAt: new Date().toISOString()
+          }
+        };
+      } else {
+        mergedSOs.push(newSO);
+      }
+    });
+
+    return {
+      ...newData,
+      value: mergedSOs,
+      conflictResolution: 'salesOrderMerge',
+      conflictTimestamp: Date.now()
+    };
+  }
+  /**
+   * Queue sync operation with conflict resolution metadata
+   */
+  private queueSync(key: string, data: any, priority: SyncPriority, metadata?: any) {
     const operation: SyncOperation = {
-      id: `${key}_${Date.now()}`,
+      id: `${key}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       key,
       data,
       priority,
       timestamp: Date.now(),
-      retryCount: 0
+      retryCount: 0,
+      metadata: metadata // Include conflict resolution info
     };
     
-    // Remove existing operation for same key
+    // Remove existing operation for same key to prevent duplicates
     this.syncQueue = this.syncQueue.filter(op => op.key !== key);
     
     // Insert based on priority
@@ -165,6 +570,8 @@ class PackagingSync {
     } else {
       this.syncQueue.splice(insertIndex, 0, operation);
     }
+    
+    console.log(`[PackagingSync] Queued ${priority} priority sync for ${key}`);
   }
 
   /**
@@ -299,7 +706,7 @@ class PackagingSync {
   }
 
   /**
-   * Sync to server
+   * Sync to server with conflict resolution metadata
    */
   private async syncToServer(operation: SyncOperation): Promise<void> {
     const storageConfig = JSON.parse(localStorage.getItem('storage_config') || '{"type":"local"}');
@@ -308,20 +715,90 @@ class PackagingSync {
       return; // Skip server sync if not configured
     }
     
+    // Prepare sync payload with conflict resolution info
+    const syncPayload = {
+      data: operation.data,
+      timestamp: operation.timestamp,
+      deviceId: this.getDeviceId(),
+      conflictResolution: operation.metadata?.conflictResolution,
+      version: operation.metadata?.version,
+      previousVersion: operation.metadata?.previousVersion
+    };
+    
     const response = await fetch(`${storageConfig.serverUrl}/api/storage/${operation.key}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
+        'X-Device-ID': this.getDeviceId(),
+        'X-Conflict-Resolution': operation.metadata?.conflictResolution || 'none'
       },
-      body: JSON.stringify({
-        data: operation.data,
-        timestamp: operation.timestamp
-      })
+      body: JSON.stringify(syncPayload)
     });
     
     if (!response.ok) {
+      // Check if it's a conflict error from server
+      if (response.status === 409) {
+        const serverData = await response.json();
+        console.log(`[PackagingSync] Server conflict detected for ${operation.key}`);
+        
+        // Handle server-side conflict
+        await this.handleServerConflict(operation, serverData);
+        return;
+      }
+      
       throw new Error(`Server sync failed: ${response.statusText}`);
     }
+    
+    const result = await response.json();
+    console.log(`[PackagingSync] Successfully synced ${operation.key} to server`);
+    
+    // Update local data with server response if needed
+    if (result.resolvedData) {
+      localStorage.setItem(operation.key, JSON.stringify({
+        ...result.resolvedData,
+        synced: true,
+        serverTimestamp: result.serverTimestamp
+      }));
+      
+      this.emitStorageChange(operation.key, result.resolvedData.value);
+    }
+  }
+
+  /**
+   * Handle server-side conflicts
+   */
+  private async handleServerConflict(operation: SyncOperation, serverData: any): Promise<void> {
+    console.log(`[PackagingSync] Resolving server conflict for ${operation.key}`);
+    
+    // Get current local data
+    const localData = this.getExistingData(operation.key);
+    
+    // Resolve conflict between local and server data
+    const resolvedData = await this.resolveConflicts(operation.key, serverData, localData);
+    
+    // Update local storage with resolved data
+    localStorage.setItem(operation.key, JSON.stringify({
+      ...resolvedData,
+      synced: true,
+      serverConflictResolved: true,
+      serverConflictTimestamp: Date.now()
+    }));
+    
+    // Emit update to UI
+    this.emitStorageChange(operation.key, resolvedData.value);
+    
+    // Retry sync with resolved data
+    const retryOperation: SyncOperation = {
+      ...operation,
+      data: resolvedData.value,
+      metadata: {
+        ...operation.metadata,
+        serverConflictResolved: true,
+        originalServerData: serverData
+      }
+    };
+    
+    await this.syncToServer(retryOperation);
   }
 
   /**

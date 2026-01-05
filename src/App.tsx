@@ -53,6 +53,7 @@ import GTReport from './pages/GeneralTrading/Settings/Report';
 import GTDBActivity from './pages/GeneralTrading/Settings/DBActivity';
 import GTUserControl from './pages/GeneralTrading/Settings/UserControl';
 import GTFlowTest from './pages/GeneralTrading/GTFlowTest';
+import CompleteFlowTest from './pages/Testing/CompleteFlowTest';
 
 // Master
 import Products from './pages/Master/Products';
@@ -249,6 +250,7 @@ function App() {
                   <Route path="settings/db-activity" element={<GTDBActivity />} />
                   <Route path="settings/user-control" element={<GTUserControl />} />
                   <Route path="settings/flow-test" element={<GTFlowTest />} />
+                  <Route path="settings/complete-flow-test" element={<CompleteFlowTest />} />
 
                   {/* Default redirect untuk general trading - ke financial reports */}
                   <Route path="" element={<Navigate to="finance/reports" replace />} />

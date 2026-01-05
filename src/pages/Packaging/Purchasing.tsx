@@ -1,11 +1,11 @@
-import { useState, useEffect, useMemo, useRef } from 'react';      
+import React, { useState, useEffect, useMemo, useRef } from 'react';      
 import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import NotificationBell from '../../components/NotificationBell';
 import { storageService, extractStorageValue } from '../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
+import { safeDeleteItem, safeDeleteMultipleItems, filterActiveItems } from '../../utils/data-persistence-helper';
 import { generatePOHtml } from '../../pdf/po-pdf-template';
 import { generatePOSheetHtml } from '../../pdf/po-sheet-template';
 import { generatePRHtml } from '../../pdf/pr-pdf-template';
@@ -89,20 +89,24 @@ const POActionMenu = ({
   item,
   hasGRN,
   hasPendingFinance,
-  onViewDetail,
+  onViewDetailPOSheet,
+  onViewDetailPOFull,
   onEdit,
   onCreateGRN,
-  onPrint,
+  onPrintPOFull,
+  onPrintPOSheet,
   onUpdateStatus,
   onDelete,
 }: {
   item: PurchaseOrder;
   hasGRN?: boolean;
   hasPendingFinance?: boolean;
-  onViewDetail?: () => void;
+  onViewDetailPOSheet?: () => void;
+  onViewDetailPOFull?: () => void;
   onEdit?: () => void;
   onCreateGRN?: () => void;
-  onPrint?: () => void;
+  onPrintPOFull?: () => void;
+  onPrintPOSheet?: () => void;
   onUpdateStatus?: () => void;
   onDelete?: () => void;
 }) => {
@@ -183,25 +187,49 @@ const POActionMenu = ({
             flexDirection: 'column',
           }}
         >
-          {onViewDetail && (
-            <button
-              onClick={() => { onViewDetail(); setShowMenu(false); }}
-              style={{
-                width: '100%',
-                textAlign: 'left',
-                padding: '6px 10px',
-                border: 'none',
-                background: 'transparent',
-                color: 'var(--text-primary)',
-                cursor: 'pointer',
-                fontSize: '11px',
-                borderRadius: '4px',
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-            >
-              👁️ View Detail
-            </button>
+          {(onViewDetailPOSheet || onViewDetailPOFull) && (
+            <>
+              {onViewDetailPOSheet && (
+                <button
+                  onClick={() => { onViewDetailPOSheet(); setShowMenu(false); }}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '6px 10px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    borderRadius: '4px',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  👁️ View Detail PO Sheet
+                </button>
+              )}
+              {onViewDetailPOFull && (
+                <button
+                  onClick={() => { onViewDetailPOFull(); setShowMenu(false); }}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '6px 10px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    borderRadius: '4px',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  👁️ View Detail PO
+                </button>
+              )}
+            </>
           )}
           {onEdit && item.status !== 'CLOSE' && (
             <button
@@ -256,25 +284,49 @@ const POActionMenu = ({
               ✓ GRN Created
             </div>
           )}
-          {onPrint && (
-            <button
-              onClick={() => { onPrint(); setShowMenu(false); }}
-              style={{
-                width: '100%',
-                textAlign: 'left',
-                padding: '6px 10px',
-                border: 'none',
-                background: 'transparent',
-                color: 'var(--text-primary)',
-                cursor: 'pointer',
-                fontSize: '11px',
-                borderRadius: '4px',
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-            >
-              🖨️ Print
-            </button>
+          {(onPrintPOFull || onPrintPOSheet) && (
+            <>
+              {onPrintPOSheet && (
+                <button
+                  onClick={() => { onPrintPOSheet(); setShowMenu(false); }}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '6px 10px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    borderRadius: '4px',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  🖨️ Print PO Sheet
+                </button>
+              )}
+              {onPrintPOFull && (
+                <button
+                  onClick={() => { onPrintPOFull(); setShowMenu(false); }}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '6px 10px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    borderRadius: '4px',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  🖨️ Print PO
+                </button>
+              )}
+            </>
           )}
           {onUpdateStatus && (
             <button
@@ -356,6 +408,8 @@ const Purchasing = () => {
   const [viewPdfData, setViewPdfData] = useState<{ html: string; poNo: string } | null>(null);
   const [viewPRPdfData, setViewPRPdfData] = useState<{ html: string; prNo: string } | null>(null);
   const [selectedPOForReceipt, setSelectedPOForReceipt] = useState<PurchaseOrder | null>(null);
+  const [showMergePODialog, setShowMergePODialog] = useState(false);
+  const [selectedPOsForMerge, setSelectedPOsForMerge] = useState<string[]>([]);
   const [grnList, setGrnList] = useState<any[]>([]);
   const [financeNotifications, setFinanceNotifications] = useState<any[]>([]);
   const [spkData, setSpkData] = useState<any[]>([]);
@@ -454,7 +508,11 @@ const Purchasing = () => {
       ]);
       const poData = Array.isArray(poDataRaw) ? poDataRaw : [];
       const financeNotifData = Array.isArray(financeNotifDataRaw) ? financeNotifDataRaw : [];
-      setOrders(poData);
+      
+      // Filter out deleted items (tombstone pattern) - prevent deleted PO from showing
+      const activePOs = filterActiveItems(poData);
+      
+      setOrders(activePOs);
       setFinanceNotifications(financeNotifData);
     } catch (error) {
       console.error('[Purchasing] Error loading orders:', error);
@@ -829,6 +887,8 @@ const Purchasing = () => {
       quality: item.quality || materialData?.deskripsi || '', // Gunakan quality dari PO, fallback ke deskripsi
       score: item.score !== undefined && item.score !== null ? item.score : '', // Gunakan score dari PO
       qty: item.qty || 0,
+      unit: materialData?.unit || 'PCS',
+      price: item.price || 0,
       keterangan: item.keterangan || item.purchaseReason || materialData?.deskripsi || '', // Gunakan keterangan dari PO, fallback ke purchaseReason
     }];
 
@@ -836,6 +896,9 @@ const Purchasing = () => {
     const companySettings = await storageService.get<{ companyName: string; address: string }>('companySettings');
     const companyName = companySettings?.companyName || 'PT TRIMA LAKSANA JAYA PRATAMA';
     const companyAddress = companySettings?.address || 'Jl. Raya Bekasi Km. 28, Cikarang, Bekasi 17530';
+
+    // Logo menggunakan logo-loader utility
+    let logo = await loadLogoAsBase64();
 
     // Generate HTML using sheet template
     return generatePOSheetHtml({
@@ -848,15 +911,26 @@ const Purchasing = () => {
       items,
       companyName,
       companyAddress,
+      logo: logo,
       page: 1,
       totalPages: 1,
     });
   };
 
-  const handleViewDetail = async (item: PurchaseOrder) => {
+  const handleViewDetailPOSheet = async (item: PurchaseOrder) => {
     try {
       // Gunakan template sheet baru (format sesuai requirement)
       const html = await generatePOSheetHtmlContent(item);
+      setViewPdfData({ html, poNo: item.poNo });
+    } catch (error: any) {
+      showAlert(`Error generating PO Sheet preview: ${error.message}`, 'Error');
+    }
+  };
+
+  const handleViewDetailPOFull = async (item: PurchaseOrder) => {
+    try {
+      // Gunakan template PO full lengkap
+      const html = await generatePOHtmlContent(item);
       setViewPdfData({ html, poNo: item.poNo });
     } catch (error: any) {
       showAlert(`Error generating PO preview: ${error.message}`, 'Error');
@@ -929,18 +1003,44 @@ const Purchasing = () => {
     setShowEditDialog(true);
   };
 
-  const handleCreateGRN = (item: PurchaseOrder) => {
+  const handleCreateGRN = async (item: PurchaseOrder) => {
     if (item.status !== 'OPEN') {
       showAlert(`Cannot create GRN from PO: ${item.poNo}\n\nPO must be OPEN (approved) first.`, 'Cannot Create GRN');
       return;
     }
-    setSelectedPOForReceipt(item);
+    
+    // Pre-load GRN data sebelum dialog dibuka untuk performa lebih cepat
+    try {
+      const grnData = await storageService.get<any[]>('grnPackaging') || [];
+      const grnsForPO = grnData.filter((grn: any) => 
+        (grn.poNo || '').toString().trim() === (item.poNo || '').toString().trim()
+      );
+      const totalReceived = grnsForPO.reduce((sum: number, grn: any) => sum + (grn.qtyReceived || 0), 0);
+      
+      // Set PO dengan pre-loaded data
+      setSelectedPOForReceipt({
+        ...item,
+        _preloadedGRNData: {
+          totalReceived,
+          grnsForPO,
+        }
+      } as any);
+    } catch (error) {
+      // Jika error, tetap buka dialog tanpa pre-loaded data
+      setSelectedPOForReceipt(item);
+    }
   };
 
   const handleSaveReceipt = async (receiptData: { qtyReceived: number; receivedDate: string; notes?: string; suratJalan?: string; suratJalanName?: string; invoiceNo?: string; invoiceFile?: string; invoiceFileName?: string }) => {
     if (!selectedPOForReceipt) return;
 
     try {
+      // IMPORTANT: Validate PO is not deleted (tombstone protection)
+      if ((selectedPOForReceipt as any).deleted === true || (selectedPOForReceipt as any).deletedAt) {
+        showAlert('PO ini sudah dihapus. Tidak bisa membuat GRN untuk PO yang sudah dihapus.', 'Error');
+        return;
+      }
+      
       const item = selectedPOForReceipt;
       const qtyReceived = Math.ceil(receiptData.qtyReceived || item.qty);
       const receivedDate = receiptData.receivedDate || new Date().toISOString().split('T')[0];
@@ -1428,7 +1528,9 @@ const Purchasing = () => {
       }
 
       // Update Production notification - material sudah diterima
-      const productionNotifications = extractStorageValue(await storageService.get<any[]>('productionNotifications'));
+      // IMPORTANT: Filter deleted notifications untuk prevent data resurrection
+      const productionNotificationsRaw = extractStorageValue(await storageService.get<any[]>('productionNotifications'));
+      const productionNotifications = filterActiveItems(productionNotificationsRaw);
       console.log('[GRN Notification] Current production notifications:', productionNotifications.length);
       console.log('[GRN Notification] Looking for SPK/SO:', { spkNo: item.spkNo, soNo: item.soNo });
       
@@ -1705,12 +1807,21 @@ const Purchasing = () => {
     }
   };
 
-  const handlePrint = async (item: PurchaseOrder) => {
+  const handlePrintPOFull = async (item: PurchaseOrder) => {
     try {
       const html = await generatePOHtmlContent(item);
       openPrintWindow(html);
     } catch (error: any) {
       showAlert(`Error generating PO PDF: ${error.message}`, 'Error');
+    }
+  };
+
+  const handlePrintPOSheet = async (item: PurchaseOrder) => {
+    try {
+      const html = await generatePOSheetHtmlContent(item);
+      openPrintWindow(html);
+    } catch (error: any) {
+      showAlert(`Error generating PO Sheet PDF: ${error.message}`, 'Error');
     }
   };
 
@@ -2157,10 +2268,12 @@ const Purchasing = () => {
             item={item}
             hasGRN={hasGRN}
             hasPendingFinance={hasPendingFinance}
-            onViewDetail={() => handleViewDetail(item)}
+            onViewDetailPOSheet={() => handleViewDetailPOSheet(item)}
+            onViewDetailPOFull={() => handleViewDetailPOFull(item)}
             onEdit={() => handleEdit(item)}
             onCreateGRN={() => handleCreateGRN(item)}
-            onPrint={() => handlePrint(item)}
+            onPrintPOFull={() => handlePrintPOFull(item)}
+            onPrintPOSheet={() => handlePrintPOSheet(item)}
             onUpdateStatus={() => handleUpdateStatus(item)}
             onDelete={() => handleDeletePO(item)}
           />
@@ -2410,6 +2523,198 @@ const Purchasing = () => {
     }
   };
 
+  // Merge PO: Validasi apakah PO yang sudah ada bisa di-merge (material sama dan supplier sama)
+  const validateMergeablePOs = (poIds: string[]): { valid: boolean; error?: string; mergeableGroups?: any[] } => {
+    if (poIds.length < 2) {
+      return { valid: false, error: 'Minimal pilih 2 PO untuk di-merge' };
+    }
+
+    const selectedPOs = orders.filter(po => poIds.includes(po.id));
+    
+    // Filter hanya PO dengan status OPEN (yang belum CLOSE)
+    const openPOs = selectedPOs.filter(po => po.status === 'OPEN');
+    if (openPOs.length < 2) {
+      return { valid: false, error: 'Minimal 2 PO dengan status OPEN untuk di-merge' };
+    }
+
+    // Helper untuk normalize material ID
+    const normalizeMaterialId = (id: string | undefined): string => {
+      return (id || '').toString().trim().toLowerCase();
+    };
+
+    // Helper untuk normalize supplier
+    const normalizeSupplier = (supplier: string | undefined): string => {
+      return (supplier || '').toString().trim().toLowerCase();
+    };
+
+    // Group PO berdasarkan materialId dan supplier
+    const groups: { [key: string]: PurchaseOrder[] } = {};
+    
+    openPOs.forEach(po => {
+      const materialId = normalizeMaterialId(po.materialId);
+      const supplier = normalizeSupplier(po.supplier);
+      const key = `${materialId}_${supplier}`;
+      
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push(po);
+    });
+
+    // Cek apakah ada group yang bisa di-merge (minimal 2 PO)
+    const mergeableGroups: any[] = [];
+    Object.entries(groups).forEach(([key, pos]) => {
+      if (pos.length >= 2) {
+        const [materialId, supplier] = key.split('_');
+        const material = materials.find(m => 
+          normalizeMaterialId(m.material_id || m.kode) === materialId
+        );
+        
+        mergeableGroups.push({
+          key,
+          materialId: pos[0].materialId,
+          materialName: pos[0].materialItem || material?.nama || materialId,
+          supplier: pos[0].supplier,
+          pos: pos.map(po => ({
+            id: po.id,
+            poNo: po.poNo,
+            spkNo: po.spkNo,
+            soNo: po.soNo,
+            qty: po.qty,
+            price: po.price,
+            total: po.total,
+          })),
+          totalQty: pos.reduce((sum, po) => sum + (po.qty || 0), 0),
+          totalAmount: pos.reduce((sum, po) => sum + (po.total || 0), 0),
+          avgPrice: pos.reduce((sum, po) => sum + (po.price || 0), 0) / pos.length,
+        });
+      }
+    });
+
+    if (mergeableGroups.length === 0) {
+      return { 
+        valid: false, 
+        error: 'Tidak ada PO yang bisa di-merge. Pastikan PO memiliki material dan supplier yang sama, dan status OPEN.' 
+      };
+    }
+
+    return { valid: true, mergeableGroups };
+  };
+
+  // Handle merge PO dari multiple PO yang sudah ada
+  const handleMergePO = async () => {
+    try {
+      if (selectedPOsForMerge.length < 2) {
+        showAlert('Minimal pilih 2 PO untuk di-merge', 'Validation Error');
+        return;
+      }
+
+      const validation = validateMergeablePOs(selectedPOsForMerge);
+      if (!validation.valid) {
+        showAlert(validation.error || 'Validasi merge gagal', 'Validation Error');
+        return;
+      }
+
+      if (!validation.mergeableGroups || validation.mergeableGroups.length === 0) {
+        showAlert('Tidak ada PO yang bisa di-merge', 'Validation Error');
+        return;
+      }
+
+      // Untuk setiap group yang bisa di-merge, buat 1 PO baru dan hapus PO lama
+      const newPOs: PurchaseOrder[] = [];
+      const poIdsToDelete: string[] = [];
+
+      for (const group of validation.mergeableGroups) {
+        // Generate PO number baru
+        const now = new Date();
+        const year = String(now.getFullYear()).slice(-2);
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const randomCode = Math.random().toString(36).substr(2, 5).toUpperCase();
+        const poNo = `PO-${year}${month}${day}-${randomCode}`;
+
+        // Get first PO for reference data
+        const firstPO = orders.find(po => po.id === group.pos[0].id);
+        if (!firstPO) continue;
+
+        // Calculate average price
+        const finalPrice = Math.ceil(group.avgPrice);
+
+        // Combine SPK numbers
+        const combinedSpkNo = group.pos
+          .map((p: any) => p.spkNo)
+          .filter((spk: string) => spk)
+          .join(', ');
+
+        // Combine SO numbers
+        const combinedSoNo = Array.from(new Set(group.pos.map((p: any) => p.soNo).filter((so: string) => so))).join(', ');
+
+        const mergedPO: PurchaseOrder = {
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+          poNo,
+          supplier: group.supplier,
+          soNo: combinedSoNo || firstPO.soNo,
+          spkNo: combinedSpkNo || firstPO.spkNo,
+          sourcePRId: firstPO.sourcePRId, // Keep original PR ID if exists
+          purchaseReason: `Merged from ${group.pos.length} POs: ${group.pos.map((p: any) => p.poNo).join(', ')}`,
+          materialItem: group.materialName,
+          materialId: group.materialId,
+          qty: group.totalQty,
+          price: finalPrice,
+          total: group.totalAmount,
+          paymentTerms: firstPO.paymentTerms,
+          topDays: firstPO.topDays,
+          status: 'OPEN',
+          receiptDate: firstPO.receiptDate,
+          created: new Date().toISOString(),
+        };
+
+        newPOs.push(mergedPO);
+        
+        // Mark PO untuk dihapus
+        group.pos.forEach((po: any) => {
+          if (!poIdsToDelete.includes(po.id)) {
+            poIdsToDelete.push(po.id);
+          }
+        });
+      }
+
+      if (newPOs.length === 0) {
+        showAlert('Tidak ada PO yang berhasil dibuat', 'Error');
+        return;
+      }
+
+      // Delete PO lama menggunakan tombstone pattern (prevent data resurrection)
+      const deleteResults = await safeDeleteMultipleItems('purchaseOrders', poIdsToDelete, 'id');
+      
+      if (deleteResults.failed > 0) {
+        showAlert(`Warning: ${deleteResults.failed} PO gagal dihapus. ${deleteResults.success} PO berhasil dihapus.`, 'Warning');
+      }
+      
+      // Tambahkan PO baru (setelah tombstone deletion)
+      const currentOrders = await storageService.get<PurchaseOrder[]>('purchaseOrders') || [];
+      const activeOrders = filterActiveItems(currentOrders);
+      const updatedOrders = [...activeOrders, ...newPOs];
+      
+      await storageService.set('purchaseOrders', updatedOrders);
+      
+      // Update state dengan filtered active items (exclude tombstones)
+      setOrders(filterActiveItems(updatedOrders));
+
+      showAlert(
+        `PO berhasil di-merge!\n\n${newPOs.length} Purchase Order baru telah dibuat dari ${poIdsToDelete.length} PO yang di-merge.`,
+        'Success'
+      );
+
+      // Reset and close
+      setSelectedPOsForMerge([]);
+      setShowMergePODialog(false);
+      loadOrders();
+    } catch (error: any) {
+      showAlert(`Error merging PO: ${error.message}`, 'Error');
+    }
+  };
+
   const handleDeletePO = async (item: PurchaseOrder) => {
     if (!item || !item.poNo) {
       showAlert('PO tidak valid. Mohon coba lagi.', 'Error');
@@ -2442,10 +2747,17 @@ const Purchasing = () => {
       `Hapus PO ${poNo}?\n\nTindakan ini akan:\n• Menghapus PO dari daftar\n• Menghapus notifikasi Finance terkait\n• Mengembalikan PR ke status APPROVED (jika ada)\n\nPastikan tidak ada proses lanjutan untuk PO ini.`,
       async () => {
         try {
-          const ordersArray = Array.isArray(orders) ? orders : [];
-          const updatedOrders = ordersArray.filter(po => po.id !== item.id);
-          await storageService.set('purchaseOrders', updatedOrders);
-          setOrders(updatedOrders);
+          // Use tombstone pattern untuk prevent data resurrection dari sync
+          const success = await safeDeleteItem('purchaseOrders', item.id, 'id');
+          if (!success) {
+            showAlert('Gagal menghapus PO. Silakan coba lagi.', 'Error');
+            return;
+          }
+          
+          // Reload orders dengan filter active items (after tombstone deletion)
+          const ordersArray = await storageService.get<PurchaseOrder[]>('purchaseOrders') || [];
+          const activeOrders = filterActiveItems(ordersArray);
+          setOrders(activeOrders);
 
           // Ensure purchaseRequests is always an array
           const prArray = Array.isArray(purchaseRequests) ? purchaseRequests : [];
@@ -2454,7 +2766,8 @@ const Purchasing = () => {
           const normalizeId = (value: any) => (value || '').toString().trim();
 
           const revertPRStatus = (targetId: string) => {
-            const stillHasPO = updatedOrders.some(po => normalizeId(po.sourcePRId) === targetId);
+            // Check against active orders (after tombstone deletion)
+            const stillHasPO = activeOrders.some((po: PurchaseOrder) => normalizeId(po.sourcePRId) === targetId);
             if (stillHasPO) return;
             updatedPRs = prArray.map(pr => {
               if (pr.id === targetId && pr.status === 'PO_CREATED') {
@@ -2471,7 +2784,7 @@ const Purchasing = () => {
             const candidate = prArray.find(pr => pr.spkNo === item.spkNo && pr.status === 'PO_CREATED');
             if (candidate) {
               const candidateId = candidate.id;
-              const stillHasPO = updatedOrders.some(po => {
+              const stillHasPO = activeOrders.some((po: PurchaseOrder) => {
                 if (normalizeId(po.sourcePRId) === candidateId) return true;
                 return (po.spkNo || '').toString().trim() === (item.spkNo || '').toString().trim();
               });
@@ -2521,6 +2834,7 @@ const Purchasing = () => {
             />
           )}
           <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
+          <Button variant="secondary" onClick={() => setShowMergePODialog(true)}>🔀 Merge PO</Button>
           <Button onClick={handleCreate}>+ Create PO</Button>
         </div>
       </div>
@@ -3152,7 +3466,7 @@ const Purchasing = () => {
                       }}>
                         <Button 
                           variant="secondary" 
-                          onClick={() => handleViewDetail(item)} 
+                          onClick={() => handleViewDetailPOSheet(item)} 
                           style={{ fontSize: '10px', padding: '4px 8px', minHeight: '24px' }}
                         >
                           View
@@ -3332,6 +3646,193 @@ const Purchasing = () => {
           onApprove={handleApprovePR}
           onViewPR={handleViewPR}
         />
+      )}
+
+      {/* Merge PO Dialog */}
+      {showMergePODialog && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+        }} onClick={() => setShowMergePODialog(false)}>
+          <Card 
+            title="Merge Purchase Order" 
+            style={{ 
+              width: '90%', 
+              maxWidth: '800px', 
+              maxHeight: '90vh',
+              overflow: 'auto',
+              zIndex: 10001,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>
+              Pilih PO yang sudah ada untuk di-merge menjadi 1 PO. PO hanya bisa di-merge jika memiliki material dan supplier yang sama, dan status OPEN.
+            </div>
+
+            <div style={{ marginBottom: '16px', maxHeight: '400px', overflowY: 'auto' }}>
+              {(() => {
+                // Filter PO yang bisa di-merge (status OPEN)
+                const mergeablePOs = orders.filter(po => po.status === 'OPEN');
+                
+                if (mergeablePOs.length === 0) {
+                  return (
+                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                      Tidak ada PO dengan status OPEN yang bisa di-merge
+                    </div>
+                  );
+                }
+
+                return (
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
+                        <th style={{ padding: '8px', textAlign: 'left', width: '40px' }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedPOsForMerge.length === mergeablePOs.length && mergeablePOs.length > 0}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedPOsForMerge(mergeablePOs.map(po => po.id));
+                              } else {
+                                setSelectedPOsForMerge([]);
+                              }
+                            }}
+                          />
+                        </th>
+                        <th style={{ padding: '8px', textAlign: 'left' }}>PO No</th>
+                        <th style={{ padding: '8px', textAlign: 'left' }}>SPK No</th>
+                        <th style={{ padding: '8px', textAlign: 'left' }}>Material</th>
+                        <th style={{ padding: '8px', textAlign: 'left' }}>Supplier</th>
+                        <th style={{ padding: '8px', textAlign: 'right' }}>Qty</th>
+                        <th style={{ padding: '8px', textAlign: 'right' }}>Price</th>
+                        <th style={{ padding: '8px', textAlign: 'right' }}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mergeablePOs.map((po) => {
+                        const isSelected = selectedPOsForMerge.includes(po.id);
+                        return (
+                          <tr 
+                            key={po.id}
+                            style={{ 
+                              borderBottom: '1px solid var(--border-color)',
+                              backgroundColor: isSelected ? 'var(--bg-hover)' : 'transparent',
+                              cursor: 'pointer',
+                            }}
+                            onClick={() => {
+                              if (isSelected) {
+                                setSelectedPOsForMerge(selectedPOsForMerge.filter(id => id !== po.id));
+                              } else {
+                                setSelectedPOsForMerge([...selectedPOsForMerge, po.id]);
+                              }
+                            }}
+                          >
+                            <td style={{ padding: '8px' }}>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  if (e.target.checked) {
+                                    setSelectedPOsForMerge([...selectedPOsForMerge, po.id]);
+                                  } else {
+                                    setSelectedPOsForMerge(selectedPOsForMerge.filter(id => id !== po.id));
+                                  }
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: '8px' }}>{po.poNo}</td>
+                            <td style={{ padding: '8px' }}>{po.spkNo || '-'}</td>
+                            <td style={{ padding: '8px' }}>{po.materialItem}</td>
+                            <td style={{ padding: '8px' }}>{po.supplier}</td>
+                            <td style={{ padding: '8px', textAlign: 'right' }}>{po.qty}</td>
+                            <td style={{ padding: '8px', textAlign: 'right' }}>
+                              {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(po.price)}
+                            </td>
+                            <td style={{ padding: '8px', textAlign: 'right' }}>
+                              {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(po.total)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                );
+              })()}
+            </div>
+
+            {selectedPOsForMerge.length > 0 && (
+              <div style={{ 
+                marginBottom: '16px', 
+                padding: '12px', 
+                backgroundColor: 'var(--bg-secondary)', 
+                borderRadius: '4px',
+                border: '1px solid var(--border-color)',
+              }}>
+                <div style={{ fontWeight: '600', marginBottom: '8px' }}>
+                  Preview Merge ({selectedPOsForMerge.length} PO selected):
+                </div>
+                {(() => {
+                  const validation = validateMergeablePOs(selectedPOsForMerge);
+                  if (!validation.valid) {
+                    return (
+                      <div style={{ color: 'var(--error)', fontSize: '14px' }}>
+                        ⚠️ {validation.error}
+                      </div>
+                    );
+                  }
+                  if (validation.mergeableGroups) {
+                    return (
+                      <div>
+                        {validation.mergeableGroups.map((group: any, idx: number) => (
+                          <div key={idx} style={{ marginBottom: '8px', fontSize: '14px' }}>
+                            <div style={{ fontWeight: '500' }}>
+                              Group {idx + 1}: {group.materialName} - {group.supplier}
+                            </div>
+                            <div style={{ marginLeft: '16px', color: 'var(--text-secondary)' }}>
+                              {group.pos.length} PO → Total Qty: {group.totalQty} → 
+                              Total: {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(group.totalAmount)}
+                            </div>
+                            <div style={{ marginLeft: '16px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                              PO yang akan dihapus: {group.pos.map((p: any) => p.poNo).join(', ')}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <Button 
+                variant="secondary" 
+                onClick={() => {
+                  setShowMergePODialog(false);
+                  setSelectedPOsForMerge([]);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleMergePO}
+                disabled={selectedPOsForMerge.length < 2}
+              >
+                Merge PO ({selectedPOsForMerge.length} selected)
+              </Button>
+            </div>
+          </Card>
+        </div>
       )}
 
       {/* Receipt/GRN Dialog */}
@@ -3884,22 +4385,61 @@ const PRApprovalDialog = ({ pr, suppliers, materials, onClose, onApprove, onView
   );
 };
 
-// Receipt/GRN Dialog Component
-const ReceiptDialog = ({ po, onClose, onSave }: { po: PurchaseOrder; onClose: () => void; onSave: (data: { qtyReceived: number; receivedDate: string; notes?: string; suratJalan?: string; suratJalanName?: string; invoiceNo?: string; invoiceFile?: string; invoiceFileName?: string }) => void }) => {
-  const [qtyReceived, setQtyReceived] = useState<string>(po.qty.toString());
+// Receipt/GRN Dialog Component - OPTIMIZED dengan pre-loaded data dan memoization
+const ReceiptDialog = React.memo(({ po, onClose, onSave }: { po: PurchaseOrder & { _preloadedGRNData?: { totalReceived: number; grnsForPO: any[] } }; onClose: () => void; onSave: (data: { qtyReceived: number; receivedDate: string; notes?: string; suratJalan?: string; suratJalanName?: string; invoiceNo?: string; invoiceFile?: string; invoiceFileName?: string }) => void }) => {
+  // Use pre-loaded data jika ada, jika tidak baru load
+  const preloadedData = (po as any)._preloadedGRNData;
+  const initialTotalReceived = preloadedData?.totalReceived || 0;
+  
+  const [qtyReceived, setQtyReceived] = useState<string>('');
   const [receivedDate, setReceivedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState<string>('');
   const [suratJalanFile, setSuratJalanFile] = useState<File | null>(null);
   const [invoiceNo, setInvoiceNo] = useState<string>('');
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
-  const [totalReceived, setTotalReceived] = useState<number>(0);
-  const [maxAllowedQty, setMaxAllowedQty] = useState<number>(po.qty);
+  const [totalReceived, setTotalReceived] = useState<number>(initialTotalReceived);
+  const [maxAllowedQty, setMaxAllowedQty] = useState<number>(() => {
+    // Calculate immediately from pre-loaded data
+    if (preloadedData) {
+      const maxTotal = Math.ceil(po.qty * 1.1);
+      return Math.max(0, maxTotal - preloadedData.totalReceived);
+    }
+    return po.qty;
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(!preloadedData);
   
   // Custom Dialog - menggunakan hook terpusat
   const { showAlert, DialogComponent: ReceiptDialogComponent } = useDialog();
   
-  // Load existing GRNs untuk calculate total received
+  // Calculate values from pre-loaded data immediately (synchronous)
   useEffect(() => {
+    if (preloadedData) {
+      const total = preloadedData.totalReceived;
+      setTotalReceived(total);
+      
+      // Calculate max allowed with 10% tolerance
+      const maxTotal = Math.ceil(po.qty * 1.1);
+      const maxRemaining = maxTotal - total;
+      setMaxAllowedQty(maxRemaining > 0 ? maxRemaining : 0);
+      
+      // Set default qtyReceived ke remaining qty jika masih ada
+      const remaining = po.qty - total;
+      if (remaining > 0) {
+        setQtyReceived(remaining.toString());
+      } else if (maxRemaining > 0) {
+        setQtyReceived(maxRemaining.toString());
+      } else {
+        setQtyReceived('0');
+      }
+      setIsLoading(false);
+    }
+  }, [preloadedData, po.qty]);
+  
+  // Load existing GRNs hanya jika tidak ada pre-loaded data
+  useEffect(() => {
+    if (preloadedData) return; // Skip jika sudah ada pre-loaded data
+    
+    let isMounted = true;
     const loadGRNs = async () => {
       try {
         const grnData = await storageService.get<any[]>('grnPackaging') || [];
@@ -3907,6 +4447,9 @@ const ReceiptDialog = ({ po, onClose, onSave }: { po: PurchaseOrder; onClose: ()
           (grn.poNo || '').toString().trim() === (po.poNo || '').toString().trim()
         );
         const total = grnsForPO.reduce((sum: number, grn: any) => sum + (grn.qtyReceived || 0), 0);
+        
+        if (!isMounted) return;
+        
         setTotalReceived(total);
         
         // Calculate max allowed with 10% tolerance
@@ -3923,12 +4466,20 @@ const ReceiptDialog = ({ po, onClose, onSave }: { po: PurchaseOrder; onClose: ()
         } else {
           setQtyReceived('0');
         }
+        setIsLoading(false);
       } catch (error) {
-        // Ignore errors
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
+    
     loadGRNs();
-  }, [po.poNo, po.qty]);
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [po.poNo, po.qty, preloadedData]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -4028,6 +4579,25 @@ const ReceiptDialog = ({ po, onClose, onSave }: { po: PurchaseOrder; onClose: ()
 
     handleFiles();
   };
+
+  // Show loading state hanya jika benar-benar loading (tidak ada pre-loaded data)
+  if (isLoading && !preloadedData) {
+    return (
+      <div className="dialog-overlay" onClick={onClose}>
+        <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%' }}>
+          <Card className="dialog-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2>Create Receipt (GRN) - {po.poNo}</h2>
+              <Button variant="secondary" onClick={onClose} style={{ padding: '6px 12px' }}>✕</Button>
+            </div>
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              Loading...
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="dialog-overlay" onClick={onClose}>
@@ -4235,7 +4805,12 @@ const ReceiptDialog = ({ po, onClose, onSave }: { po: PurchaseOrder; onClose: ()
       <ReceiptDialogComponent />
     </div>
   );
-};
+}, (prevProps, nextProps) => {
+  // Memo comparison - hanya re-render jika PO berubah
+  return prevProps.po.id === nextProps.po.id && 
+         prevProps.po.poNo === nextProps.po.poNo &&
+         prevProps.po.qty === nextProps.po.qty;
+});
 
 // Edit PO Dialog Component
 const EditPODialog = ({

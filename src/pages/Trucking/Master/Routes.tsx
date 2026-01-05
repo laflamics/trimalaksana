@@ -22,6 +22,9 @@ interface Route {
   fuelCost: number;
   status: 'Active' | 'Inactive';
   notes?: string;
+  _price?: number; // Price untuk route (dari CSV import)
+  _customer?: string; // Customer name (dari CSV import)
+  _truckType?: string; // Truck type (dari CSV import)
 }
 
 const Routes = () => {
@@ -96,6 +99,7 @@ const Routes = () => {
     fuelCost: 0,
     status: 'Active',
     notes: '',
+    _price: 0,
   });
 
   useEffect(() => {
@@ -147,6 +151,7 @@ const Routes = () => {
         fuelCost: 0,
         status: 'Active',
         notes: '',
+        _price: 0,
       });
     } catch (error: any) {
       showAlert(`Error saving route: ${error.message}`, 'Error');
@@ -175,6 +180,104 @@ const Routes = () => {
       undefined,
       'Confirm Delete'
     );
+  };
+
+  const handleImportRoutes = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+
+        // Handle both formats: array directly or wrapped {value: [...], timestamp: ...}
+        let importedRoutes: any[] = [];
+        if (Array.isArray(parsed)) {
+          importedRoutes = parsed;
+        } else if (parsed && typeof parsed === 'object' && 'value' in parsed) {
+          // Handle wrapped format from storage
+          importedRoutes = Array.isArray(parsed.value) ? parsed.value : [];
+        } else {
+          showAlert('Invalid file format. Expected JSON array or storage format {value: [...]}.', 'Error');
+          return;
+        }
+
+        if (importedRoutes.length === 0) {
+          showAlert('No routes found in file.', 'Error');
+          return;
+        }
+
+        // Validate route structure
+        const validRoutes = importedRoutes.filter((r: any) => 
+          r.routeCode && r.routeName && r.origin && r.destination
+        );
+
+        if (validRoutes.length === 0) {
+          showAlert('No valid routes found in file.', 'Error');
+          return;
+        }
+
+        showConfirm(
+          `Import ${validRoutes.length} route(s)?\n\nThis will add new routes to your existing routes.`,
+          async () => {
+            try {
+              // Get existing routes
+              const existingRoutes = await storageService.get<Route[]>('trucking_routes') || [];
+              
+              // Generate unique IDs and numbers for new routes
+              const maxNo = existingRoutes.length > 0 
+                ? Math.max(...existingRoutes.map(r => r.no || 0))
+                : 0;
+              
+              const newRoutes: Route[] = validRoutes.map((route: any, index: number) => ({
+                id: route.id || `imported_${Date.now()}_${index}`,
+                no: maxNo + index + 1,
+                routeCode: route.routeCode,
+                routeName: route.routeName,
+                origin: route.origin,
+                destination: route.destination,
+                distance: route.distance || 0,
+                distanceUnit: route.distanceUnit || 'KM',
+                estimatedTime: route.estimatedTime || 0,
+                estimatedTimeUnit: route.estimatedTimeUnit || 'Hours',
+                tollCost: route.tollCost || 0,
+                fuelCost: route.fuelCost || 0,
+                status: route.status || 'Active',
+                notes: route.notes || '',
+                _price: route._price || 0,
+                _customer: route._customer,
+                _truckType: route._truckType,
+              }));
+
+              // Merge with existing routes (avoid duplicates by routeCode)
+              const existingRouteCodes = new Set(existingRoutes.map(r => r.routeCode));
+              const uniqueNewRoutes = newRoutes.filter(r => !existingRouteCodes.has(r.routeCode));
+              
+              const updated = [...existingRoutes, ...uniqueNewRoutes];
+              await storageService.set('trucking_routes', updated);
+              setRoutes(updated.map((r, idx) => ({ ...r, no: idx + 1 })));
+              
+              const skipped = newRoutes.length - uniqueNewRoutes.length;
+              showAlert(
+                `✅ Imported ${uniqueNewRoutes.length} route(s) successfully!${skipped > 0 ? `\n⚠️ Skipped ${skipped} duplicate(s).` : ''}`,
+                'Success'
+              );
+            } catch (error: any) {
+              showAlert(`Error importing routes: ${error.message}`, 'Error');
+            }
+          },
+          undefined,
+          'Import Routes'
+        );
+      } catch (error: any) {
+        showAlert(`Error reading file: ${error.message}`, 'Error');
+      }
+    };
+    input.click();
   };
 
   const filteredRoutes = useMemo(() => {
@@ -209,9 +312,28 @@ const Routes = () => {
       render: (item: Route) => `${item.estimatedTime || 0} ${item.estimatedTimeUnit || 'Hours'}`,
     },
     {
+      key: '_price',
+      header: 'Price',
+      render: (item: Route) => {
+        const price = item._price || 0;
+        return price > 0 ? `Rp ${price.toLocaleString('id-ID')}` : '-';
+      },
+    },
+    {
       key: 'tollCost',
       header: 'Toll Cost',
       render: (item: Route) => `Rp ${(item.tollCost || 0).toLocaleString('id-ID')}`,
+    },
+    {
+      key: 'totalCost',
+      header: 'Total Deal',
+      render: (item: Route) => {
+        const price = item._price || 0;
+        const tollCost = item.tollCost || 0;
+        const fuelCost = item.fuelCost || 0;
+        const total = price + tollCost + fuelCost;
+        return total > 0 ? `Rp ${total.toLocaleString('id-ID')}` : '-';
+      },
     },
     {
       key: 'status',
@@ -239,6 +361,9 @@ const Routes = () => {
       <div className="page-header">
         <h1>Master Routes</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
+          <Button onClick={handleImportRoutes} variant="secondary">
+            📥 Import Routes
+          </Button>
           <Button onClick={() => setShowForm(!showForm)}>
             {showForm ? 'Cancel' : '+ Add Route'}
           </Button>
@@ -328,17 +453,41 @@ const Routes = () => {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <Input
+              label="Price (Rp)"
+              type="number"
+              value={String(formData._price || 0)}
+              onChange={(v) => setFormData({ ...formData, _price: Number(v) || 0 })}
+            />
+            <Input
               label="Toll Cost"
               type="number"
               value={String(formData.tollCost || 0)}
               onChange={(v) => setFormData({ ...formData, tollCost: Number(v) })}
             />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <Input
               label="Fuel Cost (Est.)"
               type="number"
               value={String(formData.fuelCost || 0)}
               onChange={(v) => setFormData({ ...formData, fuelCost: Number(v) })}
             />
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                Total Deal (Auto-calculated)
+              </label>
+              <div style={{
+                padding: '8px 12px',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-secondary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+                fontWeight: '600',
+              }}>
+                Rp {((formData._price || 0) + (formData.tollCost || 0) + (formData.fuelCost || 0)).toLocaleString('id-ID')}
+              </div>
+            </div>
           </div>
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
@@ -367,7 +516,7 @@ const Routes = () => {
             onChange={(v) => setFormData({ ...formData, notes: v })}
           />
           <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-            <Button onClick={() => { setShowForm(false); setEditingItem(null); setFormData({ routeCode: '', routeName: '', origin: '', destination: '', distance: 0, distanceUnit: 'KM', estimatedTime: 0, estimatedTimeUnit: 'Hours', tollCost: 0, fuelCost: 0, status: 'Active', notes: '' }); }} variant="secondary">
+            <Button onClick={() => { setShowForm(false); setEditingItem(null); setFormData({ routeCode: '', routeName: '', origin: '', destination: '', distance: 0, distanceUnit: 'KM', estimatedTime: 0, estimatedTimeUnit: 'Hours', tollCost: 0, fuelCost: 0, status: 'Active', notes: '', _price: 0 }); }} variant="secondary">
               Cancel
             </Button>
             <Button onClick={handleSave} variant="primary">

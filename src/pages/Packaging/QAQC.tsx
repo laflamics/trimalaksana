@@ -610,18 +610,10 @@ const QAQC = () => {
           // Jangan block QC process jika inventory update gagal
         }
         
-        // IMPORTANT: Update deliveryNotifications untuk trigger notifikasi ke Delivery Note per batch
-        // Setiap notification sekarang per SPK dan per batch (dengan sjGroupId)
-        const deliveryNotifications = await storageService.get<any[]>('deliveryNotifications') || [];
-        
-        // DISABLED: Helper functions dan variables untuk delivery notifications
-        // let updatedCount = 0;
-        // let createdCount = 0;
-        // 
-        // // Helper function untuk match SPK (handle batch format seperti SPK-2025000001-A)
-        // const matchSPK = (spk1: string, spk2: string): boolean => {
-        //   if (!spk1 || !spk2) return false;
-        //   if (spk1 === spk2) return true;
+        // REMOVED: QC tidak lagi membuat delivery notifications
+        // Hanya PPIC yang membuat delivery notifications dari schedule
+        // Delivery Note akan auto-update status berdasarkan Production CLOSE + QC PASS
+        // Ini mencegah duplikasi notifikasi antara QC dan PPIC
         //   // Support both formats: old format (strip) and new format (slash)
         //   const normalize = (spk: string) => {
         //     // Convert to slash format for comparison
@@ -645,141 +637,10 @@ const QAQC = () => {
         //   return qcSpkNo && matchSPK(p.spkNo, qcSpkNo) && p.status === 'CLOSE';
         // });
         
-        // IMPORTANT: Create delivery notification per batch saat QC PASS (mirip dengan delivery batch trigger)
-        // Jika QC punya batchNo dan sjGroupId, buat delivery notification per batch
-        const qcSpkNo = selectedQCForCheck.spkNo;
-        const qcSoNo = selectedQCForCheck.soNo;
-        const qcBatchNo = selectedQCForCheck.batchNo;
-        const qcSjGroupId = selectedQCForCheck.sjGroupId;
-        const qcDeliveryBatches = selectedQCForCheck.deliveryBatches;
-        
-        // Helper function untuk match SPK (handle batch format seperti SPK-2025000001-A)
-        const matchSPK = (spk1: string, spk2: string): boolean => {
-          if (!spk1 || !spk2) return false;
-          if (spk1 === spk2) return true;
-          // Support both formats: old format (strip) and new format (slash)
-          const normalize = (spk: string) => {
-            // Convert to slash format for comparison
-            return spk.replace(/-/g, '/');
-          };
-          const normalized1 = normalize(spk1);
-          const normalized2 = normalize(spk2);
-          if (normalized1 === normalized2) return true;
-          // Match base SPK (first 2 parts: SPK/251212)
-          const base1 = normalized1.split('/').slice(0, 2).join('/');
-          const base2 = normalized2.split('/').slice(0, 2).join('/');
-          return base1 === base2;
-        };
-        
-        // Cek apakah production sudah CLOSE untuk SPK ini
-        const prod = productionList.find((p: any) => {
-          if (!p.spkNo) return false;
-          return qcSpkNo && matchSPK(p.spkNo, qcSpkNo) && p.status === 'CLOSE';
-        });
-        
-        // IMPORTANT: Jika QC punya batchNo dan sjGroupId, buat delivery notification per batch
-        if (prod && qcSpkNo && qcBatchNo && qcSjGroupId && qcDeliveryBatches && qcDeliveryBatches.length > 0) {
-          // Load SPK data untuk mendapatkan info lengkap
-          const spkList = await storageService.get<any[]>('spk') || [];
-          const spk = spkList.find((s: any) => {
-            const sSpkNo = (s.spkNo || '').toString().trim();
-            return sSpkNo && matchSPK(sSpkNo, qcSpkNo);
-          });
-          
-          // Cek apakah sudah ada delivery notification untuk batch ini (berdasarkan SPK + sjGroupId)
-          const existingNotif = deliveryNotifications.find((n: any) => {
-            const notifSpkNo = n.spkNo || (n.spkNos && n.spkNos.length > 0 ? n.spkNos[0] : null);
-            const notifSjGroupId = n.sjGroupId || (n.deliveryBatches && n.deliveryBatches[0]?.sjGroupId) || null;
-            return notifSpkNo && matchSPK(notifSpkNo, qcSpkNo) && notifSjGroupId === qcSjGroupId;
-          });
-          
-          if (!existingNotif && spk) {
-            // Buat delivery notification per batch dengan sjGroupId yang sesuai
-            const deliveryBatch = qcDeliveryBatches[0]; // Ambil batch yang sesuai dengan QC
-            const newNotification = {
-              id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-              type: 'DELIVERY_SCHEDULE',
-              soNo: qcSoNo || spk.soNo || '',
-              customer: selectedQCForCheck.customer || spk.customer || '',
-              spkNo: qcSpkNo,
-              sjGroupId: qcSjGroupId, // SJ Group ID untuk batch trigger
-              product: selectedQCForCheck.product || spk.product || '',
-              productId: spk.product_id || spk.kode || '',
-              qty: deliveryBatch.qty || selectedQCForCheck.qty || spk.qty || 0,
-              deliveryBatches: [deliveryBatch], // Include deliveryBatch info
-              status: 'READY_TO_SHIP', // Production CLOSE + QC PASS = READY_TO_SHIP
-              created: new Date().toISOString(),
-            };
-            
-            deliveryNotifications.push(newNotification);
-            await storageService.set('deliveryNotifications', deliveryNotifications);
-            console.log(`✅ [QC Batch Trigger] Created delivery notification for SPK ${qcSpkNo}, Batch ${qcBatchNo}, sjGroupId: ${qcSjGroupId} (Production CLOSE + QC PASS)`);
-          } else if (existingNotif) {
-            // Update existing notification status jika belum READY_TO_SHIP
-            if (existingNotif.status !== 'READY_TO_SHIP') {
-              const updatedNotifications = deliveryNotifications.map((n: any) => {
-                const notifSpkNo = n.spkNo || (n.spkNos && n.spkNos.length > 0 ? n.spkNos[0] : null);
-                const notifSjGroupId = n.sjGroupId || (n.deliveryBatches && n.deliveryBatches[0]?.sjGroupId) || null;
-                if (notifSpkNo && matchSPK(notifSpkNo, qcSpkNo) && notifSjGroupId === qcSjGroupId) {
-                  return { ...n, status: 'READY_TO_SHIP' };
-                }
-                return n;
-              });
-              await storageService.set('deliveryNotifications', updatedNotifications);
-              console.log(`✅ [QC Batch Trigger] Updated delivery notification status to READY_TO_SHIP for SPK ${qcSpkNo}, Batch ${qcBatchNo}`);
-            }
-          }
-        } else if (prod && qcSpkNo && !qcBatchNo) {
-          // Fallback: Jika QC tidak punya batch info, buat notification tanpa batch (old format)
-          const spkList = await storageService.get<any[]>('spk') || [];
-          const spk = spkList.find((s: any) => {
-            const sSpkNo = (s.spkNo || '').toString().trim();
-            return sSpkNo && matchSPK(sSpkNo, qcSpkNo);
-          });
-          
-          // Cek apakah sudah ada delivery notification untuk SPK ini
-          const existingNotif = deliveryNotifications.find((n: any) => {
-            const notifSpkNo = n.spkNo || (n.spkNos && n.spkNos.length > 0 ? n.spkNos[0] : null);
-            return notifSpkNo && matchSPK(notifSpkNo, qcSpkNo);
-          });
-          
-          if (!existingNotif && spk) {
-            // Load schedule untuk mendapatkan deliveryBatches jika ada
-            const scheduleList = await storageService.get<any[]>('schedule') || [];
-            const relatedSchedule = scheduleList.find((s: any) => {
-              if (!s.spkNo) return false;
-              return matchSPK(s.spkNo, qcSpkNo);
-            });
-            
-            // Ambil deliveryBatches dari schedule jika ada
-            let deliveryBatches: any[] = [];
-            let sjGroupId: string | undefined = undefined;
-            if (relatedSchedule && relatedSchedule.deliveryBatches && relatedSchedule.deliveryBatches.length > 0) {
-              // Ambil batch pertama dari schedule
-              deliveryBatches = [relatedSchedule.deliveryBatches[0]];
-              sjGroupId = relatedSchedule.deliveryBatches[0]?.sjGroupId;
-            }
-            
-            const newNotification = {
-              id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-              type: 'DELIVERY_SCHEDULE',
-              soNo: qcSoNo || spk.soNo || '',
-              customer: selectedQCForCheck.customer || spk.customer || '',
-              spkNo: qcSpkNo,
-              sjGroupId: sjGroupId, // Include sjGroupId dari schedule jika ada
-              product: selectedQCForCheck.product || spk.product || '',
-              productId: spk.product_id || spk.kode || '',
-              qty: selectedQCForCheck.qty || spk.qty || 0,
-              deliveryBatches: deliveryBatches.length > 0 ? deliveryBatches : undefined,
-              status: 'READY_TO_SHIP', // Production CLOSE + QC PASS = READY_TO_SHIP
-              created: new Date().toISOString(),
-            };
-            
-            deliveryNotifications.push(newNotification);
-            await storageService.set('deliveryNotifications', deliveryNotifications);
-            console.log(`✅ [QC] Created delivery notification for SPK ${qcSpkNo} (Production CLOSE + QC PASS)${deliveryBatches.length > 0 ? ` with ${deliveryBatches.length} delivery batch(es)` : ''}`);
-          }
-        }
+        // REMOVED: QC tidak lagi membuat delivery notifications
+        // Hanya PPIC yang membuat delivery notifications dari schedule
+        // Delivery Note akan auto-update status berdasarkan Production CLOSE + QC PASS
+        // Ini mencegah duplikasi notifikasi antara QC dan PPIC
         
         showAlert(
           'QC Completed',

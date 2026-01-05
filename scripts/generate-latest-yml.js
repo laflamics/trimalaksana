@@ -4,23 +4,42 @@ const crypto = require('crypto');
 
 const RELEASE_DIR = path.join(__dirname, '..', 'release-build');
 const PACKAGE_JSON = path.join(__dirname, '..', 'package.json');
+const { getBuildNumber } = require('./get-build-number');
 
 // Read package.json to get version
 const packageJson = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8'));
 const version = packageJson.version;
+const buildNumber = getBuildNumber();
+
+// CRITICAL FIX: Electron-updater requires valid semver format (MAJOR.MINOR.PATCH)
+// Format dengan 4 bagian (1.0.6.4) tidak valid untuk semver
+// Gunakan prerelease format: 1.0.6-build.4 atau build metadata: 1.0.6+4
+// Untuk generic provider, gunakan prerelease format: 1.0.6-build.4
+const versionWithBuild = `${version}-build.${buildNumber}`;
 
 // Find the installer exe file
 const files = fs.readdirSync(RELEASE_DIR);
-const installerFile = files.find(f => 
+// Lebih fleksibel: cari semua .exe yang bukan blockmap atau patch
+let installerFile = files.find(f => 
   f.endsWith('.exe') && 
   !f.includes('blockmap') &&
-  !f.endsWith('.exe.patch') && // Exclude patch files from main installer search
+  !f.endsWith('.exe.patch') &&
   f.includes('PT.Trima Laksana Jaya Pratama')
 );
 
+// Fallback: cari .exe apapun yang bukan blockmap atau patch
 if (!installerFile) {
-  console.error('❌ Installer file not found in release directory');
-  process.exit(1);
+  installerFile = files.find(f => 
+    f.endsWith('.exe') && 
+    !f.includes('blockmap') &&
+    !f.endsWith('.exe.patch')
+  );
+}
+
+if (!installerFile) {
+  console.error(`⚠️  Installer .exe file not found in ${RELEASE_DIR}`);
+  console.error(`   Available files: ${files.filter(f => f.endsWith('.exe')).join(', ') || 'none'}`);
+  process.exit(0);
 }
 
 const installerPath = path.join(RELEASE_DIR, installerFile);
@@ -34,10 +53,15 @@ hashSum.update(fileBuffer);
 const sha512 = hashSum.digest('hex');
 
 // Find patch file if exists (for differential updates)
-const patchFile = files.find(f => 
+let patchFile = files.find(f => 
   f.endsWith('.exe.patch') &&
   f.includes('PT.Trima Laksana Jaya Pratama')
 );
+
+// Fallback: cari patch file apapun
+if (!patchFile) {
+  patchFile = files.find(f => f.endsWith('.exe.patch'));
+}
 
 let patchFileInfo = null;
 if (patchFile) {
@@ -53,8 +77,6 @@ if (patchFile) {
     sha512: patchSha512,
     size: patchStats.size
   };
-  
-  console.log(`📦 Found patch file: ${patchFile} (${(patchStats.size / 1024 / 1024).toFixed(2)} MB)`);
 }
 
 // Generate latest.yml content with patch file support
@@ -69,7 +91,7 @@ if (patchFileInfo) {
     size: ${patchFileInfo.size}`;
 }
 
-const latestYml = `version: ${version}
+const latestYml = `version: ${versionWithBuild}
 files:
 ${filesSection}
 path: ${installerFile}
@@ -80,13 +102,4 @@ releaseDate: '${new Date().toISOString()}'
 // Write latest.yml
 const latestYmlPath = path.join(RELEASE_DIR, 'latest.yml');
 fs.writeFileSync(latestYmlPath, latestYml, 'utf8');
-
-console.log('✅ Generated latest.yml');
-console.log(`   Version: ${version}`);
-console.log(`   Installer: ${installerFile} (${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
-if (patchFileInfo) {
-  console.log(`   Patch: ${patchFileInfo.url} (${(patchFileInfo.size / 1024 / 1024).toFixed(2)} MB)`);
-  console.log(`   💡 Users updating from previous version will download patch file only!`);
-}
-console.log(`   SHA512: ${sha512.substring(0, 16)}...`);
 

@@ -14,7 +14,7 @@ const getCategoryKeys = (category: string): string[] => {
       // Master Data
       'products', 'customers', 'suppliers', 'materials', 'bom',
       // Production Flow
-      'spk', 'schedule', 'production', 'qc', 'productionResults',
+      'spk', 'schedule', 'production', 'qc', 'productionResults', 'ptp',
       // Purchasing & Inventory
       'purchaseRequests', 'purchaseOrders', 'grn', 'inventory', // grn akan map ke grnPackaging
       // Sales & Delivery
@@ -125,6 +125,7 @@ const DBActivity = () => {
     { id: 'qc', label: 'QC Checks' },
     { id: 'delivery', label: 'Delivery Notes' },
     { id: 'inventory', label: 'Inventory' },
+    { id: 'ptp', label: 'PTP (Production to Production)' },
     { id: 'payments', label: 'Payments' },
     { id: 'journal-entries', label: 'Journal Entries' },
     { id: 'notifications', label: 'Notifications' },
@@ -291,6 +292,19 @@ const DBActivity = () => {
     { key: 'lastUpdate', header: 'Last Update' },
   ];
 
+  const ptpColumns = [
+    { key: 'id', header: 'ID' },
+    { key: 'requestNo', header: 'Request No' },
+    { key: 'customer', header: 'Customer' },
+    { key: 'productItem', header: 'Product Item' },
+    { key: 'qty', header: 'Qty' },
+    { key: 'unit', header: 'Unit' },
+    { key: 'reason', header: 'Reason' },
+    { key: 'status', header: 'Status' },
+    { key: 'requestDate', header: 'Request Date' },
+    { key: 'created', header: 'Created' },
+  ];
+
   const paymentColumns = [
     { key: 'id', header: 'ID' },
     { key: 'paymentNo', header: 'Payment No' },
@@ -338,6 +352,7 @@ const DBActivity = () => {
       case 'qc': return qcColumns;
       case 'delivery': return deliveryColumns;
       case 'inventory': return inventoryColumns;
+      case 'ptp': return ptpColumns;
       case 'payments': return paymentColumns;
       case 'journal-entries': return journalEntryColumns;
       case 'notifications': return notificationColumns;
@@ -482,6 +497,10 @@ const DBActivity = () => {
           created: item.created,
         })) : [];
       }
+      case 'ptp': {
+        const ptp = extractStorageValue(data.ptp);
+        return Array.isArray(ptp) ? ptp : [];
+      }
       default: return [];
       }
     } catch (error) {
@@ -589,7 +608,7 @@ const DBActivity = () => {
         // Master Data
         'products', 'customers', 'suppliers', 'materials', 'bom', 'staff',
         // Production Flow
-        'spk', 'schedule', 'production', 'qc', 'productionResults',
+        'spk', 'schedule', 'production', 'qc', 'productionResults', 'ptp',
         // Purchasing & Inventory
         'purchaseRequests', 'purchaseOrders', 'grn', 'inventory', // grn akan map ke grnPackaging
         // Sales & Delivery
@@ -799,44 +818,164 @@ const DBActivity = () => {
     }
   };
 
-  const handleSeedFromServer = async () => {
+  const handleSeedFromServer = async (seedType: 'packaging' | 'gt' | 'trucking' = 'packaging') => {
     setShowSeedDialog(false);
     setSeedLoading(true);
     setSeedMessage('');
 
     try {
-      const config = storageService.getConfig();
-      if (!config.serverUrl) {
-        setSeedMessage(`✗ Server URL not configured. Please set up server connection first.`);
+      // Determine seed name
+      let seedName = 'Packaging';
+      if (seedType === 'gt') {
+        seedName = 'General Trading';
+      } else if (seedType === 'trucking') {
+        seedName = 'Trucking';
+      }
+
+      setSeedMessage(`🔄 Reading ${seedName} data from data/localStorage/...`);
+
+      // Check if Electron API is available
+      const electronAPI = (window as any).electronAPI;
+      if (!electronAPI || !electronAPI.readDataFiles) {
+        setSeedMessage(`✗ File system access not available. This feature only works in Electron app.`);
         setSeedLoading(false);
         return;
       }
 
-      // Call server seed endpoint
-      const response = await fetch(`${config.serverUrl}/api/seed`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      // Read all data files from data/localStorage/
+      const allData = await electronAPI.readDataFiles();
+      
+      if (!allData || Object.keys(allData).length === 0) {
+        setSeedMessage(`✗ No data files found in data/localStorage/ folder.`);
+        setSeedLoading(false);
+        return;
+      }
 
-      if (response.ok) {
-        const result = await response.json();
-        setSeedMessage(`✓ ${result.message || 'Seed completed successfully'}`);
+      // Define keys for each business type
+      const packagingKeys = [
+        'products', 'customers', 'suppliers', 'materials', 'bom', 'staff',
+        'spk', 'schedule', 'production', 'qc', 'productionResults', 'ptp',
+        'purchaseRequests', 'purchaseOrders', 'grn', 'grnPackaging', 'inventory',
+        'salesOrders', 'delivery', 'deliveryNotes',
+        'productionNotifications', 'deliveryNotifications', 'invoiceNotifications', 'financeNotifications',
+        'payments', 'journalEntries', 'accounts', 'invoices', 'expenses',
+        'audit', 'outbox', 'companySettings'
+      ];
+
+      const gtKeys = [
+        'gt_products', 'gt_customers', 'gt_suppliers',
+        'gt_salesOrders', 'gt_purchaseRequests', 'gt_purchaseOrders', 'gt_invoices',
+        'gt_grn', 'gt_delivery', 'gt_inventory',
+        'gt_deliveryNotifications', 'gt_invoiceNotifications', 'gt_financeNotifications', 'gt_productionNotifications',
+        'gt_payments', 'gt_journalEntries', 'gt_accounts', 'gt_expenses',
+        'gt_returns', 'gt_spk', 'gt_schedule'
+      ];
+
+      const truckingKeys = [
+        'trucking_customers', 'trucking_drivers', 'trucking_routes', 'trucking_vehicles',
+        'trucking_pettyCash', 'trucking_pettycash_requests',
+        'trucking_payments', 'trucking_bills', 'Trucking_bills',
+        'trucking_route_plans', 'Trucking_route_plans',
+        'trucking_delivery_orders'
+      ];
+
+      // Select keys based on seedType
+      let keysToImport: string[] = [];
+      if (seedType === 'packaging') {
+        keysToImport = packagingKeys;
+      } else if (seedType === 'gt') {
+        keysToImport = gtKeys;
+      } else if (seedType === 'trucking') {
+        keysToImport = truckingKeys;
+      }
+
+      // Filter data based on keys and folder structure
+      // readDataFiles returns keys in format:
+      // - Root: "products", "customers", etc.
+      // - Subfolder: "general-trading/gt_products", "trucking/trucking_customers", etc.
+      const dataToImport: Record<string, any> = {};
+      
+      for (const key of keysToImport) {
+        // Try multiple key formats based on folder structure
+        const possibleKeys: string[] = [];
         
-        // Sync data from server after seed
-        setTimeout(async () => {
-          await storageService.syncFromServer();
+        if (seedType === 'packaging') {
+          // Packaging: root level keys
+          possibleKeys.push(key); // "products", "customers", etc.
+          possibleKeys.push(`packaging/${key}`); // "packaging/products" (if exists)
+        } else if (seedType === 'gt') {
+          // GT: from general-trading/ folder
+          possibleKeys.push(`general-trading/${key}`); // "general-trading/gt_products"
+          possibleKeys.push(key); // "gt_products" (if in root)
+          possibleKeys.push(key.replace('gt_', '')); // "products" (without prefix)
+        } else if (seedType === 'trucking') {
+          // Trucking: from trucking/ folder
+          possibleKeys.push(`trucking/${key}`); // "trucking/trucking_customers"
+          possibleKeys.push(key); // "trucking_customers" (if in root)
+          possibleKeys.push(key.replace('trucking_', '')); // "customers" (without prefix)
+        }
+
+        // Find matching key in allData
+        for (const possibleKey of possibleKeys) {
+          if (allData[possibleKey] !== undefined) {
+            dataToImport[key] = allData[possibleKey];
+            break;
+          }
+        }
+      }
+
+      if (Object.keys(dataToImport).length === 0) {
+        setSeedMessage(`✗ No ${seedName} data found in data/localStorage/ folder.`);
+        setSeedLoading(false);
+        return;
+      }
+
+      setSeedMessage(`🔄 Importing ${Object.keys(dataToImport).length} keys to storage...`);
+
+      // Import each key to storage
+      let imported = 0;
+      let errors: string[] = [];
+
+      for (const [key, value] of Object.entries(dataToImport)) {
+        try {
+          // Extract value (handle wrapped format {value, timestamp})
+          let dataValue = value;
+          if (value && typeof value === 'object' && value.value !== undefined) {
+            dataValue = value.value;
+          }
+
+          // Save to storage
+          await storageService.set(key, dataValue);
+          imported++;
+        } catch (error: any) {
+          const errorMsg = `Error importing ${key}: ${error.message}`;
+          errors.push(errorMsg);
+        }
+      }
+
+      if (imported > 0) {
+        const details = errors.length > 0 
+          ? ` (${errors.length} errors occurred)` 
+          : '';
+        setSeedMessage(`✓ ${seedName} seed completed: ${imported} keys imported${details}`);
+        
+        // Reload data after seed
+        setTimeout(() => {
           loadData();
-        }, 1000);
+        }, 500);
+      } else if (errors.length > 0) {
+        const errorMsg = errors.length === 1 
+          ? errors[0] 
+          : `${errors[0]} (and ${errors.length - 1} more errors)`;
+        setSeedMessage(`✗ ${errorMsg}`);
       } else {
-        const error = await response.json();
-        setSeedMessage(`✗ Server seed failed: ${error.error || 'Unknown error'}`);
+        setSeedMessage(`✗ No data imported.`);
       }
     } catch (error: any) {
-      console.error('Seed from server error:', error);
-      setSeedMessage(`✗ Error: ${error.message || 'Failed to seed from server'}`);
+      setSeedMessage(`✗ Error: ${error.message || 'Failed to seed from data/localStorage/'}`);
     } finally {
       setSeedLoading(false);
-      setTimeout(() => setSeedMessage(''), 10000);
+      setTimeout(() => setSeedMessage(''), 15000);
     }
   };
 
@@ -1452,7 +1591,7 @@ const DBActivity = () => {
                 </button>
 
                 <button
-                  onClick={handleSeedFromServer}
+                  onClick={() => handleSeedFromServer('packaging')}
                   disabled={seedLoading}
                   style={{
                     padding: '12px 16px',
@@ -1477,9 +1616,73 @@ const DBActivity = () => {
                     }
                   }}
                 >
-                  <div style={{ fontWeight: '600', marginBottom: '4px' }}>🌐 Dari Server Docker</div>
+                  <div style={{ fontWeight: '600', marginBottom: '4px' }}>📁 Dari data/localStorage/ - Packaging</div>
                   <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    Jalankan seed script di server Docker. Server harus punya file Excel di folder data/.
+                    Import data Packaging dari folder data/localStorage/ di project. Membaca file JSON sesuai key bisnis.
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => handleSeedFromServer('gt')}
+                  disabled={seedLoading}
+                  style={{
+                    padding: '12px 16px',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    backgroundColor: 'var(--bg-secondary)',
+                    color: 'var(--text-primary)',
+                    cursor: seedLoading ? 'not-allowed' : 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!seedLoading) {
+                      e.currentTarget.style.backgroundColor = 'var(--hover-bg)';
+                      e.currentTarget.style.borderColor = 'var(--accent-color)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!seedLoading) {
+                      e.currentTarget.style.backgroundColor = 'var(--bg-secondary)';
+                      e.currentTarget.style.borderColor = 'var(--border-color)';
+                    }
+                  }}
+                >
+                  <div style={{ fontWeight: '600', marginBottom: '4px' }}>📁 Dari data/localStorage/ - General Trading</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    Import data General Trading dari folder data/localStorage/general-trading/ di project. Membaca file JSON sesuai key bisnis.
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => handleSeedFromServer('trucking')}
+                  disabled={seedLoading}
+                  style={{
+                    padding: '12px 16px',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    backgroundColor: 'var(--bg-secondary)',
+                    color: 'var(--text-primary)',
+                    cursor: seedLoading ? 'not-allowed' : 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!seedLoading) {
+                      e.currentTarget.style.backgroundColor = 'var(--hover-bg)';
+                      e.currentTarget.style.borderColor = 'var(--accent-color)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!seedLoading) {
+                      e.currentTarget.style.backgroundColor = 'var(--bg-secondary)';
+                      e.currentTarget.style.borderColor = 'var(--border-color)';
+                    }
+                  }}
+                >
+                  <div style={{ fontWeight: '600', marginBottom: '4px' }}>📁 Dari data/localStorage/ - Trucking</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    Import data Trucking dari folder data/localStorage/trucking/ di project. Membaca file JSON sesuai key bisnis.
                   </div>
                 </button>
 

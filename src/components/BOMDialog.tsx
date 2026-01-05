@@ -7,8 +7,8 @@ import './BOMDialog.css';
 
 interface BOMItem {
   id?: string;
-  material_id: string;
-  material_name?: string;
+  materialId: string;  // camelCase untuk konsistensi dengan SO
+  materialName?: string;  // camelCase untuk konsistensi dengan SO
   ratio: number;
 }
 
@@ -87,18 +87,38 @@ const BOMDialog = ({ productId, productName, productKode, onClose, onSave }: BOM
 
   const productKodeRef = useRef(productKode);
   const productIdRef = useRef(productId);
+  const onSaveRef = useRef(onSave);
+  const isSavingRef = useRef(false);
+  const isLoadingRef = useRef(false);
+  const lastProductIdRef = useRef<string>('');
+  const lastProductKodeRef = useRef<string>('');
 
   useEffect(() => {
     productKodeRef.current = productKode;
     productIdRef.current = productId;
-  }, [productKode, productId]);
+    onSaveRef.current = onSave;
+  }, [productKode, productId, onSave]);
 
-  useEffect(() => {
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productId, productKode]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
+    // Prevent multiple simultaneous loads
+    if (isLoadingRef.current) {
+      return;
+    }
+    
+    const currentProductId = (productIdRef.current || '').toString().trim();
+    const currentProductKode = (productKodeRef.current || '').toString().trim();
+    const currentKey = `${currentProductId}-${currentProductKode}`;
+    const lastKey = `${lastProductIdRef.current}-${lastProductKodeRef.current}`;
+    
+    // Skip if same product
+    if (currentKey === lastKey && currentKey !== '') {
+      return;
+    }
+    
+    isLoadingRef.current = true;
+    lastProductIdRef.current = currentProductId;
+    lastProductKodeRef.current = currentProductKode;
+    
     try {
       setLoading(true);
       // Load materials
@@ -109,7 +129,8 @@ const BOMDialog = ({ productId, productName, productKode, onClose, onSave }: BOM
       const bomData = await storageService.get<any[]>('bom') || [];
       const targetId = (productKodeRef.current || productIdRef.current || '').toString().trim();
       const productBOM = bomData.filter(b => {
-        const bomProductId = (b.product_id || b.kode || '').toString().trim();
+        // Fallback: product_id -> padCode -> kode
+        const bomProductId = (b.product_id || b.padCode || b.kode || '').toString().trim();
         return bomProductId === targetId;
       });
 
@@ -118,7 +139,8 @@ const BOMDialog = ({ productId, productName, productKode, onClose, onSave }: BOM
       // Sesuai dengan sheet, ada duplicate material di BOM yang sama, tapi kita hanya tampilkan 1 per material_id
       const bomMap = new Map<string, any>();
       productBOM.forEach(bom => {
-        const materialId = (bom.material_id || '').toString().trim();
+        // Support both snake_case (dari storage) dan camelCase (backward compatibility)
+        const materialId = (bom.material_id || bom.materialId || '').toString().trim();
         if (materialId && !bomMap.has(materialId)) {
           // Ambil yang pertama untuk setiap material_id (sesuai sheet, ada duplicate)
           const material = materialsData.find(m => 
@@ -126,8 +148,8 @@ const BOMDialog = ({ productId, productName, productKode, onClose, onSave }: BOM
           );
           bomMap.set(materialId, {
             id: bom.id,
-            material_id: materialId,
-            material_name: material?.nama || bom.material_name || '',
+            materialId: materialId,  // camelCase untuk konsistensi dengan SO
+            materialName: material?.nama || bom.materialName || bom.material_name || '',  // camelCase untuk konsistensi dengan SO, support backward compatibility
             ratio: bom.ratio || 1,
           });
         }
@@ -138,8 +160,13 @@ const BOMDialog = ({ productId, productName, productKode, onClose, onSave }: BOM
       console.error('Error loading BOM data:', error);
     } finally {
       setLoading(false);
+      isLoadingRef.current = false;
     }
-  };
+  }, [productId, productKode]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const getMaterialInputDisplayValue = () => {
     if (materialInputValue !== undefined && materialInputValue !== '') {
@@ -189,7 +216,7 @@ const BOMDialog = ({ productId, productName, productKode, onClose, onSave }: BOM
 
     setBomItems(prevItems => {
       // Check for duplicate material - prevent duplicate di BOM yang sama
-      if (prevItems.some(item => item.material_id === selectedMaterialId)) {
+      if (prevItems.some(item => item.materialId === selectedMaterialId)) {  // camelCase untuk konsistensi dengan SO
         showAlert('Material ini sudah ada di BOM. Pilih material lain atau edit yang sudah ada.', 'Information');
         return prevItems;
       }
@@ -201,8 +228,8 @@ const BOMDialog = ({ productId, productName, productKode, onClose, onSave }: BOM
       }
 
       const newItem: BOMItem = {
-        material_id: selectedMaterialId,
-        material_name: material.nama || '',
+        materialId: selectedMaterialId,  // camelCase untuk konsistensi dengan SO
+        materialName: material.nama || '',  // camelCase untuk konsistensi dengan SO
         ratio: ratioNum,
       };
 
@@ -252,12 +279,27 @@ const BOMDialog = ({ productId, productName, productKode, onClose, onSave }: BOM
   }, []);
 
   const handleSave = useCallback(() => {
-    onSave(bomItems);
-  }, [bomItems, onSave]);
+    // Prevent multiple calls
+    if (isSavingRef.current) {
+      return;
+    }
+    
+    isSavingRef.current = true;
+    try {
+      onSaveRef.current(bomItems);
+      // Reset flag after a delay to allow save to complete
+      setTimeout(() => {
+        isSavingRef.current = false;
+      }, 1000);
+    } catch (error) {
+      console.error('Error in handleSave:', error);
+      isSavingRef.current = false;
+    }
+  }, [bomItems]);
 
   // Memoize filtered materials untuk prevent re-render
   const availableMaterials = useMemo(() => {
-    const bomMaterialIds = new Set(bomItems.map(item => item.material_id));
+    const bomMaterialIds = new Set(bomItems.map(item => item.materialId));  // camelCase untuk konsistensi dengan SO
     return materials.filter(m => !bomMaterialIds.has(m.material_id || m.kode));
   }, [materials, bomItems]);
 
@@ -436,14 +478,14 @@ const BOMDialog = ({ productId, productName, productKode, onClose, onSave }: BOM
                     {bomItems.map((item, index) => {
                       const previewQtyNum = parseFloat(previewQty) || 1;
                       const calculatedQty = previewQtyNum * item.ratio;
-                      const material = materials.find(m => (m.material_id || m.kode) === item.material_id);
+                      const material = materials.find(m => (m.material_id || m.kode) === item.materialId);  // camelCase untuk konsistensi dengan SO
                       const unit = material?.satuan || material?.unit || 'PCS';
                       
                       return (
                         <tr key={index}>
                           <td style={{ padding: '10px', borderBottom: '1px solid var(--border-color)' }}>
-                            <div style={{ fontWeight: '500' }}>{item.material_name || '-'}</div>
-                            <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>({item.material_id})</div>
+                            <div style={{ fontWeight: '500' }}>{item.materialName || '-'}</div>  {/* camelCase untuk konsistensi dengan SO */}
+                            <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>({item.materialId})</div>  {/* camelCase untuk konsistensi dengan SO */}
                           </td>
                           <td style={{ padding: '10px', borderBottom: '1px solid var(--border-color)', textAlign: 'right' }}>
                             <input

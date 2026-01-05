@@ -1231,7 +1231,7 @@ const DeliveryOrders = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <Card title={editingItem ? "Edit Delivery Order" : "Create New Delivery Order"}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
             <Input
               label="DO No"
               value={formData.doNo || ''}
@@ -1425,9 +1425,9 @@ const DeliveryOrders = () => {
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-primary)', fontWeight: '500', fontSize: '13px' }}>
                 Vehicle
               </label>
               <select
@@ -1451,8 +1451,8 @@ const DeliveryOrders = () => {
                 ))}
               </select>
             </div>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-primary)', fontWeight: '500', fontSize: '13px' }}>
                 Driver
               </label>
               <select
@@ -1476,9 +1476,9 @@ const DeliveryOrders = () => {
                 ))}
               </select>
             </div>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-                Route <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 'normal' }}>(auto-detect, pilih dari list, atau ketik manual)</span>
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-primary)', fontWeight: '500', fontSize: '13px' }}>
+                Route <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 'normal' }}>(auto-detect, pilih dari list, atau ketik manual)</span>
               </label>
               <input
                 type="text"
@@ -1489,48 +1489,94 @@ const DeliveryOrders = () => {
                   // Cari route yang match dengan input
                   const matchedRoute = routes.find(r => {
                     const routeDisplay = `${r.routeName} (${r.origin} - ${r.destination})`;
-                    return routeDisplay === value || r.routeName === value;
+                    const routeDisplayWithCustomer = `${r.routeName} (${r.origin} - ${r.destination}) [${r._customer || ''}]`;
+                    return routeDisplay === value || 
+                           routeDisplayWithCustomer === value ||
+                           r.routeName === value ||
+                           (r._customer && value.includes(r._customer));
                   });
                   
                   setFormData({ 
                     ...formData, 
                     routeId: matchedRoute?.id || '',
-                    routeName: value, // Bisa input manual
+                    routeName: matchedRoute ? `${matchedRoute.routeName} (${matchedRoute.origin} - ${matchedRoute.destination})` : value, // Bisa input manual
+                    // Auto-fill totalDeal dari _price route jika ada
+                    totalDeal: matchedRoute?._price ? (matchedRoute._price + (matchedRoute.tollCost || 0) + (matchedRoute.fuelCost || 0)) : formData.totalDeal || 0,
                   });
+                  
+                  // Update totalDealInputValue jika route match
+                  if (matchedRoute?._price) {
+                    const total = matchedRoute._price + (matchedRoute.tollCost || 0) + (matchedRoute.fuelCost || 0);
+                    setTotalDealInputValue(total > 0 ? String(total) : '');
+                  }
                 }}
                 onBlur={(e) => {
                   const value = e.target.value;
                   // Saat blur, coba match dengan route yang ada
                   const matchedRoute = routes.find(r => {
                     const routeDisplay = `${r.routeName} (${r.origin} - ${r.destination})`;
-                    return routeDisplay === value || r.routeName === value;
+                    const routeDisplayWithCustomer = `${r.routeName} (${r.origin} - ${r.destination}) [${r._customer || ''}]`;
+                    return routeDisplay === value || 
+                           routeDisplayWithCustomer === value ||
+                           r.routeName === value ||
+                           (r._customer && value.includes(r._customer));
                   });
                   
                   if (matchedRoute) {
+                    const totalDeal = matchedRoute._price ? (matchedRoute._price + (matchedRoute.tollCost || 0) + (matchedRoute.fuelCost || 0)) : formData.totalDeal || 0;
                     setFormData({ 
                       ...formData, 
                       routeId: matchedRoute.id,
-                      routeName: matchedRoute.routeName,
+                      routeName: `${matchedRoute.routeName} (${matchedRoute.origin} - ${matchedRoute.destination})`,
+                      // Auto-fill totalDeal dari _price route jika ada
+                      totalDeal: totalDeal,
                     });
+                    // Update totalDealInputValue
+                    if (matchedRoute._price) {
+                      setTotalDealInputValue(totalDeal > 0 ? String(totalDeal) : '');
+                    }
                   }
                 }}
                 placeholder="Ketik route atau pilih dari list"
                 style={{
                   width: '100%',
-                  padding: '8px 12px',
+                  padding: '6px 10px',
                   border: '1px solid var(--border)',
                   borderRadius: '4px',
                   backgroundColor: 'var(--bg-primary)',
                   color: 'var(--text-primary)',
-                  fontSize: '14px',
+                  fontSize: '13px',
                 }}
               />
               <datalist id={`route-list-${editingItem?.id || 'new'}`}>
-                {routes.filter(r => r.status === 'Active').map(r => (
-                  <option key={r.id} value={`${r.routeName} (${r.origin} - ${r.destination})`}>
-                    {r.routeName}
-                  </option>
-                ))}
+                {routes
+                  .filter(r => {
+                    // Filter by status Active
+                    if (r.status !== 'Active') return false;
+                    // Jika ada search query di input, filter juga
+                    const searchQuery = (formData.routeName || '').toLowerCase().trim();
+                    if (searchQuery && searchQuery.length > 0) {
+                      const routeDisplay = `${r.routeName} (${r.origin} - ${r.destination})`.toLowerCase();
+                      const routeNameLower = (r.routeName || '').toLowerCase();
+                      const originLower = (r.origin || '').toLowerCase();
+                      const destLower = (r.destination || '').toLowerCase();
+                      const customerLower = (r._customer || '').toLowerCase();
+                      const routeCodeLower = (r.routeCode || '').toLowerCase();
+                      return routeDisplay.includes(searchQuery) || 
+                             routeNameLower.includes(searchQuery) ||
+                             originLower.includes(searchQuery) ||
+                             destLower.includes(searchQuery) ||
+                             customerLower.includes(searchQuery) ||
+                             routeCodeLower.includes(searchQuery);
+                    }
+                    return true;
+                  })
+                  .slice(0, 100) // Limit to 100 results untuk performa
+                  .map(r => (
+                    <option key={r.id} value={`${r.routeName} (${r.origin} - ${r.destination})`}>
+                      {r.routeName} {r._customer ? `[${r._customer}]` : ''}
+                    </option>
+                  ))}
               </datalist>
             </div>
           </div>
@@ -1540,9 +1586,9 @@ const DeliveryOrders = () => {
             value={formData.scheduledDate || ''}
             onChange={(v) => setFormData({ ...formData, scheduledDate: v })}
           />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-primary)', fontWeight: '500', fontSize: '13px' }}>
                 Total Deal (Rp)
               </label>
               <input
@@ -1598,17 +1644,17 @@ const DeliveryOrders = () => {
                 placeholder="0"
                 style={{
                   width: '100%',
-                  padding: '8px 12px',
+                  padding: '6px 10px',
                   border: '1px solid var(--border)',
                   borderRadius: '4px',
                   backgroundColor: 'var(--bg-primary)',
                   color: 'var(--text-primary)',
-                  fontSize: '14px',
+                  fontSize: '13px',
                 }}
               />
             </div>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-primary)', fontWeight: '500', fontSize: '13px' }}>
                 Discount (%)
               </label>
               <input

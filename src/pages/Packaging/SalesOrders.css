@@ -36,16 +36,16 @@
 
 .status-open {
   background-color: #2196f3;
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .status-close {
   background-color: #4caf50;
-  color: white;
+  color: var(--text-on-success);
 }
 
 .status-void {
   background-color: #f44336;
-  color: white;
+  color: var(--text-on-error);
 }
 

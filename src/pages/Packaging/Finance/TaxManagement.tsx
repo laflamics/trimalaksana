@@ -892,12 +892,14 @@ const TaxManagement = () => {
                 <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
                   Total Amount
                 </label>
-                <Input
-                  type="text"
-                  value={`Rp ${(formData.totalAmount || 0).toLocaleString('id-ID')}`}
-                  disabled
-                  style={{ backgroundColor: 'var(--bg-secondary)' }}
-                />
+                <div style={{ backgroundColor: 'var(--bg-secondary)' }}>
+                  <Input
+                    type="text"
+                    value={`Rp ${(formData.totalAmount || 0).toLocaleString('id-ID')}`}
+                    onChange={() => {}}
+                    disabled
+                  />
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
