@@ -621,13 +621,13 @@ ipcMain.handle('load-storage', async (event, key: string) => {
     
     // Check if file exists (final check)
     if (!fileFound) {
-      try {
-        await fs.promises.access(filePath);
+    try {
+      await fs.promises.access(filePath);
         fileFound = true;
-      } catch {
-        // File doesn't exist, return null
+    } catch {
+      // File doesn't exist, return null
         console.log(`[load-storage] File not found: ${key} (tried root and subdirectories)`);
-        return { success: true, data: null };
+      return { success: true, data: null };
       }
     }
     
@@ -717,38 +717,38 @@ ipcMain.handle('load-all-storage', async () => {
           } else if (entry.isFile() && entry.name.endsWith('.json')) {
             // Load JSON file
             const key = prefix ? `${prefix}/${entry.name.replace('.json', '')}` : entry.name.replace('.json', '');
-            try {
+      try {
               const content = await fs.promises.readFile(fullPath, 'utf8');
-              try {
-                data[key] = JSON.parse(content);
-              } catch (parseError: any) {
+        try {
+          data[key] = JSON.parse(content);
+        } catch (parseError: any) {
                 console.error(`[WATCH] Error reading ${entry.name}:`, parseError);
-                // Try to fix corrupted JSON by removing trailing content after valid JSON
-                try {
-                  // Find the last valid closing brace/bracket
-                  let lastValidIndex = content.lastIndexOf('}');
-                  if (lastValidIndex === -1) {
-                    lastValidIndex = content.lastIndexOf(']');
-                  }
-                  if (lastValidIndex > 0) {
-                    const cleanedContent = content.substring(0, lastValidIndex + 1);
-                    // Try to parse cleaned content
-                    const parsed = JSON.parse(cleanedContent);
-                    // If successful, save the cleaned version
+          // Try to fix corrupted JSON by removing trailing content after valid JSON
+          try {
+            // Find the last valid closing brace/bracket
+            let lastValidIndex = content.lastIndexOf('}');
+            if (lastValidIndex === -1) {
+              lastValidIndex = content.lastIndexOf(']');
+            }
+            if (lastValidIndex > 0) {
+              const cleanedContent = content.substring(0, lastValidIndex + 1);
+              // Try to parse cleaned content
+              const parsed = JSON.parse(cleanedContent);
+              // If successful, save the cleaned version
                     await fs.promises.writeFile(fullPath, JSON.stringify(parsed, null, 2), 'utf8');
                     console.log(`[WATCH] Fixed corrupted JSON in ${entry.name}`);
-                    data[key] = parsed;
-                  } else {
+              data[key] = parsed;
+            } else {
                     console.error(`[WATCH] Cannot fix ${entry.name}: no valid JSON structure found`);
-                  }
-                } catch (fixError) {
-                  console.error(`[WATCH] Failed to fix ${entry.name}:`, fixError);
-                }
-              }
-            } catch (error) {
-              console.error(`[WATCH] Error reading file ${entry.name}:`, error);
             }
+          } catch (fixError) {
+                  console.error(`[WATCH] Failed to fix ${entry.name}:`, fixError);
           }
+        }
+      } catch (error) {
+              console.error(`[WATCH] Error reading file ${entry.name}:`, error);
+      }
+    }
         }
       } catch (error: any) {
         // Ignore errors for directories that don't exist or can't be read
@@ -802,14 +802,14 @@ ipcMain.handle('delete-storage', async (event, key: string) => {
     let deleted = false;
     for (const filePath of pathsToTry) {
       try {
-        await fs.promises.unlink(filePath);
+    await fs.promises.unlink(filePath);
         deleted = true;
         console.log(`[delete-storage] Deleted ${key} from ${filePath}`);
-      } catch (error: any) {
+  } catch (error: any) {
         if (error.code !== 'ENOENT') {
           // Only log non-ENOENT errors
           console.warn(`[delete-storage] Error deleting ${key} from ${filePath}:`, error.message);
-        }
+    }
       }
     }
     
