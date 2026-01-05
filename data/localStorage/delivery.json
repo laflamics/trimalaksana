@@ -1,0 +1,26 @@
+{
+  "value": [
+    {
+      "id": "1767603229104",
+      "sjNo": "SJ-260105-3YW7U",
+      "soNo": "PO0000010938",
+      "customer": "PT. INDONESIA KOITO",
+      "items": [
+        {
+          "spkNo": "SPK/260105/E648O-SJ1",
+          "product": "BOX X + COVER LIPAT MAGNET UK 780X470X385 mm",
+          "productCode": "FG-KOITO-0001",
+          "qty": 56,
+          "unit": "PCS",
+          "soNo": "PO0000010938",
+          "fromInventory": true
+        }
+      ],
+      "status": "OPEN",
+      "deliveryDate": "2026-01-12T00:00:00.000Z",
+      "productCodeDisplay": "padCode"
+    }
+  ],
+  "timestamp": 1767603229104,
+  "_timestamp": 1767603229104
+}

@@ -1,0 +1,31 @@
+{
+  "value": [
+    {
+      "id": "1767602626100kpmqjsf01",
+      "prNo": "PR-260105-7L40O",
+      "spkNo": "SPK/260105/E648O",
+      "soNo": "PO0000010938",
+      "customer": "PT. INDONESIA KOITO",
+      "product": "BOX X + COVER LIPAT MAGNET UK 780X470X385 mm",
+      "items": [
+        {
+          "materialId": "IMP-00001",
+          "materialName": "SHEET IMPRA T5 UK 2000X3000 MM",
+          "materialKode": "IMP-00001",
+          "supplier": "PT. TOP ONE PLASTINDO",
+          "unit": "LEMBAR",
+          "price": 0,
+          "requiredQty": 28,
+          "availableStock": 0,
+          "shortageQty": 28
+        }
+      ],
+      "status": "PO_CREATED",
+      "created": "2026-01-05T08:43:46.100Z",
+      "createdBy": "PPIC",
+      "padCode": ""
+    }
+  ],
+  "timestamp": 1767602857675,
+  "_timestamp": 1767602857675
+}

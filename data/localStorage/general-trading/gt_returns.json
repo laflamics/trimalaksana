@@ -14,8 +14,38 @@
       "notes": "",
       "status": "CONFIRMED",
       "created": "2025-12-18T07:11:30.214Z"
+    },
+    {
+      "id": "1767080316225",
+      "returnNo": "RET-251230-QX94B",
+      "sourceType": "SO",
+      "sourceNo": "KIPO25120231",
+      "productId": "TRM0672",
+      "productName": "BOLT (BAUT JT) M4XP0.7XL12MM (GALVANIZED) (NB180-1)",
+      "productKode": "TRM0672",
+      "qty": 5,
+      "unit": "PCS",
+      "reason": "Scratch",
+      "notes": "",
+      "status": "CONFIRMED",
+      "created": "2025-12-30T07:38:36.225Z"
+    },
+    {
+      "id": "1767085947100",
+      "returnNo": "RET-251230-BZVQX",
+      "sourceType": "SO",
+      "sourceNo": "KIPO25120231",
+      "productId": "TRM0114",
+      "productName": "BOLT (BAUT L) M6XP1.0XL20MM (SUS304) (NB204)",
+      "productKode": "TRM0114",
+      "qty": 3,
+      "unit": "PCS",
+      "reason": "Basah",
+      "notes": "",
+      "status": "CONFIRMED",
+      "created": "2025-12-30T09:12:27.100Z"
     }
   ],
-  "timestamp": 1766041890221,
-  "_timestamp": 1766041890221
+  "timestamp": 1767085947102,
+  "_timestamp": 1767085947102
 }

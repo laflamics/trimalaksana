@@ -1,6 +1,21 @@
 {
   "value": [
     {
+      "id": "1767602231864",
+      "no": 1,
+      "lastUpdate": "2026-01-05T08:38:58.163Z",
+      "userUpdate": "System",
+      "ipAddress": "127.0.0.1",
+      "kode": "IMP-00001",
+      "nama": "SHEET IMPRA T5 UK 2000X3000 MM",
+      "satuan": "LEMBAR",
+      "stockAman": 0,
+      "stockMinimum": 0,
+      "kategori": "MATERIAL",
+      "supplier": "PT. TOP ONE PLASTINDO",
+      "priceMtr": 0
+    },
+    {
       "id": "1765961628803-wa93i4pjs",
       "material_id": "MTRL00001",
       "kode": "MTRL-00001",
@@ -14581,10 +14596,25 @@
       "created": "2025-12-17T08:53:48.808Z"
     },
     {
+      "id": "1767581165740",
+      "no": 811,
+      "lastUpdate": "2026-01-05T02:46:05.740Z",
+      "userUpdate": "System",
+      "ipAddress": "127.0.0.1",
+      "kode": "MTRL-00828",
+      "nama": "SHEET  UK 128,3 X 42,7  K200/M125/K200 C/F SCOORE 13,6+15,5+13,6 CM ",
+      "satuan": "PCS",
+      "stockAman": 0,
+      "stockMinimum": 0,
+      "kategori": "MATERIAL",
+      "supplier": "PT. KATI KARTIKA MURNI",
+      "priceMtr": 0
+    },
+    {
       "id": "1765961033311-b796jkdvz",
       "material_id": "MTRL-00576",
       "kode": "MTRL-00576",
-      "no": 811,
+      "no": 812,
       "nama": "MTRL-00576",
       "satuan": "PCS",
       "stockAman": 0,
@@ -14599,46 +14629,10 @@
       "created": "2025-12-17T08:43:53.311Z"
     },
     {
-      "id": "1765961033311-a4r7tkdpd",
-      "material_id": "MTRL-00567",
-      "kode": "MTRL-00567",
-      "no": 812,
-      "nama": "MTRL-00567",
-      "satuan": "PCS",
-      "stockAman": 0,
-      "stockMinimum": 0,
-      "kategori": "Material",
-      "supplier": "",
-      "priceMtr": 0,
-      "hargaSales": 0,
-      "lastUpdate": "2025-12-17T08:43:53.311Z",
-      "userUpdate": "System",
-      "ipAddress": "127.0.0.1",
-      "created": "2025-12-17T08:43:53.311Z"
-    },
-    {
-      "id": "1765961033312-4ztt3ln0e",
-      "material_id": "MTRL-00532",
-      "kode": "MTRL-00532",
-      "no": 813,
-      "nama": "MTRL-00532",
-      "satuan": "PCS",
-      "stockAman": 0,
-      "stockMinimum": 0,
-      "kategori": "Material",
-      "supplier": "",
-      "priceMtr": 0,
-      "hargaSales": 0,
-      "lastUpdate": "2025-12-17T08:43:53.312Z",
-      "userUpdate": "System",
-      "ipAddress": "127.0.0.1",
-      "created": "2025-12-17T08:43:53.312Z"
-    },
-    {
       "id": "1765961033312-awqcb4uyo",
       "material_id": "MTRL-00320",
       "kode": "MTRL-00320",
-      "no": 814,
+      "no": 813,
       "nama": "MTRL-00320",
       "satuan": "PCS",
       "stockAman": 0,
@@ -14653,8 +14647,44 @@
       "created": "2025-12-17T08:43:53.312Z"
     },
     {
-      "id": "1766452933885",
+      "id": "1765961033312-4ztt3ln0e",
+      "material_id": "MTRL-00532",
+      "kode": "MTRL-00532",
+      "no": 814,
+      "nama": "MTRL-00532",
+      "satuan": "PCS",
+      "stockAman": 0,
+      "stockMinimum": 0,
+      "kategori": "Material",
+      "supplier": "",
+      "priceMtr": 0,
+      "hargaSales": 0,
+      "lastUpdate": "2025-12-17T08:43:53.312Z",
+      "userUpdate": "System",
+      "ipAddress": "127.0.0.1",
+      "created": "2025-12-17T08:43:53.312Z"
+    },
+    {
+      "id": "1765961033311-a4r7tkdpd",
+      "material_id": "MTRL-00567",
+      "kode": "MTRL-00567",
       "no": 815,
+      "nama": "MTRL-00567",
+      "satuan": "PCS",
+      "stockAman": 0,
+      "stockMinimum": 0,
+      "kategori": "Material",
+      "supplier": "",
+      "priceMtr": 0,
+      "hargaSales": 0,
+      "lastUpdate": "2025-12-17T08:43:53.311Z",
+      "userUpdate": "System",
+      "ipAddress": "127.0.0.1",
+      "created": "2025-12-17T08:43:53.311Z"
+    },
+    {
+      "id": "1766452933885",
+      "no": 816,
       "lastUpdate": "2025-12-23T01:22:38.701Z",
       "userUpdate": "System",
       "ipAddress": "127.0.0.1",
@@ -14669,7 +14699,7 @@
     },
     {
       "id": "1766453204049",
-      "no": 816,
+      "no": 817,
       "lastUpdate": "2025-12-23T01:26:44.049Z",
       "userUpdate": "System",
       "ipAddress": "127.0.0.1",
@@ -14681,8 +14711,23 @@
       "kategori": "",
       "supplier": "PT. KATI KARTIKA MURNI",
       "priceMtr": 4000
+    },
+    {
+      "id": "1767597076477",
+      "no": 818,
+      "lastUpdate": "2026-01-05T07:12:03.044Z",
+      "userUpdate": "System",
+      "ipAddress": "127.0.0.1",
+      "kode": "MTRL-00830",
+      "nama": "SHEET 95 X 95 CM K125/M125 CB/F BRUTO",
+      "satuan": "PCS",
+      "stockAman": 0,
+      "stockMinimum": 0,
+      "kategori": "MATERIAL",
+      "supplier": "",
+      "priceMtr": 5751
     }
   ],
-  "timestamp": 1766453204049,
-  "_timestamp": 1766453204049
+  "timestamp": 1767602338163,
+  "_timestamp": 1767602338163
 }

@@ -3,6 +3,13 @@
 	"appName": "Trima Laksana ERP",
 	"webDir": "dist/renderer",
 	"server": {
-		"androidScheme": "https"
+		"androidScheme": "https",
+		"iosScheme": "https"
+	},
+	"ios": {
+		"contentInset": "automatic",
+		"scrollEnabled": true,
+		"allowsLinkPreview": false,
+		"preferredContentMode": "mobile"
 	}
 }

@@ -1,0 +1,48 @@
+{
+  "value": [
+    {
+      "id": "17676013625327zhzrvqci",
+      "spkNo": "SPK/260105/UIAR6",
+      "soNo": "PO-000010643",
+      "customer": "PT. ESSILORLUXOTICA PROFESSIONAL SOLUTION INDONESIA",
+      "product": "PLASTIK WRAP DAIMARU",
+      "product_id": "TRM2753",
+      "kode": "TRM2753",
+      "qty": 6,
+      "unit": "ROL",
+      "status": "OPEN",
+      "created": "2026-01-05T08:22:42.533Z",
+      "notes": ""
+    },
+    {
+      "id": "1767601362533grgxorww7",
+      "spkNo": "SPK/260105/GZYIY",
+      "soNo": "PO-000010643",
+      "customer": "PT. ESSILORLUXOTICA PROFESSIONAL SOLUTION INDONESIA",
+      "product": "ISOLASI 2.5",
+      "product_id": "TRM1801",
+      "kode": "TRM1801",
+      "qty": 100,
+      "unit": "ROL",
+      "status": "OPEN",
+      "created": "2026-01-05T08:22:42.533Z",
+      "notes": ""
+    },
+    {
+      "id": "1767601362533ravhm8074",
+      "spkNo": "SPK/260105/SLPY8",
+      "soNo": "PO-000010643",
+      "customer": "PT. ESSILORLUXOTICA PROFESSIONAL SOLUTION INDONESIA",
+      "product": "KERTAS HVS 70Gr PINK",
+      "product_id": "TRM1555",
+      "kode": "TRM1555",
+      "qty": 10,
+      "unit": "RIM",
+      "status": "OPEN",
+      "created": "2026-01-05T08:22:42.533Z",
+      "notes": ""
+    }
+  ],
+  "timestamp": 1767601362533,
+  "_timestamp": 1767601362533
+}

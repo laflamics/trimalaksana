@@ -2,8 +2,8 @@
   "value": {
     "companyName": "PT TRIMA LAKSANA JAYA PRATAMA",
     "address": "Jl. Raya Bekasi Km. 28, Cikarang, Bekasi 17530",
-    "bankName": "",
-    "bankAccount": "",
+    "bankName": "Bank MANDIRI, KCP JKT Cimanggis",
+    "bankAccount": "129-00-1116726-5",
     "npwp": "",
     "buffer": "5000000",
     "workingCapital": "5000000",
@@ -15,8 +15,11 @@
     "logo": "https://tvngl6lsfmmykptz.public.blob.vercel-storage.com/product-1766391671239-DfIDM9WKBHJtNEvtOh59IYYvWp6slk.png",
     "signature": "",
     "accountName": "Panji Depasha",
-    "updatedAt": "2025-12-22T08:21:37.508Z"
+    "updatedAt": "2025-12-22T08:21:37.508Z",
+    "lastUpdate": "2026-01-05T04:07:52.561Z",
+    "timestamp": 1767586072561,
+    "_timestamp": 1767586072561
   },
-  "timestamp": 1766980835275,
-  "_timestamp": 1766980835275
+  "timestamp": 1767603862714,
+  "_timestamp": 1767603862714
 }

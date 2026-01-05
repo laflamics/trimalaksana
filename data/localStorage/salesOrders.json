@@ -1,0 +1,172 @@
+{
+  "value": [
+    {
+      "id": "1767602426840",
+      "soNo": "PO0000010938",
+      "customer": "PT. INDONESIA KOITO",
+      "customerKode": "CTM-084",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-05T08:40:26.841Z",
+      "items": [
+        {
+          "id": "1767602384168akdu7tucq",
+          "productId": "FG-CTM-00002",
+          "productKode": "FG-CTM-00002",
+          "productName": "BOX X + COVER LIPAT MAGNET UK 780X470X385 mm",
+          "qty": 56,
+          "unit": "PCS",
+          "price": 157900,
+          "total": 8842400,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": [],
+      "confirmed": true,
+      "confirmedAt": "2026-01-05T08:41:45.184Z",
+      "confirmedBy": "Sales"
+    },
+    {
+      "id": "1767595965505",
+      "soNo": "001/PO/CAC/I/2026",
+      "customer": "PT. CAC PUTRA PERKASA",
+      "customerKode": "CTM-026",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-05T06:52:45.505Z",
+      "items": [
+        {
+          "id": "176759584730773c06mnoe",
+          "productId": "FG-CAC-00002",
+          "productKode": "FG-CAC-00002",
+          "productName": "CARTON BOX 387X277X125",
+          "qty": 1500,
+          "unit": "PCS",
+          "price": 6000,
+          "total": 9000000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 128 X 37,3 CM K200/M125X3/K150 CB/F SCOORE 11,8+13,7+11,8",
+              "materialId": "MTRL-00024",
+              "unit": "Pcs",
+              "qty": 951,
+              "ratio": 0.634,
+              "pricePerUnit": 3178
+            }
+          ]
+        }
+      ],
+      "globalSpecNote": "DELIVERY TGL 9 JANUARI 2026",
+      "category": "packaging",
+      "bomSnapshot": [
+        {
+          "materialId": "MTRL-00024",
+          "materialName": "SHEET 128 X 37,3 CM K200/M125X3/K150 CB/F SCOORE 11,8+13,7+11,8",
+          "unit": "Pcs",
+          "qty": 951,
+          "ratio": 0.634,
+          "pricePerUnit": 3178,
+          "totalPrice": 3022278
+        }
+      ],
+      "confirmed": true,
+      "confirmedAt": "2026-01-05T06:53:00.367Z",
+      "confirmedBy": "Sales"
+    },
+    {
+      "id": "1767593999389",
+      "soNo": "test 1111",
+      "customer": "PT. CAC PUTRA PERKASA",
+      "customerKode": "CTM-026",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-05T06:19:59.389Z",
+      "items": [
+        {
+          "id": "1767593898702q9zc1mwo2",
+          "productId": "FG-DHW-00033",
+          "productKode": "FG-DHW-00033",
+          "productName": "CARTON BOX DH 8",
+          "qty": 100,
+          "unit": "PCS",
+          "price": 5971,
+          "total": 597100,
+          "specNote": "urgent",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 175 X 94,8 CM K150/M125X3/K125 CB/F 30,9 + 33 + 30,9",
+              "materialId": "MTRL-00167",
+              "unit": "PCS",
+              "qty": 100,
+              "ratio": 1,
+              "pricePerUnit": 10189
+            }
+          ]
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": [
+        {
+          "materialId": "MTRL-00167",
+          "materialName": "SHEET 175 X 94,8 CM K150/M125X3/K125 CB/F 30,9 + 33 + 30,9",
+          "unit": "PCS",
+          "qty": 100,
+          "ratio": 1,
+          "pricePerUnit": 10189,
+          "totalPrice": 1018900
+        }
+      ],
+      "deleted": true,
+      "deletedAt": "2026-01-05T06:55:11.515Z",
+      "deletedTimestamp": 1767596111517
+    },
+    {
+      "id": "1767593131701",
+      "soNo": "testerr",
+      "customer": "PT. DWIKARYA SEJAHTERA",
+      "customerKode": "CTM-006",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-05T06:05:31.701Z",
+      "items": [
+        {
+          "id": "1767593081083nf68ijtdr",
+          "productId": "FG-AMM-00025",
+          "productKode": "FG-AMM-00025",
+          "productName": "BOX PANJANG UK.180",
+          "qty": 200,
+          "unit": "PCS",
+          "price": 15790,
+          "total": 3158000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": [],
+      "deleted": true,
+      "deletedAt": "2026-01-05T06:42:12.045Z",
+      "deletedTimestamp": 1767595332045
+    }
+  ],
+  "timestamp": 1767602505184,
+  "_timestamp": 1767602505184
+}

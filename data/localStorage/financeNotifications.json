@@ -1,0 +1,27 @@
+{
+  "value": [
+    {
+      "id": "1767602971155",
+      "type": "SUPPLIER_PAYMENT",
+      "poNo": "PO-260105-CO960",
+      "supplier": "PT. TOP ONE PLASTINDO",
+      "soNo": "PO0000010938",
+      "spkNo": "SPK/260105/E648O",
+      "grnNo": "GRN-260105-64O1T",
+      "materialItem": "SHEET IMPRA T5 UK 2000X3000 MM",
+      "qty": 28,
+      "total": 0,
+      "receivedDate": "2026-01-05",
+      "suratJalan": "",
+      "suratJalanName": "",
+      "invoiceNo": "",
+      "invoiceFile": "",
+      "invoiceFileName": "",
+      "purchaseReason": "",
+      "status": "PENDING",
+      "created": "2026-01-05T08:49:31.155Z"
+    }
+  ],
+  "timestamp": 1767602971155,
+  "_timestamp": 1767602971155
+}

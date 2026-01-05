@@ -1,0 +1,40 @@
+{
+  "value": [
+    {
+      "id": "17676025528289o4puaxgu",
+      "spkNo": "SPK/260105/E648O",
+      "soNo": "PO0000010938",
+      "customer": "PT. INDONESIA KOITO",
+      "product": "BOX X + COVER LIPAT MAGNET UK 780X470X385 mm",
+      "product_id": "FG-CTM-00002",
+      "kode": "FG-CTM-00002",
+      "qty": 56,
+      "unit": "PCS",
+      "status": "CLOSE",
+      "created": "2026-01-05T08:42:32.828Z",
+      "notes": "",
+      "padCode": "",
+      "bomOverride": {},
+      "updated": "2026-01-05T08:43:39.188Z",
+      "stockFulfilled": true,
+      "progress": 56
+    },
+    {
+      "id": "1767601182183kqkqq7ao8",
+      "spkNo": "SPK/260105/EUW5N",
+      "soNo": "001/PO/CAC/I/2026",
+      "customer": "PT. CAC PUTRA PERKASA",
+      "product": "CARTON BOX 387X277X125",
+      "product_id": "FG-CAC-00002",
+      "kode": "FG-CAC-00002",
+      "qty": 1500,
+      "unit": "PCS",
+      "status": "OPEN",
+      "created": "2026-01-05T08:19:42.183Z",
+      "notes": "DELIVERY TGL 9 JANUARI 2026",
+      "padCode": ""
+    }
+  ],
+  "timestamp": 1767605604845,
+  "_timestamp": 1767605604845
+}
