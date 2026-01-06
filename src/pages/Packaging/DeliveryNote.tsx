@@ -9,12 +9,13 @@ import NotificationBell from '../../components/NotificationBell';
 import { storageService } from '../../services/storage';
 import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
 import { generateSuratJalanHtml, generateSuratJalanRecapHtml } from '../../pdf/suratjalan-pdf-template';
-import { openPrintWindow, isMobile, isCapacitor } from '../../utils/actions';
+import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import { useDialog } from '../../hooks/useDialog';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
 import { PageSizeDialog, PageSize } from '../../components/PageSizeDialog';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
+import { logCreate, logUpdate, logDelete } from '../../utils/activity-logger';
 import '../../styles/common.css';
 import '../../styles/compact.css';
 
@@ -2464,6 +2465,18 @@ const DeliveryNote = () => {
       const activeDeliveries = updated.filter(d => !d.deleted);
       setDeliveries(activeDeliveries);
 
+      // Log activity
+      try {
+        await logCreate('DELIVERY_NOTE', newDelivery.id, '/packaging/delivery-note', {
+          sjNo: newDelivery.sjNo,
+          soNo: newDelivery.soNo,
+          customer: newDelivery.customer,
+          itemCount: deliveryItems.length,
+        });
+      } catch (logError) {
+        // Silent fail
+      }
+
       // IMPORTANT: Inventory update hanya dilakukan setelah upload SJ (di handleUploadSignedDocument)
       // Jangan update inventory saat create delivery note
 
@@ -3130,10 +3143,17 @@ const DeliveryNote = () => {
         }
         // If canceled, do nothing (user closed dialog)
       } else if (isMobile() || isCapacitor()) {
-        // Mobile/Capacitor: Open print dialog atau preview window
-        // Di mobile, print dialog biasanya bisa save as PDF
-        openPrintWindow(viewPdfData.html, { autoPrint: false });
-        showAlert('Info', 'Gunakan menu print di browser untuk menyimpan sebagai PDF');
+        // Mobile/Capacitor: Use Web Share API or print dialog
+        await savePdfForMobile(
+          viewPdfData.html,
+          fileName,
+          (message) => {
+            showAlert('Success', message);
+            setViewPdfData(null); // Close view setelah save
+            closeDialog();
+          },
+          (message) => showAlert('Error', message)
+        );
       } else {
         // Browser: Open print dialog, user can select "Save as PDF"
         openPrintWindow(viewPdfData.html);

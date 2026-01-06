@@ -4,13 +4,14 @@ import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import { storageService } from '../../services/storage';
-import { openPrintWindow, focusAppWindow } from '../../utils/actions';
+import { openPrintWindow, focusAppWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
 import { useDialog } from '../../hooks/useDialog';
 import { generateQuotationHtml } from '../../pdf/quotation-pdf-template';
 import { PageSizeDialog, PageSize } from '../../components/PageSizeDialog';
+import { logCreate, logUpdate, logDelete } from '../../utils/activity-logger';
 import '../../styles/common.css';
 import '../../styles/compact.css';
 
@@ -1925,6 +1926,17 @@ const SalesOrders = () => {
           showAlert(`Error saving PDF: ${result.error || 'Unknown error'}`, 'Error');
         }
         // If canceled, do nothing (user closed dialog)
+      } else if (isMobile() || isCapacitor()) {
+        // Mobile/Capacitor: Use Web Share API or print dialog
+        await savePdfForMobile(
+          viewQuotationPdfData.html,
+          fileName,
+          (message) => {
+            showAlert(message, 'Success');
+            setViewQuotationPdfData(null); // Close view setelah save
+          },
+          (message) => showAlert(message, 'Error')
+        );
       } else {
         // Browser: Open print dialog, user can select "Save as PDF"
         openPrintWindow(viewQuotationPdfData.html);
@@ -1953,6 +1965,17 @@ const SalesOrders = () => {
           showAlert(`Error saving PDF: ${result.error || 'Unknown error'}`, 'Error');
         }
         // If canceled, do nothing (user closed dialog)
+      } else if (isMobile() || isCapacitor()) {
+        // Mobile/Capacitor: Use Web Share API or print dialog
+        await savePdfForMobile(
+          viewPdfData.html,
+          fileName,
+          (message) => {
+            showAlert(message, 'Success');
+            setViewPdfData(null); // Close view setelah save
+          },
+          (message) => showAlert(message, 'Error')
+        );
       } else {
         // Browser: Open print dialog, user can select "Save as PDF"
         openPrintWindow(viewPdfData.html);
@@ -2115,6 +2138,16 @@ const SalesOrders = () => {
         );
         await storageService.set('gt_salesOrders', updated);
         setOrders(updated);
+        // Log activity
+        try {
+          await logUpdate('SALES_ORDER', editingOrder.id, '/general-trading/sales-orders', {
+            soNo: formData.soNo || editingOrder.soNo,
+            customer: formData.customer,
+            itemCount: formData.items?.length || 0,
+          });
+        } catch (logError) {
+          // Silent fail
+        }
         showAlert(`SO ${formData.soNo} updated successfully`, 'Success');
       } else {
         const newOrder: SalesOrder = {
@@ -2137,6 +2170,18 @@ const SalesOrders = () => {
         const updated = [...ordersArray, newOrder];
         await storageService.set('gt_salesOrders', updated);
         setOrders(updated);
+        
+        // Log activity
+        try {
+          await logCreate('SALES_ORDER', newOrder.id, '/general-trading/sales-orders', {
+            soNo: newOrder.soNo,
+            customer: newOrder.customer,
+            itemCount: newOrder.items?.length || 0,
+            status: newOrder.status,
+          });
+        } catch (logError) {
+          // Silent fail
+        }
         
         // Send notification to PPIC to create SPK
         try {
@@ -2299,6 +2344,15 @@ const SalesOrders = () => {
           // Save dengan timestamp terbaru untuk ensure last write wins saat sync
           await storageService.set('gt_salesOrders', updated);
           setOrders(updated);
+          // Log activity
+          try {
+            await logDelete('SALES_ORDER', item.id, '/general-trading/sales-orders', {
+              soNo: item.soNo,
+              customer: item.customer,
+            });
+          } catch (logError) {
+            // Silent fail
+          }
           closeDialog();
           showAlert(`SO ${item.soNo} berhasil dihapus.`, 'Success');
         } catch (error: any) {

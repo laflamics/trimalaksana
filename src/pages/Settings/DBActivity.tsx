@@ -1012,6 +1012,40 @@ const DBActivity = () => {
     }
   };
 
+  const handleSeedTruckingFromPC = async () => {
+    setShowSeedDialog(false);
+    setSeedLoading(true);
+    setSeedMessage('');
+
+    try {
+      const result = await storageService.seedTruckingFromPC();
+      
+      if (result.imported > 0) {
+        const details = result.errors && result.errors.length > 0 
+          ? ` (${result.errors.length} errors occurred)` 
+          : '';
+        const message = result.message || `✓ Imported ${result.imported} trucking files from PC utama${details}`;
+        setSeedMessage(message);
+        setTimeout(() => {
+          loadData();
+        }, 500);
+      } else if (result.errors && result.errors.length > 0) {
+        const errorMsg = result.errors.length === 1 
+          ? result.errors[0] 
+          : `${result.errors[0]} (and ${result.errors.length - 1} more errors)`;
+        setSeedMessage(`✗ ${errorMsg}`);
+      } else {
+        setSeedMessage(`✗ No trucking data found in PC utama folder`);
+      }
+    } catch (error: any) {
+      console.error('Seed trucking from PC error:', error);
+      setSeedMessage(`✗ Error: ${error.message || 'Failed to seed trucking data'}`);
+    } finally {
+      setSeedLoading(false);
+      setTimeout(() => setSeedMessage(''), 10000);
+    }
+  };
+
   const handleSeed = async () => {
     setShowSeedDialog(true);
   };
@@ -1717,6 +1751,40 @@ const DBActivity = () => {
                     Import data dari folder data/localStorage/ di project. Hanya bekerja jika folder project ada.
                   </div>
                 </button>
+
+                {typeof window !== 'undefined' && window.electronAPI && (
+                  <button
+                    onClick={handleSeedTruckingFromPC}
+                    disabled={seedLoading}
+                    style={{
+                      padding: '12px 16px',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--bg-secondary)',
+                      color: 'var(--text-primary)',
+                      cursor: seedLoading ? 'not-allowed' : 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!seedLoading) {
+                        e.currentTarget.style.backgroundColor = 'var(--hover-bg)';
+                        e.currentTarget.style.borderColor = 'var(--accent-color)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!seedLoading) {
+                        e.currentTarget.style.backgroundColor = 'var(--bg-secondary)';
+                        e.currentTarget.style.borderColor = 'var(--border-color)';
+                      }
+                    }}
+                  >
+                    <div style={{ fontWeight: '600', marginBottom: '4px' }}>📥 Seed Trucking dari PC Utama</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      Import data trucking dari PC utama: D:\trimalaksanaapps\PT.Trima Laksana Jaya Pratama\docker\data\localstorage\trucking
+                    </div>
+                  </button>
+                )}
               </div>
             </div>
             

@@ -5,6 +5,7 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -144,38 +145,21 @@ const TaxManagement = () => {
   const loadData = async () => {
     // Load accounts
     const accs = await storageService.get<Account[]>('trucking_accounts') || [];
-    // Filter out deleted items (tombstone pattern)
-    const activeAccounts = (accs || []).filter((a: any) => {
-      return !(a?.deleted === true || a?.deleted === 'true' || a?.deletedAt);
-    });
-    setAccounts(activeAccounts);
+    setAccounts(filterActiveItems(accs || []));
 
     // Load invoices, purchase orders, payments
     const invs = await storageService.get<any[]>('trucking_invoices') || [];
     const pos = await storageService.get<any[]>('trucking_purchaseOrders') || [];
     const pays = await storageService.get<any[]>('trucking_payments') || [];
     
-    // Filter out deleted items (tombstone pattern)
-    const activeInvoices = (invs || []).filter((i: any) => {
-      return !(i?.deleted === true || i?.deleted === 'true' || i?.deletedAt);
-    });
-    const activePOs = (pos || []).filter((p: any) => {
-      return !(p?.deleted === true || p?.deleted === 'true' || p?.deletedAt);
-    });
-    const activePayments = (pays || []).filter((p: any) => {
-      return !(p?.deleted === true || p?.deleted === 'true' || p?.deletedAt);
-    });
-    
-    setInvoices(activeInvoices);
-    setPurchaseOrders(activePOs);
-    setPayments(activePayments);
+    setInvoices(filterActiveItems(invs || []));
+    setPurchaseOrders(filterActiveItems(pos || []));
+    setPayments(filterActiveItems(pays || []));
 
     // Load tax records
     let recordsRaw = await storageService.get<TaxRecord[]>('trucking_taxRecords') || [];
-    // Filter out deleted items (tombstone pattern)
-    let records = (recordsRaw || []).filter((r: any) => {
-      return !(r?.deleted === true || r?.deleted === 'true' || r?.deletedAt);
-    });
+    // Filter out deleted items menggunakan helper function
+    let records = filterActiveItems(recordsRaw || []);
 
     // Generate tax records dari invoices, purchase orders jika belum ada
     const generatedRecords: TaxRecord[] = [];
@@ -412,13 +396,19 @@ const TaxManagement = () => {
       'Delete this tax record?',
       async () => {
         try {
-          // Ensure taxRecords is always an array
-          const taxRecordsArray = Array.isArray(taxRecords) ? taxRecords : [];
-          const updated = taxRecordsArray.filter(r => r.id !== record.id);
-          await storageService.set('trucking_taxRecords', updated);
-          setTaxRecords(updated);
-          closeDialog();
-          showAlert('Tax record deleted successfully', 'Success');
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('trucking_taxRecords', record.id, 'id');
+          
+          if (success) {
+            // Reload data dengan filter active items
+            const updatedTaxRecords = await storageService.get<TaxRecord[]>('trucking_taxRecords') || [];
+            setTaxRecords(filterActiveItems(updatedTaxRecords));
+            closeDialog();
+            showAlert('Tax record deleted successfully', 'Success');
+          } else {
+            closeDialog();
+            showAlert('Error deleting tax record. Please try again.', 'Error');
+          }
         } catch (error: any) {
           closeDialog();
           showAlert(`Error deleting tax record: ${error.message}`, 'Error');

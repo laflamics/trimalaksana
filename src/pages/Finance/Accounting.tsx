@@ -6,7 +6,7 @@ import Input from '../../components/Input';
 import NotificationBell from '../../components/NotificationBell';
 import { storageService } from '../../services/storage';
 import { generateInvoiceHtml } from '../../pdf/invoice-pdf-template';
-import { openPrintWindow } from '../../utils/actions';
+import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
 import { useDialog } from '../../hooks/useDialog';
 import { PageSizeDialog, PageSize } from '../../components/PageSizeDialog';
@@ -1249,6 +1249,17 @@ const Accounting = () => {
         } else if (!result.canceled) {
           showToast(`Error saving PDF: ${result.error || 'Unknown error'}`, 'error');
         }
+      } else if (isMobile() || isCapacitor()) {
+        // Mobile/Capacitor: Use Web Share API or print dialog
+        await savePdfForMobile(
+          viewPdfData.html,
+          fileName,
+          (message) => {
+            showToast(message, 'success');
+            setViewPdfData(null); // Close view setelah save
+          },
+          (message) => showToast(message, 'error')
+        );
       } else {
         openPrintWindow(viewPdfData.html);
       }

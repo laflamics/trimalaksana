@@ -12,12 +12,13 @@ import NotificationBell from '../../components/NotificationBell';
 import { storageService, extractStorageValue } from '../../services/storage';
 import { materialAllocator } from '../../services/material-allocator';
 import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
-import { openPrintWindow } from '../../utils/actions';
+import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
 import { generatePRHtml } from '../../pdf/pr-pdf-template';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
 import { getTheme } from '../../utils/theme';
+import { logCreate, logUpdate, logDelete } from '../../utils/activity-logger';
 import '../../styles/common.css';
 import '../../styles/compact.css';
 
@@ -4444,6 +4445,17 @@ const PPIC = () => {
           showAlert(`Error saving PDF: ${result.error || 'Unknown error'}`, 'Error');
         }
         // If canceled, do nothing (user closed dialog)
+      } else if (isMobile() || isCapacitor()) {
+        // Mobile/Capacitor: Use Web Share API or download link
+        await savePdfForMobile(
+          viewPdfData.html,
+          fileName,
+          (message) => {
+            showAlert(message, 'Success');
+            setViewPdfData(null); // Close view setelah save
+          },
+          (message) => showAlert(message, 'Error')
+        );
       } else {
         // Browser: Open print dialog, user can select "Save as PDF"
         openPrintWindow(viewPdfData.html);

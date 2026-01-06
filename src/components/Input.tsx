@@ -1,3 +1,4 @@
+import React from 'react';
 import './Input.css';
 
 interface InputProps {
@@ -9,6 +10,7 @@ interface InputProps {
   error?: string;
   disabled?: boolean;
   className?: string;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 }
 
 const Input = ({
@@ -20,6 +22,7 @@ const Input = ({
   error,
   disabled = false,
   className = '',
+  onKeyDown,
 }: InputProps) => {
   return (
     <div className={`input-group ${className}`}>
@@ -30,6 +33,7 @@ const Input = ({
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
         disabled={disabled}
       />
       {error && <span className="input-error-text">{error}</span>}

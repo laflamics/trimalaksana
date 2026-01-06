@@ -86,7 +86,7 @@ const Settings = () => {
   }, []);
 
   const loadSettings = async () => {
-    const data = await storageService.get<TrackingSettings>('tracking_settings');
+    const data = await storageService.get<TrackingSettings>('trucking_settings');
     if (data) {
       setSettings(data);
     }
@@ -94,7 +94,7 @@ const Settings = () => {
 
   const handleSave = async () => {
     try {
-      await storageService.set('tracking_settings', settings);
+      await storageService.set('trucking_settings', settings);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (error: any) {

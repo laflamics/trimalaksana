@@ -5,6 +5,7 @@ import Input from '../../components/Input';
 import Table from '../../components/Table';
 import { storageService, BusinessType } from '../../services/storage';
 import { safeDeleteMultipleItems, filterActiveItems } from '../../utils/data-persistence-helper';
+import { getCurrentUser, isDefaultAdmin } from '../../utils/access-control-helper';
 import './UserControl.css';
 
 type BusinessId = BusinessType;
@@ -189,60 +190,60 @@ const BUSINESS_MENU_CONFIG: BusinessMenuConfig[] = [
   },
   {
     id: 'trucking',
-    label: 'Tracking',
+    label: 'trucking',
     description: 'Fleet, delivery & expedition unit',
     icon: '🚚',
     accent: '#10b981',
     sections: [
       {
-        id: 'tracking-dashboard',
+        id: 'trucking-dashboard',
         title: 'Overview',
         items: [
           { id: '/trucking/dashboard', label: 'Dashboard', path: '/trucking/dashboard' },
         ],
       },
       {
-        id: 'tracking-master',
+        id: 'trucking-master',
         title: 'Master Data',
         items: [
             { id: '/trucking/master/vehicles', label: 'Vehicles', path: '/trucking/master/vehicles' },
-          { id: '/tracking/master/drivers', label: 'Drivers', path: '/tracking/master/drivers' },
-          { id: '/tracking/master/routes', label: 'Routes', path: '/tracking/master/routes' },
-          { id: '/tracking/master/customers', label: 'Customers', path: '/tracking/master/customers' },
+          { id: '/trucking/master/drivers', label: 'Drivers', path: '/trucking/master/drivers' },
+          { id: '/trucking/master/routes', label: 'Routes', path: '/trucking/master/routes' },
+          { id: '/trucking/master/customers', label: 'Customers', path: '/trucking/master/customers' },
         ],
       },
       {
-        id: 'tracking-shipments',
-        title: 'Shipments & Tracking',
+        id: 'trucking-shipments',
+        title: 'Shipments & trucking',
         items: [
-          { id: '/tracking/shipments/delivery-orders', label: 'Delivery Orders', path: '/tracking/shipments/delivery-orders' },
-          { id: '/tracking/shipments/tracking', label: 'Shipment Tracking', path: '/tracking/shipments/tracking' },
-          { id: '/tracking/tracking/realtime', label: 'Real-time Location', path: '/tracking/tracking/realtime' },
-          { id: '/tracking/tracking/status', label: 'Status Updates', path: '/tracking/tracking/status' },
+          { id: '/trucking/shipments/delivery-orders', label: 'Delivery Orders', path: '/trucking/shipments/delivery-orders' },
+          { id: '/trucking/shipments/trucking', label: 'Shipment trucking', path: '/trucking/shipments/trucking' },
+          { id: '/trucking/trucking/realtime', label: 'Real-time Location', path: '/trucking/trucking/realtime' },
+          { id: '/trucking/trucking/status', label: 'Status Updates', path: '/trucking/trucking/status' },
         ],
       },
       {
-        id: 'tracking-schedules',
+        id: 'trucking-schedules',
         title: 'Schedules',
         items: [
-          { id: '/tracking/schedules/route-planning', label: 'Route Planning', path: '/tracking/schedules/route-planning' },
-          { id: '/tracking/schedules/delivery', label: 'Delivery Schedules', path: '/tracking/schedules/delivery' },
+          { id: '/trucking/schedules/route-planning', label: 'Route Planning', path: '/trucking/schedules/route-planning' },
+          { id: '/trucking/schedules/delivery', label: 'Delivery Schedules', path: '/trucking/schedules/delivery' },
         ],
       },
       {
-        id: 'tracking-finance',
+        id: 'trucking-finance',
         title: 'Finance',
         items: [
-          { id: '/tracking/finance/billing', label: 'Billing', path: '/tracking/finance/billing' },
-          { id: '/tracking/finance/payments', label: 'Payments', path: '/tracking/finance/payments' },
-          { id: '/tracking/finance/pettycash', label: 'Petty Cash', path: '/tracking/finance/pettycash' },
+          { id: '/trucking/finance/billing', label: 'Billing', path: '/trucking/finance/billing' },
+          { id: '/trucking/finance/payments', label: 'Payments', path: '/trucking/finance/payments' },
+          { id: '/trucking/finance/pettycash', label: 'Petty Cash', path: '/trucking/finance/pettycash' },
         ],
       },
       {
-        id: 'tracking-settings',
+        id: 'trucking-settings',
         title: 'Settings',
         items: [
-          { id: '/tracking/settings', label: 'Settings', path: '/tracking/settings' },
+          { id: '/trucking/settings', label: 'Settings', path: '/trucking/settings' },
         ],
       },
     ],
@@ -338,10 +339,19 @@ const formatDateTime = (value?: string) => {
 const getMenuCount = (menuAccess: Record<BusinessId, string[]>) =>
   Object.values(menuAccess || {}).reduce((sum, items) => sum + (items?.length || 0), 0);
 
+const USER_CONTROL_PIN_KEY = 'userControlPin';
+const DEFAULT_USER_CONTROL_PIN = '7777';
+
 const UserControl = () => {
   const [users, setUsers] = useState<UserAccess[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+  const [pinDialogVisible, setPinDialogVisible] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pendingEditAction, setPendingEditAction] = useState<(() => void) | null>(null);
+  const [currentBusinessUnit, setCurrentBusinessUnit] = useState<string>('');
+  const [currentUserBusinessUnits, setCurrentUserBusinessUnits] = useState<BusinessId[]>([]);
+  
   // Custom Dialog state
   const [dialogState, setDialogState] = useState<{
     show: boolean;
@@ -482,18 +492,90 @@ const UserControl = () => {
     };
   }, [loadUsers]);
 
+  // Get current user's business units
+  useEffect(() => {
+    const loadCurrentUserBusinessUnits = async () => {
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        setCurrentUserBusinessUnits([]);
+        return;
+      }
+      
+      // Super admin has access to all business units
+      if (isDefaultAdmin(currentUser)) {
+        setCurrentUserBusinessUnits(['packaging', 'general-trading', 'trucking']);
+        return;
+      }
+      
+      // Get current user's business units from storage
+      const allUsers = await storageService.get<UserAccess[]>('userAccessControl') || [];
+      const currentUserData = allUsers.find(u => u.id === currentUser.id);
+      setCurrentUserBusinessUnits(currentUserData?.businessUnits || []);
+    };
+    
+    loadCurrentUserBusinessUnits();
+  }, [users]); // Reload when users change
+
   const filteredUsers = useMemo(() => {
-    if (!searchQuery) return users;
+    // Filter by business unit first (if not super admin)
+    const currentUser = getCurrentUser();
+    const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+    
+    let businessFilteredUsers = users;
+    if (!isSuperAdmin && currentUserBusinessUnits.length > 0) {
+      // User yang punya akses ke 3 business unit (Packaging + GT + Trucking) bisa lihat semua user
+      // User yang punya akses kurang dari 3 hanya bisa lihat user yang business units-nya sama persis
+      const hasAllThreeBusinessUnits = currentUserBusinessUnits.length === 3 && 
+        currentUserBusinessUnits.includes('packaging' as BusinessId) &&
+        currentUserBusinessUnits.includes('general-trading' as BusinessId) &&
+        currentUserBusinessUnits.includes('trucking' as BusinessId);
+      
+      if (hasAllThreeBusinessUnits) {
+        // User dengan 3 business units bisa lihat semua user
+        businessFilteredUsers = users;
+      } else {
+        // User dengan kurang dari 3 business units hanya bisa lihat user yang business units-nya sama persis
+        businessFilteredUsers = users.filter((user) => {
+          // Check if user has the same business units as current user
+          if (user.businessUnits.length !== currentUserBusinessUnits.length) {
+            return false;
+          }
+          
+          // Check if all business units match
+          const userUnitsSet = new Set(user.businessUnits);
+          const currentUnitsSet = new Set(currentUserBusinessUnits);
+          
+          // Check if sets are equal
+          if (userUnitsSet.size !== currentUnitsSet.size) {
+            return false;
+          }
+          
+          for (const unit of userUnitsSet) {
+            if (!currentUnitsSet.has(unit)) {
+              return false;
+            }
+          }
+          
+          return true;
+        });
+      }
+    }
+    
+    // Then filter by search query
+    if (!searchQuery) return businessFilteredUsers;
     const query = searchQuery.toLowerCase();
-    return users.filter((user) => {
+    return businessFilteredUsers.filter((user) => {
       return (
         user.fullName.toLowerCase().includes(query) ||
         (user.username || '').toLowerCase().includes(query) ||
         (user.role || '').toLowerCase().includes(query) ||
-        user.businessUnits.some((unit) => BUSINESS_MENU_MAP[unit]?.label.toLowerCase().includes(query))
+        user.businessUnits.some((unit) => {
+          const config = BUSINESS_MENU_MAP[unit];
+          return config?.label?.toLowerCase().includes(query) || false;
+        })
       );
     });
-  }, [users, searchQuery]);
+  }, [users, searchQuery, currentUserBusinessUnits]);
 
   useEffect(() => {
     if (!selectedUser && filteredUsers.length > 0) {
@@ -510,22 +592,139 @@ const UserControl = () => {
     setFormVisible(true);
   };
 
+  // Get current business unit from localStorage
+  useEffect(() => {
+    const selectedBusiness = localStorage.getItem('selectedBusiness') || '';
+    setCurrentBusinessUnit(selectedBusiness);
+  }, []);
+
+  // Get User Control PIN
+  const getUserControlPin = async (): Promise<string> => {
+    const pin = await storageService.get<string>(USER_CONTROL_PIN_KEY);
+    return pin || DEFAULT_USER_CONTROL_PIN;
+  };
+
+  // Check if user has access to edit User Control in current business unit
+  const canEditUserControl = async (): Promise<boolean> => {
+    const currentUser = getCurrentUser();
+    if (!currentUser) return false;
+    
+    // Super admin can always edit (no business unit check needed)
+    if (isDefaultAdmin(currentUser)) return true;
+    
+    // If no business unit selected, check if user has access to any business unit
+    if (!currentBusinessUnit) {
+      const users = await storageService.get<UserAccess[]>('userAccessControl') || [];
+      const userData = users.find(u => u.id === currentUser.id);
+      if (!userData || !userData.isActive || userData.deleted) return false;
+      // If user has at least one business unit, allow edit (for Super Admin context)
+      return userData.businessUnits.length > 0;
+    }
+    
+    // Check if user has access to User Control menu in current business unit
+    const users = await storageService.get<UserAccess[]>('userAccessControl') || [];
+    const userData = users.find(u => u.id === currentUser.id);
+    
+    if (!userData || !userData.isActive || userData.deleted) return false;
+    
+    // Check if user has access to current business unit
+    if (!userData.businessUnits.includes(currentBusinessUnit as BusinessId)) return false;
+    
+    // Check if user has access to User Control menu in current business unit
+    const menuAccess = userData.menuAccess || {};
+    const userControlPath = `/${currentBusinessUnit}/settings/user-control`;
+    const allowedMenus = menuAccess[currentBusinessUnit as BusinessId] || [];
+    
+    return allowedMenus.includes(userControlPath);
+  };
+
+  // Validate PIN and proceed with edit
+  const handlePinSubmit = async () => {
+    const correctPin = await getUserControlPin();
+    if (pinInput.trim() !== correctPin) {
+      showAlert('PIN salah. Silakan coba lagi.', 'PIN Salah');
+      setPinInput('');
+      return;
+    }
+    
+    // Check business unit access
+    const hasAccess = await canEditUserControl();
+    if (!hasAccess) {
+      showAlert('Anda tidak memiliki akses untuk mengedit User Control di business unit ini.', 'Akses Ditolak');
+      setPinDialogVisible(false);
+      setPinInput('');
+      setPendingEditAction(null);
+      return;
+    }
+    
+    // PIN correct and has access, proceed with edit
+    setPinDialogVisible(false);
+    setPinInput('');
+    if (pendingEditAction) {
+      pendingEditAction();
+      setPendingEditAction(null);
+    }
+  };
+
   const handleEditUser = (user: UserAccess) => {
-    setFormState({
-      id: user.id,
-      fullName: user.fullName,
-      username: user.username,
-      email: user.email || '',
-      phone: user.phone || '',
-      role: user.role || '',
-      accessCode: user.accessCode || '',
-      isActive: user.isActive,
-      businessUnits: user.businessUnits,
-      defaultBusiness: user.defaultBusiness || user.businessUnits[0] || '',
-      menuAccess: user.menuAccess || {},
-      notes: user.notes || '',
-    });
-    setFormVisible(true);
+    try {
+      // Store the edit action
+      const editAction = () => {
+        const currentUser = getCurrentUser();
+        const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+        
+        // Filter business units based on current business unit (if not super admin)
+        let filteredBusinessUnits = user.businessUnits || [];
+        let filteredMenuAccess = user.menuAccess || {};
+        
+        if (!isSuperAdmin && currentBusinessUnit) {
+          // Only keep business units that match current business unit
+          const currentBusinessId = currentBusinessUnit as BusinessId;
+          filteredBusinessUnits = filteredBusinessUnits.filter(unit => unit === currentBusinessId);
+          // Only keep menu access for current business unit
+          filteredMenuAccess = {
+            packaging: [],
+            'general-trading': [],
+            trucking: [],
+            [currentBusinessId]: filteredMenuAccess[currentBusinessId] || []
+          } as Record<BusinessId, string[]>;
+        }
+        
+        setFormState({
+          id: user.id,
+          fullName: user.fullName,
+          username: user.username,
+          email: user.email || '',
+          phone: user.phone || '',
+          role: user.role || '',
+          accessCode: user.accessCode || '',
+          isActive: user.isActive,
+          businessUnits: filteredBusinessUnits,
+          defaultBusiness: filteredBusinessUnits.length > 0 
+            ? (user.defaultBusiness && filteredBusinessUnits.includes(user.defaultBusiness) 
+                ? user.defaultBusiness 
+                : filteredBusinessUnits[0])
+            : '',
+          menuAccess: filteredMenuAccess,
+          notes: user.notes || '',
+        });
+        setFormVisible(true);
+      };
+      
+      // Check if super admin - no PIN needed
+      const currentUser = getCurrentUser();
+      if (currentUser && isDefaultAdmin(currentUser)) {
+        editAction();
+        return;
+      }
+      
+      // Show PIN dialog
+      setPendingEditAction(() => editAction);
+      setPinDialogVisible(true);
+    } catch (error: any) {
+      console.error('[UserControl] Error in handleEditUser:', error);
+      showAlert(`Error: ${error.message || 'Gagal membuka form edit'}`, 'Error');
+    }
   };
 
   const handleDeleteUser = async (user: UserAccess) => {
@@ -642,6 +841,16 @@ const UserControl = () => {
   }, [someSelected]);
 
   const handleBusinessToggle = (businessId: BusinessId) => {
+    // Check if user is super admin
+    const currentUser = getCurrentUser();
+    const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+    
+    // If not super admin, only allow toggling current business unit
+    if (!isSuperAdmin && businessId !== currentBusinessUnit) {
+      showAlert('Anda hanya dapat mengatur business unit yang sesuai dengan business unit yang dipilih.', 'Akses Ditolak');
+      return;
+    }
+    
     setFormState((prev) => {
       const exists = prev.businessUnits.includes(businessId);
       const nextUnits = exists
@@ -714,7 +923,28 @@ const UserControl = () => {
     return businessUnits.reduce<Record<BusinessId, string[]>>((acc, unit) => {
       const allowed = new Set(getAllMenuIds(unit));
       const selected = access[unit] || [];
-      acc[unit] = selected.filter((menuId) => allowed.has(menuId));
+      // Filter out invalid menu IDs and normalize paths
+      acc[unit] = selected
+        .filter((menuId) => {
+          // Check if menuId exists in allowed menus
+          if (!allowed.has(menuId)) {
+            return false;
+          }
+          // Validate format: must start with /business-unit/
+          const businessPrefix = `/${unit}/`;
+          if (!menuId.startsWith(businessPrefix)) {
+            return false;
+          }
+          return true;
+        })
+        .map((menuId) => {
+          // Normalize path: remove trailing slash, ensure proper format
+          let normalized = menuId.trim();
+          if (normalized.endsWith('/') && normalized.length > 1) {
+            normalized = normalized.slice(0, -1);
+          }
+          return normalized;
+        });
       return acc;
     }, {} as Record<BusinessId, string[]>);
   };
@@ -733,6 +963,34 @@ const UserControl = () => {
       return;
     }
 
+    // Check business unit access for non-admin users (skip for super admin)
+    const currentUser = getCurrentUser();
+    const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+    
+    // Filter business units and menu access for non-admin users
+    let finalBusinessUnits = formState.businessUnits;
+    let finalMenuAccess = formState.menuAccess;
+    
+    if (!isSuperAdmin) {
+      const hasAccess = await canEditUserControl();
+      if (!hasAccess) {
+        showAlert('Anda tidak memiliki akses untuk mengedit User Control di business unit ini.', 'Akses Ditolak');
+        return;
+      }
+      
+      // Filter to only include current business unit
+      if (currentBusinessUnit) {
+        finalBusinessUnits = finalBusinessUnits.filter(unit => unit === currentBusinessUnit as BusinessId);
+        const currentBusinessId = currentBusinessUnit as BusinessId;
+        finalMenuAccess = {
+          packaging: [],
+          'general-trading': [],
+          trucking: [],
+          [currentBusinessId]: finalMenuAccess[currentBusinessId] || []
+        } as Record<BusinessId, string[]>;
+      }
+    }
+
     setSaving(true);
     try {
       // CRITICAL: Load all users (including deleted) from storage to check for duplicates
@@ -740,10 +998,21 @@ const UserControl = () => {
       const allStoredUsers = (await storageService.get<UserAccess[]>(storageKey)) || [];
       
       const timestamp = new Date().toISOString();
-      const sanitizedAccess = sanitizeMenuAccess(formState.businessUnits, formState.menuAccess);
-      const defaultBusiness = formState.defaultBusiness && formState.businessUnits.includes(formState.defaultBusiness as BusinessId)
+      
+      // Validate and sanitize menu access before saving
+      const sanitizedAccess = sanitizeMenuAccess(finalBusinessUnits, finalMenuAccess);
+      
+      // Validate that at least one business unit has menu access if business units are selected
+      const hasAnyMenuAccess = Object.values(sanitizedAccess).some(menus => menus.length > 0);
+      if (finalBusinessUnits.length > 0 && !hasAnyMenuAccess) {
+        showAlert('Pilih minimal satu menu untuk unit bisnis yang dipilih.', 'Information');
+        setSaving(false);
+        return;
+      }
+      
+      const defaultBusiness = formState.defaultBusiness && finalBusinessUnits.includes(formState.defaultBusiness as BusinessId)
         ? (formState.defaultBusiness as BusinessId)
-        : formState.businessUnits[0];
+        : finalBusinessUnits[0];
 
       // Generate or use existing ID
       let userId = formState.id || `usr-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
@@ -776,7 +1045,7 @@ const UserControl = () => {
         role: formState.role.trim() || undefined,
         accessCode: formState.accessCode.trim() || undefined,
         isActive: formState.isActive,
-        businessUnits: formState.businessUnits,
+        businessUnits: finalBusinessUnits,
         defaultBusiness,
         menuAccess: sanitizedAccess,
         notes: formState.notes.trim() || undefined,
@@ -868,7 +1137,10 @@ const UserControl = () => {
         <div className="chip-row">
           {user.businessUnits.map((unit) => (
             <span key={unit} className="access-chip">
-              {BUSINESS_MENU_MAP[unit]?.icon} {BUSINESS_MENU_MAP[unit]?.label}
+              {(() => {
+                const config = BUSINESS_MENU_MAP[unit];
+                return config ? `${config.icon} ${config.label}` : unit;
+              })()}
             </span>
           ))}
         </div>
@@ -1030,7 +1302,7 @@ const UserControl = () => {
                       <label>Default Unit</label>
                       <strong>
                         {selectedUser.defaultBusiness
-                          ? BUSINESS_MENU_MAP[selectedUser.defaultBusiness]?.label
+                          ? (BUSINESS_MENU_MAP[selectedUser.defaultBusiness]?.label || selectedUser.defaultBusiness)
                           : '-'}
                       </strong>
                     </div>
@@ -1043,7 +1315,10 @@ const UserControl = () => {
                   <div className="chip-row">
                     {selectedUser.businessUnits.map((unit) => (
                       <span key={unit} className="access-chip large">
-                        {BUSINESS_MENU_MAP[unit]?.icon} {BUSINESS_MENU_MAP[unit]?.label}
+                        {(() => {
+                          const config = BUSINESS_MENU_MAP[unit];
+                          return config ? `${config.icon} ${config.label}` : unit;
+                        })()}
                       </span>
                     ))}
                   </div>
@@ -1054,7 +1329,10 @@ const UserControl = () => {
                       return (
                         <div key={unit} className="menu-preview-section">
                           <div className="menu-section-title">
-                            {BUSINESS_MENU_MAP[unit]?.label} ({menus.length} menu)
+                            {(() => {
+                              const config = BUSINESS_MENU_MAP[unit];
+                              return config ? `${config.label} (${menus.length} menu)` : `${unit} (${menus.length} menu)`;
+                            })()}
                           </div>
                           {menus.length === 0 ? (
                             <p className="muted-text">Belum ada menu yang dipilih.</p>
@@ -1098,6 +1376,45 @@ const UserControl = () => {
           )}
         </div>
       </div>
+
+      {/* PIN Dialog */}
+      {pinDialogVisible && (
+        <div className="dialog-overlay" onClick={() => { setPinDialogVisible(false); setPinInput(''); setPendingEditAction(null); }} style={{ zIndex: 10001 }}>
+          <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+            <div className="dialog-header">
+              <h3>Masukkan PIN</h3>
+              <button className="dialog-close" onClick={() => { setPinDialogVisible(false); setPinInput(''); setPendingEditAction(null); }}>×</button>
+            </div>
+            <div className="dialog-content">
+              <p style={{ marginBottom: '20px', color: 'var(--text-secondary)' }}>
+                Untuk mengedit User Control, masukkan PIN yang telah ditetapkan.
+              </p>
+              <div onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handlePinSubmit();
+                }
+              }}>
+                <Input
+                  label="PIN"
+                  type="password"
+                  value={pinInput}
+                  onChange={setPinInput}
+                  placeholder="Masukkan PIN"
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
+                <Button variant="secondary" onClick={() => { setPinDialogVisible(false); setPinInput(''); setPendingEditAction(null); }}>
+                  Batal
+                </Button>
+                <Button variant="primary" onClick={handlePinSubmit}>
+                  Masuk
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Form Modal Dialog */}
       {formVisible && (
@@ -1168,23 +1485,35 @@ const UserControl = () => {
               </div>
 
               <div className="business-grid-compact">
-                {BUSINESS_MENU_CONFIG.map((business) => {
-                  const selected = formState.businessUnits.includes(business.id);
-                  return (
-                    <label
-                      key={business.id}
-                      className={`business-card-compact ${selected ? 'selected' : ''}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected}
-                        onChange={() => handleBusinessToggle(business.id)}
-                      />
-                      <span className="business-icon-compact">{business.icon}</span>
-                      <span className="business-label-compact">{business.label}</span>
-                    </label>
-                  );
-                })}
+                {(() => {
+                  // Filter business units based on selectedBusiness (if not super admin)
+                  const currentUser = getCurrentUser();
+                  const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+                  
+                  // If super admin, show all business units
+                  // If not super admin, only show current business unit
+                  const availableBusinesses = isSuperAdmin 
+                    ? BUSINESS_MENU_CONFIG 
+                    : BUSINESS_MENU_CONFIG.filter(business => business.id === currentBusinessUnit);
+                  
+                  return availableBusinesses.map((business) => {
+                    const selected = formState.businessUnits.includes(business.id);
+                    return (
+                      <label
+                        key={business.id}
+                        className={`business-card-compact ${selected ? 'selected' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => handleBusinessToggle(business.id)}
+                        />
+                        <span className="business-icon-compact">{business.icon}</span>
+                        <span className="business-label-compact">{business.label}</span>
+                      </label>
+                    );
+                  });
+                })()}
               </div>
 
               {formState.businessUnits.length > 0 && (
@@ -1192,19 +1521,33 @@ const UserControl = () => {
                   <div className="default-business">
                     <label>Default unit ketika login:</label>
                     <div className="radio-row">
-                      {formState.businessUnits.map((unit) => (
-                        <label key={unit} className="radio-option">
-                          <input
-                            type="radio"
-                            value={unit}
-                            checked={formState.defaultBusiness === unit}
-                            onChange={() =>
-                              setFormState((prev) => ({ ...prev, defaultBusiness: unit }))
-                            }
-                          />
-                          {BUSINESS_MENU_MAP[unit]?.label}
-                        </label>
-                      ))}
+                      {(() => {
+                        // Filter business units based on current business unit (if not super admin)
+                        const currentUser = getCurrentUser();
+                        const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+                        
+                        const unitsToShow = isSuperAdmin 
+                          ? formState.businessUnits 
+                          : formState.businessUnits.filter(unit => unit === currentBusinessUnit);
+                        
+                        return unitsToShow.map((unit) => {
+                          const config = BUSINESS_MENU_MAP[unit];
+                          if (!config) return null; // Skip if business unit not found
+                          return (
+                            <label key={unit} className="radio-option">
+                              <input
+                                type="radio"
+                                value={unit}
+                                checked={formState.defaultBusiness === unit}
+                                onChange={() =>
+                                  setFormState((prev) => ({ ...prev, defaultBusiness: unit }))
+                                }
+                              />
+                              {config.label}
+                            </label>
+                          );
+                        });
+                      })()}
                     </div>
                   </div>
 
@@ -1218,55 +1561,66 @@ const UserControl = () => {
                   </div>
 
                   <div className="menu-access-list">
-                    {formState.businessUnits.map((unit) => {
-                      const config = BUSINESS_MENU_MAP[unit];
-                      const allMenus = getAllMenuIds(unit);
-                      const selectedMenus = formState.menuAccess[unit] || [];
+                    {(() => {
+                      // Filter business units based on current business unit (if not super admin)
+                      const currentUser = getCurrentUser();
+                      const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+                      
+                      const unitsToShow = isSuperAdmin 
+                        ? formState.businessUnits 
+                        : formState.businessUnits.filter(unit => unit === currentBusinessUnit);
+                      
+                      return unitsToShow.map((unit) => {
+                        const config = BUSINESS_MENU_MAP[unit];
+                        if (!config) return null; // Skip if business unit not found in config
+                        const allMenus = getAllMenuIds(unit);
+                        const selectedMenus = formState.menuAccess[unit] || [];
 
-                      return (
-                        <div key={unit} className="menu-access-card">
-                          <div className="menu-access-header">
-                            <div>
-                              <h4>{config.label}</h4>
-                              <span className="muted-text">
-                                {selectedMenus.length}/{allMenus.length} menu
-                              </span>
-                            </div>
-                            <div className="menu-actions">
-                              <Button
-                                variant="secondary"
-                                onClick={() => handleSelectAllMenus(unit)}
-                              >
-                                Pilih Semua
-                              </Button>
-                              <Button variant="secondary" onClick={() => handleClearMenus(unit)}>
-                                Bersihkan
-                              </Button>
-                            </div>
-                          </div>
-                          {config.sections.map((section) => (
-                            <div key={section.id} className="menu-section">
-                              <div className="menu-section-title">{section.title}</div>
-                              <div className="menu-checkbox-grid">
-                                {section.items.map((item) => {
-                                  const checked = selectedMenus.includes(item.id);
-                                  return (
-                                    <label key={item.id} className="checkbox-option">
-                                      <input
-                                        type="checkbox"
-                                        checked={checked}
-                                        onChange={() => handleMenuToggle(unit, item.id)}
-                                      />
-                                      <span>{item.label}</span>
-                                    </label>
-                                  );
-                                })}
+                        return (
+                          <div key={unit} className="menu-access-card">
+                            <div className="menu-access-header">
+                              <div>
+                                <h4>{config.label}</h4>
+                                <span className="muted-text">
+                                  {selectedMenus.length}/{allMenus.length} menu
+                                </span>
+                              </div>
+                              <div className="menu-actions">
+                                <Button
+                                  variant="secondary"
+                                  onClick={() => handleSelectAllMenus(unit)}
+                                >
+                                  Pilih Semua
+                                </Button>
+                                <Button variant="secondary" onClick={() => handleClearMenus(unit)}>
+                                  Bersihkan
+                                </Button>
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      );
-                    })}
+                            {config.sections.map((section) => (
+                              <div key={section.id} className="menu-section">
+                                <div className="menu-section-title">{section.title}</div>
+                                <div className="menu-checkbox-grid">
+                                  {section.items.map((item) => {
+                                    const checked = selectedMenus.includes(item.id);
+                                    return (
+                                      <label key={item.id} className="checkbox-option">
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          onChange={() => handleMenuToggle(unit, item.id)}
+                                        />
+                                        <span>{item.label}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
                 </>
               )}

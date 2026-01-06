@@ -6,8 +6,7 @@ import Table from '../../../components/Table';
 import { storageService, BusinessType } from '../../../services/storage';
 import { safeDeleteMultipleItems, filterActiveItems } from '../../../utils/data-persistence-helper';
 import { getCurrentUser, isDefaultAdmin } from '../../../utils/access-control-helper';
-import '../../../styles/common.css';
-import '../../../styles/compact.css';
+import '../../Settings/UserControl.css';
 
 type BusinessId = BusinessType;
 
@@ -45,6 +44,7 @@ const BUSINESS_MENU_CONFIG: BusinessMenuConfig[] = [
         title: 'Master Data',
         items: [
           { id: '/packaging/master/products', label: 'Products', path: '/packaging/master/products' },
+          { id: '/packaging/master/materials', label: 'Materials', path: '/packaging/master/materials' },
           { id: '/packaging/master/customers', label: 'Customers', path: '/packaging/master/customers' },
           { id: '/packaging/master/suppliers', label: 'Suppliers', path: '/packaging/master/suppliers' },
           { id: '/packaging/master/inventory', label: 'Inventory', path: '/packaging/master/inventory' },
@@ -213,30 +213,29 @@ const BUSINESS_MENU_CONFIG: BusinessMenuConfig[] = [
         ],
       },
       {
-        id: 'trucking-shipments',
-        title: 'Shipments & trucking',
+        id: 'trucking-operations',
+        title: 'Operations',
         items: [
           { id: '/trucking/shipments/delivery-orders', label: 'Delivery Orders', path: '/trucking/shipments/delivery-orders' },
-          { id: '/trucking/shipments/trucking', label: 'Shipment trucking', path: '/trucking/shipments/trucking' },
-          { id: '/trucking/trucking/realtime', label: 'Real-time Location', path: '/trucking/trucking/realtime' },
-          { id: '/trucking/trucking/status', label: 'Status Updates', path: '/trucking/trucking/status' },
-        ],
-      },
-      {
-        id: 'trucking-schedules',
-        title: 'Schedules',
-        items: [
-          { id: '/trucking/schedules/route-planning', label: 'Route Planning', path: '/trucking/schedules/route-planning' },
-          { id: '/trucking/schedules/delivery', label: 'Delivery Schedules', path: '/trucking/schedules/delivery' },
+          { id: '/trucking/unit-scheduling', label: 'Pengaturan Unit', path: '/trucking/unit-scheduling' },
+          { id: '/trucking/finance/pettycash', label: 'Petty Cash', path: '/trucking/finance/pettycash' },
+          { id: '/trucking/shipments/surat-jalan', label: 'Surat Jalan', path: '/trucking/shipments/surat-jalan' },
         ],
       },
       {
         id: 'trucking-finance',
         title: 'Finance',
         items: [
-          { id: '/trucking/finance/billing', label: 'Billing', path: '/trucking/finance/billing' },
+          { id: '/trucking/finance/invoices', label: 'Invoices', path: '/trucking/finance/invoices' },
           { id: '/trucking/finance/payments', label: 'Payments', path: '/trucking/finance/payments' },
-          { id: '/trucking/finance/pettycash', label: 'Petty Cash', path: '/trucking/finance/pettycash' },
+          { id: '/trucking/finance/accounting', label: 'Accounting', path: '/trucking/finance/accounting' },
+          { id: '/trucking/finance/ledger', label: 'General Ledger', path: '/trucking/finance/ledger' },
+          { id: '/trucking/finance/reports', label: 'Financial Reports', path: '/trucking/finance/reports' },
+          { id: '/trucking/finance/ar', label: 'Accounts Receivable', path: '/trucking/finance/ar' },
+          { id: '/trucking/finance/ap', label: 'Accounts Payable', path: '/trucking/finance/ap' },
+          { id: '/trucking/finance/tax-management', label: 'Tax Management', path: '/trucking/finance/tax-management' },
+          { id: '/trucking/finance/cost-analysis', label: 'Cost Analysis', path: '/trucking/finance/cost-analysis' },
+          { id: '/trucking/finance/coa', label: 'COA', path: '/trucking/finance/coa' },
         ],
       },
       {
@@ -244,6 +243,8 @@ const BUSINESS_MENU_CONFIG: BusinessMenuConfig[] = [
         title: 'Settings',
         items: [
           { id: '/trucking/settings', label: 'Settings', path: '/trucking/settings' },
+          { id: '/trucking/settings/db-activity', label: 'DB Activity', path: '/trucking/settings/db-activity' },
+          { id: '/trucking/settings/user-control', label: 'User Control', path: '/trucking/settings/user-control' },
         ],
       },
     ],
@@ -286,6 +287,9 @@ interface UserAccess {
   notes?: string;
   createdAt: string;
   updatedAt: string;
+  deleted?: boolean;
+  deletedAt?: string;
+  deletedTimestamp?: number;
 }
 
 interface UserFormState {
@@ -347,6 +351,7 @@ const UserControl = () => {
   const [pinInput, setPinInput] = useState('');
   const [pendingEditAction, setPendingEditAction] = useState<(() => void) | null>(null);
   const [currentBusinessUnit, setCurrentBusinessUnit] = useState<string>('');
+  const [currentUserBusinessUnits, setCurrentUserBusinessUnits] = useState<BusinessId[]>([]);
   
   // Custom Dialog state
   const [dialogState, setDialogState] = useState<{
@@ -413,51 +418,50 @@ const UserControl = () => {
     const storageKey = 'userAccessControl';
     
     // Migration: Merge data from old business-specific keys if they exist
-    const oldGTKey = 'general-trading_userAccessControl';
     const oldTruckingKey = 'trucking_userAccessControl';
-    const oldGTData = (await storageService.get<UserAccess[]>(oldGTKey)) || [];
     const oldTruckingData = (await storageService.get<UserAccess[]>(oldTruckingKey)) || [];
     const currentData = (await storageService.get<UserAccess[]>(storageKey)) || [];
     
-    // Merge: Combine data from old keys and current key, deduplicate by ID
+    // CRITICAL: Combine all data sources first
+    const allDataSources = [...currentData, ...oldTruckingData];
+    
+    // Merge: Combine data from old key and current key, deduplicate by ID
     // CRITICAL: Use Map to ensure ID uniqueness - last one wins if duplicate
     const mergedUsers = new Map<string, UserAccess>();
     
-    // Add current data first (priority)
-    currentData.forEach(user => {
+    // Add all users, keeping the one with latest updatedAt if duplicate
+    // Also migrate "trucking" to "trucking" for backward compatibility
+    allDataSources.forEach(user => {
       if (user && user.id) {
-        // If duplicate ID exists, keep the one with latest updatedAt
+        // Migrate "trucking" to "trucking" in businessUnits
+        if (user.businessUnits && Array.isArray(user.businessUnits)) {
+          user.businessUnits = user.businessUnits.map((unit: string) => 
+            unit === 'trucking' ? 'trucking' : unit
+          ) as BusinessId[];
+        }
+        
+        // Migrate "trucking" to "trucking" in defaultBusiness
+        if ((user.defaultBusiness as any) === 'trucking') {
+          user.defaultBusiness = 'trucking';
+        }
+        
+        // Migrate "trucking" to "trucking" in menuAccess keys
+        const menuAccessAny = user.menuAccess as any;
+        if (menuAccessAny && menuAccessAny['trucking']) {
+          menuAccessAny['trucking'] = menuAccessAny['trucking'];
+          // Remove 'trucking' key by creating new object without it
+          const { trucking, ...rest } = menuAccessAny;
+          Object.assign(user.menuAccess, rest);
+        }
+        
         const existing = mergedUsers.get(user.id);
-        if (!existing || (user.updatedAt && existing.updatedAt && user.updatedAt > existing.updatedAt)) {
-          mergedUsers.set(user.id, user);
-        }
-      }
-    });
-    
-    // Add old GT data if not already exists
-    oldGTData.forEach(user => {
-      if (user && user.id) {
-        if (!mergedUsers.has(user.id)) {
+        if (!existing) {
           mergedUsers.set(user.id, user);
         } else {
           // If duplicate, keep the one with latest updatedAt
-          const existing = mergedUsers.get(user.id);
-          if (user.updatedAt && existing?.updatedAt && user.updatedAt > existing.updatedAt) {
-            mergedUsers.set(user.id, user);
-          }
-        }
-      }
-    });
-    
-    // Add old Trucking data if not already exists
-    oldTruckingData.forEach(user => {
-      if (user && user.id) {
-        if (!mergedUsers.has(user.id)) {
-          mergedUsers.set(user.id, user);
-        } else {
-          // If duplicate, keep the one with latest updatedAt
-          const existing = mergedUsers.get(user.id);
-          if (user.updatedAt && existing?.updatedAt && user.updatedAt > existing.updatedAt) {
+          const existingUpdatedAt = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+          const userUpdatedAt = user.updatedAt ? new Date(user.updatedAt).getTime() : 0;
+          if (userUpdatedAt > existingUpdatedAt) {
             mergedUsers.set(user.id, user);
           }
         }
@@ -466,18 +470,33 @@ const UserControl = () => {
     
     const stored = Array.from(mergedUsers.values());
     
-    // If duplicates were found and removed, save cleaned data back
-    const totalBeforeDedup = currentData.length + oldGTData.length + oldTruckingData.length;
-    if (stored.length < totalBeforeDedup) {
+    // Save migrated data back if migration occurred
+    let needsSave = false;
+    stored.forEach(user => {
+      const hastrucking = user.businessUnits?.includes('trucking' as any) || 
+                         (user.defaultBusiness as any) === 'trucking' ||
+                         (user.menuAccess && (user.menuAccess as any)['trucking']);
+      if (hastrucking) {
+        needsSave = true;
+      }
+    });
+    
+    if (needsSave) {
       await storageService.set(storageKey, stored);
-      console.log(`[UserControl] Removed ${totalBeforeDedup - stored.length} duplicate users (by ID)`);
+      console.log(`[UserControl] Migrated "trucking" to "trucking" in user data`);
     }
     
-    // If we merged data, save it back to unified key
-    const totalOldData = oldGTData.length + oldTruckingData.length;
-    if (totalOldData > 0 && stored.length > currentData.length) {
+    // CRITICAL: Always save deduplicated data back to ensure consistency
+    // This prevents duplicates from accumulating
+    if (stored.length !== allDataSources.length) {
       await storageService.set(storageKey, stored);
-      console.log(`[UserControl] Migrated ${totalOldData} users from old keys to ${storageKey}`);
+      console.log(`[UserControl] Deduplicated: ${allDataSources.length} -> ${stored.length} users (removed ${allDataSources.length - stored.length} duplicates)`);
+    }
+    
+    // If we merged data from old key, save it back to unified key
+    if (oldTruckingData.length > 0 && stored.length > currentData.length) {
+      await storageService.set(storageKey, stored);
+      console.log(`[UserControl] Migrated ${oldTruckingData.length} users from ${oldTruckingKey} to ${storageKey}`);
     }
     
     // Filter out deleted users for display using filterActiveItems helper
@@ -501,8 +520,7 @@ const UserControl = () => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ key?: string }>).detail;
       const storageKey = detail?.key?.split('/').pop();
-      // Listen for both GT and Trucking storage keys
-      if (storageKey === 'userAccessControl' || storageKey === 'general-trading_userAccessControl' || storageKey === 'trucking_userAccessControl' || storageKey === 'packaging_userAccessControl') {
+      if (storageKey === 'userAccessControl' || storageKey === 'trucking_userAccessControl') {
         loadUsers();
       }
     };
@@ -513,18 +531,108 @@ const UserControl = () => {
     };
   }, [loadUsers]);
 
+  // Get current user's business units
+  useEffect(() => {
+    const loadCurrentUserBusinessUnits = async () => {
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        setCurrentUserBusinessUnits([]);
+        return;
+      }
+      
+      // Super admin has access to all business units
+      if (isDefaultAdmin(currentUser)) {
+        setCurrentUserBusinessUnits(['packaging', 'general-trading', 'trucking']);
+        return;
+      }
+      
+      // Get current user's business units from storage
+      const allUsers = await storageService.get<UserAccess[]>('userAccessControl') || [];
+      const currentUserData = allUsers.find(u => u.id === currentUser.id);
+      // For Trucking UserControl, get all business units (not filtered) for proper filtering logic
+      // Filter akan dilakukan di filteredUsers berdasarkan apakah user punya trucking atau tidak
+      const userBusinessUnits = currentUserData?.businessUnits || [];
+      setCurrentUserBusinessUnits(userBusinessUnits);
+    };
+    
+    loadCurrentUserBusinessUnits();
+  }, [users]); // Reload when users change
+
   const filteredUsers = useMemo(() => {
-    if (!searchQuery) return users;
+    // Filter by business unit first (if not super admin)
+    const currentUser = getCurrentUser();
+    const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+    
+    let businessFilteredUsers = users;
+    if (!isSuperAdmin && currentUserBusinessUnits.length > 0) {
+      // For Trucking UserControl: Same logic as Packaging
+      // User yang punya akses ke 3 business unit (Packaging + GT + Trucking) bisa lihat semua user yang punya Trucking
+      // User yang punya akses kurang dari 3 hanya bisa lihat user yang business units-nya sama persis
+      const hasAllThreeBusinessUnits = currentUserBusinessUnits.length === 3 && 
+        currentUserBusinessUnits.includes('packaging' as BusinessId) &&
+        currentUserBusinessUnits.includes('general-trading' as BusinessId) &&
+        currentUserBusinessUnits.includes('trucking' as BusinessId);
+      
+      if (hasAllThreeBusinessUnits) {
+        // User dengan 3 business units bisa lihat semua user yang punya Trucking
+        businessFilteredUsers = users.filter((user) => {
+          return user.businessUnits.includes('trucking' as BusinessId);
+        });
+      } else {
+        // User dengan kurang dari 3 business units hanya bisa lihat user yang business units-nya sama persis
+        // Tapi tetap harus punya Trucking
+        businessFilteredUsers = users.filter((user) => {
+          // User harus punya Trucking
+          if (!user.businessUnits.includes('trucking' as BusinessId)) {
+            return false;
+          }
+          
+          // Check if user has the same business units as current user
+          if (user.businessUnits.length !== currentUserBusinessUnits.length) {
+            return false;
+          }
+          
+          // Check if all business units match
+          const userUnitsSet = new Set(user.businessUnits);
+          const currentUnitsSet = new Set(currentUserBusinessUnits);
+          
+          // Check if sets are equal
+          if (userUnitsSet.size !== currentUnitsSet.size) {
+            return false;
+          }
+          
+          for (const unit of userUnitsSet) {
+            if (!currentUnitsSet.has(unit)) {
+              return false;
+            }
+          }
+          
+          return true;
+        });
+      }
+    } else if (!isSuperAdmin) {
+      // If currentUserBusinessUnits is empty (user belum di-load), show all users with trucking access temporarily
+      // This will be filtered once currentUserBusinessUnits is loaded
+      businessFilteredUsers = users.filter((user) => {
+        return user.businessUnits.includes('trucking' as BusinessId);
+      });
+    }
+    
+    // Then filter by search query
+    if (!searchQuery) return businessFilteredUsers;
     const query = searchQuery.toLowerCase();
-    return users.filter((user) => {
+    return businessFilteredUsers.filter((user) => {
       return (
         user.fullName.toLowerCase().includes(query) ||
         (user.username || '').toLowerCase().includes(query) ||
         (user.role || '').toLowerCase().includes(query) ||
-        user.businessUnits.some((unit) => BUSINESS_MENU_MAP[unit]?.label.toLowerCase().includes(query))
+        user.businessUnits.some((unit) => {
+          const config = BUSINESS_MENU_MAP[unit];
+          return config?.label?.toLowerCase().includes(query) || false;
+        })
       );
     });
-  }, [users, searchQuery]);
+  }, [users, searchQuery, currentUserBusinessUnits]);
 
   useEffect(() => {
     if (!selectedUser && filteredUsers.length > 0) {
@@ -541,10 +649,9 @@ const UserControl = () => {
     setFormVisible(true);
   };
 
-  // Get current business unit from localStorage
+  // Get current business unit from localStorage - always trucking for Trucking UserControl
   useEffect(() => {
-    const selectedBusiness = localStorage.getItem('selectedBusiness') || '';
-    setCurrentBusinessUnit(selectedBusiness);
+    setCurrentBusinessUnit('trucking');
   }, []);
 
   // Get User Control PIN
@@ -558,14 +665,23 @@ const UserControl = () => {
     const currentUser = getCurrentUser();
     if (!currentUser) return false;
     
-    // Super admin can always edit
+    // Super admin can always edit (no business unit check needed)
     if (isDefaultAdmin(currentUser)) return true;
+    
+    // If no business unit selected, check if user has access to any business unit
+    if (!currentBusinessUnit) {
+      const users = await storageService.get<UserAccess[]>('userAccessControl') || [];
+      const userData = users.find(u => u.id === currentUser.id);
+      if (!userData || !userData.isActive || userData.deleted) return false;
+      // If user has at least one business unit, allow edit (for Super Admin context)
+      return userData.businessUnits.length > 0;
+    }
     
     // Check if user has access to User Control menu in current business unit
     const users = await storageService.get<UserAccess[]>('userAccessControl') || [];
     const userData = users.find(u => u.id === currentUser.id);
     
-    if (!userData || !userData.isActive) return false;
+    if (!userData || !userData.isActive || userData.deleted) return false;
     
     // Check if user has access to current business unit
     if (!userData.businessUnits.includes(currentBusinessUnit as BusinessId)) return false;
@@ -607,35 +723,70 @@ const UserControl = () => {
   };
 
   const handleEditUser = (user: UserAccess) => {
-    // Store the edit action
-    const editAction = () => {
-      setFormState({
-        id: user.id,
-        fullName: user.fullName,
-        username: user.username,
-        email: user.email || '',
-        phone: user.phone || '',
-        role: user.role || '',
-        accessCode: user.accessCode || '',
-        isActive: user.isActive,
-        businessUnits: user.businessUnits,
-        defaultBusiness: user.defaultBusiness || user.businessUnits[0] || '',
-        menuAccess: user.menuAccess || {},
-        notes: user.notes || '',
-      });
-      setFormVisible(true);
-    };
-    
-    // Check if super admin - no PIN needed
-    const currentUser = getCurrentUser();
-    if (currentUser && isDefaultAdmin(currentUser)) {
-      editAction();
-      return;
+    try {
+      // Store the edit action
+      const editAction = () => {
+        const currentUser = getCurrentUser();
+        const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+        
+        // Filter business units based on current business unit (if not super admin)
+        // For Trucking UserControl: Always ensure trucking is included and menu access is initialized
+        let filteredBusinessUnits = user.businessUnits || [];
+        let filteredMenuAccess = user.menuAccess || {};
+        
+        if (!isSuperAdmin) {
+          // For Trucking UserControl: Only keep trucking business unit
+          const truckingBusinessId = 'trucking' as BusinessId;
+          filteredBusinessUnits = filteredBusinessUnits.filter(unit => unit === truckingBusinessId);
+          
+          // If user doesn't have trucking in businessUnits, add it
+          if (!filteredBusinessUnits.includes(truckingBusinessId)) {
+            filteredBusinessUnits = [truckingBusinessId];
+          }
+          
+          // Only keep menu access for trucking, ensure it's initialized even if empty
+          filteredMenuAccess = {
+            packaging: [],
+            'general-trading': [],
+            trucking: filteredMenuAccess[truckingBusinessId] || []
+          } as Record<BusinessId, string[]>;
+        }
+        
+        setFormState({
+          id: user.id,
+          fullName: user.fullName,
+          username: user.username,
+          email: user.email || '',
+          phone: user.phone || '',
+          role: user.role || '',
+          accessCode: user.accessCode || '',
+          isActive: user.isActive,
+          businessUnits: filteredBusinessUnits,
+          defaultBusiness: filteredBusinessUnits.length > 0 
+            ? (user.defaultBusiness && filteredBusinessUnits.includes(user.defaultBusiness) 
+                ? user.defaultBusiness 
+                : filteredBusinessUnits[0])
+            : '',
+          menuAccess: filteredMenuAccess,
+          notes: user.notes || '',
+        });
+        setFormVisible(true);
+      };
+      
+      // Check if super admin - no PIN needed
+      const currentUser = getCurrentUser();
+      if (currentUser && isDefaultAdmin(currentUser)) {
+        editAction();
+        return;
+      }
+      
+      // Show PIN dialog
+      setPendingEditAction(() => editAction);
+      setPinDialogVisible(true);
+    } catch (error: any) {
+      console.error('[UserControl] Error in handleEditUser:', error);
+      showAlert(`Error: ${error.message || 'Gagal membuka form edit'}`, 'Error');
     }
-    
-    // Show PIN dialog
-    setPendingEditAction(() => editAction);
-    setPinDialogVisible(true);
   };
 
   const handleDeleteUser = async (user: UserAccess) => {
@@ -673,14 +824,95 @@ const UserControl = () => {
           return prev;
         });
         
-        console.log(`[UserControl-GT] Safely deleted user ${user.fullName} (ID: ${user.id}) using tombstone pattern`);
+        console.log(`[UserControl] Safely deleted user ${user.fullName} (ID: ${user.id}) using tombstone pattern`);
       },
       undefined,
       'Confirm Delete'
     );
   };
 
+  // Handle bulk delete (multiple users)
+  const handleBulkDelete = async () => {
+    if (selectedUserIds.size === 0) {
+      showAlert('Pilih minimal satu user untuk dihapus.', 'Information');
+      return;
+    }
+
+    const selectedUsers = users.filter(u => selectedUserIds.has(u.id));
+    const userNames = selectedUsers.map(u => u.fullName).join(', ');
+    
+    showConfirm(
+      `Hapus ${selectedUserIds.size} user berikut?\n${userNames}`,
+      async () => {
+        const storageKey = 'userAccessControl';
+        
+        // Use safeDeleteMultipleItems for bulk delete with tombstone pattern
+        const userIds = Array.from(selectedUserIds);
+        const result = await safeDeleteMultipleItems(storageKey, userIds, 'id');
+        
+        if (result.failed > 0) {
+          showAlert(`Gagal menghapus ${result.failed} user. ${result.success} user berhasil dihapus.`, 'Warning');
+        } else {
+          showAlert(`Berhasil menghapus ${result.success} user.`, 'Success');
+        }
+        
+        // Reload users to refresh display
+        await loadUsers();
+        
+        // Clear selection
+        setSelectedUserIds(new Set());
+        
+        console.log(`[UserControl] Bulk deleted ${result.success} users using tombstone pattern`);
+      },
+      undefined,
+      'Confirm Bulk Delete'
+    );
+  };
+
+  // Handle select all checkbox
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedUserIds(new Set(filteredUsers.map(u => u.id)));
+    } else {
+      setSelectedUserIds(new Set());
+    }
+  };
+
+  // Handle individual checkbox
+  const handleSelectUserCheckbox = (userId: string, checked: boolean) => {
+    setSelectedUserIds(prev => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(userId);
+      } else {
+        next.delete(userId);
+      }
+      return next;
+    });
+  };
+
+  const allSelected = filteredUsers.length > 0 && selectedUserIds.size === filteredUsers.length;
+  const someSelected = selectedUserIds.size > 0 && selectedUserIds.size < filteredUsers.length;
+  const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
+
+  // Update indeterminate state of select all checkbox
+  useEffect(() => {
+    if (selectAllCheckboxRef.current) {
+      selectAllCheckboxRef.current.indeterminate = someSelected;
+    }
+  }, [someSelected]);
+
   const handleBusinessToggle = (businessId: BusinessId) => {
+    // Check if user is super admin
+    const currentUser = getCurrentUser();
+    const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+    
+    // If not super admin, only allow toggling trucking business unit
+    if (!isSuperAdmin && businessId !== 'trucking') {
+      showAlert('Anda hanya dapat mengatur business unit Trucking.', 'Akses Ditolak');
+      return;
+    }
+    
     setFormState((prev) => {
       const exists = prev.businessUnits.includes(businessId);
       const nextUnits = exists
@@ -793,14 +1025,28 @@ const UserControl = () => {
       return;
     }
 
-    // Check business unit access for non-admin users
+    // Check business unit access for non-admin users (skip for super admin)
     const currentUser = getCurrentUser();
-    if (currentUser && !isDefaultAdmin(currentUser)) {
+    const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+    
+    // Filter business units and menu access for non-admin users
+    let finalBusinessUnits = formState.businessUnits;
+    let finalMenuAccess = formState.menuAccess;
+    
+    if (!isSuperAdmin) {
       const hasAccess = await canEditUserControl();
       if (!hasAccess) {
         showAlert('Anda tidak memiliki akses untuk mengedit User Control di business unit ini.', 'Akses Ditolak');
         return;
       }
+      
+      // Filter to only include trucking business unit for non-admin users
+      finalBusinessUnits = finalBusinessUnits.filter(unit => unit === 'trucking');
+      finalMenuAccess = {
+        packaging: [],
+        'general-trading': [],
+        trucking: finalMenuAccess['trucking'] || []
+      } as Record<BusinessId, string[]>;
     }
 
     setSaving(true);
@@ -810,10 +1056,21 @@ const UserControl = () => {
       const allStoredUsers = (await storageService.get<UserAccess[]>(storageKey)) || [];
       
       const timestamp = new Date().toISOString();
-      const sanitizedAccess = sanitizeMenuAccess(formState.businessUnits, formState.menuAccess);
-      const defaultBusiness = formState.defaultBusiness && formState.businessUnits.includes(formState.defaultBusiness as BusinessId)
+      
+      // Validate and sanitize menu access before saving
+      const sanitizedAccess = sanitizeMenuAccess(finalBusinessUnits, finalMenuAccess);
+      
+      // Validate that at least one business unit has menu access if business units are selected
+      const hasAnyMenuAccess = Object.values(sanitizedAccess).some(menus => menus.length > 0);
+      if (finalBusinessUnits.length > 0 && !hasAnyMenuAccess) {
+        showAlert('Pilih minimal satu menu untuk unit bisnis yang dipilih.', 'Information');
+        setSaving(false);
+        return;
+      }
+      
+      const defaultBusiness = formState.defaultBusiness && finalBusinessUnits.includes(formState.defaultBusiness as BusinessId)
         ? (formState.defaultBusiness as BusinessId)
-        : formState.businessUnits[0];
+        : finalBusinessUnits[0];
 
       // Generate or use existing ID
       let userId = formState.id || `usr-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
@@ -846,7 +1103,7 @@ const UserControl = () => {
         role: formState.role.trim() || undefined,
         accessCode: formState.accessCode.trim() || undefined,
         isActive: formState.isActive,
-        businessUnits: formState.businessUnits,
+        businessUnits: finalBusinessUnits,
         defaultBusiness,
         menuAccess: sanitizedAccess,
         notes: formState.notes.trim() || undefined,
@@ -883,7 +1140,7 @@ const UserControl = () => {
       setFormVisible(false);
       showAlert('User access tersimpan ✅', 'Success');
       
-      console.log(`[UserControl-GT] Saved user ${payload.fullName} (ID: ${payload.id}) - ensured ID uniqueness`);
+      console.log(`[UserControl] Saved user ${payload.fullName} (ID: ${payload.id}) - ensured ID uniqueness`);
     } catch (error: any) {
       console.error(error);
       showAlert(`Gagal menyimpan user: ${error.message || error}`, 'Error');
@@ -891,77 +1148,6 @@ const UserControl = () => {
       setSaving(false);
     }
   };
-
-  // Handle bulk delete (multiple users)
-  const handleBulkDelete = async () => {
-    if (selectedUserIds.size === 0) {
-      showAlert('Pilih minimal satu user untuk dihapus.', 'Information');
-      return;
-    }
-
-    const selectedUsers = users.filter(u => selectedUserIds.has(u.id));
-    const userNames = selectedUsers.map(u => u.fullName).join(', ');
-    
-    showConfirm(
-      `Hapus ${selectedUserIds.size} user berikut?\n${userNames}`,
-      async () => {
-        const storageKey = 'userAccessControl';
-        
-        // Use safeDeleteMultipleItems for bulk delete with tombstone pattern
-        const userIds = Array.from(selectedUserIds);
-        const result = await safeDeleteMultipleItems(storageKey, userIds, 'id');
-        
-        if (result.failed > 0) {
-          showAlert(`Gagal menghapus ${result.failed} user. ${result.success} user berhasil dihapus.`, 'Warning');
-        } else {
-          showAlert(`Berhasil menghapus ${result.success} user.`, 'Success');
-        }
-        
-        // Reload users to refresh display
-        await loadUsers();
-        
-        // Clear selection
-        setSelectedUserIds(new Set());
-        
-        console.log(`[UserControl-GT] Bulk deleted ${result.success} users using tombstone pattern`);
-      },
-      undefined,
-      'Confirm Bulk Delete'
-    );
-  };
-
-  // Handle select all checkbox
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedUserIds(new Set(filteredUsers.map(u => u.id)));
-    } else {
-      setSelectedUserIds(new Set());
-    }
-  };
-
-  // Handle individual checkbox
-  const handleSelectUserCheckbox = (userId: string, checked: boolean) => {
-    setSelectedUserIds(prev => {
-      const next = new Set(prev);
-      if (checked) {
-        next.add(userId);
-      } else {
-        next.delete(userId);
-      }
-      return next;
-    });
-  };
-
-  const allSelected = filteredUsers.length > 0 && selectedUserIds.size === filteredUsers.length;
-  const someSelected = selectedUserIds.size > 0 && selectedUserIds.size < filteredUsers.length;
-  const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
-
-  // Update indeterminate state of select all checkbox
-  useEffect(() => {
-    if (selectAllCheckboxRef.current) {
-      selectAllCheckboxRef.current.indeterminate = someSelected;
-    }
-  }, [someSelected]);
 
   const handleCancelForm = () => {
     setFormState(createEmptyForm());
@@ -1009,7 +1195,10 @@ const UserControl = () => {
         <div className="chip-row">
           {user.businessUnits.map((unit) => (
             <span key={unit} className="access-chip">
-              {BUSINESS_MENU_MAP[unit]?.icon} {BUSINESS_MENU_MAP[unit]?.label}
+              {(() => {
+                const config = BUSINESS_MENU_MAP[unit];
+                return config ? `${config.icon} ${config.label}` : unit;
+              })()}
             </span>
           ))}
         </div>
@@ -1050,7 +1239,8 @@ const UserControl = () => {
         <div className="table-actions">
           <Button
             variant="secondary"
-            onClick={() => {
+            onClick={(e) => {
+              e?.stopPropagation();
               handleEditUser(user);
             }}
           >
@@ -1058,7 +1248,8 @@ const UserControl = () => {
           </Button>
           <Button
             variant="danger"
-            onClick={() => {
+            onClick={(e) => {
+              e?.stopPropagation();
               handleDeleteUser(user);
             }}
           >
@@ -1070,11 +1261,25 @@ const UserControl = () => {
   ];
 
   const stats = useMemo(() => {
-    const total = users.length;
-    const active = users.filter((u) => u.isActive).length;
-    const businessUsage = BUSINESS_MENU_CONFIG.map((config) => ({
+    const currentUser = getCurrentUser();
+    const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+    
+    // For Trucking UserControl: Calculate stats based on filtered users, not all users
+    const filteredForStats = isSuperAdmin 
+      ? users 
+      : users.filter((u) => u.businessUnits.includes('trucking' as BusinessId));
+    
+    const total = filteredForStats.length;
+    const active = filteredForStats.filter((u) => u.isActive).length;
+    
+    // For Trucking UserControl: Only show trucking stats for non-admin
+    const businessConfigsToShow = isSuperAdmin 
+      ? BUSINESS_MENU_CONFIG 
+      : BUSINESS_MENU_CONFIG.filter(config => config.id === 'trucking');
+    
+    const businessUsage = businessConfigsToShow.map((config) => ({
       ...config,
-      count: users.filter((u) => u.businessUnits.includes(config.id)).length,
+      count: filteredForStats.filter((u) => u.businessUnits.includes(config.id)).length,
     }));
     return { total, active, businessUsage };
   }, [users]);
@@ -1168,47 +1373,95 @@ const UserControl = () => {
                     <div>
                       <label>Default Unit</label>
                       <strong>
-                        {selectedUser.defaultBusiness
-                          ? BUSINESS_MENU_MAP[selectedUser.defaultBusiness]?.label
-                          : '-'}
+                        {(() => {
+                          const currentUser = getCurrentUser();
+                          const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+                          // For Trucking UserControl: Only show trucking default unit for non-admin
+                          if (!isSuperAdmin && selectedUser.defaultBusiness && selectedUser.defaultBusiness !== 'trucking') {
+                            return 'Trucking'; // Show trucking even if default is other unit
+                          }
+                          // Handle migration: if defaultBusiness is "trucking", show "Trucking"
+                          const defaultBusiness = (selectedUser.defaultBusiness as any) === 'trucking' 
+                            ? 'trucking' 
+                            : selectedUser.defaultBusiness;
+                          return defaultBusiness
+                            ? (BUSINESS_MENU_MAP[defaultBusiness]?.label || (defaultBusiness === 'trucking' ? 'Trucking' : defaultBusiness))
+                            : '-';
+                        })()}
                       </strong>
                     </div>
                     <div>
                       <label>Total Menu</label>
-                      <strong>{getMenuCount(selectedUser.menuAccess)}</strong>
+                      <strong>
+                        {(() => {
+                          const currentUser = getCurrentUser();
+                          const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+                          // For Trucking UserControl: Only count trucking menus for non-admin
+                          if (!isSuperAdmin) {
+                            return selectedUser.menuAccess['trucking']?.length || 0;
+                          }
+                          return getMenuCount(selectedUser.menuAccess);
+                        })()}
+                      </strong>
                     </div>
                   </div>
 
                   <div className="chip-row">
-                    {selectedUser.businessUnits.map((unit) => (
-                      <span key={unit} className="access-chip large">
-                        {BUSINESS_MENU_MAP[unit]?.icon} {BUSINESS_MENU_MAP[unit]?.label}
-                      </span>
-                    ))}
+                    {(() => {
+                      const currentUser = getCurrentUser();
+                      const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+                      // For Trucking UserControl: Only show trucking business unit for non-admin
+                      const unitsToShow = isSuperAdmin 
+                        ? selectedUser.businessUnits 
+                        : selectedUser.businessUnits.filter(unit => unit === 'trucking');
+                      
+                      return unitsToShow.map((unit) => (
+                        <span key={unit} className="access-chip large">
+                          {(() => {
+                            // Handle migration: if unit is "trucking", show "Trucking"
+                            const actualUnit = (unit as any) === 'trucking' ? 'trucking' : unit;
+                            const config = BUSINESS_MENU_MAP[actualUnit];
+                            return config ? `${config.icon} ${config.label}` : (unit === 'trucking' ? '🚚 Trucking' : unit);
+                          })()}
+                        </span>
+                      ));
+                    })()}
                   </div>
 
                   <div className="menu-preview">
-                    {selectedUser.businessUnits.map((unit) => {
-                      const menus = selectedUser.menuAccess[unit] || [];
-                      return (
-                        <div key={unit} className="menu-preview-section">
-                          <div className="menu-section-title">
-                            {BUSINESS_MENU_MAP[unit]?.label} ({menus.length} menu)
-                          </div>
-                          {menus.length === 0 ? (
-                            <p className="muted-text">Belum ada menu yang dipilih.</p>
-                          ) : (
-                            <div className="menu-pill-grid">
-                              {menus.map((menuId) => (
-                                <span key={menuId} className="menu-pill">
-                                  {MENU_LOOKUP[menuId]?.label || menuId}
-                                </span>
-                              ))}
+                    {(() => {
+                      const currentUser = getCurrentUser();
+                      const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+                      // For Trucking UserControl: Only show trucking menu access for non-admin
+                      const unitsToShow = isSuperAdmin 
+                        ? selectedUser.businessUnits 
+                        : selectedUser.businessUnits.filter(unit => unit === 'trucking');
+                      
+                      return unitsToShow.map((unit) => {
+                        const menus = selectedUser.menuAccess[unit] || [];
+                        return (
+                          <div key={unit} className="menu-preview-section">
+                            <div className="menu-section-title">
+                              {(() => {
+                                const config = BUSINESS_MENU_MAP[unit];
+                                return config ? `${config.label} (${menus.length} menu)` : `${unit} (${menus.length} menu)`;
+                              })()}
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                            {menus.length === 0 ? (
+                              <p className="muted-text">Belum ada menu yang dipilih.</p>
+                            ) : (
+                              <div className="menu-pill-grid">
+                                {menus.map((menuId) => (
+                                  <span key={menuId} className="menu-pill">
+                                    {MENU_LOOKUP[menuId]?.label || menuId}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
 
                   {selectedUser.notes && (
@@ -1250,18 +1503,20 @@ const UserControl = () => {
               <p style={{ marginBottom: '20px', color: 'var(--text-secondary)' }}>
                 Untuk mengedit User Control, masukkan PIN yang telah ditetapkan.
               </p>
-              <Input
-                label="PIN"
-                type="password"
-                value={pinInput}
-                onChange={setPinInput}
-                placeholder="Masukkan PIN"
-                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                  if (e.key === 'Enter') {
-                    handlePinSubmit();
-                  }
-                }}
-              />
+              <div onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handlePinSubmit();
+                }
+              }}>
+                <Input
+                  label="PIN"
+                  type="password"
+                  value={pinInput}
+                  onChange={setPinInput}
+                  placeholder="Masukkan PIN"
+                />
+              </div>
               <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
                 <Button variant="secondary" onClick={() => { setPinDialogVisible(false); setPinInput(''); setPendingEditAction(null); }}>
                   Batal
@@ -1344,23 +1599,35 @@ const UserControl = () => {
               </div>
 
               <div className="business-grid-compact">
-                {BUSINESS_MENU_CONFIG.map((business) => {
-                  const selected = formState.businessUnits.includes(business.id);
-                  return (
-                    <label
-                      key={business.id}
-                      className={`business-card-compact ${selected ? 'selected' : ''}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected}
-                        onChange={() => handleBusinessToggle(business.id)}
-                      />
-                      <span className="business-icon-compact">{business.icon}</span>
-                      <span className="business-label-compact">{business.label}</span>
-                    </label>
-                  );
-                })}
+                {(() => {
+                  // Filter business units based on selectedBusiness (if not super admin)
+                  const currentUser = getCurrentUser();
+                  const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+                  
+                  // For Trucking UserControl: Super admin can see all, but non-admin only sees trucking
+                  // However, super admin should still be able to assign users to all 3 business units
+                  const availableBusinesses = isSuperAdmin 
+                    ? BUSINESS_MENU_CONFIG 
+                    : BUSINESS_MENU_CONFIG.filter(business => business.id === 'trucking');
+                  
+                  return availableBusinesses.map((business) => {
+                    const selected = formState.businessUnits.includes(business.id);
+                    return (
+                      <label
+                        key={business.id}
+                        className={`business-card-compact ${selected ? 'selected' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => handleBusinessToggle(business.id)}
+                        />
+                        <span className="business-icon-compact">{business.icon}</span>
+                        <span className="business-label-compact">{business.label}</span>
+                      </label>
+                    );
+                  });
+                })()}
               </div>
 
               {formState.businessUnits.length > 0 && (
@@ -1368,19 +1635,33 @@ const UserControl = () => {
                   <div className="default-business">
                     <label>Default unit ketika login:</label>
                     <div className="radio-row">
-                      {formState.businessUnits.map((unit) => (
-                        <label key={unit} className="radio-option">
-                          <input
-                            type="radio"
-                            value={unit}
-                            checked={formState.defaultBusiness === unit}
-                            onChange={() =>
-                              setFormState((prev) => ({ ...prev, defaultBusiness: unit }))
-                            }
-                          />
-                          {BUSINESS_MENU_MAP[unit]?.label}
-                        </label>
-                      ))}
+                      {(() => {
+                        // Filter business units based on current business unit (if not super admin)
+                        const currentUser = getCurrentUser();
+                        const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+                        
+                        const unitsToShow = isSuperAdmin 
+                          ? formState.businessUnits 
+                          : formState.businessUnits.filter(unit => unit === 'trucking');
+                        
+                        return unitsToShow.map((unit) => {
+                          const config = BUSINESS_MENU_MAP[unit];
+                          if (!config) return null; // Skip if business unit not found
+                          return (
+                            <label key={unit} className="radio-option">
+                              <input
+                                type="radio"
+                                value={unit}
+                                checked={formState.defaultBusiness === unit}
+                                onChange={() =>
+                                  setFormState((prev) => ({ ...prev, defaultBusiness: unit }))
+                                }
+                              />
+                              {config.label}
+                            </label>
+                          );
+                        });
+                      })()}
                     </div>
                   </div>
 
@@ -1394,55 +1675,66 @@ const UserControl = () => {
                   </div>
 
                   <div className="menu-access-list">
-                    {formState.businessUnits.map((unit) => {
-                      const config = BUSINESS_MENU_MAP[unit];
-                      const allMenus = getAllMenuIds(unit);
-                      const selectedMenus = formState.menuAccess[unit] || [];
+                    {(() => {
+                      // Filter business units based on current business unit (if not super admin)
+                      const currentUser = getCurrentUser();
+                      const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+                      
+                      const unitsToShow = isSuperAdmin 
+                        ? formState.businessUnits 
+                        : formState.businessUnits.filter(unit => unit === 'trucking');
+                      
+                      return unitsToShow.map((unit) => {
+                        const config = BUSINESS_MENU_MAP[unit];
+                        if (!config) return null; // Skip if business unit not found in config
+                        const allMenus = getAllMenuIds(unit);
+                        const selectedMenus = formState.menuAccess[unit] || [];
 
-                      return (
-                        <div key={unit} className="menu-access-card">
-                          <div className="menu-access-header">
-                            <div>
-                              <h4>{config.label}</h4>
-                              <span className="muted-text">
-                                {selectedMenus.length}/{allMenus.length} menu
-                              </span>
-                            </div>
-                            <div className="menu-actions">
-                              <Button
-                                variant="secondary"
-                                onClick={() => handleSelectAllMenus(unit)}
-                              >
-                                Pilih Semua
-                              </Button>
-                              <Button variant="secondary" onClick={() => handleClearMenus(unit)}>
-                                Bersihkan
-                              </Button>
-                            </div>
-                          </div>
-                          {config.sections.map((section) => (
-                            <div key={section.id} className="menu-section">
-                              <div className="menu-section-title">{section.title}</div>
-                              <div className="menu-checkbox-grid">
-                                {section.items.map((item) => {
-                                  const checked = selectedMenus.includes(item.id);
-                                  return (
-                                    <label key={item.id} className="checkbox-option">
-                                      <input
-                                        type="checkbox"
-                                        checked={checked}
-                                        onChange={() => handleMenuToggle(unit, item.id)}
-                                      />
-                                      <span>{item.label}</span>
-                                    </label>
-                                  );
-                                })}
+                        return (
+                          <div key={unit} className="menu-access-card">
+                            <div className="menu-access-header">
+                              <div>
+                                <h4>{config.label}</h4>
+                                <span className="muted-text">
+                                  {selectedMenus.length}/{allMenus.length} menu
+                                </span>
+                              </div>
+                              <div className="menu-actions">
+                                <Button
+                                  variant="secondary"
+                                  onClick={() => handleSelectAllMenus(unit)}
+                                >
+                                  Pilih Semua
+                                </Button>
+                                <Button variant="secondary" onClick={() => handleClearMenus(unit)}>
+                                  Bersihkan
+                                </Button>
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      );
-                    })}
+                            {config.sections.map((section) => (
+                              <div key={section.id} className="menu-section">
+                                <div className="menu-section-title">{section.title}</div>
+                                <div className="menu-checkbox-grid">
+                                  {section.items.map((item) => {
+                                    const checked = selectedMenus.includes(item.id);
+                                    return (
+                                      <label key={item.id} className="checkbox-option">
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          onChange={() => handleMenuToggle(unit, item.id)}
+                                        />
+                                        <span>{item.label}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
                 </>
               )}

@@ -111,7 +111,8 @@ const Vehicles = () => {
 
   const loadVehicles = async () => {
     const data = await storageService.get<Vehicle[]>('trucking_vehicles') || [];
-    setVehicles(data.map((v, idx) => ({ ...v, no: idx + 1 })));
+    const activeVehicles = filterActiveItems(data);
+    setVehicles(activeVehicles.map((v, idx) => ({ ...v, no: idx + 1 })));
   };
 
   const loadDrivers = async () => {
@@ -178,10 +179,18 @@ const Vehicles = () => {
       `Are you sure you want to delete vehicle "${item.vehicleNo}"?`,
       async () => {
         try {
-          const updated = vehicles.filter(v => v.id !== item.id);
-          await storageService.set('trucking_vehicles', updated);
-          setVehicles(updated.map((v, idx) => ({ ...v, no: idx + 1 })));
-          showAlert(`Vehicle "${item.vehicleNo}" deleted successfully`, 'Success');
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('trucking_vehicles', item.id, 'id');
+          
+          if (success) {
+            // Reload data dengan filter active items
+            const updatedVehicles = await storageService.get<Vehicle[]>('trucking_vehicles') || [];
+            const activeVehicles = filterActiveItems(updatedVehicles);
+            setVehicles(activeVehicles.map((v, idx) => ({ ...v, no: idx + 1 })));
+            showAlert(`Vehicle "${item.vehicleNo}" deleted successfully`, 'Success');
+          } else {
+            showAlert(`Error deleting vehicle "${item.vehicleNo}". Please try again.`, 'Error');
+          }
         } catch (error: any) {
           showAlert(`Error deleting vehicle: ${error.message}`, 'Error');
         }

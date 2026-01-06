@@ -4,6 +4,7 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../../utils/excel-helper';
 import '../../../styles/common.css';
@@ -144,28 +145,20 @@ const DeliveryOrders = () => {
   }, []);
 
   const loadData = async () => {
-    // Load langsung dari localStorage untuk memastikan data yang sudah di-mark sebagai deleted tetap terbaca
-    const storageKey = 'trucking/trucking_delivery_orders';
-    const valueStr = localStorage.getItem(storageKey);
-    let ordersData: DeliveryOrder[] = [];
-    
-    if (valueStr) {
-      const parsed = JSON.parse(valueStr);
-      ordersData = Array.isArray(parsed?.value) ? parsed.value : (Array.isArray(parsed) ? parsed : []);
-    }
-    
-    // Load master data dengan storageService (bisa tetap pakai karena tidak masalah)
-    const [customersData, vehiclesData, driversData, routesData] = await Promise.all([
-      storageService.get<any[]>('trucking_customers') || [],
-      storageService.get<any[]>('trucking_vehicles') || [],
-      storageService.get<any[]>('trucking_drivers') || [],
-      storageService.get<any[]>('trucking_routes') || [],
+    // Load semua data menggunakan storageService untuk membaca dari file storage juga
+    const [ordersDataRaw, customersData, vehiclesData, driversData, routesData] = await Promise.all([
+      storageService.get<DeliveryOrder[]>('trucking_delivery_orders'),
+      storageService.get<any[]>('trucking_customers'),
+      storageService.get<any[]>('trucking_vehicles'),
+      storageService.get<any[]>('trucking_drivers'),
+      storageService.get<any[]>('trucking_routes'),
     ]);
     
-      // Filter out deleted items sebagai safety net (jaga-jaga kalau masih ada data yang ter-mark sebagai deleted)
-      const activeOrders = (ordersData || []).filter((o: any) => {
-        return !(o?.deleted === true || o?.deleted === 'true' || o?.deletedAt);
-      });
+    // Ensure arrays (handle null/undefined)
+    const ordersData = ordersDataRaw || [];
+    
+    // Filter out deleted items menggunakan helper function
+    const activeOrders = filterActiveItems(ordersData);
     
     console.log(`[DeliveryOrders] Loaded ${ordersData.length} DOs, filtered to ${activeOrders.length} active DOs`);
     
@@ -177,11 +170,11 @@ const DeliveryOrders = () => {
     });
     setOrders(sortedOrders.map((o, idx) => ({ ...o, no: idx + 1 })));
     
-    // Filter out deleted items for master data too
-    const activeCustomers = (customersData || []).filter((c: any) => !(c?.deleted === true || c?.deleted === 'true' || c?.deletedAt));
-    const activeVehicles = (vehiclesData || []).filter((v: any) => !(v?.deleted === true || v?.deleted === 'true' || v?.deletedAt));
-    const activeDrivers = (driversData || []).filter((d: any) => !(d?.deleted === true || d?.deleted === 'true' || d?.deletedAt));
-    const activeRoutes = (routesData || []).filter((r: any) => !(r?.deleted === true || r?.deleted === 'true' || r?.deletedAt));
+    // Filter out deleted items for master data menggunakan helper function
+    const activeCustomers = filterActiveItems(customersData || []);
+    const activeVehicles = filterActiveItems(vehiclesData || []);
+    const activeDrivers = filterActiveItems(driversData || []);
+    const activeRoutes = filterActiveItems(routesData || []);
     
     setCustomers(activeCustomers);
     setVehicles(activeVehicles);
@@ -291,18 +284,9 @@ const DeliveryOrders = () => {
       const driver = drivers.find(d => d.id === formData.driverId);
       const route = routes.find(r => r.id === formData.routeId);
 
-      // Load semua data dari localStorage untuk memastikan data yang sudah di-mark sebagai deleted tetap ada
-      const storageKey = 'trucking/trucking_delivery_orders';
-      const valueStr = localStorage.getItem(storageKey);
-      let allOrders: DeliveryOrder[] = [];
-      
-      if (valueStr) {
-        const parsed = JSON.parse(valueStr);
-        allOrders = Array.isArray(parsed?.value) ? parsed.value : (Array.isArray(parsed) ? parsed : []);
-      } else {
-        // Fallback ke orders state jika localStorage kosong
-        allOrders = orders;
-      }
+      // Load semua data menggunakan storageService untuk membaca dari file storage juga
+      const allOrdersRaw = await storageService.get<DeliveryOrder[]>('trucking_delivery_orders');
+      const allOrders = allOrdersRaw || orders; // Fallback ke orders state jika kosong
       
       if (editingItem) {
         const updated = allOrders.map((o: any) =>
@@ -327,18 +311,11 @@ const DeliveryOrders = () => {
             : o
         );
         
-        // Simpan langsung ke localStorage
-        const storageValue = {
-          value: updated,
-          timestamp: new Date().toISOString(),
-          _timestamp: Date.now(),
-        };
-        localStorage.setItem(storageKey, JSON.stringify(storageValue));
+        // Simpan menggunakan storageService untuk menyimpan ke file storage juga
+        await storageService.set('trucking_delivery_orders', updated);
         
-        // Filter out deleted items untuk display
-        const activeOrders = updated.filter((o: any) => {
-          return !(o?.deleted === true || o?.deleted === 'true' || o?.deletedAt);
-        });
+        // Filter out deleted items untuk display menggunakan helper function
+        const activeOrders = filterActiveItems(updated);
         
         // Sort by orderDate (newest first)
         const sortedUpdated = activeOrders.sort((a, b) => {
@@ -352,7 +329,7 @@ const DeliveryOrders = () => {
         const doNo = (formData.doNo && formData.doNo.trim() !== '') ? formData.doNo : generateDONo();
         const newOrder: DeliveryOrder = {
           id: Date.now().toString(),
-          no: allOrders.filter((o: any) => !(o?.deleted === true || o?.deleted === 'true' || o?.deletedAt)).length + 1,
+          no: filterActiveItems(allOrders).length + 1,
           customerName: customer?.nama || '',
           customerAddress: customer?.alamat || customer?.deliveryAddress || '',
           vehicleNo: vehicle?.vehicleNo || '',
@@ -366,18 +343,11 @@ const DeliveryOrders = () => {
         } as DeliveryOrder;
         const updated = [...allOrders, newOrder];
         
-        // Simpan langsung ke localStorage
-        const storageValue = {
-          value: updated,
-          timestamp: new Date().toISOString(),
-          _timestamp: Date.now(),
-        };
-        localStorage.setItem(storageKey, JSON.stringify(storageValue));
+        // Simpan menggunakan storageService untuk menyimpan ke file storage juga
+        await storageService.set('trucking_delivery_orders', updated);
         
-        // Filter out deleted items untuk display
-        const activeOrders = updated.filter((o: any) => {
-          return !(o?.deleted === true || o?.deleted === 'true' || o?.deletedAt);
-        });
+        // Filter out deleted items untuk display menggunakan helper function
+        const activeOrders = filterActiveItems(updated);
         
         // Sort by orderDate (newest first)
         const sortedUpdated = activeOrders.sort((a, b) => {
@@ -431,18 +401,6 @@ const DeliveryOrders = () => {
       `Are you sure you want to delete delivery order "${item.doNo}"?`,
       async () => {
         try {
-          // Load semua data dari localStorage
-          const storageKey = 'trucking/trucking_delivery_orders';
-          const valueStr = localStorage.getItem(storageKey);
-          let allOrders: DeliveryOrder[] = [];
-          
-          if (valueStr) {
-            const parsed = JSON.parse(valueStr);
-            allOrders = Array.isArray(parsed?.value) ? parsed.value : (Array.isArray(parsed) ? parsed : []);
-          } else {
-            allOrders = orders;
-          }
-          
           // Simpan tombstone ke audit log sebelum menghapus
           const timestamp = new Date().toISOString();
           const itemId = item.id || item.doNo || 'unknown';
@@ -458,41 +416,29 @@ const DeliveryOrders = () => {
             createdAt: timestamp,
           };
           
-          // Simpan audit log
-          const auditKey = 'trucking/auditLogs';
-          const auditStr = localStorage.getItem(auditKey);
-          let auditLogs: any[] = [];
-          if (auditStr) {
-            const parsed = JSON.parse(auditStr);
-            auditLogs = Array.isArray(parsed?.value) ? parsed.value : (Array.isArray(parsed) ? parsed : []);
+          // Simpan audit log menggunakan storageService
+          const auditLogs = await storageService.get<any[]>('trucking_auditLogs') || [];
+          await storageService.set('trucking_auditLogs', [...auditLogs, auditLog]);
+          
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('trucking_delivery_orders', item.id, 'id');
+          
+          if (success) {
+            // Reload data dengan filter active items
+            const updatedOrders = await storageService.get<DeliveryOrder[]>('trucking_delivery_orders') || [];
+            const activeOrders = filterActiveItems(updatedOrders);
+            
+            // Sort by orderDate (newest first)
+            const sortedUpdated = activeOrders.sort((a, b) => {
+              const dateA = a.orderDate ? new Date(a.orderDate).getTime() : (a.created ? new Date(a.created).getTime() : 0);
+              const dateB = b.orderDate ? new Date(b.orderDate).getTime() : (b.created ? new Date(b.created).getTime() : 0);
+              return dateB - dateA; // Newest first
+            });
+            setOrders(sortedUpdated.map((o, idx) => ({ ...o, no: idx + 1 })));
+            showAlert(`Delivery order "${item.doNo}" deleted successfully`, 'Success');
+          } else {
+            showAlert(`Error deleting delivery order "${item.doNo}". Please try again.`, 'Error');
           }
-          auditLogs.push(auditLog);
-          localStorage.setItem(auditKey, JSON.stringify({
-            value: auditLogs,
-            timestamp: new Date().toISOString(),
-            _timestamp: Date.now(),
-          }));
-          
-          // Hapus data benar-benar dari array (bukan mark sebagai deleted)
-          const updated = allOrders.filter((o: any) => o.id !== item.id);
-          
-          // Simpan ke localStorage
-          const storageValue = {
-            value: updated,
-            timestamp: new Date().toISOString(),
-            _timestamp: Date.now(),
-          };
-          localStorage.setItem(storageKey, JSON.stringify(storageValue));
-          console.log(`[DeliveryOrders] Deleted DO ${item.doNo} and saved tombstone to audit log`);
-          
-          // Sort by orderDate (newest first)
-          const sortedUpdated = updated.sort((a, b) => {
-            const dateA = a.orderDate ? new Date(a.orderDate).getTime() : (a.created ? new Date(a.created).getTime() : 0);
-            const dateB = b.orderDate ? new Date(b.orderDate).getTime() : (b.created ? new Date(b.created).getTime() : 0);
-            return dateB - dateA; // Newest first
-          });
-          setOrders(sortedUpdated.map((o, idx) => ({ ...o, no: idx + 1 })));
-          showAlert(`Delivery order "${item.doNo}" deleted successfully`, 'Success');
         } catch (error: any) {
           showAlert(`Error deleting delivery order: ${error.message}`, 'Error');
         }
@@ -504,17 +450,9 @@ const DeliveryOrders = () => {
 
   const handleConfirmDO = async (item: DeliveryOrder) => {
     try {
-      // Load semua data dari localStorage
-      const storageKey = 'trucking/trucking_delivery_orders';
-      const valueStr = localStorage.getItem(storageKey);
-      let allOrders: DeliveryOrder[] = [];
-      
-      if (valueStr) {
-        const parsed = JSON.parse(valueStr);
-        allOrders = Array.isArray(parsed?.value) ? parsed.value : (Array.isArray(parsed) ? parsed : []);
-      } else {
-        allOrders = orders;
-      }
+      // Load semua data menggunakan storageService
+      const allOrdersRaw = await storageService.get<DeliveryOrder[]>('trucking_delivery_orders');
+      const allOrders = allOrdersRaw || orders;
       
       // Update DO dengan confirmed flag
       const updated = allOrders.map((o: any) =>
@@ -527,18 +465,11 @@ const DeliveryOrders = () => {
           : o
       );
       
-      // Simpan langsung ke localStorage
-      const storageValue = {
-        value: updated,
-        timestamp: new Date().toISOString(),
-        _timestamp: Date.now(),
-      };
-      localStorage.setItem(storageKey, JSON.stringify(storageValue));
+      // Simpan menggunakan storageService
+      await storageService.set('trucking_delivery_orders', updated);
       
-      // Filter out deleted items untuk display
-      const activeOrders = updated.filter((o: any) => {
-        return !(o?.deleted === true || o?.deleted === 'true' || o?.deletedAt);
-      });
+      // Filter out deleted items untuk display menggunakan helper function
+      const activeOrders = filterActiveItems(updated);
       
       setOrders(activeOrders.map((o, idx) => ({ ...o, no: idx + 1 })));
 
@@ -586,17 +517,9 @@ const DeliveryOrders = () => {
 
   const handleStatusChange = async (item: DeliveryOrder, newStatus: DeliveryOrder['status']) => {
     try {
-      // Load semua data dari localStorage
-      const storageKey = 'trucking/trucking_delivery_orders';
-      const valueStr = localStorage.getItem(storageKey);
-      let allOrders: DeliveryOrder[] = [];
-      
-      if (valueStr) {
-        const parsed = JSON.parse(valueStr);
-        allOrders = Array.isArray(parsed?.value) ? parsed.value : (Array.isArray(parsed) ? parsed : []);
-      } else {
-        allOrders = orders;
-      }
+      // Load semua data menggunakan storageService
+      const allOrdersRaw = await storageService.get<DeliveryOrder[]>('trucking_delivery_orders');
+      const allOrders = allOrdersRaw || orders;
       
       const updated = allOrders.map((o: any) =>
         o.id === item.id
@@ -608,18 +531,11 @@ const DeliveryOrders = () => {
           : o
       );
       
-      // Simpan langsung ke localStorage
-      const storageValue = {
-        value: updated,
-        timestamp: new Date().toISOString(),
-        _timestamp: Date.now(),
-      };
-      localStorage.setItem(storageKey, JSON.stringify(storageValue));
+      // Simpan menggunakan storageService
+      await storageService.set('trucking_delivery_orders', updated);
       
-      // Filter out deleted items untuk display
-      const activeOrders = updated.filter((o: any) => {
-        return !(o?.deleted === true || o?.deleted === 'true' || o?.deletedAt);
-      });
+      // Filter out deleted items untuk display menggunakan helper function
+      const activeOrders = filterActiveItems(updated);
       
       // Sort by orderDate (newest first)
       const sortedUpdated = activeOrders.sort((a, b) => {
@@ -1396,6 +1312,7 @@ const DeliveryOrders = () => {
                   <option value="ROLL">ROLL</option>
                   <option value="SET">SET</option>
                   <option value="UNIT">UNIT</option>
+                  <option value="LOT">LOT</option>
                   <option value="OTHER">OTHER</option>
                 </select>
                 {showCustomUnit && (

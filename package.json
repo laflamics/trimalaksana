@@ -61,10 +61,15 @@
   },
   "dependencies": {
     "@capacitor/android": "^6.2.1",
+    "@capacitor/core": "^6.2.1",
+    "@capacitor/filesystem": "^6.0.4",
+    "@capacitor/share": "^6.0.4",
     "axios": "^1.6.2",
     "electron-updater": "^6.6.2",
+    "html2pdf.js": "^0.12.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-is": "^19.2.3",
     "react-router-dom": "^6.21.1",
     "recharts": "^3.4.1",
     "xlsx": "^0.18.5",
@@ -127,6 +132,6 @@
       "perMachine": false,
       "differentialPackage": true
     },
-    "buildVersion": "6"
+    "buildVersion": "9"
   }
 }

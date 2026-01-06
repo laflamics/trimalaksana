@@ -10,6 +10,7 @@ import { openPrintWindow, focusAppWindow } from '../../utils/actions';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
 import { useDialog } from '../../hooks/useDialog';
+import { logCreate, logUpdate, logDelete } from '../../utils/activity-logger';
 import '../../styles/common.css';
 import '../../styles/compact.css';
 
@@ -1455,6 +1456,16 @@ const SalesOrders = () => {
         );
         await storageService.set('salesOrders', updated);
         setOrders(updated);
+        // Log activity
+        try {
+          await logUpdate('SALES_ORDER', editingOrder.id, '/packaging/sales-orders', {
+            soNo: formDataWithPadCode.soNo || editingOrder.soNo,
+            customer: formDataWithPadCode.customer,
+            itemCount: itemsWithPadCode.length,
+          });
+        } catch (logError) {
+          // Silent fail
+        }
         showAlert(`SO ${formDataWithPadCode.soNo || 'N/A'} updated successfully`, 'Success');
       } else {
         const newOrder: SalesOrder = {
@@ -1475,6 +1486,17 @@ const SalesOrders = () => {
         const updated = [...ordersArray, newOrder];
         await storageService.set('salesOrders', updated);
         setOrders(updated);
+        // Log activity
+        try {
+          await logCreate('SALES_ORDER', newOrder.id, '/packaging/sales-orders', {
+            soNo: newOrder.soNo,
+            customer: newOrder.customer,
+            itemCount: itemsWithPadCode.length,
+            status: newOrder.status,
+          });
+        } catch (logError) {
+          // Silent fail
+        }
         
         // Update inventory premonth stock untuk items yang punya inventoryQty
         if (formData.items && formData.items.length > 0) {
@@ -1704,6 +1726,16 @@ const SalesOrders = () => {
           const success = await safeDeleteItem('salesOrders', item.id, 'id');
           
           if (success) {
+            // Log activity
+            try {
+              await logDelete('SALES_ORDER', item.id, '/packaging/sales-orders', {
+                soNo: item.soNo,
+                customer: item.customer,
+              });
+            } catch (logError) {
+              // Silent fail
+            }
+            
             // Refresh data to show updated list (without deleted items)
             const updatedOrders = await storageService.get<SalesOrder[]>('salesOrders') || [];
             const activeOrders = filterActiveItems(updatedOrders);

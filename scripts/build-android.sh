@@ -51,6 +51,14 @@ node scripts/generate-gradle-wrapper.js
 
 # Setup Android SDK location
 echo "📱 Setting up Android SDK..."
+
+# Check if ANDROID_HOME is set but directory doesn't exist
+if [ -n "$ANDROID_HOME" ] && [ ! -d "$ANDROID_HOME" ]; then
+  echo "⚠️  ANDROID_HOME is set to non-existent directory: $ANDROID_HOME"
+  echo "   Unsetting ANDROID_HOME to auto-detect correct path..."
+  unset ANDROID_HOME
+fi
+
 if [ -z "$ANDROID_HOME" ]; then
   # Try common Android SDK locations (urutkan dari yang paling umum)
   if [ -d "/opt/android-sdk" ]; then
@@ -72,6 +80,12 @@ if [ -z "$ANDROID_HOME" ]; then
   fi
 else
   echo "   Using ANDROID_HOME from environment: $ANDROID_HOME"
+  # Verify that the directory actually exists
+  if [ ! -d "$ANDROID_HOME" ]; then
+    echo "❌ Android SDK directory tidak ditemukan: $ANDROID_HOME"
+    echo "   Please install Android SDK atau set ANDROID_HOME ke path yang benar"
+    exit 1
+  fi
 fi
 
 # Create or update local.properties

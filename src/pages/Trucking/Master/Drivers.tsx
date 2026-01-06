@@ -4,6 +4,7 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -105,7 +106,8 @@ const Drivers = () => {
 
   const loadDrivers = async () => {
     const data = await storageService.get<Driver[]>('trucking_drivers') || [];
-    setDrivers(data.map((d, idx) => ({ ...d, no: idx + 1 })));
+    const activeDrivers = filterActiveItems(data);
+    setDrivers(activeDrivers.map((d, idx) => ({ ...d, no: idx + 1 })));
   };
 
   const loadVehicles = async () => {
@@ -171,10 +173,18 @@ const Drivers = () => {
       `Are you sure you want to delete driver "${item.name}"?`,
       async () => {
         try {
-          const updated = drivers.filter(d => d.id !== item.id);
-          await storageService.set('trucking_drivers', updated);
-          setDrivers(updated.map((d, idx) => ({ ...d, no: idx + 1 })));
-          showAlert(`Driver "${item.name}" deleted successfully`, 'Success');
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('trucking_drivers', item.id, 'id');
+          
+          if (success) {
+            // Reload data dengan filter active items
+            const updatedDrivers = await storageService.get<Driver[]>('trucking_drivers') || [];
+            const activeDrivers = filterActiveItems(updatedDrivers);
+            setDrivers(activeDrivers.map((d, idx) => ({ ...d, no: idx + 1 })));
+            showAlert(`Driver "${item.name}" deleted successfully`, 'Success');
+          } else {
+            showAlert(`Error deleting driver "${item.name}". Please try again.`, 'Error');
+          }
         } catch (error: any) {
           showAlert(`Error deleting driver: ${error.message}`, 'Error');
         }

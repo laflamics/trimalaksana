@@ -87,7 +87,7 @@ const StatusUpdates = () => {
   }, []);
 
   const loadData = async () => {
-    const ordersData = await storageService.get<any[]>('tracking_delivery_orders') || [];
+    const ordersData = await storageService.get<any[]>('trucking_delivery_orders') || [];
     setOrders(ordersData);
     
     // Generate status updates dari history orders
@@ -151,7 +151,7 @@ const StatusUpdates = () => {
         }
         return o;
       });
-      await storageService.set('tracking_delivery_orders', updatedOrders);
+      await storageService.set('trucking_delivery_orders', updatedOrders);
       setUpdateNote('');
       setSelectedOrder(null);
       loadData();

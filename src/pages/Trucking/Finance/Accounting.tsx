@@ -4,6 +4,7 @@ import Card from '../../../components/Card';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -107,10 +108,8 @@ const Accounting = () => {
   const loadEntries = async () => {
     let data = await storageService.get<JournalEntry[]>('trucking_journalEntries') || [];
     
-    // Filter out deleted items (tombstone pattern)
-    const activeData = (data || []).filter((e: any) => {
-      return !(e?.deleted === true || e?.deleted === 'true' || e?.deletedAt);
-    });
+    // Filter out deleted items menggunakan helper function
+    const activeData = filterActiveItems(data || []);
     
     // Ensure data is always an array before checking length
     const dataArray = Array.isArray(activeData) ? activeData : [];
@@ -119,10 +118,8 @@ const Accounting = () => {
     if (dataArray.length === 0) {
       await generateJournalEntriesFromTransactions();
       data = await storageService.get<JournalEntry[]>('trucking_journalEntries') || [];
-      // Filter out deleted items again after reload
-      const reloadedActiveData = (data || []).filter((e: any) => {
-        return !(e?.deleted === true || e?.deleted === 'true' || e?.deletedAt);
-      });
+      // Filter out deleted items again after reload menggunakan helper function
+      const reloadedActiveData = filterActiveItems(data || []);
       // Ensure data is still an array after reload
       const reloadedDataArray = Array.isArray(reloadedActiveData) ? reloadedActiveData : [];
       setEntries(reloadedDataArray.map((e, idx) => ({ ...e, no: idx + 1 })));
@@ -136,9 +133,7 @@ const Accounting = () => {
     try {
       // Load existing journal entries untuk prevent duplicate
       const existingEntriesRaw = await storageService.get<JournalEntry[]>('trucking_journalEntries') || [];
-      const existingEntries = (Array.isArray(existingEntriesRaw) ? existingEntriesRaw : []).filter((e: any) => {
-        return !(e?.deleted === true || e?.deleted === 'true' || e?.deletedAt);
-      });
+      const existingEntries = filterActiveItems(Array.isArray(existingEntriesRaw) ? existingEntriesRaw : []);
       
       const [invoices, payments, purchaseOrders] = await Promise.all([
         storageService.get<any[]>('trucking_invoices') || [],
@@ -736,13 +731,23 @@ const Accounting = () => {
             'Delete this entry?',
             async () => {
               try {
-                // Hapus entry yang dipilih
-                // Ensure entries is always an array
-                const entriesArray = Array.isArray(entries) ? entries : [];
-                let updated = entriesArray.filter(e => e.id !== item.id);
+                // Pakai helper function untuk safe delete (tombstone pattern)
+                const success = await safeDeleteItem('trucking_journalEntries', item.id, 'id');
+                
+                if (!success) {
+                  closeDialog();
+                  showAlert('Error deleting entry. Please try again.', 'Error');
+                  return;
+                }
+                
+                // Load updated data untuk logic restore balance
+                let updated = await storageService.get<any[]>('trucking_journalEntries') || [];
+                
+                // Filter untuk logic restore balance (hanya active entries)
+                const activeEntries = filterActiveItems(updated);
                 
                 // Jika entry yang di-delete punya reference yang sama dengan entry lain, restore balance
-                const relatedEntries = updated.filter(e => e.reference === item.reference);
+                const relatedEntries = activeEntries.filter(e => e.reference === item.reference);
                 if (relatedEntries.length > 0) {
                   // Hitung total debit dan credit untuk reference yang sama setelah delete
                   const totalDebit = relatedEntries.reduce((sum, e) => sum + (e.debit || 0), 0);
@@ -772,14 +777,18 @@ const Accounting = () => {
                         }
                         return e;
                       });
+                      
+                      // Simpan perubahan restore balance
+                      await storageService.set('trucking_journalEntries', updated);
                     }
                   }
                   // Jika balanceDiff === 0, berarti entry yang di-delete adalah entry yang balanced
                   // atau entry debit/kredit utama yang dihapus, jadi tidak perlu restore
                 }
                 
-                await storageService.set('trucking_journalEntries', updated);
-                setEntries(updated.map((e, idx) => ({ ...e, no: idx + 1 })));
+                // Filter out deleted items untuk display menggunakan helper function
+                const finalActiveEntries = filterActiveItems(updated);
+                setEntries(finalActiveEntries.map((e, idx) => ({ ...e, no: idx + 1 })));
                 closeDialog();
                 showAlert('Entry deleted successfully', 'Success');
               } catch (error: any) {

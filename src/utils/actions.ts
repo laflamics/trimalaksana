@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import Card from '../components/Card';
 import Button from '../components/Button';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 
 // Platform detection utility
 export const isElectron = (): boolean => {
@@ -333,3 +334,178 @@ export const handleUpdateStatus = async (
   }
 };
 
+// Helper function untuk save/share PDF di mobile
+export const savePdfForMobile = async (
+  htmlContent: string,
+  fileName: string,
+  onSuccess?: (message: string) => void,
+  onError?: (message: string) => void
+): Promise<void> => {
+  try {
+    if (isMobile() || isCapacitor()) {
+      // Mobile: Save HTML file ke Documents folder di HP
+      // User bisa buka file tersebut dan print sendiri
+      
+      const htmlFileName = fileName.endsWith('.pdf') ? fileName.replace('.pdf', '.html') : `${fileName}.html`;
+      
+      // Buat HTML lengkap dengan print styling
+      const fullHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${fileName}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 10mm;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      background: #fff;
+    }
+    body {
+      font-family: Arial, sans-serif;
+    }
+    @media print {
+      @page {
+        size: A4;
+        margin: 10mm;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  ${htmlContent}
+</body>
+</html>`;
+      
+      try {
+        // Convert HTML ke base64
+        const base64Data = btoa(unescape(encodeURIComponent(fullHtml)));
+        
+        // Buat temporary file di Documents folder dulu
+        const tempPath = `temp_${Date.now()}_${htmlFileName}`;
+        await Filesystem.writeFile({
+          path: tempPath,
+          data: base64Data,
+          directory: Directory.Documents,
+          recursive: true
+        });
+        
+        // Baca file untuk share
+        const fileData = await Filesystem.readFile({
+          path: tempPath,
+          directory: Directory.Documents
+        });
+        
+        // Convert base64 ke blob untuk share
+        const byteCharacters = atob(fileData.data as string);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'text/html' });
+        const file = new File([blob], htmlFileName, { type: 'text/html' });
+        
+        // Trigger share - user akan pilih lokasi save
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: fileName,
+            text: 'Simpan dokumen HTML'
+          });
+          
+          // Cleanup temp file setelah share
+          try {
+            await Filesystem.deleteFile({
+              path: tempPath,
+              directory: Directory.Documents
+            });
+          } catch (e) {
+            // Ignore cleanup error
+          }
+          
+          onSuccess?.('File berhasil di-save. View akan ditutup.');
+        } else {
+          // Fallback: save ke Documents folder
+          const result = await Filesystem.writeFile({
+            path: htmlFileName,
+            data: base64Data,
+            directory: Directory.Documents,
+            recursive: true
+          });
+          
+          // Cleanup temp file
+          try {
+            await Filesystem.deleteFile({
+              path: tempPath,
+              directory: Directory.Documents
+            });
+          } catch (e) {
+            // Ignore cleanup error
+          }
+          
+          onSuccess?.(`File HTML berhasil disimpan ke:\n${result.uri}\n\nView akan ditutup.`);
+        }
+      } catch (fsError: any) {
+        // Jika Filesystem gagal, coba share langsung via Web Share API
+        try {
+          const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+          const file = new File([blob], htmlFileName, { type: 'text/html' });
+          
+          if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              files: [file],
+              title: fileName,
+              text: 'Simpan dokumen HTML'
+            });
+            onSuccess?.('File berhasil di-save. View akan ditutup.');
+          } else {
+            // Fallback: download via blob
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = htmlFileName;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            setTimeout(() => {
+              document.body.removeChild(link);
+              URL.revokeObjectURL(url);
+            }, 1000);
+            onSuccess?.('File HTML ter-download. View akan ditutup.');
+          }
+        } catch (downloadError: any) {
+          onError?.(`Gagal save file: ${fsError.message || downloadError.message}`);
+        }
+      }
+    } else {
+      // Desktop browser: Download sebagai HTML
+      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      onSuccess?.('PDF berhasil di-download');
+    }
+  } catch (error: any) {
+    onError?.(`Gagal save PDF: ${error.message}`);
+  }
+};

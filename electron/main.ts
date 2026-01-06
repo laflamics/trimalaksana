@@ -509,6 +509,15 @@ ipcMain.handle('save-storage', async (event, key: string, value: any) => {
       return { success: true, path: '', skipped: true };
     }
     
+    // CRITICAL FIX: userAccessControl is global/shared - always save to root localStorage
+    if (key === 'userAccessControl') {
+      const dataDir = path.join(__dirname, '..', 'data', 'localStorage');
+      await fs.promises.mkdir(dataDir, { recursive: true });
+      const filePath = path.join(dataDir, `${key}.json`);
+      await fs.promises.writeFile(filePath, JSON.stringify(value, null, 2), 'utf8');
+      return { success: true, path: filePath };
+    }
+    
     // CRITICAL FIX: Handle key with prefix format (general-trading/gt_products)
     // Extract actual key and determine directory
     let actualKey = key;
@@ -578,10 +587,38 @@ ipcMain.handle('load-storage', async (event, key: string) => {
       dataDir = path.join(process.resourcesPath || app.getAppPath(), 'data');
     }
     
+    // CRITICAL FIX: userAccessControl is global/shared - always load from root localStorage
+    if (key === 'userAccessControl') {
+      const filePath = path.join(dataDir, 'localStorage', `${key}.json`);
+      try {
+        const content = await fs.promises.readFile(filePath, 'utf8');
+        return { success: true, data: JSON.parse(content) };
+      } catch (error: any) {
+        if (error.code === 'ENOENT') {
+          return { success: false, error: 'File not found', data: null };
+        }
+        throw error;
+      }
+    }
+    
     // CRITICAL FIX: For GT/Trucking, check subdirectories (general-trading/, trucking/)
     // Try multiple paths: root, general-trading/, trucking/
+    // DEFAULT: Try localStorage subfolder first (trucking/trucking_*.json -> data/localStorage/trucking/trucking_*.json)
     let filePath = path.join(dataDir, 'localStorage', `${key}.json`);
     let fileFound = false;
+    
+    // CRITICAL: If key has prefix format (trucking/trucking_*), try prefixed path FIRST
+    if (key.includes('/') && key.startsWith('trucking/')) {
+      const prefixedPath = path.join(dataDir, 'localStorage', `${key}.json`);
+      try {
+        await fs.promises.access(prefixedPath);
+        filePath = prefixedPath;
+        fileFound = true;
+        console.log(`[load-storage] ✅ Found ${key} at prefixed path FIRST: ${prefixedPath}`);
+      } catch {
+        // File doesn't exist at prefixed path, continue with other checks
+      }
+    }
     
     // If key starts with gt_, try general-trading subdirectory first
     if (key.startsWith('gt_')) {
@@ -595,27 +632,74 @@ ipcMain.handle('load-storage', async (event, key: string) => {
       }
     }
     
-    // If key starts with trucking_, try trucking subdirectory
+    // SPECIAL FIX: For trucking_, check data/ folder directly (not localStorage/)
+    // Data trucking ada di data/trucking_*.json (bukan data/localStorage/trucking_*.json)
     if (!fileFound && key.startsWith('trucking_')) {
-      const truckingPath = path.join(dataDir, 'localStorage', 'trucking', `${key}.json`);
+      // Try data/trucking_*.json directly (not in localStorage subfolder)
+      const truckingDataPath = path.join(dataDir, `${key}.json`);
       try {
-        await fs.promises.access(truckingPath);
-        filePath = truckingPath; // File exists in subdirectory, use it
+        await fs.promises.access(truckingDataPath);
+        filePath = truckingDataPath; // File exists in data/ folder, use it
         fileFound = true;
       } catch {
-        // File doesn't exist in subdirectory, try root
+        // File doesn't exist in data/, try localStorage/trucking/ subdirectory
+        const truckingPath = path.join(dataDir, 'localStorage', 'trucking', `${key}.json`);
+        try {
+          await fs.promises.access(truckingPath);
+          filePath = truckingPath; // File exists in subdirectory, use it
+          fileFound = true;
+        } catch {
+          // File doesn't exist in subdirectory, try localStorage root
+          const rootPath = path.join(dataDir, 'localStorage', `${key}.json`);
+          try {
+            await fs.promises.access(rootPath);
+            filePath = rootPath; // File exists in root, use it
+            fileFound = true;
+          } catch {
+            // File doesn't exist anywhere
+          }
+        }
       }
     }
     
-    // Also try with prefix format (general-trading/gt_products)
+    // Also try with prefix format (trucking/trucking_drivers) - check data/ folder first
     if (!fileFound && key.includes('/')) {
-      const prefixedPath = path.join(dataDir, 'localStorage', `${key}.json`);
-      try {
-        await fs.promises.access(prefixedPath);
-        filePath = prefixedPath; // File exists with prefix format, use it
-        fileFound = true;
-      } catch {
-        // File doesn't exist with prefix, continue with original path
+      // If key is like "trucking/trucking_drivers", try data/trucking_drivers.json first
+      if (key.startsWith('trucking/') && key.includes('trucking_')) {
+        const rootKey = key.replace('trucking/', ''); // Remove prefix, get just "trucking_drivers"
+        // Try data/trucking_drivers.json first (not localStorage/)
+        const dataPath = path.join(dataDir, `${rootKey}.json`);
+        try {
+          await fs.promises.access(dataPath);
+          filePath = dataPath; // File exists in data/ folder, use it
+          fileFound = true;
+        } catch {
+          // File doesn't exist in data/, try localStorage root
+          const rootPath = path.join(dataDir, 'localStorage', `${rootKey}.json`);
+          try {
+            await fs.promises.access(rootPath);
+            filePath = rootPath; // File exists in root, use it
+            fileFound = true;
+          } catch {
+            // File doesn't exist in root, try prefixed path
+          }
+        }
+      }
+      
+      // Try prefixed path (trucking/trucking_drivers.json in localStorage)
+      if (!fileFound) {
+        const prefixedPath = path.join(dataDir, 'localStorage', `${key}.json`);
+        try {
+          await fs.promises.access(prefixedPath);
+          filePath = prefixedPath; // File exists with prefix format, use it
+          fileFound = true;
+          console.log(`[load-storage] ✅ Found ${key} at prefixed path: ${prefixedPath}`);
+        } catch {
+          // File doesn't exist with prefix, continue with original path
+          if (key.includes('trucking')) {
+            console.log(`[load-storage] ⚠️ ${key} not found at prefixed path: ${prefixedPath}`);
+          }
+        }
       }
     }
     
@@ -1388,6 +1472,132 @@ ipcMain.handle('install-update', async () => {
 
 ipcMain.handle('get-app-version', () => {
   return app.getVersion();
+});
+
+// Seed trucking data from PC utama folder
+ipcMain.handle('seed-trucking-from-pc', async (event, pcFolderPath?: string) => {
+  try {
+    // Default path ke PC utama jika tidak di-specify
+    const defaultPath = 'D:\\trimalaksanaapps\\PT.Trima Laksana Jaya Pratama\\docker\\data\\localstorage\\trucking';
+    const sourcePath = pcFolderPath || defaultPath;
+    
+    console.log(`[Seed Trucking] Reading from PC utama: ${sourcePath}`);
+    
+    // Check if path exists
+    try {
+      await fs.promises.access(sourcePath);
+    } catch {
+      return { 
+        success: false, 
+        error: `Folder tidak ditemukan: ${sourcePath}\n\nPastikan folder PC utama tersedia.`,
+        imported: 0 
+      };
+    }
+    
+    const data: Record<string, any> = {};
+    let imported = 0;
+    const errors: string[] = [];
+    
+    // Helper function to read directory recursively
+    const readDirRecursive = async (dir: string, baseKey: string = ''): Promise<void> => {
+      try {
+        const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+        
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          const key = baseKey ? `${baseKey}/${entry.name}` : entry.name;
+          
+          if (entry.isDirectory()) {
+            // Recursively read subdirectories
+            await readDirRecursive(fullPath, key);
+          } else if (entry.isFile() && entry.name.endsWith('.json')) {
+            try {
+              const content = await fs.promises.readFile(fullPath, 'utf8');
+              const dataKey = key.replace('.json', '').replace(/\\/g, '/');
+              
+              // Filter: hanya file yang prefix trucking_ atau di folder trucking/
+              const fileName = entry.name.replace('.json', '');
+              const isTruckingFile = fileName.startsWith('trucking_') || 
+                                     dataKey.includes('trucking/') || 
+                                     dataKey.startsWith('trucking/');
+              
+              if (isTruckingFile) {
+                const parsed = JSON.parse(content);
+                // Extract value if wrapped with timestamp
+                const actualValue = (parsed && typeof parsed === 'object' && 'value' in parsed) 
+                  ? parsed.value 
+                  : parsed;
+                
+                // Normalize key: remove folder prefix, keep only filename
+                let normalizedKey = fileName;
+                if (normalizedKey.includes('/')) {
+                  normalizedKey = normalizedKey.split('/').pop() || normalizedKey;
+                }
+                
+                data[normalizedKey] = actualValue;
+                console.log(`✓ Loaded trucking data: ${normalizedKey} from ${fullPath}`);
+              }
+            } catch (error: any) {
+              errors.push(`Error reading ${entry.name}: ${error.message}`);
+            }
+          }
+        }
+      } catch (error: any) {
+        errors.push(`Cannot read directory ${dir}: ${error.message}`);
+      }
+    };
+    
+    // Read all files from source folder
+    await readDirRecursive(sourcePath);
+    
+    console.log(`[Seed Trucking] Found ${Object.keys(data).length} trucking files to import`);
+    
+    // Get target data directory
+    const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+    let targetDataDir: string;
+    
+    if (isDev) {
+      targetDataDir = path.join(__dirname, '..', 'data', 'localStorage', 'trucking');
+    } else {
+      targetDataDir = path.join(process.resourcesPath || app.getAppPath(), 'data', 'localStorage', 'trucking');
+    }
+    
+    // Ensure target directory exists
+    await fs.promises.mkdir(targetDataDir, { recursive: true });
+    
+    // Save each file to target directory
+    for (const [key, value] of Object.entries(data)) {
+      try {
+        const timestamp = Date.now();
+        const dataToSave = {
+          value,
+          timestamp,
+          _timestamp: timestamp,
+        };
+        
+        const targetPath = path.join(targetDataDir, `${key}.json`);
+        await fs.promises.writeFile(targetPath, JSON.stringify(dataToSave, null, 2), 'utf8');
+        imported++;
+        console.log(`✓ Saved ${key} to ${targetPath}`);
+      } catch (error: any) {
+        errors.push(`Error saving ${key}: ${error.message}`);
+      }
+    }
+    
+    return {
+      success: true,
+      imported,
+      errors: errors.length > 0 ? errors : undefined,
+      message: `✅ Berhasil import ${imported} file trucking dari PC utama`
+    };
+  } catch (error: any) {
+    console.error('[Seed Trucking] Error:', error);
+    return {
+      success: false,
+      error: error.message,
+      imported: 0
+    };
+  }
 });
 
 // Function to create desktop shortcut (Windows only, for portable builds)

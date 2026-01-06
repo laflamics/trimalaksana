@@ -5,8 +5,9 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import NotificationBell from '../../../components/NotificationBell';
 import { storageService } from '../../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
 import { generateInvoiceHtml } from '../../../pdf/invoice-pdf-template';
-import { openPrintWindow } from '../../../utils/actions';
+import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../../utils/actions';
 import { loadLogoAsBase64 } from '../../../utils/logo-loader';
 import '../../../styles/common.css';
 
@@ -126,21 +127,9 @@ const Accounting = () => {
     const prod = await storageService.get<any[]>('trucking_products') || [];
     const so = await storageService.get<any[]>('trucking_salesOrders') || [];
     
-    // Filter out deleted items (tombstone pattern)
-    const activeInvoices = (inv || []).filter((i: any) => {
-      const isDeleted = i?.deleted === true || i?.deleted === 'true' || i?.deletedAt;
-      if (isDeleted) {
-        console.log(`[Invoices] Filtering out deleted invoice in loadData: ${i.invoiceNo || i.id}, deleted: ${i.deleted}, deletedAt: ${i.deletedAt}`);
-      }
-      return !isDeleted;
-    });
-    const activeExpenses = (exp || []).filter((e: any) => {
-      const isDeleted = e?.deleted === true || e?.deleted === 'true' || e?.deletedAt;
-      if (isDeleted) {
-        console.log(`[Invoices] Filtering out deleted expense in loadData: ${e.expenseNo || e.id}, deleted: ${e.deleted}, deletedAt: ${e.deletedAt}`);
-      }
-      return !isDeleted;
-    });
+    // Filter out deleted items menggunakan helper function
+    const activeInvoices = filterActiveItems(inv || []);
+    const activeExpenses = filterActiveItems(exp || []);
     
     console.log(`[Invoices] Loaded ${(inv || []).length} invoices, filtered to ${activeInvoices.length} active invoices`);
     setInvoices(activeInvoices);
@@ -453,9 +442,7 @@ const Accounting = () => {
       const updated = [...invoicesArray, newInvoice];
       await storageService.set('trucking_invoices', updated);
       // Filter out deleted items setelah update
-      const activeUpdated = updated.filter((i: any) => {
-        return !(i?.deleted === true || i?.deleted === 'true' || i?.deletedAt);
-      });
+      const activeUpdated = filterActiveItems(updated);
       setInvoices(activeUpdated);
 
       // Auto-create journal entries untuk General Ledger
@@ -463,9 +450,7 @@ const Accounting = () => {
       try {
             // Reload journalEntries dari storage untuk prevent duplicate (filter out deleted items)
             const journalEntriesRaw = await storageService.get<any[]>('trucking_journalEntries') || [];
-            const journalEntries = (Array.isArray(journalEntriesRaw) ? journalEntriesRaw : []).filter((e: any) => {
-              return !(e?.deleted === true || e?.deleted === 'true' || e?.deletedAt);
-            });
+            const journalEntries = filterActiveItems(Array.isArray(journalEntriesRaw) ? journalEntriesRaw : []);
         const accounts = await storageService.get<any[]>('trucking_accounts') || [];
         
         // Pastikan accounts ada
@@ -608,9 +593,7 @@ const Accounting = () => {
           if (cogsAmount > 0) {
             // Reload journalEntries lagi untuk COGS check (prevent duplicate)
             const journalEntriesForCOGS = await storageService.get<any[]>('trucking_journalEntries') || [];
-            const activeJournalEntriesForCOGS = (Array.isArray(journalEntriesForCOGS) ? journalEntriesForCOGS : []).filter((e: any) => {
-              return !(e?.deleted === true || e?.deleted === 'true' || e?.deletedAt);
-            });
+            const activeJournalEntriesForCOGS = filterActiveItems(Array.isArray(journalEntriesForCOGS) ? journalEntriesForCOGS : []);
             
             // accountsArray already declared above
             const cogsAccount = accountsArray.find((a: any) => a.code === '5000') || { code: '5000', name: 'Cost of Goods Sold' };
@@ -645,9 +628,7 @@ const Accounting = () => {
               ];
 
               const currentEntriesRaw = await storageService.get<any[]>('trucking_journalEntries') || [];
-              const currentEntries = (Array.isArray(currentEntriesRaw) ? currentEntriesRaw : []).filter((e: any) => {
-                return !(e?.deleted === true || e?.deleted === 'true' || e?.deletedAt);
-              });
+              const currentEntries = filterActiveItems(Array.isArray(currentEntriesRaw) ? currentEntriesRaw : []);
               const baseLength = currentEntries.length;
               const cogsEntriesWithNo = cogsEntries.map((entry, idx) => ({
                 ...entry,
@@ -780,20 +761,16 @@ const Accounting = () => {
       await storageService.set('trucking_invoices', updated);
       
       // Filter out deleted items setelah update
-      const activeUpdated = updated.filter((i: any) => {
-        return !(i?.deleted === true || i?.deleted === 'true' || i?.deletedAt);
-      });
+      const activeUpdated = filterActiveItems(updated);
       setInvoices(activeUpdated);
 
       // Auto-create journal entries untuk General Ledger
       try {
         // Reload journalEntries dari storage untuk prevent duplicate (filter out deleted items)
         const journalEntriesRaw = await storageService.get<any[]>('trucking_journalEntries') || [];
-        const journalEntries = (Array.isArray(journalEntriesRaw) ? journalEntriesRaw : []).filter((e: any) => {
-          return !(e?.deleted === true || e?.deleted === 'true' || e?.deletedAt);
-        });
-        const accounts = await storageService.get<any[]>('trucking_accounts') || [];
-        const accountsArray = Array.isArray(accounts) ? accounts : [];
+        const journalEntries = filterActiveItems(Array.isArray(journalEntriesRaw) ? journalEntriesRaw : []);
+        const accountsRaw = await storageService.get<any[]>('trucking_accounts') || [];
+        const accountsArray = filterActiveItems(Array.isArray(accountsRaw) ? accountsRaw : []);
         
         if (accountsArray.length === 0) {
           const defaultAccounts = [
@@ -1217,6 +1194,7 @@ const Accounting = () => {
       const fileName = `${viewPdfData.invoiceNo}.pdf`;
 
       if (electronAPI && typeof electronAPI.savePdf === 'function') {
+        // Electron: Use file picker to select save location
         const result = await electronAPI.savePdf(viewPdfData.html, fileName);
         if (result.success) {
           showToast(`PDF saved successfully to:\n${result.path}`, 'success');
@@ -1224,8 +1202,38 @@ const Accounting = () => {
         } else if (!result.canceled) {
           showToast(`Error saving PDF: ${result.error || 'Unknown error'}`, 'error');
         }
+      } else if (isMobile() || isCapacitor()) {
+        // Mobile/Capacitor: Use Web Share API or download link
+        await savePdfForMobile(
+          viewPdfData.html,
+          fileName,
+          (message) => {
+            showToast(message, 'success');
+            setViewPdfData(null); // Close view setelah save
+          },
+          (message) => showToast(message, 'error')
+        );
       } else {
-        openPrintWindow(viewPdfData.html);
+        // Browser: Buka window baru dengan print dialog langsung
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.open();
+          printWindow.document.write(viewPdfData.html);
+          printWindow.document.close();
+          printWindow.onload = () => {
+            setTimeout(() => {
+              printWindow.print();
+            }, 250);
+          };
+          setTimeout(() => {
+            if (printWindow && !printWindow.closed) {
+              printWindow.print();
+            }
+          }, 500);
+          showToast('Print dialog akan muncul. Pilih "Save as PDF" untuk menyimpan dokumen.', 'info');
+        } else {
+          openPrintWindow(viewPdfData.html, { autoPrint: true });
+        }
       }
     } catch (error: any) {
       showToast(`Error saving PDF: ${error.message}`, 'error');
@@ -1372,7 +1380,7 @@ const Accounting = () => {
 
 
   // Helper function untuk save tombstone ke audit log
-  const saveTombstoneToAuditLog = (item: any, refType: string) => {
+  const saveTombstoneToAuditLog = async (item: any, refType: string) => {
     try {
       const timestamp = new Date().toISOString();
       const itemId = item.id || item.invoiceNo || item.expenseNo || 'unknown';
@@ -1388,19 +1396,9 @@ const Accounting = () => {
         createdAt: timestamp,
       };
       
-      const auditKey = 'trucking/auditLogs';
-      const auditStr = localStorage.getItem(auditKey);
-      let auditLogs: any[] = [];
-      if (auditStr) {
-        const parsed = JSON.parse(auditStr);
-        auditLogs = Array.isArray(parsed?.value) ? parsed.value : (Array.isArray(parsed) ? parsed : []);
-      }
-      auditLogs.push(auditLog);
-      localStorage.setItem(auditKey, JSON.stringify({
-        value: auditLogs,
-        timestamp: new Date().toISOString(),
-        _timestamp: Date.now(),
-      }));
+      // Simpan audit log menggunakan storageService
+      const auditLogs = await storageService.get<any[]>('trucking_auditLogs') || [];
+      await storageService.set('trucking_auditLogs', [...auditLogs, auditLog]);
       return true;
     } catch (error) {
       console.error('Error saving tombstone to audit log:', error);
@@ -1414,21 +1412,18 @@ const Accounting = () => {
       async () => {
         try {
           // Simpan tombstone ke audit log sebelum menghapus
-          saveTombstoneToAuditLog(item, 'trucking_invoices');
+          await saveTombstoneToAuditLog(item, 'trucking_invoices');
           
-          // Load semua data dari storage
-          const allInvoices = await storageService.get<any[]>('trucking_invoices') || [];
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('trucking_invoices', item.id, 'id');
           
-          // Hapus data benar-benar dari array
-          const updated = allInvoices.filter((inv: any) => inv.id !== item.id);
-          
-          // Simpan ke storage
-          await storageService.set('trucking_invoices', updated);
-          console.log(`[Invoices] Deleted invoice ${item.invoiceNo} and saved tombstone to audit log`);
-          
-          // Reload data
-          await loadData();
-          showAlert(`Invoice "${item.invoiceNo}" deleted successfully`, 'Success');
+          if (success) {
+            // Reload data
+            await loadData();
+            showAlert(`Invoice "${item.invoiceNo}" deleted successfully`, 'Success');
+          } else {
+            showAlert(`Error deleting invoice "${item.invoiceNo}". Please try again.`, 'Error');
+          }
         } catch (error: any) {
           showAlert(`Error deleting invoice: ${error.message}`, 'Error');
         }
@@ -1448,35 +1443,27 @@ const Accounting = () => {
     showConfirm(
       `Delete expense: ${item.expenseNo}?`,
       async () => {
-        await proceedWithDeleteExpense();
+        try {
+          // Simpan tombstone ke audit log sebelum menghapus
+          await saveTombstoneToAuditLog(item, 'trucking_expenses');
+          
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('trucking_expenses', item.id, 'id');
+          
+          if (success) {
+            // Reload data dengan filter active items
+            await loadData();
+            showAlert(`Expense "${item.expenseNo}" deleted successfully`, 'Success');
+          } else {
+            showAlert(`Error deleting expense "${item.expenseNo}". Please try again.`, 'Error');
+          }
+        } catch (error: any) {
+          showAlert(`Error deleting expense: ${error.message}`, 'Error');
+        }
       },
       () => {},
       'Delete Expense'
     );
-    return;
-    
-    async function proceedWithDeleteExpense() {
-      try {
-        // Simpan tombstone ke audit log sebelum menghapus
-        saveTombstoneToAuditLog(item, 'trucking_expenses');
-        
-        // Load semua data dari storage
-        const allExpenses = await storageService.get<any[]>('trucking_expenses') || [];
-        
-        // Hapus data benar-benar dari array
-        const updated = allExpenses.filter((e: any) => e.id !== item.id);
-        
-        // Simpan ke storage
-        await storageService.set('trucking_expenses', updated);
-        console.log(`[Invoices] Deleted expense ${item.expenseNo} and saved tombstone to audit log`);
-        
-        // Reload data
-        await loadData();
-        showAlert(`Expense "${item.expenseNo}" deleted successfully`, 'Success');
-      } catch (error: any) {
-        showAlert(`Error deleting expense: ${error.message}`, 'Error');
-      }
-    }
   };
 
   const tabs = [
@@ -1639,14 +1626,8 @@ const Accounting = () => {
   const sortedInvoices = useMemo(() => {
     // Ensure invoices is always an array
     const invoicesArray = Array.isArray(invoices) ? invoices : [];
-    // Filter out deleted items (double-check untuk memastikan tidak ada yang lolos)
-    const activeInvoices = invoicesArray.filter((i: any) => {
-      const isDeleted = i?.deleted === true || i?.deleted === 'true' || i?.deletedAt;
-      if (isDeleted) {
-        console.log(`[Invoices] Filtering out deleted invoice: ${i.invoiceNo || i.id}, deleted: ${i.deleted}, deletedAt: ${i.deletedAt}`);
-      }
-      return !isDeleted;
-    });
+    // Filter out deleted items menggunakan helper function
+    const activeInvoices = filterActiveItems(invoicesArray);
     return [...activeInvoices].sort((a, b) => {
       const dateA = new Date(a.created || 0).getTime();
       const dateB = new Date(b.created || 0).getTime();
@@ -2138,18 +2119,16 @@ const Accounting = () => {
           salesOrders={salesOrders}
           onClose={() => setEditingInvoice(null)}
           onSave={async (updatedData) => {
-            const updated = invoices.map(inv =>
+            // Load semua data dari storage untuk update
+            const allInvoices = await storageService.get<any[]>('trucking_invoices') || [];
+            const updated = allInvoices.map(inv =>
               inv.id === editingInvoice.id ? { ...inv, ...updatedData } : inv
             );
             await storageService.set('trucking_invoices', updated);
-            // Filter out deleted items setelah update
-            const activeUpdated = updated.filter((i: any) => {
-              return !(i?.deleted === true || i?.deleted === 'true' || i?.deletedAt);
-            });
-            setInvoices(activeUpdated);
+            // Reload data dengan filter active items menggunakan helper function
+            await loadData();
             setEditingInvoice(null);
             showAlert('✅ Invoice updated', 'Success');
-            await loadData();
           }}
         />
       )}
@@ -2173,11 +2152,8 @@ const Accounting = () => {
                 : inv
             );
             await storageService.set('trucking_invoices', updated);
-            // Filter out deleted items setelah update
-            const activeUpdated = updated.filter((i: any) => {
-              return !(i?.deleted === true || i?.deleted === 'true' || i?.deletedAt);
-            });
-            setInvoices(activeUpdated);
+            // Reload data dengan filter active items menggunakan helper function
+            await loadData();
             
             // Create payment record untuk AR tracking
             try {
@@ -2220,7 +2196,8 @@ const Accounting = () => {
               const journalEntries = (Array.isArray(journalEntriesRaw) ? journalEntriesRaw : []).filter((e: any) => {
                 return !(e?.deleted === true || e?.deleted === 'true' || e?.deletedAt);
               });
-              const accounts = await storageService.get<any[]>('trucking_accounts') || [];
+              const accountsRaw = await storageService.get<any[]>('trucking_accounts') || [];
+              const accounts = filterActiveItems(accountsRaw || []);
               const invoiceTotal = updatingInvoice.bom?.total || 0;
               const entryDate = new Date().toISOString().split('T')[0];
               
@@ -2387,11 +2364,9 @@ const CreateInvoiceDialog = ({
           storageService.get<any[]>('trucking_suratJalan') || [],
         ]);
         
-        // Filter: hanya yang belum di-delete
-        const activeDOs = (doData || []).filter((doItem: any) => {
-          if (doItem?.deleted === true || doItem?.deleted === 'true' || doItem?.deletedAt) {
-            return false;
-          }
+        // Filter: hanya yang belum di-delete menggunakan helper function
+        const activeDOsRaw = filterActiveItems(doData || []);
+        const activeDOs = activeDOsRaw.filter((doItem: any) => {
           // Filter: belum ada invoice untuk DO ini (cek via SJ atau langsung dari doNo)
           const hasInvoice = invoices.some((inv: any) => {
             // Cek apakah invoice punya doNo yang sama
@@ -2405,10 +2380,8 @@ const CreateInvoiceDialog = ({
           return !hasInvoice;
         });
         
-        const activeSJ = (sjData || []).filter((sj: any) => {
-          if (sj?.deleted === true || sj?.deleted === 'true' || sj?.deletedAt) {
-            return false;
-          }
+        const activeSJRaw = filterActiveItems(sjData || []);
+        const activeSJ = activeSJRaw.filter((sj: any) => {
           const hasInvoice = invoices.some((inv: any) => inv.sjNo === sj.sjNo);
           return !hasInvoice;
         });
@@ -2428,14 +2401,9 @@ const CreateInvoiceDialog = ({
   useEffect(() => {
     if (selectedDOs.length > 0 && mode === 'do') {
       const loadDOData = async () => {
-        // Load dari localStorage langsung untuk konsistensi
-        const storageKey = 'trucking/trucking_delivery_orders';
-        const valueStr = localStorage.getItem(storageKey);
-        let doData: any[] = [];
-        if (valueStr) {
-          const parsed = JSON.parse(valueStr);
-          doData = Array.isArray(parsed?.value) ? parsed.value : (Array.isArray(parsed) ? parsed : []);
-        }
+        // Load menggunakan storageService untuk membaca dari file storage juga
+        const doDataRaw = await storageService.get<any[]>('trucking_delivery_orders');
+        const doData = doDataRaw || [];
         const selectedDOItems = doData.filter((doItem: any) => selectedDOs.includes(doItem.doNo));
         
         if (selectedDOItems.length > 0) {

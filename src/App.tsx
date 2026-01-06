@@ -1,6 +1,8 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import BusinessSelector from './pages/BusinessSelector';
 import ProtectedRoute from './components/ProtectedRoute';
+import DefaultRouteRedirect from './components/DefaultRouteRedirect';
+import SuperAdmin from './pages/SuperAdmin/SuperAdmin';
 import PackagingLayout from './pages/Packaging/Layout';
 import GeneralTradingLayout from './pages/GeneralTrading/Layout';
 import TruckingLayout from './pages/Trucking/Layout';
@@ -123,7 +125,7 @@ import TruckingPettyCash from './pages/Trucking/Finance/PettyCash';
 // Trucking - Settings
 import TruckingSettings from './pages/Trucking/Settings/Settings';
 import TruckingDBActivity from './pages/Trucking/Settings/DBActivity';
-import TruckingUserControl from './pages/GeneralTrading/Settings/UserControl'; // Reuse from GT
+import TruckingUserControl from './pages/Trucking/Settings/UserControl';
 // Trucking - Unit Scheduling
 import TruckingUnitScheduling from './pages/Trucking/UnitScheduling';
 
@@ -135,6 +137,16 @@ function App() {
       <Routes>
         {/* Login */}
         <Route path="/login" element={<Login />} />
+
+        {/* Super Admin - Only accessible by admin user */}
+        <Route
+          path="/super-admin"
+          element={
+            <ProtectedRoute>
+              <SuperAdmin />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Business Selector - Landing Page */}
         <Route
@@ -194,9 +206,9 @@ function App() {
                   <Route path="settings/user-control" element={<UserControl />} />
                   <Route path="settings/test-automation" element={<TestAutomation />} />
 
-                  {/* Default redirect untuk packaging - ke financial reports */}
-                  <Route path="" element={<Navigate to="finance/reports" replace />} />
-                  <Route path="*" element={<Navigate to="finance/reports" replace />} />
+                  {/* Default redirect untuk packaging - check access first */}
+                  <Route path="" element={<DefaultRouteRedirect businessUnit="packaging" defaultRoute="finance/reports" />} />
+                  <Route path="*" element={<DefaultRouteRedirect businessUnit="packaging" defaultRoute="finance/reports" />} />
                 </Routes>
               </PackagingLayout>
             </ProtectedRoute>
@@ -252,9 +264,9 @@ function App() {
                   <Route path="settings/flow-test" element={<GTFlowTest />} />
                   <Route path="settings/complete-flow-test" element={<CompleteFlowTest />} />
 
-                  {/* Default redirect untuk general trading - ke financial reports */}
-                  <Route path="" element={<Navigate to="finance/reports" replace />} />
-                  <Route path="*" element={<Navigate to="finance/reports" replace />} />
+                  {/* Default redirect untuk general trading - check access first */}
+                  <Route path="" element={<DefaultRouteRedirect businessUnit="general-trading" defaultRoute="finance/reports" />} />
+                  <Route path="*" element={<DefaultRouteRedirect businessUnit="general-trading" defaultRoute="finance/reports" />} />
                 </Routes>
               </GeneralTradingLayout>
             </ProtectedRoute>
@@ -301,9 +313,9 @@ function App() {
                   <Route path="settings/db-activity" element={<TruckingDBActivity />} />
                   <Route path="settings/user-control" element={<TruckingUserControl />} />
 
-                  {/* Default redirect untuk trucking */}
-                  <Route path="" element={<Navigate to="dashboard" replace />} />
-                  <Route path="*" element={<Navigate to="dashboard" replace />} />
+                  {/* Default redirect untuk trucking - check access first */}
+                  <Route path="" element={<DefaultRouteRedirect businessUnit="trucking" defaultRoute="dashboard" />} />
+                  <Route path="*" element={<DefaultRouteRedirect businessUnit="trucking" defaultRoute="dashboard" />} />
                 </Routes>
               </TruckingLayout>
             </ProtectedRoute>

@@ -19,7 +19,23 @@ const initAutoSync = () => {
   const config = storageService.getConfig();
   if (config.type === 'server' && config.serverUrl) {
     console.log('🔄 Initializing auto-sync with server:', config.serverUrl);
-    storageService.startAutoSync();
+    
+    // Check if running on mobile/Capacitor
+    const isMobile = typeof window !== 'undefined' && 
+      (!!(window as any).Capacitor || 
+       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+    
+    if (isMobile) {
+      console.log('📱 Mobile device detected - using extended timeout for sync');
+      // Di mobile, delay sedikit untuk memastikan Capacitor sudah ready
+      // dan network sudah tersedia
+      setTimeout(() => {
+        storageService.startAutoSync();
+      }, 1000); // Delay 1 detik untuk mobile
+    } else {
+      // Desktop - start immediately
+      storageService.startAutoSync();
+    }
   } else {
     console.log('📦 Using local storage mode');
   }

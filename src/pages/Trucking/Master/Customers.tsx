@@ -4,6 +4,7 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -100,7 +101,8 @@ const Customers = () => {
 
   const loadCustomers = async () => {
     const data = await storageService.get<Customer[]>('trucking_customers') || [];
-    setCustomers(data.map((c, idx) => ({ ...c, no: idx + 1 })));
+    const activeCustomers = filterActiveItems(data);
+    setCustomers(activeCustomers.map((c, idx) => ({ ...c, no: idx + 1 })));
   };
 
   const handleSave = async () => {
@@ -158,10 +160,18 @@ const Customers = () => {
       `Are you sure you want to delete customer "${item.nama}"?`,
       async () => {
         try {
-          const updated = customers.filter(c => c.id !== item.id);
-          await storageService.set('trucking_customers', updated);
-          setCustomers(updated.map((c, idx) => ({ ...c, no: idx + 1 })));
-          showAlert(`Customer "${item.nama}" deleted successfully`, 'Success');
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('trucking_customers', item.id, 'id');
+          
+          if (success) {
+            // Reload data dengan filter active items
+            const updatedCustomers = await storageService.get<Customer[]>('trucking_customers') || [];
+            const activeCustomers = filterActiveItems(updatedCustomers);
+            setCustomers(activeCustomers.map((c, idx) => ({ ...c, no: idx + 1 })));
+            showAlert(`Customer "${item.nama}" deleted successfully`, 'Success');
+          } else {
+            showAlert(`Error deleting customer "${item.nama}". Please try again.`, 'Error');
+          }
         } catch (error: any) {
           showAlert(`Error deleting customer: ${error.message}`, 'Error');
         }

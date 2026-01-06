@@ -108,6 +108,11 @@ class StorageService {
 
   // Get storage key with business context prefix
   private getStorageKey(key: string, forServer: boolean = false): string {
+    // CRITICAL: userAccessControl is global/shared across business units - always use without prefix
+    if (key === 'userAccessControl') {
+      return key;
+    }
+    
     const business = this.getBusinessContext();
     // Packaging tetap pakai key asli untuk backward compatibility
     if (business === 'packaging') {
@@ -147,38 +152,69 @@ class StorageService {
     if (this.autoSyncEnabled) return; // Already running
     
     const config = this.getConfig();
-    if (config.type !== 'server' || !config.serverUrl) return;
+    if (config.type !== 'server' || !config.serverUrl) {
+      console.warn('[Storage] Auto-sync not started: server mode not configured or serverUrl missing');
+      return;
+    }
+    
+    // Check if running on mobile/Capacitor
+    const isMobile = typeof window !== 'undefined' && 
+      (!!(window as any).Capacitor || 
+       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
     
     this.autoSyncEnabled = true;
-    this.log(`🔄 Auto-sync started (polling every ${this.autoSyncIntervalMs}ms)`);
+    console.log(`🔄 Auto-sync started (polling every ${this.autoSyncIntervalMs}ms)`);
+    console.log(`🔄 Server URL: ${config.serverUrl}`);
+    if (isMobile) {
+      console.log('📱 Mobile device detected - using extended timeout (90s for first sync, 45s for normal sync)');
+    }
     
     // CRITICAL: Reset last sync timestamp untuk force full sync saat pertama kali
     // Ini memastikan user baru atau user yang datanya belum ter-update akan dapat semua data dari server
     const lastSyncTimestamp = this.getLastSyncTimestamp();
-    if (lastSyncTimestamp === 0) {
-      this.log('🔄 First sync detected - will pull all data from server');
+    const isFirstSync = lastSyncTimestamp === 0;
+    
+    if (isFirstSync) {
+      console.log('🔄 First sync detected - will pull ALL data from server (no timestamp filter)');
+      if (isMobile) {
+        console.log('📱 Mobile first sync: This may take longer (up to 90 seconds) - please wait...');
+      }
+    } else {
+      console.log(`🔄 Incremental sync - will pull data changed since: ${new Date(lastSyncTimestamp).toISOString()}`);
     }
     
-    // Sync TO server first (push local data to server)
-    this.syncToServer().then(() => {
-      this.log('✅ Initial sync to server completed');
-      // Then sync FROM server (pull server data to local)
-      // Ini akan pull semua data jika lastSyncTimestamp === 0 (user baru atau belum pernah sync)
-      this.syncFromServer().then(() => {
-        this.log('✅ Initial sync from server completed - all data should be available');
-      }).catch((error) => {
-        console.error('❌ Initial sync from server failed:', error);
-      });
-    }).catch((error) => {
-      console.error('❌ Initial sync to server failed:', error);
-      // Still try to sync from server even if push failed
-      // Ini penting untuk user baru yang belum punya data local
-      this.syncFromServer().then(() => {
-        this.log('✅ Sync from server completed after push failure - all data should be available');
-      }).catch((syncError) => {
-        console.error('❌ Sync from server also failed:', syncError);
-      });
-    });
+    // CRITICAL: Untuk device baru, sync FROM server FIRST (pull data dulu)
+    // Ini penting karena device baru belum punya data local
+    // Sync TO server bisa dilakukan setelah data sudah ter-pull
+    const performInitialSync = async () => {
+      try {
+        console.log('🔄 Starting initial sync FROM server (pulling data first for new devices)...');
+        await this.syncFromServer();
+        console.log('✅ Initial sync FROM server completed - all data should be available');
+        
+        // Setelah data ter-pull, sync TO server untuk push data local (jika ada)
+        console.log('🔄 Syncing local data TO server...');
+        await this.syncToServer();
+        console.log('✅ Initial sync TO server completed');
+      } catch (error: any) {
+        console.error('❌ Initial sync failed:', error);
+        // Retry sync FROM server sekali lagi jika gagal
+        if (isFirstSync) {
+          console.log('🔄 Retrying sync FROM server (first sync, critical for new devices)...');
+          setTimeout(async () => {
+            try {
+              await this.syncFromServer();
+              console.log('✅ Retry sync FROM server completed');
+            } catch (retryError) {
+              console.error('❌ Retry sync FROM server also failed:', retryError);
+            }
+          }, 3000); // Retry setelah 3 detik
+        }
+      }
+    };
+    
+    // Start initial sync immediately
+    performInitialSync();
     
     // Then sync periodically: BOTH push to server AND pull from server
     // This ensures local updates are pushed to server, and server updates are pulled to local
@@ -271,9 +307,20 @@ class StorageService {
              (normalizedKey === key || key.startsWith('packaging/'));
     }
     
-    // General Trading & Trucking: must have prefix
-    const prefix = `${business}/`;
-    return key.startsWith(prefix) || key.startsWith('storage_config');
+    // General Trading & Trucking: must have prefix OR direct prefix (gt_* or trucking_*)
+    if (business === 'general-trading') {
+      const prefix = `${business}/`;
+      // Accept: general-trading/gt_products OR gt_products (from server)
+      return key.startsWith(prefix) || key.startsWith('gt_') || key.startsWith('storage_config');
+    }
+    
+    if (business === 'trucking') {
+      const prefix = `${business}/`;
+      // Accept: trucking/trucking_drivers OR trucking_drivers (from server)
+      return key.startsWith(prefix) || key.startsWith('trucking_') || key.startsWith('storage_config');
+    }
+    
+    return key.startsWith('storage_config');
   }
 
   getConfig(): StorageConfig {
@@ -329,6 +376,39 @@ class StorageService {
             if (prefixedResult.success && prefixedResult.data !== null) {
               result = prefixedResult;
               this.log(`[Storage.get] Found ${key} with prefix packaging/ (backward compatibility)`);
+            }
+          }
+          // SPECIAL FIX: For trucking, try multiple paths:
+          // 1. data/localStorage/trucking/trucking_*.json (subfolder) - PRIMARY location
+          // 2. data/trucking_*.json (root data folder) - user's preferred location
+          // 3. data/localStorage/trucking_*.json (root localStorage) - fallback
+          if (business === 'trucking' && (!result.success || result.data === null)) {
+            // storageKey is "trucking/trucking_delivery_orders" for key "trucking_delivery_orders"
+            // Electron loadStorage should already try this, but let's try explicitly
+            
+            // First, try the prefixed path directly (data/localStorage/trucking/trucking_*.json)
+            // This is what Electron should find with storageKey
+            if (storageKey.startsWith('trucking/')) {
+              const directResult = await electronAPI.loadStorage(storageKey);
+              if (directResult.success && directResult.data !== null) {
+                result = directResult;
+                console.log(`[Storage.get] ✅ Found ${key} at prefixed path: ${storageKey}`);
+              }
+            }
+            
+            // If still not found, try root key (trucking_delivery_orders) - Electron will check multiple paths
+            if (!result.success || result.data === null) {
+              const rootKey = storageKey.startsWith('trucking/') 
+                ? storageKey.replace('trucking/', '') // "trucking/trucking_drivers" -> "trucking_drivers"
+                : key; // Already root key
+              
+              const rootResult = await electronAPI.loadStorage(rootKey);
+              if (rootResult.success && rootResult.data !== null) {
+                result = rootResult;
+                console.log(`[Storage.get] ✅ Found ${key} at root key: ${rootKey}`);
+              } else {
+                console.log(`[Storage.get] ⚠️ ${key} not found. Tried storageKey: ${storageKey}, rootKey: ${rootKey}`);
+              }
             }
           }
           if (result.success && result.data !== null) {
@@ -393,10 +473,14 @@ class StorageService {
       }
       
       // Fallback to localStorage (instant, no retry needed)
-      // CRITICAL FIX: For packaging, try both formats (with and without prefix) for backward compatibility
-      let value = localStorage.getItem(storageKey);
+      // CRITICAL: For userAccessControl, always use key without prefix (global key)
+      // getStorageKey already returns 'userAccessControl' without prefix, but let's be explicit
+      const readKey = key === 'userAccessControl' ? 'userAccessControl' : storageKey;
+      let value = localStorage.getItem(readKey);
       const business = this.getBusinessContext();
-      if (business === 'packaging' && !value) {
+      // CRITICAL FIX: For packaging, try both formats (with and without prefix) for backward compatibility
+      // BUT: Skip this for userAccessControl (it's global, not business-specific)
+      if (key !== 'userAccessControl' && business === 'packaging' && !value) {
         // Try with packaging/ prefix (backward compatibility)
         const prefixedKey = `packaging/${key}`;
         const prefixedValue = localStorage.getItem(prefixedKey);
@@ -407,6 +491,21 @@ class StorageService {
           localStorage.setItem(storageKey, prefixedValue);
           localStorage.removeItem(prefixedKey);
           this.log(`[Storage.get] Migrated ${key} from packaging/ prefix to direct key`);
+        }
+      }
+      // CRITICAL FIX: For trucking, try root path if not found in subfolder (backward compatibility)
+      // Storage key is "trucking/trucking_drivers" but localStorage might have "trucking_drivers"
+      // BUT: Skip this for userAccessControl (it's global, not business-specific)
+      if (key !== 'userAccessControl' && business === 'trucking' && !value && storageKey.startsWith('trucking/')) {
+        // Try root path (without trucking/ prefix) for backward compatibility
+        const rootKey = storageKey.replace('trucking/', ''); // "trucking/trucking_drivers" -> "trucking_drivers"
+        const rootValue = localStorage.getItem(rootKey);
+        if (rootValue) {
+          value = rootValue;
+          this.log(`[Storage.get] Found ${key} in localStorage at root path ${rootKey} (backward compatibility)`);
+          // Migrate to new format (with trucking/ prefix) for consistency
+          localStorage.setItem(storageKey, rootValue);
+          // Don't remove root key yet - keep both for now to avoid breaking other parts
         }
       }
       if (value) {
@@ -453,7 +552,9 @@ class StorageService {
       const serverKey = this.getStorageKey(key, true); // true = for server
       
       // STEP 1: Load from local storage first (instant response)
-      const localValueStr = localStorage.getItem(storageKey);
+      // CRITICAL: For userAccessControl, always use key without prefix (global key)
+      const readKey = key === 'userAccessControl' ? 'userAccessControl' : storageKey;
+      const localValueStr = localStorage.getItem(readKey);
       let localValue = null;
       let localTimestamp = 0;
       
@@ -1389,9 +1490,12 @@ class StorageService {
       }
 
       // Incremental sync: only get data changed since last sync
+      // CRITICAL: Untuk device baru (first sync), jangan pakai timestamp filter
+      // Ini memastikan semua data ter-pull dari server
       const lastSyncTimestamp = this.getLastSyncTimestamp();
       const sinceParam = lastSyncTimestamp > 0 ? `?since=${lastSyncTimestamp}` : '';
       const url = `${config.serverUrl}/api/storage/all${sinceParam}`;
+      console.log(`[Storage] 🔄 Syncing from server: ${url}${isFirstSync ? ' (FIRST SYNC - pulling ALL data, longer timeout)' : ''}`);
       this.log(`[Storage] Syncing from server: ${url}${isFirstSync ? ' (FIRST SYNC - longer timeout)' : ''}`);
       
       // Create AbortController untuk timeout (lebih lama untuk first sync)
@@ -1472,10 +1576,20 @@ class StorageService {
         return;
       }
       
+      const currentBusiness = this.getBusinessContext();
       for (const [key, serverValue] of Object.entries(serverData)) {
           // Filter by business context
           if (!this.isKeyForCurrentBusiness(key)) {
+            // DEBUG: Log skipped keys untuk trucking
+            if (currentBusiness === 'trucking' && (key.startsWith('trucking_') || key.includes('trucking'))) {
+              console.log(`[Storage] ⚠️ Skipped trucking key "${key}" - isKeyForCurrentBusiness returned false`);
+            }
             continue;
+          }
+          
+          // DEBUG: Log keys yang akan di-process untuk trucking
+          if (currentBusiness === 'trucking' && (key.startsWith('trucking_') || key.includes('trucking'))) {
+            console.log(`[Storage] ✅ Processing trucking key "${key}" from server`);
           }
           
           const serverTimestamp = serverTimestamps[key] || 0;
@@ -1656,7 +1770,46 @@ class StorageService {
                   finalTimestamp = serverTimestamp;
                 }
               } else {
-                finalValue = this.mergeData(actualServerValue, localValue, serverTimestamp, localTimestamp);
+                // CRITICAL: Filter out server items that are already deleted locally BEFORE merge
+                // Ini mencegah server mengembalikan item yang sudah di-delete
+                let filteredServerValue = actualServerValue;
+                if (hasDeletedItems && Array.isArray(actualServerValue) && Array.isArray(localValue)) {
+                  const deletedItems = (localValue as any[]).filter((item: any) => item.deleted === true || item.deletedAt);
+                  const deletedIds = new Set<string | number>();
+                  deletedItems.forEach((item: any) => {
+                    const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
+                    if (id !== undefined && id !== null) {
+                      deletedIds.add(id);
+                    }
+                  });
+                  
+                  // Filter out server items that are already deleted locally
+                  filteredServerValue = (actualServerValue as any[]).filter((item: any) => {
+                    const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
+                    if (id !== undefined && id !== null && deletedIds.has(id)) {
+                      this.log(`[Storage] Filtering out server item ${id} - already deleted locally (tombstone protection)`);
+                      return false; // Filter out item ini
+                    }
+                    return true;
+                  });
+                  
+                  // Add deleted items from local to filtered server value (preserve tombstones)
+                  deletedItems.forEach((deletedItem: any) => {
+                    const id = deletedItem.id || deletedItem._id || deletedItem.code || deletedItem.number || deletedItem.sjNo || deletedItem.soNo || deletedItem.kode || deletedItem.product_id;
+                    if (id !== undefined && id !== null) {
+                      const existsInFiltered = (filteredServerValue as any[]).some((item: any) => {
+                        const itemId = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
+                        return itemId === id;
+                      });
+                      if (!existsInFiltered) {
+                        (filteredServerValue as any[]).push(deletedItem); // Tambahkan deleted item untuk tombstone
+                        this.log(`[Storage] Preserving deleted item ${id} from local (tombstone)`);
+                      }
+                    }
+                  });
+                }
+                
+                finalValue = this.mergeData(filteredServerValue, localValue, serverTimestamp, localTimestamp);
                 finalTimestamp = serverTimestamp;
               }
               
@@ -1665,37 +1818,53 @@ class StorageService {
                 const deletedItems = (localValue as any[]).filter((item: any) => item.deleted === true || item.deletedAt);
                 const deletedIds = new Set<string | number>();
                 deletedItems.forEach((item: any) => {
-                  const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo;
+                  const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
                   if (id !== undefined && id !== null) {
                     deletedIds.add(id);
                   }
                 });
                 
-                // Pastikan deleted items ada di finalValue
+                // Pastikan deleted items ada di finalValue dan filter out non-deleted items dengan ID yang sama
                 const finalValueArray = finalValue as any[];
+                // First, remove any non-deleted items that match deleted IDs
+                const filteredFinal = finalValueArray.filter((item: any) => {
+                  const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
+                  if (id !== undefined && id !== null && deletedIds.has(id)) {
+                    // If this item is not marked as deleted, filter it out
+                    if (!(item.deleted === true || item.deletedAt)) {
+                      this.log(`[Storage] Filtering out non-deleted item ${id} from server - already deleted locally (tombstone protection)`);
+                      return false;
+                    }
+                  }
+                  return true;
+                });
+                
+                // Then, ensure deleted items are in finalValue
                 deletedItems.forEach((deletedItem: any) => {
-                  const id = deletedItem.id || deletedItem._id || deletedItem.code || deletedItem.number || deletedItem.sjNo || deletedItem.soNo;
+                  const id = deletedItem.id || deletedItem._id || deletedItem.code || deletedItem.number || deletedItem.sjNo || deletedItem.soNo || deletedItem.kode || deletedItem.product_id;
                   if (id !== undefined && id !== null) {
-                    const existsInFinal = finalValueArray.some((item: any) => {
-                      const itemId = item.id || item._id || item.code || item.number || item.sjNo || item.soNo;
+                    const existsInFinal = filteredFinal.some((item: any) => {
+                      const itemId = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
                       return itemId === id;
                     });
                     if (!existsInFinal) {
-                      finalValueArray.push(deletedItem); // Tambahkan deleted item untuk tombstone
+                      filteredFinal.push(deletedItem); // Tambahkan deleted item untuk tombstone
                       this.log(`[Storage] Preserving deleted item ${id} in finalValue (tombstone)`);
                     } else {
                       // Update existing item dengan deleted flag
-                      const index = finalValueArray.findIndex((item: any) => {
-                        const itemId = item.id || item._id || item.code || item.number || item.sjNo || item.soNo;
+                      const index = filteredFinal.findIndex((item: any) => {
+                        const itemId = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
                         return itemId === id;
                       });
                       if (index >= 0) {
-                        finalValueArray[index] = { ...finalValueArray[index], deleted: true, deletedAt: deletedItem.deletedAt || new Date().toISOString() };
+                        filteredFinal[index] = { ...filteredFinal[index], deleted: true, deletedAt: deletedItem.deletedAt || new Date().toISOString(), deletedTimestamp: deletedItem.deletedTimestamp || Date.now() };
                         this.log(`[Storage] Marking item ${id} as deleted in finalValue (tombstone)`);
                       }
                     }
                   }
                 });
+                
+                finalValue = filteredFinal;
               }
               
               if (Math.abs(serverTimestamp - localTimestamp) > 1000) {
@@ -1760,12 +1929,35 @@ class StorageService {
             // Also save to normalized key for consistency
             localStorage.setItem(key, JSON.stringify(dataToSave));
           }
+          
+          // CRITICAL FIX: For trucking, also save to root key if key is trucking_* (without trucking/ prefix)
+          // Server mengirim key sebagai "trucking_drivers" tapi localKey mungkin "trucking/trucking_drivers"
+          if (currentBusiness === 'trucking' && key.startsWith('trucking_')) {
+            // Also save to root key for backward compatibility (data/trucking_*.json)
+            // localKey mungkin "trucking/trucking_drivers" atau "trucking_drivers"
+            if (localKey.startsWith('trucking/')) {
+              // Save to root key juga
+              localStorage.setItem(key, JSON.stringify(dataToSave));
+              console.log(`[Storage] ✅ Saved trucking key "${key}" to both ${localKey} and ${key} for backward compatibility`);
+            } else {
+              // localKey sudah root key, tapi pastikan juga save ke prefixed key
+              const prefixedKey = `trucking/${key}`;
+              localStorage.setItem(prefixedKey, JSON.stringify(dataToSave));
+              console.log(`[Storage] ✅ Saved trucking key "${key}" to both ${key} and ${prefixedKey} for consistency`);
+            }
+          }
+          
           synced++;
+          console.log(`[Storage] ✅ Synced key "${key}" from server (localKey: ${localKey}, synced: ${synced})`);
           
           // Update file storage jika Electron
           if (electronAPI && electronAPI.saveStorage) {
             try {
               await electronAPI.saveStorage(localKey, dataToSave);
+              // Also save to root key for trucking
+              if (currentBusiness === 'trucking' && key.startsWith('trucking_') && localKey.startsWith('trucking/')) {
+                await electronAPI.saveStorage(key, dataToSave);
+              }
             } catch (error) {
               console.error(`Error saving ${localKey} to file during sync:`, error);
             }
@@ -1819,9 +2011,18 @@ class StorageService {
         }
       }
         
-      // Reduced logging - hanya log jika ada perubahan signifikan
+      // Log hasil sync (termasuk jika tidak ada perubahan untuk debugging)
       if (synced > 0 || merged > 0 || conflicts > 0) {
         this.log(`✅ Synced ${synced} keys from server${merged > 0 ? ` (${merged} merged)` : ''}${conflicts > 0 ? ` (${conflicts} conflicts resolved)` : ''}`);
+      } else if (currentBusiness === 'trucking') {
+        // DEBUG: Log jika tidak ada data yang di-sync untuk trucking
+        const truckingKeys = Object.keys(serverData).filter(k => k.startsWith('trucking_') || k.includes('trucking'));
+        if (truckingKeys.length > 0) {
+          console.warn(`[Storage] ⚠️ No trucking keys synced, but server has ${truckingKeys.length} trucking keys:`, truckingKeys.slice(0, 10));
+          console.warn(`[Storage] ⚠️ Total server keys:`, Object.keys(serverData).slice(0, 20));
+        } else {
+          console.log(`[Storage] ℹ️ No trucking keys found in server response`);
+        }
       }
       this.retryCount = 0; // Reset retry count on success
       this.setSyncStatus('synced');
@@ -1865,6 +2066,14 @@ class StorageService {
         return;
       }
       
+      // Skip keys yang tidak perlu di-sync ke server (local-only keys)
+      // journalEntries adalah key lokal yang tidak perlu di-sync karena auto-generated
+      const localOnlyKeys = ['journalEntries', 'gt_journalEntries', 'trucking_journalEntries'];
+      if (localOnlyKeys.includes(key) || localOnlyKeys.includes(serverKey)) {
+        // Skip sync untuk local-only keys
+        return;
+      }
+      
       // Add timeout untuk prevent hanging jika server tidak respond
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
@@ -1883,7 +2092,7 @@ class StorageService {
       
       // Handle 404 gracefully - endpoint tidak ada di server, skip silently
       if (response.status === 404) {
-        // Endpoint tidak ada di server - ini normal untuk beberapa key (seperti tracking_accounts, tracking_journalEntries)
+        // Endpoint tidak ada di server - ini normal untuk beberapa key (seperti trucking_accounts, trucking_journalEntries)
         // Skip silently tanpa log error untuk menghindari noise di console
         return;
       }
@@ -1899,7 +2108,9 @@ class StorageService {
           
           // CRITICAL: Deduplicate array data sebelum save (especially for userAccessControl)
           let finalMerged = merged;
-          if (Array.isArray(merged) && storageKey === 'userAccessControl') {
+          // Check if this is userAccessControl (key might have prefix, but original key is userAccessControl)
+          const isUserAccessControl = key === 'userAccessControl' || storageKey === 'userAccessControl' || storageKey.endsWith('/userAccessControl');
+          if (Array.isArray(merged) && isUserAccessControl) {
             // Deduplicate by ID - use Map to ensure uniqueness
             const deduplicatedMap = new Map<string | number, any>();
             merged.forEach((item: any) => {
@@ -1923,13 +2134,16 @@ class StorageService {
             timestamp: mergedTimestamp,
             _timestamp: mergedTimestamp,
           };
-          localStorage.setItem(storageKey, JSON.stringify(mergedDataToSave));
+          
+          // CRITICAL: For userAccessControl, always use key without prefix (global key)
+          const saveKey = isUserAccessControl ? 'userAccessControl' : storageKey;
+          localStorage.setItem(saveKey, JSON.stringify(mergedDataToSave));
           
           // Also save to file storage if Electron
           const mergedElectronAPI = (window as any).electronAPI;
           if (mergedElectronAPI && mergedElectronAPI.saveStorage) {
             try {
-              await mergedElectronAPI.saveStorage(storageKey, mergedDataToSave);
+              await mergedElectronAPI.saveStorage(saveKey, mergedDataToSave);
             } catch (error) {
               // Silent fail for file storage
             }
@@ -1937,28 +2151,30 @@ class StorageService {
           
           // CRITICAL: Prevent infinite loop - don't dispatch event if data hasn't changed
           // Compare with current localStorage value to prevent unnecessary events
-          const currentStored = localStorage.getItem(storageKey);
+          const currentStored = localStorage.getItem(saveKey);
           if (currentStored) {
             try {
               const currentParsed = JSON.parse(currentStored);
               const currentValue = currentParsed.value !== undefined ? currentParsed.value : currentParsed;
               // Only dispatch if data actually changed
               if (JSON.stringify(currentValue) !== JSON.stringify(finalMerged)) {
-                this.dispatchStorageEvent(storageKey, finalMerged);
+                this.dispatchStorageEvent(saveKey, finalMerged);
               }
             } catch {
               // If comparison fails, dispatch anyway to be safe
-              this.dispatchStorageEvent(storageKey, finalMerged);
+              this.dispatchStorageEvent(saveKey, finalMerged);
             }
           } else {
             // No current data, safe to dispatch
-            this.dispatchStorageEvent(storageKey, finalMerged);
+            this.dispatchStorageEvent(saveKey, finalMerged);
           }
         } else if (serverValue && !localValue) {
           // Server has data but local doesn't - save it
           // CRITICAL: Deduplicate array data sebelum save (especially for userAccessControl)
           let finalServerValue = serverValue;
-          if (Array.isArray(serverValue) && storageKey === 'userAccessControl') {
+          // Check if this is userAccessControl (key might have prefix, but original key is userAccessControl)
+          const isUserAccessControl = key === 'userAccessControl' || storageKey === 'userAccessControl' || storageKey.endsWith('/userAccessControl');
+          if (Array.isArray(serverValue) && isUserAccessControl) {
             // Deduplicate by ID - use Map to ensure uniqueness
             const deduplicatedMap = new Map<string | number, any>();
             serverValue.forEach((item: any) => {
@@ -1980,20 +2196,39 @@ class StorageService {
             timestamp: serverTimestamp,
             _timestamp: serverTimestamp,
           };
-          localStorage.setItem(storageKey, JSON.stringify(serverDataToSave));
+          
+          // CRITICAL: For userAccessControl, always use key without prefix (global key)
+          const saveKey = isUserAccessControl ? 'userAccessControl' : storageKey;
+          localStorage.setItem(saveKey, JSON.stringify(serverDataToSave));
+          
+          // CRITICAL FIX: For trucking, also save to root key if serverKey is trucking_* (without trucking/ prefix)
+          // Server mengirim key sebagai "trucking_drivers" tapi storageKey adalah "trucking/trucking_drivers"
+          // Kita perlu save ke kedua lokasi untuk backward compatibility
+          // BUT: Skip this for userAccessControl (it's global, not business-specific)
+          const business = this.getBusinessContext();
+          if (!isUserAccessControl && business === 'trucking' && serverKey.startsWith('trucking_') && storageKey.startsWith('trucking/')) {
+            // Also save to root key for backward compatibility (data/trucking_*.json)
+            const rootKey = serverKey; // "trucking_drivers"
+            localStorage.setItem(rootKey, JSON.stringify(serverDataToSave));
+            this.log(`[Storage] Saved ${key} to both ${storageKey} and ${rootKey} for backward compatibility`);
+          }
           
           // Also save to file storage if Electron
           const serverElectronAPI = (window as any).electronAPI;
           if (serverElectronAPI && serverElectronAPI.saveStorage) {
             try {
-              await serverElectronAPI.saveStorage(storageKey, serverDataToSave);
+              await serverElectronAPI.saveStorage(saveKey, serverDataToSave);
+              // Also save to root key for trucking (but not for userAccessControl)
+              if (!isUserAccessControl && business === 'trucking' && serverKey.startsWith('trucking_') && storageKey.startsWith('trucking/')) {
+                await serverElectronAPI.saveStorage(serverKey, serverDataToSave);
+              }
             } catch (error) {
               // Silent fail for file storage
             }
           }
           
           // Dispatch event untuk notify components bahwa data updated
-          this.dispatchStorageEvent(storageKey, finalServerValue);
+          this.dispatchStorageEvent(saveKey, finalServerValue);
         }
       } else {
         // Other non-200 responses - log warning but don't block
@@ -2083,7 +2318,7 @@ class StorageService {
       const deletedIds = new Set<string | number>();
       olderData.forEach((item: any) => {
         if (item.deleted === true || item.deletedAt) {
-          const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo;
+          const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
           if (id !== undefined && id !== null) {
             deletedIds.add(id);
           }
@@ -2498,6 +2733,68 @@ class StorageService {
     }
 
     return { imported, errors };
+  }
+
+  // Seed trucking data from PC utama folder
+  async seedTruckingFromPC(pcFolderPath?: string): Promise<{ imported: number; errors?: string[]; message?: string }> {
+    try {
+      // Check if we're in Electron
+      const electronAPI = (window as any).electronAPI;
+      if (!electronAPI || !electronAPI.seedTruckingFromPC) {
+        return {
+          imported: 0,
+          errors: ['Seed trucking hanya tersedia di Electron app. Tidak bisa di browser/mobile.'],
+        };
+      }
+
+      const result = await electronAPI.seedTruckingFromPC(pcFolderPath);
+      
+      if (result.success) {
+        // After seeding, reload data from files to localStorage
+        // This ensures data is available immediately
+        const seededData = await electronAPI.readDataFiles();
+        
+        // Import seeded data to localStorage
+        for (const [key, value] of Object.entries(seededData)) {
+          // Filter hanya trucking data
+          if (key.startsWith('trucking_') || key.includes('trucking/')) {
+            try {
+              const normalizedKey = key.includes('/') ? key.split('/').pop() || key : key;
+              const actualValue = (value && typeof value === 'object' && 'value' in value) 
+                ? (value as any).value 
+                : value;
+              
+              const timestamp = Date.now();
+              const dataToSave = {
+                value: actualValue,
+                timestamp,
+                _timestamp: timestamp,
+              };
+              
+              localStorage.setItem(normalizedKey, JSON.stringify(dataToSave));
+            } catch (error) {
+              // Silent fail for individual keys
+            }
+          }
+        }
+        
+        return {
+          imported: result.imported,
+          errors: result.errors,
+          message: result.message || `✅ Berhasil import ${result.imported} file trucking`,
+        };
+      } else {
+        return {
+          imported: 0,
+          errors: [result.error || 'Gagal seed trucking data'],
+        };
+      }
+    } catch (error: any) {
+      return {
+        imported: 0,
+        errors: [`Error seeding trucking data: ${error.message}`],
+      };
+    }
   }
 }
 

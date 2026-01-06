@@ -7,7 +7,7 @@ import ScheduleTable from '../../components/ScheduleTable';
 import NotificationBell from '../../components/NotificationBell';
  import { storageService, extractStorageValue } from '../../services/storage';
 import { generateSuratJalanHtml, generateGTDeliveryNoteHtml } from '../../pdf/suratjalan-pdf-template';
-import { openPrintWindow } from '../../utils/actions';
+import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import { useDialog } from '../../hooks/useDialog';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
 import { PageSizeDialog, PageSize } from '../../components/PageSizeDialog';
@@ -2147,6 +2147,18 @@ const DeliveryNote = () => {
           showAlert('Error', `Error saving PDF: ${result.error || 'Unknown error'}`);
         }
         // If canceled, do nothing (user closed dialog)
+      } else if (isMobile() || isCapacitor()) {
+        // Mobile/Capacitor: Use Web Share API or print dialog
+        await savePdfForMobile(
+          viewPdfData.html,
+          fileName,
+          (message) => {
+            showAlert('Success', message);
+            setViewPdfData(null); // Close view setelah save
+            closeDialog();
+          },
+          (message) => showAlert('Error', message)
+        );
       } else {
         // Browser: Open print dialog, user can select "Save as PDF"
         openPrintWindow(viewPdfData.html);

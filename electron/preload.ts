@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readJsonFile: (filePath: string) => ipcRenderer.invoke('read-json-file', filePath),
   readDataFiles: () => ipcRenderer.invoke('read-data-files'),
   readBundleData: () => ipcRenderer.invoke('read-bundle-data'),
+  seedTruckingFromPC: (pcFolderPath?: string) => ipcRenderer.invoke('seed-trucking-from-pc', pcFolderPath),
   exportLocalStorage: (data: Record<string, any>) => ipcRenderer.invoke('export-localstorage', data),
   // New file-based storage API
   saveStorage: (key: string, value: any) => ipcRenderer.invoke('save-storage', key, value),

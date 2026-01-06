@@ -5,7 +5,8 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import NotificationBell from '../../../components/NotificationBell';
 import { storageService } from '../../../services/storage';
-import { openPrintWindow } from '../../../utils/actions';
+import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
+import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../../utils/actions';
 import { loadLogoAsBase64 } from '../../../utils/logo-loader';
 import { generatePettyCashMemoHtml } from '../../../pdf/pettycash-memo-pdf-template';
 import '../../../styles/common.css';
@@ -97,11 +98,48 @@ const ActionMenu = ({ onApprove, onReject, onEdit, onDelete, onDistribute, onVie
 
   useEffect(() => {
     if (showMenu && buttonRef.current) {
-      const buttonRect = buttonRef.current.getBoundingClientRect();
-      setMenuPosition({
-        top: buttonRect.bottom + 4,
-        right: window.innerWidth - buttonRect.right,
-      });
+      const updatePosition = () => {
+        if (!buttonRef.current) return;
+        
+        const buttonRect = buttonRef.current.getBoundingClientRect();
+        const estimatedMenuHeight = 300; // Estimate menu height
+        const spaceBelow = window.innerHeight - buttonRect.bottom;
+        const spaceAbove = buttonRect.top;
+        
+        // Check if menu is rendered and get actual height
+        if (menuRef.current) {
+          const actualMenuHeight = menuRef.current.offsetHeight;
+          const openUpward = spaceBelow < actualMenuHeight && spaceAbove > spaceBelow;
+          
+          setMenuPosition({
+            top: openUpward ? buttonRect.top - actualMenuHeight - 4 : buttonRect.bottom + 4,
+            right: window.innerWidth - buttonRect.right,
+          });
+        } else {
+          // Initial position before menu is rendered
+          const openUpward = spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow;
+          setMenuPosition({
+            top: openUpward ? buttonRect.top - estimatedMenuHeight - 4 : buttonRect.bottom + 4,
+            right: window.innerWidth - buttonRect.right,
+          });
+        }
+      };
+      
+      // Update position immediately
+      updatePosition();
+      
+      // Update again after menu is rendered (using setTimeout to ensure DOM is updated)
+      const timeoutId = setTimeout(updatePosition, 0);
+      
+      // Also update on window resize or scroll
+      window.addEventListener('resize', updatePosition);
+      window.addEventListener('scroll', updatePosition, true);
+      
+      return () => {
+        clearTimeout(timeoutId);
+        window.removeEventListener('resize', updatePosition);
+        window.removeEventListener('scroll', updatePosition, true);
+      };
     }
   }, [showMenu]);
   
@@ -121,8 +159,8 @@ const ActionMenu = ({ onApprove, onReject, onEdit, onDelete, onDistribute, onVie
           ref={menuRef}
           style={{
             position: 'fixed',
-            top: `${menuPosition.top}px`,
-            right: `${menuPosition.right}px`,
+            top: `${Math.max(4, Math.min(menuPosition.top, window.innerHeight - 100))}px`,
+            right: `${Math.max(4, Math.min(menuPosition.right, window.innerWidth - 170))}px`,
             backgroundColor: 'var(--bg-primary)',
             border: '1px solid var(--border)',
             borderRadius: '6px',
@@ -132,7 +170,9 @@ const ActionMenu = ({ onApprove, onReject, onEdit, onDelete, onDistribute, onVie
             maxWidth: '220px',
             padding: '4px',
             display: 'flex',
-            flexDirection: 'column', // Ensure vertical layout
+            flexDirection: 'column',
+            maxHeight: 'calc(100vh - 8px)',
+            overflowY: 'auto',
           }}
         >
           {showApprove !== false && (
@@ -451,49 +491,26 @@ const PettyCash = () => {
 
   const loadAllData = async () => {
     try {
-      // Load requests langsung dari localStorage untuk memastikan data yang sudah di-mark sebagai deleted tetap terbaca
-      const requestsStorageKey = 'trucking/trucking_pettycash_requests';
-      const requestsValueStr = localStorage.getItem(requestsStorageKey);
-      let requestsData: PettyCashRequest[] = [];
-      if (requestsValueStr) {
-        const parsed = JSON.parse(requestsValueStr);
-        requestsData = Array.isArray(parsed?.value) ? parsed.value : (Array.isArray(parsed) ? parsed : []);
-      }
-      
-      // Load DO langsung dari localStorage juga
-      const doStorageKey = 'trucking/trucking_delivery_orders';
-      const doValueStr = localStorage.getItem(doStorageKey);
-      let doData: any[] = [];
-      if (doValueStr) {
-        const parsed = JSON.parse(doValueStr);
-        doData = Array.isArray(parsed?.value) ? parsed.value : (Array.isArray(parsed) ? parsed : []);
-      }
-      
-      // Load memos langsung dari localStorage untuk memastikan data yang sudah di-mark sebagai deleted tetap terbaca
-      const memosStorageKey = 'trucking/trucking_pettycash_memos';
-      const memosValueStr = localStorage.getItem(memosStorageKey);
-      let memosData: PettyCashMemo[] = [];
-      if (memosValueStr) {
-        const parsed = JSON.parse(memosValueStr);
-        memosData = Array.isArray(parsed?.value) ? parsed.value : (Array.isArray(parsed) ? parsed : []);
-      }
-      
-      // Load master data dengan storageService (bisa tetap pakai karena tidak masalah)
-      const [driversData, notifData] = await Promise.all([
-        storageService.get<any[]>('trucking_drivers') || [],
-        storageService.get<any[]>('trucking_pettyCashNotifications') || [],
+      // Load semua data menggunakan storageService untuk membaca dari file storage juga
+      const [requestsDataRaw, doDataRaw, memosDataRaw, driversData, notifData] = await Promise.all([
+        storageService.get<PettyCashRequest[]>('trucking_pettycash_requests'),
+        storageService.get<any[]>('trucking_delivery_orders'),
+        storageService.get<PettyCashMemo[]>('trucking_pettycash_memos'),
+        storageService.get<any[]>('trucking_drivers'),
+        storageService.get<any[]>('trucking_pettyCashNotifications'),
       ]);
       
-      // Filter out deleted DOs (tombstone pattern) untuk validasi notifications
-      const activeDOs = (doData || []).filter((d: any) => {
-        return !(d?.deleted === true || d?.deleted === 'true' || d?.deletedAt);
-      });
+      // Ensure arrays (handle null/undefined)
+      const requestsData = requestsDataRaw || [];
+      const doData = doDataRaw || [];
+      const memosData = memosDataRaw || [];
+      
+      // Filter out deleted DOs menggunakan helper function
+      const activeDOs = filterActiveItems(doData);
       const activeDONos = new Set(activeDOs.map((d: any) => d.doNo));
       
-      // Filter out deleted items sebagai safety net (jaga-jaga kalau masih ada data yang ter-mark sebagai deleted)
-      const activeRequests = (requestsData || []).filter((r: any) => {
-        return !(r?.deleted === true || r?.deleted === 'true' || r?.deletedAt);
-      });
+      // Filter out deleted items menggunakan helper function
+      const activeRequests = filterActiveItems(requestsData);
       
       console.log(`[PettyCash] Loaded ${requestsData.length} requests, filtered to ${activeRequests.length} active requests`);
       
@@ -505,21 +522,15 @@ const PettyCash = () => {
       });
       setRequests(sortedRequests.map((r, idx) => ({ ...r, no: idx + 1 })));
       
-      // Filter out deleted drivers
-      const activeDrivers = (driversData || []).filter((d: any) => {
-        return d.status === 'Active' && !(d?.deleted === true || d?.deleted === 'true' || d?.deletedAt);
-      });
+      // Filter out deleted drivers menggunakan helper function
+      const activeDrivers = filterActiveItems(driversData || []).filter((d: any) => d.status === 'Active');
       setDrivers(activeDrivers);
       
       // Filter out deleted notifications and only show PENDING ones
       // Also filter out notifications for deleted DOs
       // Also filter out notifications that already have a petty cash request
       const requestDONos = new Set(requestsData.map((r: any) => r.doNo).filter(Boolean));
-      const activeNotifs = (notifData || []).filter((n: any) => {
-        // Exclude deleted notifications (tombstone pattern)
-        if (n?.deleted === true || n?.deleted === 'true' || n?.deletedAt) {
-          return false;
-        }
+      const activeNotifs = filterActiveItems(notifData || []).filter((n: any) => {
         // Exclude notifications for deleted DOs
         if (n.doNo && !activeDONos.has(n.doNo)) {
           return false;
@@ -551,9 +562,7 @@ const PettyCash = () => {
       setNotifications(activeNotifs);
       
       // Filter out deleted items sebagai safety net (jaga-jaga kalau masih ada data yang ter-mark sebagai deleted)
-      const activeMemos = (memosData || []).filter((m: any) => {
-        return !(m?.deleted === true || m?.deleted === 'true' || m?.deletedAt);
-      });
+      const activeMemos = filterActiveItems(memosData || []);
       console.log(`[PettyCash] Loaded ${memosData.length} memos, filtered to ${activeMemos.length} active memos`);
       setMemos(activeMemos);
     } catch (error: any) {
@@ -690,14 +699,15 @@ const PettyCash = () => {
               : r
           );
           await storageService.set('trucking_pettycash_requests', updated);
+          
           // Sort by requestDate (newest first)
-        const sortedUpdated = updated.sort((a, b) => {
+          const sortedUpdated = updated.sort((a, b) => {
           const dateA = a.requestDate ? new Date(a.requestDate).getTime() : 0;
           const dateB = b.requestDate ? new Date(b.requestDate).getTime() : 0;
           return dateB - dateA; // Newest first
         });
         setRequests(sortedUpdated.map((r, idx) => ({ ...r, no: idx + 1 })));
-          showAlert('✅ Request approved', 'Success');
+        showAlert('✅ Request approved', 'Success');
         } catch (error: any) {
           showAlert(`Error approving request: ${error.message}`, 'Error');
         }
@@ -955,10 +965,12 @@ const PettyCash = () => {
           try {
             if (item.doNo) {
               // Load DO data untuk mendapatkan informasi lengkap
-              const deliveryOrders = await storageService.get<any[]>('trucking_delivery_orders') || [];
+              const deliveryOrdersRaw = await storageService.get<any[]>('trucking_delivery_orders') || [];
+              // Filter active items menggunakan helper function
+              const deliveryOrders = filterActiveItems(deliveryOrdersRaw);
               const doData = deliveryOrders.find((doItem: any) => doItem.doNo === item.doNo);
               
-              if (doData && !doData.deleted) {
+              if (doData) {
                 const suratJalanNotifications = await storageService.get<any[]>('trucking_suratJalanNotifications') || [];
                 
                 // Cek apakah sudah ada notifikasi untuk DO ini
@@ -1047,7 +1059,7 @@ const PettyCash = () => {
   };
 
   // Helper function untuk save tombstone ke audit log
-  const saveTombstoneToAuditLog = (item: any, refType: string) => {
+  const saveTombstoneToAuditLog = async (item: any, refType: string) => {
     try {
       const timestamp = new Date().toISOString();
       const itemId = item.id || item.requestNo || item.memoNo || 'unknown';
@@ -1063,19 +1075,9 @@ const PettyCash = () => {
         createdAt: timestamp,
       };
       
-      const auditKey = 'trucking/auditLogs';
-      const auditStr = localStorage.getItem(auditKey);
-      let auditLogs: any[] = [];
-      if (auditStr) {
-        const parsed = JSON.parse(auditStr);
-        auditLogs = Array.isArray(parsed?.value) ? parsed.value : (Array.isArray(parsed) ? parsed : []);
-      }
-      auditLogs.push(auditLog);
-      localStorage.setItem(auditKey, JSON.stringify({
-        value: auditLogs,
-        timestamp: new Date().toISOString(),
-        _timestamp: Date.now(),
-      }));
+      // Simpan audit log menggunakan storageService
+      const auditLogs = await storageService.get<any[]>('trucking_auditLogs') || [];
+      await storageService.set('trucking_auditLogs', [...auditLogs, auditLog]);
       return true;
     } catch (error) {
       console.error('Error saving tombstone to audit log:', error);
@@ -1084,49 +1086,39 @@ const PettyCash = () => {
   };
 
   const handleDelete = async (item: PettyCashRequest) => {
-    if (item.status !== 'Open') {
-      showAlert('Hanya request dengan status Open yang bisa di-delete', 'Information');
-      return;
-    }
+    // Tampilkan warning jika request sudah di-approve atau di-close
+    const warningMessage = item.status === 'Close' 
+      ? `Request "${item.requestNo}" sudah di-close. Apakah Anda yakin ingin menghapus?`
+      : item.approvedBy || item.approvedDate
+      ? `Request "${item.requestNo}" sudah di-approve. Apakah Anda yakin ingin menghapus?`
+      : `Are you sure you want to delete request "${item.requestNo}"?`;
+    
     showConfirm(
-      `Are you sure you want to delete request "${item.requestNo}"?`,
+      warningMessage,
       async () => {
         try {
           // Simpan tombstone ke audit log sebelum menghapus
-          saveTombstoneToAuditLog(item, 'trucking_pettycash_requests');
+          await saveTombstoneToAuditLog(item, 'trucking_pettycash_requests');
           
-          // Load semua data dari localStorage
-          const storageKey = 'trucking/trucking_pettycash_requests';
-          const valueStr = localStorage.getItem(storageKey);
-          let allRequests: PettyCashRequest[] = [];
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('trucking_pettycash_requests', item.id, 'id');
           
-          if (valueStr) {
-            const parsed = JSON.parse(valueStr);
-            allRequests = Array.isArray(parsed?.value) ? parsed.value : (Array.isArray(parsed) ? parsed : []);
+          if (success) {
+            // Reload data dengan filter active items
+            const updatedRequests = await storageService.get<PettyCashRequest[]>('trucking_pettycash_requests') || [];
+            const activeRequests = filterActiveItems(updatedRequests);
+            
+            // Sort by requestDate (newest first)
+            const sortedUpdated = activeRequests.sort((a, b) => {
+              const dateA = a.requestDate ? new Date(a.requestDate).getTime() : 0;
+              const dateB = b.requestDate ? new Date(b.requestDate).getTime() : 0;
+              return dateB - dateA; // Newest first
+            });
+            setRequests(sortedUpdated.map((r, idx) => ({ ...r, no: idx + 1 })));
+            showAlert(`Request "${item.requestNo}" deleted successfully`, 'Success');
           } else {
-            allRequests = requests;
+            showAlert(`Error deleting request "${item.requestNo}". Please try again.`, 'Error');
           }
-          
-          // Hapus data benar-benar dari array
-          const updated = allRequests.filter((r: any) => r.id !== item.id);
-          
-          // Simpan ke localStorage
-          const storageValue = {
-            value: updated,
-            timestamp: new Date().toISOString(),
-            _timestamp: Date.now(),
-          };
-          localStorage.setItem(storageKey, JSON.stringify(storageValue));
-          console.log(`[PettyCash] Deleted request ${item.requestNo} and saved tombstone to audit log`);
-          
-          // Sort by requestDate (newest first)
-          const sortedUpdated = updated.sort((a, b) => {
-            const dateA = a.requestDate ? new Date(a.requestDate).getTime() : 0;
-            const dateB = b.requestDate ? new Date(b.requestDate).getTime() : 0;
-            return dateB - dateA; // Newest first
-          });
-          setRequests(sortedUpdated.map((r, idx) => ({ ...r, no: idx + 1 })));
-          showAlert(`Request "${item.requestNo}" deleted successfully`, 'Success');
         } catch (error: any) {
           showAlert(`Error deleting request: ${error.message}`, 'Error');
         }
@@ -1362,6 +1354,7 @@ const PettyCash = () => {
       const fileName = `${viewPdfData.memoNo}.pdf`;
 
       if (electronAPI && typeof electronAPI.savePdf === 'function') {
+        // Electron: Use file picker to select save location
         const result = await electronAPI.savePdf(viewPdfData.html, fileName);
         if (result.success) {
           showAlert(`PDF saved successfully to:\n${result.path}`, 'Success');
@@ -1369,8 +1362,42 @@ const PettyCash = () => {
         } else if (!result.canceled) {
           showAlert(`Error saving PDF: ${result.error || 'Unknown error'}`, 'Error');
         }
+      } else if (isMobile() || isCapacitor()) {
+        // Mobile/Capacitor: Use Web Share API or download link
+        await savePdfForMobile(
+          viewPdfData.html,
+          fileName,
+          (message) => {
+            showAlert(message, 'Success');
+            setViewPdfData(null); // Close view setelah save
+          },
+          (message) => showAlert(message, 'Error')
+        );
       } else {
-        openPrintWindow(viewPdfData.html);
+        // Browser: Buka window baru dengan print dialog langsung
+        // Ini lebih reliable daripada hidden iframe
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.open();
+          printWindow.document.write(viewPdfData.html);
+          printWindow.document.close();
+          // Trigger print dialog setelah content loaded
+          printWindow.onload = () => {
+            setTimeout(() => {
+              printWindow.print();
+            }, 250);
+          };
+          // Fallback jika onload tidak trigger
+          setTimeout(() => {
+            if (printWindow && !printWindow.closed) {
+              printWindow.print();
+            }
+          }, 500);
+          showAlert('Print dialog akan muncul. Pilih "Save as PDF" untuk menyimpan dokumen.', 'Info');
+        } else {
+          // Jika popup blocked, fallback ke openPrintWindow
+          openPrintWindow(viewPdfData.html, { autoPrint: true });
+        }
       }
     } catch (error: any) {
       showAlert(`Error saving PDF: ${error.message}`, 'Error');
@@ -1383,34 +1410,20 @@ const PettyCash = () => {
       async () => {
         try {
           // Simpan tombstone ke audit log sebelum menghapus
-          saveTombstoneToAuditLog(memo, 'trucking_pettycash_memos');
+          await saveTombstoneToAuditLog(memo, 'trucking_pettycash_memos');
           
-          // Load semua data dari localStorage
-          const storageKey = 'trucking/trucking_pettycash_memos';
-          const valueStr = localStorage.getItem(storageKey);
-          let allMemos: PettyCashMemo[] = [];
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('trucking_pettycash_memos', memo.id, 'id');
           
-          if (valueStr) {
-            const parsed = JSON.parse(valueStr);
-            allMemos = Array.isArray(parsed?.value) ? parsed.value : (Array.isArray(parsed) ? parsed : []);
+          if (success) {
+            // Reload data dengan filter active items
+            const updatedMemos = await storageService.get<PettyCashMemo[]>('trucking_pettycash_memos') || [];
+            const activeMemos = filterActiveItems(updatedMemos);
+            setMemos(activeMemos);
+            showAlert(`Memo "${memo.memoNo}" deleted successfully`, 'Success');
           } else {
-            allMemos = memos;
+            showAlert(`Error deleting memo "${memo.memoNo}". Please try again.`, 'Error');
           }
-          
-          // Hapus data benar-benar dari array
-          const updated = allMemos.filter((m: any) => m.id !== memo.id);
-          
-          // Simpan ke localStorage
-          const storageValue = {
-            value: updated,
-            timestamp: new Date().toISOString(),
-            _timestamp: Date.now(),
-          };
-          localStorage.setItem(storageKey, JSON.stringify(storageValue));
-          console.log(`[PettyCash] Deleted memo ${memo.memoNo} and saved tombstone to audit log`);
-          
-          setMemos(updated);
-          showAlert(`Memo "${memo.memoNo}" deleted successfully`, 'Success');
         } catch (error: any) {
           showAlert(`Error deleting memo: ${error.message}`, 'Error');
         }
@@ -1425,6 +1438,45 @@ const PettyCash = () => {
     { key: 'memoNo', header: 'Memo No' },
     { key: 'memoDate', header: 'Tanggal' },
     { key: 'location', header: 'Lokasi' },
+    {
+      key: 'customer',
+      header: 'Customer',
+      render: (item: PettyCashMemo) => {
+        // Ambil customer dari items, gabungkan jika berbeda
+        const customers = item.items?.map(i => i.customer).filter(Boolean) || [];
+        const uniqueCustomers = [...new Set(customers)];
+        return (
+          <span style={{ fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px', display: 'inline-block' }}>
+            {uniqueCustomers.length > 0 
+              ? (uniqueCustomers.length === 1 
+                  ? uniqueCustomers[0] 
+                  : `${uniqueCustomers[0]}${uniqueCustomers.length > 1 ? ` (+${uniqueCustomers.length - 1})` : ''}`)
+              : '-'}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'driver',
+      header: 'Driver',
+      render: (item: PettyCashMemo) => {
+        // Cari driver dari request yang terkait berdasarkan item.id
+        const relatedRequests = requests.filter(r => 
+          item.items?.some(memoItem => memoItem.id === r.id)
+        );
+        const drivers = relatedRequests.map(r => r.driverName).filter(Boolean);
+        const uniqueDrivers = [...new Set(drivers)];
+        return (
+          <span style={{ fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px', display: 'inline-block' }}>
+            {uniqueDrivers.length > 0 
+              ? (uniqueDrivers.length === 1 
+                  ? uniqueDrivers[0] 
+                  : `${uniqueDrivers[0]}${uniqueDrivers.length > 1 ? ` (+${uniqueDrivers.length - 1})` : ''}`)
+              : '-'}
+          </span>
+        );
+      },
+    },
     { 
       key: 'total', 
       header: 'Total',
@@ -1451,7 +1503,7 @@ const PettyCash = () => {
             onClick={() => handleDeleteMemo(item)}
             style={{ fontSize: '11px', padding: '4px 8px' }}
           >
-            Hapus
+            🗑️ Delete
           </Button>
         </div>
       ),
@@ -1518,7 +1570,7 @@ const PettyCash = () => {
     
     // Load DO data untuk reference jika ada doNo
     const doData = await storageService.get<any[]>('trucking_delivery_orders') || [];
-    const activeDOs = doData.filter((d: any) => !(d?.deleted === true || d?.deleted === 'true' || d?.deletedAt));
+    const activeDOs = filterActiveItems(doData);
     
     // Convert requests to memo items
     const memoItems: PettyCashMemoItem[] = selectedItems.map((req, idx) => {
@@ -1944,7 +1996,7 @@ const PettyCash = () => {
                     
                     // Load DO data untuk reference
                     const doData = await storageService.get<any[]>('trucking_delivery_orders') || [];
-                    const activeDOs = doData.filter((d: any) => !(d?.deleted === true || d?.deleted === 'true' || d?.deletedAt));
+                    const activeDOs = filterActiveItems(doData);
                     
                     // Convert selected requests to memo items
                     const selectedRequests = requests.filter(r => selectedRequestsForMemo.includes(r.id));
@@ -2299,45 +2351,86 @@ const PettyCash = () => {
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {item.status === 'Open' && !item.approvedBy && !item.approvedDate && !item.rejectedReason && (
-                    <>
-                      <Button variant="primary" onClick={() => handleApprove(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>
-                        Approve
-                      </Button>
-                      <Button variant="danger" onClick={() => handleReject(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>
-                        Reject
-                      </Button>
-                      <Button variant="primary" onClick={() => handleDistributePettyCash(item)} style={{ fontSize: '11px', padding: '4px 8px', backgroundColor: '#2196F3', color: 'white', border: 'none' }}>
-                        📤 Distribusi
-                      </Button>
-                      <Button variant="secondary" onClick={() => handleEdit(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>Edit</Button>
-                      <Button variant="danger" onClick={() => handleDelete(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>Delete</Button>
-                      {item.receiptProof && (
-                        <Button variant="secondary" onClick={() => handleViewReceipt(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>
-                          View Receipt
-                        </Button>
-                      )}
-                      {item.transferProof && (
-                        <Button variant="secondary" onClick={() => handleViewTransferProof(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>
-                          View Transfer Proof
-                        </Button>
-                      )}
-                      <Button 
-                        variant="primary"
-                        onClick={async () => {
+                  {(() => {
+                    // Cek apakah request sudah punya memo
+                    const relatedMemo = memos.find(memo => 
+                      memo.items && memo.items.some(memoItem => memoItem.id === item.id)
+                    );
+                    
+                    // Handle missing status - default to 'Open'
+                    const itemStatus = item.status || 'Open';
+                    
+                    if (itemStatus === 'Open') {
+                      // Sembunyikan approve/reject jika sudah di-approve atau di-reject
+                      const isApproved = !!(item.approvedBy || item.approvedDate);
+                      const isRejected = !!item.rejectedReason;
+                      const showApprove = !isApproved && !isRejected;
+                      const showReject = !isApproved && !isRejected;
+                      
+                      return (
+                        <ActionMenu
+                          onApprove={() => handleApprove(item)}
+                          onReject={() => handleReject(item)}
+                          onEdit={() => handleEdit(item)}
+                          onDelete={() => handleDelete(item)}
+                          onDistribute={() => handleDistributePettyCash(item)}
+                          onViewReceipt={item.receiptProof ? () => handleViewReceipt(item) : undefined}
+                          onViewTransferProof={item.transferProof ? () => handleViewTransferProof(item) : undefined}
+                          onGenerateMemo={async () => {
+                            handleGenerateMemoFromRequests([item.id]);
+                          }}
+                          hasMemo={!!relatedMemo}
+                          onViewMemo={relatedMemo ? () => handleViewMemo(relatedMemo) : undefined}
+                          showApprove={showApprove}
+                          showReject={showReject}
+                        />
+                      );
+                    }
+                    if (itemStatus === 'Close') {
+                      // Untuk status Close, tampilkan ActionMenu dengan opsi terbatas
+                      return (
+                        <ActionMenu
+                          onApprove={() => {}}
+                          onReject={() => {}}
+                          onEdit={() => {}}
+                          onDelete={() => {}}
+                          onViewReceipt={item.receiptProof ? () => handleViewReceipt(item) : undefined}
+                          onViewTransferProof={item.transferProof ? () => handleViewTransferProof(item) : undefined}
+                          onGenerateMemo={async () => {
+                            handleGenerateMemoFromRequests([item.id]);
+                          }}
+                          hasMemo={!!relatedMemo}
+                          onViewMemo={relatedMemo ? () => handleViewMemo(relatedMemo) : undefined}
+                          showApprove={false}
+                          showReject={false}
+                        />
+                      );
+                    }
+                    // Fallback: tampilkan ActionMenu untuk status undefined atau lainnya (default to Open behavior)
+                    const isApproved = !!(item.approvedBy || item.approvedDate);
+                    const isRejected = !!item.rejectedReason;
+                    const showApprove = !isApproved && !isRejected;
+                    const showReject = !isApproved && !isRejected;
+                    
+                    return (
+                      <ActionMenu
+                        onApprove={() => handleApprove(item)}
+                        onReject={() => handleReject(item)}
+                        onEdit={() => handleEdit(item)}
+                        onDelete={() => handleDelete(item)}
+                        onDistribute={() => handleDistributePettyCash(item)}
+                        onViewReceipt={item.receiptProof ? () => handleViewReceipt(item) : undefined}
+                        onViewTransferProof={item.transferProof ? () => handleViewTransferProof(item) : undefined}
+                        onGenerateMemo={async () => {
                           handleGenerateMemoFromRequests([item.id]);
-                        }} 
-                        style={{ fontSize: '11px', padding: '4px 8px', backgroundColor: '#4CAF50', color: 'white', border: 'none' }}
-                      >
-                        📄 Generate Memo
-                      </Button>
-                    </>
-                  )}
-                  {item.status === 'Close' && item.rejectedReason && (
-                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }} title={item.rejectedReason}>
-                      Reason: {item.rejectedReason}
-                    </span>
-                  )}
+                        }}
+                        hasMemo={!!relatedMemo}
+                        onViewMemo={relatedMemo ? () => handleViewMemo(relatedMemo) : undefined}
+                        showApprove={showApprove}
+                        showReject={showReject}
+                      />
+                    );
+                  })()}
                 </div>
               </Card>
             ))}
@@ -2418,7 +2511,10 @@ const PettyCash = () => {
                     memo.items && memo.items.some(memoItem => memoItem.id === item.id)
                   );
                   
-                  if (item.status === 'Open') {
+                  // Handle missing status - default to 'Open'
+                  const itemStatus = item.status || 'Open';
+                  
+                  if (itemStatus === 'Open') {
                     // Sembunyikan approve/reject jika sudah di-approve atau di-reject
                     const isApproved = !!(item.approvedBy || item.approvedDate);
                     const isRejected = !!item.rejectedReason;
@@ -2444,14 +2540,50 @@ const PettyCash = () => {
                       />
                     );
                   }
-                  if (item.status === 'Close' && item.rejectedReason) {
+                  if (itemStatus === 'Close') {
+                    // Untuk status Close, tampilkan ActionMenu dengan opsi terbatas
                     return (
-                      <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }} title={item.rejectedReason}>
-                        Reason: {item.rejectedReason}
-                      </span>
+                      <ActionMenu
+                        onApprove={() => {}}
+                        onReject={() => {}}
+                        onEdit={() => {}}
+                        onDelete={() => {}}
+                        onViewReceipt={item.receiptProof ? () => handleViewReceipt(item) : undefined}
+                        onViewTransferProof={item.transferProof ? () => handleViewTransferProof(item) : undefined}
+                        onGenerateMemo={async () => {
+                          handleGenerateMemoFromRequests([item.id]);
+                        }}
+                        hasMemo={!!relatedMemo}
+                        onViewMemo={relatedMemo ? () => handleViewMemo(relatedMemo) : undefined}
+                        showApprove={false}
+                        showReject={false}
+                      />
                     );
                   }
-                  return null;
+                  // Fallback: tampilkan ActionMenu untuk status undefined atau lainnya (default to Open behavior)
+                  const isApproved = !!(item.approvedBy || item.approvedDate);
+                  const isRejected = !!item.rejectedReason;
+                  const showApprove = !isApproved && !isRejected;
+                  const showReject = !isApproved && !isRejected;
+                  
+                  return (
+                    <ActionMenu
+                      onApprove={() => handleApprove(item)}
+                      onReject={() => handleReject(item)}
+                      onEdit={() => handleEdit(item)}
+                      onDelete={() => handleDelete(item)}
+                      onDistribute={() => handleDistributePettyCash(item)}
+                      onViewReceipt={item.receiptProof ? () => handleViewReceipt(item) : undefined}
+                      onViewTransferProof={item.transferProof ? () => handleViewTransferProof(item) : undefined}
+                      onGenerateMemo={async () => {
+                        handleGenerateMemoFromRequests([item.id]);
+                      }}
+                      hasMemo={!!relatedMemo}
+                      onViewMemo={relatedMemo ? () => handleViewMemo(relatedMemo) : undefined}
+                      showApprove={showApprove}
+                      showReject={showReject}
+                    />
+                  );
                 },
               },
             ]} 

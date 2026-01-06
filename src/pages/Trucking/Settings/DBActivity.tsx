@@ -377,21 +377,15 @@ const DBActivity = () => {
         'trucking_audit',
       ];
       
-      // Load langsung dari localStorage untuk memastikan data yang sudah di-mark sebagai deleted tetap terbaca
+      // Load data menggunakan storageService untuk konsistensi (tetap baca semua data termasuk deleted untuk activity log)
       const allData: any = {};
       for (const key of keys) {
         try {
-          const storageKey = `trucking/${key}`;
-          const valueStr = localStorage.getItem(storageKey);
-          if (valueStr) {
-            const parsed = JSON.parse(valueStr);
-            const dataArray = Array.isArray(parsed?.value) ? parsed.value : (Array.isArray(parsed) ? parsed : []);
-            const deletedCount = dataArray.filter((i: any) => i?.deleted === true || i?.deleted === 'true' || i?.deletedAt).length;
-            console.log(`[DBActivity] Loaded ${key}: ${dataArray.length} items (including ${deletedCount} deleted items)`);
-            allData[key] = dataArray;
-          } else {
-            allData[key] = [];
-          }
+          // Pakai storageService.get() untuk konsistensi, tapi tetap simpan semua data termasuk deleted
+          const dataArray = await storageService.get<any[]>(key) || [];
+          const deletedCount = dataArray.filter((i: any) => i?.deleted === true || i?.deleted === 'true' || i?.deletedAt).length;
+          console.log(`[DBActivity] Loaded ${key}: ${dataArray.length} items (including ${deletedCount} deleted items)`);
+          allData[key] = dataArray;
         } catch (error) {
           console.warn(`[DBActivity] Error loading ${key}:`, error);
           allData[key] = [];
@@ -475,19 +469,12 @@ const DBActivity = () => {
   const handleClear = async () => {
     setSelectedKeys(new Set(allClearableKeys.map(k => k.key)));
     
-    // Load counts untuk setiap key yang bisa di-clear
+    // Load counts untuk setiap key yang bisa di-clear menggunakan storageService
     const counts: Record<string, number> = {};
     for (const keyInfo of allClearableKeys) {
       try {
-        const storageKey = `trucking/${keyInfo.key}`;
-        const valueStr = localStorage.getItem(storageKey);
-        if (valueStr) {
-          const parsed = JSON.parse(valueStr);
-          const dataArray = Array.isArray(parsed?.value) ? parsed.value : (Array.isArray(parsed) ? parsed : []);
-          counts[keyInfo.key] = Array.isArray(dataArray) ? dataArray.length : 0;
-        } else {
-          counts[keyInfo.key] = 0;
-        }
+        const dataArray = await storageService.get<any[]>(keyInfo.key) || [];
+        counts[keyInfo.key] = Array.isArray(dataArray) ? dataArray.length : 0;
       } catch (error) {
         counts[keyInfo.key] = 0;
       }
@@ -602,25 +589,30 @@ const DBActivity = () => {
       }
 
       // Force clear localStorage for selected keys (double-check)
-      console.log('[Clear] Double-checking localStorage after clear...');
+      console.log('[Clear] Double-checking storage after clear...');
       for (const key of keys) {
-        const possibleKeys = [
-          `trucking/${key}`,
-          key,
-        ];
-        for (const storageKey of possibleKeys) {
-          const stillExists = localStorage.getItem(storageKey);
-          if (stillExists) {
-            console.warn(`[Clear] ⚠️ Key still exists after clear: ${storageKey}, forcing removal...`);
-            localStorage.removeItem(storageKey);
-            if (electronAPI && electronAPI.deleteStorage) {
-              try {
-                await electronAPI.deleteStorage(storageKey);
-              } catch (e) {
-                // Ignore
+        try {
+          // Double-check menggunakan storageService untuk konsistensi
+          const stillExists = await storageService.get<any[]>(key);
+          if (stillExists && Array.isArray(stillExists) && stillExists.length > 0) {
+            console.warn(`[Clear] ⚠️ Key still exists after clear: ${key}, forcing removal...`);
+            // Force clear dengan set empty array
+            await storageService.set(key, []);
+            // Juga clear dari localStorage langsung untuk memastikan
+            const possibleKeys = [`trucking/${key}`, key];
+            for (const storageKey of possibleKeys) {
+              localStorage.removeItem(storageKey);
+              if (electronAPI && electronAPI.deleteStorage) {
+                try {
+                  await electronAPI.deleteStorage(storageKey);
+                } catch (e) {
+                  // Ignore
+                }
               }
             }
           }
+        } catch (error) {
+          // Ignore errors during double-check
         }
       }
       
@@ -817,7 +809,7 @@ const DBActivity = () => {
             </div>
             
             <div style={{ marginBottom: '24px', fontSize: '14px', color: 'var(--text-primary)' }}>
-              <p style={{ marginBottom: '16px' }}>Import data tracking dari folder data/</p>
+              <p style={{ marginBottom: '16px' }}>Import data trucking dari folder data/</p>
               
               <div style={{ marginBottom: '12px', padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
                 <strong>Note:</strong> Untuk seed dari CSV files, jalankan script terlebih dahulu:

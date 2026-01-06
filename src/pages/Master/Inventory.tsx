@@ -1,10 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import { storageService, extractStorageValue } from '../../services/storage';
+import { getCurrentUser } from '../../utils/access-control-helper';
+import { logCreate } from '../../utils/activity-logger';
+import { useDialog } from '../../hooks/useDialog';
 import '../../styles/common.css';
 import './Inventory.css';
 import './Master.css';
@@ -26,13 +30,32 @@ interface InventoryItem {
   anomaly?: string;
   anomalyDetail?: string;
   padCode?: string; // PAD Code untuk product (diambil dari master product)
+  stockDocumentation?: string; // Base64 atau path untuk dokumentasi stock (optional)
   // Tracking untuk anti-duplicate
   processedPOs?: string[]; // PO numbers yang sudah diproses (untuk material: RECEIVE dari GRN dan OUTGOING dari Production)
   processedSPKs?: string[]; // SPK numbers yang sudah diproses (untuk product: RECEIVE dari QC PASS dan OUTGOING dari Delivery)
   processedGRNs?: string[]; // GRN numbers yang sudah diproses (untuk material: RECEIVE dari GRN dengan soNo kosong - PO tanpa SO)
 }
 
+interface Material {
+  id: string;
+  kode: string;
+  nama: string;
+  satuan: string;
+  kategori: string;
+  supplier: string;
+  harga?: number;
+  priceMtr?: number;
+}
+
+interface Supplier {
+  id: string;
+  kode: string;
+  nama: string;
+}
+
 const Inventory = () => {
+  const navigate = useNavigate();
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -42,6 +65,22 @@ const Inventory = () => {
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [showReceiptDialog, setShowReceiptDialog] = useState(false);
+  const [showAddInventoryDialog, setShowAddInventoryDialog] = useState(false);
+  const [addInventoryForm, setAddInventoryForm] = useState({
+    selectedMaterialId: '',
+    supplierName: '',
+    codeItem: '',
+    description: '',
+    kategori: '',
+    satuan: 'PCS',
+    price: '',
+    stockPremonth: '',
+    stockDocumentation: '',
+  });
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [stockDocFile, setStockDocFile] = useState<File | null>(null);
+  const { showAlert } = useDialog();
   const [receiptData, setReceiptData] = useState<{
     stockOpname: Array<{ date: string; qty: number; source: string }>;
     purchasing: Array<{ date: string; qty: number; grnNo: string; poNo: string; supplier: string }>;
@@ -49,7 +88,146 @@ const Inventory = () => {
 
   useEffect(() => {
     loadInventory();
+    loadMaterials();
+    loadSuppliers();
   }, []);
+
+  const loadMaterials = async () => {
+    try {
+      const data = extractStorageValue(await storageService.get<Material[]>('materials')) || [];
+      setMaterials(data);
+    } catch (error) {
+      console.error('Error loading materials:', error);
+    }
+  };
+
+  const loadSuppliers = async () => {
+    try {
+      const data = extractStorageValue(await storageService.get<Supplier[]>('suppliers')) || [];
+      setSuppliers(data);
+    } catch (error) {
+      console.error('Error loading suppliers:', error);
+    }
+  };
+
+  const handleMaterialSelect = (materialId: string) => {
+    const selectedMaterial = materials.find(m => m.id === materialId);
+    if (selectedMaterial) {
+      // Auto-fill dari master material
+      setAddInventoryForm({
+        ...addInventoryForm,
+        selectedMaterialId: materialId,
+        codeItem: selectedMaterial.kode || '',
+        description: selectedMaterial.nama || '',
+        kategori: selectedMaterial.kategori || '',
+        satuan: selectedMaterial.satuan || 'PCS',
+        price: String(selectedMaterial.harga || selectedMaterial.priceMtr || 0),
+        supplierName: selectedMaterial.supplier || '',
+      });
+    }
+  };
+
+  const handleStockDocUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Limit file size to 5MB
+    if (file.size > 5 * 1024 * 1024) {
+      showAlert('File terlalu besar. Maksimal 5MB.', 'Error');
+      return;
+    }
+
+    setStockDocFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = e.target?.result as string;
+      setAddInventoryForm({ ...addInventoryForm, stockDocumentation: base64 });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAddInventory = async () => {
+    if (!addInventoryForm.codeItem.trim() || !addInventoryForm.description.trim()) {
+      showAlert('Code Item dan Description wajib diisi.', 'Validation Error');
+      return;
+    }
+
+    if (!addInventoryForm.stockPremonth || parseFloat(addInventoryForm.stockPremonth) < 0) {
+      showAlert('Stock Premonth wajib diisi dan harus >= 0.', 'Validation Error');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setSuccessMessage('');
+    try {
+      const existingInventory = extractStorageValue(await storageService.get<InventoryItem[]>('inventory'));
+      const currentUser = getCurrentUser();
+      const userIdentifier = currentUser ? `${currentUser.fullName} (@${currentUser.username})` : 'System';
+
+      // Check for duplicate codeItem
+      const isDuplicate = existingInventory.some(item => 
+        item.codeItem.toLowerCase() === addInventoryForm.codeItem.trim().toLowerCase()
+      );
+
+      if (isDuplicate) {
+        showAlert('Item dengan Code Item ini sudah ada.', 'Duplicate Entry');
+        setLoading(false);
+        return;
+      }
+
+      const newInventoryItem: InventoryItem = {
+        id: `inv-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+        supplierName: addInventoryForm.supplierName.trim(),
+        codeItem: addInventoryForm.codeItem.trim(),
+        description: addInventoryForm.description.trim(),
+        kategori: addInventoryForm.kategori || (activeTab === 'product' ? 'Product' : 'Material'),
+        satuan: addInventoryForm.satuan.trim() || 'PCS',
+        price: parseFloat(addInventoryForm.price) || 0,
+        stockPremonth: parseFloat(addInventoryForm.stockPremonth) || 0,
+        receive: 0,
+        outgoing: 0,
+        return: 0,
+        nextStock: parseFloat(addInventoryForm.stockPremonth) || 0,
+        lastUpdate: new Date().toISOString(),
+        anomaly: '',
+        anomalyDetail: '',
+        stockDocumentation: addInventoryForm.stockDocumentation || undefined,
+        processedPOs: [],
+        processedSPKs: [],
+        processedGRNs: [],
+      };
+
+      const updatedInventory = [...existingInventory, newInventoryItem];
+      await storageService.set('inventory', updatedInventory);
+      await logCreate('INVENTORY', newInventoryItem.id, '/packaging/master/inventory', {
+        codeItem: newInventoryItem.codeItem,
+        description: newInventoryItem.description,
+        initialStock: newInventoryItem.stockPremonth,
+        supplier: newInventoryItem.supplierName,
+      });
+
+      setSuccessMessage('✅ Inventory item added successfully!');
+      setAddInventoryForm({
+        selectedMaterialId: '',
+        supplierName: '',
+        codeItem: '',
+        description: '',
+        kategori: '',
+        satuan: 'PCS',
+        price: '',
+        stockPremonth: '',
+        stockDocumentation: '',
+      });
+      setStockDocFile(null);
+      setShowAddInventoryDialog(false);
+      loadInventory(); // Reload to show new item
+    } catch (err: any) {
+      setError(`Failed to add inventory: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Add event listener untuk auto-refresh ketika data berubah (dengan debounce)
   useEffect(() => {
@@ -1119,6 +1297,13 @@ const Inventory = () => {
           </Button>
           <Button
             variant="primary"
+            onClick={() => setShowAddInventoryDialog(true)}
+            style={{ fontSize: '14px', padding: '8px 16px', backgroundColor: 'var(--accent-color)', color: 'white' }}
+          >
+            ➕ Add Inventory
+          </Button>
+          <Button
+            variant="primary"
             onClick={handleImportExcel}
             disabled={importLoading}
             style={{ fontSize: '14px', padding: '8px 16px' }}
@@ -1311,6 +1496,207 @@ const Inventory = () => {
             setReceiptData({ stockOpname: [], purchasing: [] });
           }}
         />
+      )}
+
+      {/* Add Inventory Dialog */}
+      {showAddInventoryDialog && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+          }}
+          onClick={() => setShowAddInventoryDialog(false)}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--bg-primary)',
+              borderRadius: '8px',
+              padding: '24px',
+              maxWidth: '600px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflow: 'auto',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>
+                ➕ Add Inventory
+              </h2>
+              <button
+                onClick={() => setShowAddInventoryDialog(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: 'var(--text-secondary)',
+                  padding: '0',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)' }}>
+                  Pilih Material *
+                </label>
+                <select
+                  value={addInventoryForm.selectedMaterialId}
+                  onChange={(e) => handleMaterialSelect(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-input)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
+                >
+                  <option value="">-- Pilih Material --</option>
+                  {materials.map((material) => (
+                    <option key={material.id} value={material.id}>
+                      {material.kode} - {material.nama}
+                    </option>
+                  ))}
+                </select>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                  Pilih material untuk auto-fill data supplier, harga, dll
+                </p>
+              </div>
+
+              <Input
+                label="Supplier Name"
+                value={addInventoryForm.supplierName}
+                onChange={(value) => setAddInventoryForm({ ...addInventoryForm, supplierName: value })}
+                placeholder="Otomatis dari material (bisa diubah)"
+                disabled={!!addInventoryForm.selectedMaterialId}
+              />
+              <Input
+                label="Code Item *"
+                value={addInventoryForm.codeItem}
+                onChange={(value) => setAddInventoryForm({ ...addInventoryForm, codeItem: value })}
+                placeholder="Otomatis dari material (bisa diubah)"
+                required
+                disabled={!!addInventoryForm.selectedMaterialId}
+              />
+              <Input
+                label="Description *"
+                value={addInventoryForm.description}
+                onChange={(value) => setAddInventoryForm({ ...addInventoryForm, description: value })}
+                placeholder="Otomatis dari material (bisa diubah)"
+                required
+                disabled={!!addInventoryForm.selectedMaterialId}
+              />
+              <Input
+                label="Kategori"
+                value={addInventoryForm.kategori}
+                onChange={(value) => setAddInventoryForm({ ...addInventoryForm, kategori: value })}
+                placeholder={activeTab === 'product' ? 'Product' : 'Material'}
+                disabled={!!addInventoryForm.selectedMaterialId}
+              />
+              <Input
+                label="Satuan"
+                value={addInventoryForm.satuan}
+                onChange={(value) => setAddInventoryForm({ ...addInventoryForm, satuan: value })}
+                placeholder="PCS"
+                disabled={!!addInventoryForm.selectedMaterialId}
+              />
+              <Input
+                label="Price"
+                type="number"
+                value={addInventoryForm.price}
+                onChange={(value) => setAddInventoryForm({ ...addInventoryForm, price: value })}
+                placeholder="Otomatis dari material (bisa diubah)"
+                disabled={!!addInventoryForm.selectedMaterialId}
+              />
+              <Input
+                label="Stock Premonth *"
+                type="number"
+                value={addInventoryForm.stockPremonth}
+                onChange={(value) => setAddInventoryForm({ ...addInventoryForm, stockPremonth: value })}
+                placeholder="Masukkan stock awal"
+                required
+              />
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)' }}>
+                  Upload Dokumentasi Stock (Optional)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={handleStockDocUpload}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-input)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
+                />
+                {stockDocFile && (
+                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                    File: {stockDocFile.name} ({(stockDocFile.size / 1024).toFixed(2)} KB)
+                  </p>
+                )}
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                  Upload foto atau dokumen sebagai bukti stock (maks 5MB)
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '20px' }}>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowAddInventoryDialog(false);
+                    setAddInventoryForm({
+                      selectedMaterialId: '',
+                      supplierName: '',
+                      codeItem: '',
+                      description: '',
+                      kategori: '',
+                      satuan: 'PCS',
+                      price: '',
+                      stockPremonth: '',
+                      stockDocumentation: '',
+                    });
+                    setStockDocFile(null);
+                  }}
+                >
+                  Batal
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={handleAddInventory}
+                  disabled={loading}
+                >
+                  {loading ? 'Menyimpan...' : 'Simpan'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

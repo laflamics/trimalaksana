@@ -5,6 +5,7 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
+import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -71,16 +72,10 @@ const AccountsReceivable = () => {
         storageService.get<any[]>('trucking_customers') || [],
       ]);
       
-      // Filter out deleted items (tombstone pattern)
-      const activeEntries = (entries || []).filter((e: any) => {
-        return !(e?.deleted === true || e?.deleted === 'true' || e?.deletedAt);
-      });
-      const activeInvoices = (invs || []).filter((i: any) => {
-        return !(i?.deleted === true || i?.deleted === 'true' || i?.deletedAt);
-      });
-      const activeCustomers = (cust || []).filter((c: any) => {
-        return !(c?.deleted === true || c?.deleted === 'true' || c?.deletedAt);
-      });
+      // Filter out deleted items menggunakan helper function
+      const activeEntries = filterActiveItems(entries || []);
+      const activeInvoices = filterActiveItems(invs || []);
+      const activeCustomers = filterActiveItems(cust || []);
       
       console.log(`📦 Loaded data:`, {
         journalEntries: activeEntries?.length || 0,

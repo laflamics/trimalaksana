@@ -6,7 +6,7 @@ import Input from '../../components/Input';
 import { storageService, extractStorageValue } from '../../services/storage';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
 import { generateBacHtml } from '../../pdf/bac-pdf-template';
-import { openPrintWindow } from '../../utils/actions';
+import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import { useDialog } from '../../hooks/useDialog';
 import '../../styles/common.css';
 import '../../styles/compact.css';
@@ -395,8 +395,19 @@ const Return = () => {
         } else if (!result.canceled) {
           showToast(`Gagal menyimpan PDF: ${result.error || 'Unknown error'}`, 'error');
         }
+      } else if (isMobile() || isCapacitor()) {
+        // Mobile/Capacitor: Use Web Share API or download link
+        await savePdfForMobile(
+          viewPdfData.html,
+          fileName,
+          (message) => {
+            showToast(message, 'success');
+            setViewPdfData(null); // Close view setelah save
+          },
+          (message) => showToast(message, 'error')
+        );
       } else {
-        // Fallback: open print window jika tidak ada Electron API
+        // Browser: Open print dialog, user can select "Save as PDF"
         openPrintWindow(viewPdfData.html);
       }
     } catch (error: any) {

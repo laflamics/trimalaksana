@@ -3,6 +3,14 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { storageService, type SyncStatus } from '../../services/storage';
 import { getTheme, applyTheme, type Theme } from '../../utils/theme';
 import { loadIconAsBase64 } from '../../utils/icon-loader';
+import { 
+  hasRouteAccess, 
+  getFirstAccessibleRoute, 
+  isDefaultAdmin, 
+  getCurrentUser,
+  normalizePath,
+  getUserAccessData
+} from '../../utils/access-control-helper';
 import '../../components/Layout.css';
 
 interface LayoutProps {
@@ -96,21 +104,20 @@ const GeneralTradingLayout = ({ children }: LayoutProps) => {
   useEffect(() => {
     const loadUserAccess = async () => {
       try {
-        const currentUserStr = localStorage.getItem('currentUser');
-        if (!currentUserStr) {
+        const currentUser = getCurrentUser();
+        if (!currentUser) {
           setUserMenuAccess({});
           return;
         }
-        const currentUser = JSON.parse(currentUserStr);
         
         // Default admin gets full access (null means no restrictions)
-        if (currentUser.username === 'admin') {
+        if (isDefaultAdmin(currentUser)) {
           setUserMenuAccess(null);
           return;
         }
         
-        const users = await storageService.get<UserAccess[]>('userAccessControl');
-        const userData = users?.find((u) => u.id === currentUser.id);
+        // Pakai helper function yang sudah pakai filterActiveItems
+        const userData = await getUserAccessData(currentUser.id);
         
         if (userData?.menuAccess) {
           setUserMenuAccess(userData.menuAccess);
@@ -129,7 +136,8 @@ const GeneralTradingLayout = ({ children }: LayoutProps) => {
     const handleStorageChange = (event: Event) => {
       const detail = (event as CustomEvent<{ key?: string }>).detail;
       const storageKey = detail?.key?.split('/').pop();
-      if (storageKey === 'userAccessControl' || storageKey === 'currentUser') {
+      // Handle both 'userAccessControl' (global) and 'general-trading/userAccessControl' (prefixed)
+      if (storageKey === 'userAccessControl' || detail?.key === 'userAccessControl' || detail?.key?.endsWith('/userAccessControl') || storageKey === 'currentUser') {
         loadUserAccess();
       }
     };
@@ -206,26 +214,105 @@ const GeneralTradingLayout = ({ children }: LayoutProps) => {
     },
   ];
 
-  const isActive = (path: string) => location.pathname === path;
+  // Normalize path for comparison (handle trailing slash and hash router)
+  const isActive = (path: string) => {
+    const currentPath = normalizePath(location.pathname);
+    const menuPath = normalizePath(path);
+    return currentPath === menuPath || currentPath.startsWith(menuPath + '/');
+  };
 
   // Filter menu items based on user access
   const filteredMenuItems = useMemo(() => {
-    const currentUserStr = localStorage.getItem('currentUser');
-    const isDefaultAdmin = currentUserStr && JSON.parse(currentUserStr).username === 'admin';
+    const currentUser = getCurrentUser();
+    const isAdmin = currentUser ? isDefaultAdmin(currentUser) : false;
     
     // Default admin gets full access (userMenuAccess === null)
-    if (isDefaultAdmin || userMenuAccess === null) {
+    if (isAdmin || userMenuAccess === null) {
       return menuItems;
     }
 
     // User with menuAccess restrictions
     const allowedMenus = new Set(userMenuAccess['general-trading'] || []);
     
+    // Settings menu items that are admin-only
+    const adminOnlySettingsPaths = [
+      '/general-trading/settings/report',
+      '/general-trading/settings/db-activity',
+      '/general-trading/settings/user-control',
+      '/general-trading/settings/flow-test'
+    ];
+    
     return menuItems.map((section) => ({
       ...section,
-      items: section.items.filter((item) => allowedMenus.has(item.path)),
+      items: section.items.filter((item) => {
+        const normalizedItemPath = normalizePath(item.path);
+        
+        // Admin-only Settings items: only show to admin
+        if (adminOnlySettingsPaths.some(adminPath => normalizePath(adminPath) === normalizedItemPath)) {
+          return isAdmin;
+        }
+        
+        // Other items: check against allowed menus
+        return Array.from(allowedMenus).some(allowed => 
+          normalizePath(allowed) === normalizedItemPath || 
+          normalizedItemPath.startsWith(normalizePath(allowed) + '/')
+        );
+      }),
     })).filter((section) => section.items.length > 0); // Remove empty sections
   }, [userMenuAccess]);
+
+  // Route protection: Check access when location changes
+  useEffect(() => {
+    const checkRouteAccess = async () => {
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        navigate('/login', { replace: true });
+        return;
+      }
+
+      // Default admin has full access
+      if (isDefaultAdmin(currentUser)) {
+        return;
+      }
+
+      const currentPath = normalizePath(location.pathname);
+      const businessUnit = 'general-trading';
+
+      // Admin-only Settings paths - block non-admin access
+      const adminOnlySettingsPaths = [
+        '/general-trading/settings/report',
+        '/general-trading/settings/db-activity',
+        '/general-trading/settings/user-control',
+        '/general-trading/settings/flow-test'
+      ];
+      
+      if (adminOnlySettingsPaths.some(adminPath => normalizePath(adminPath) === currentPath)) {
+        // Redirect non-admin users away from admin-only Settings pages
+        const firstAccessible = await getFirstAccessibleRoute(
+          businessUnit,
+          'finance/reports',
+          currentUser.id
+        );
+        navigate(firstAccessible, { replace: true });
+        return;
+      }
+
+      // Check if user has access to current route
+      const hasAccess = await hasRouteAccess(currentPath, businessUnit, currentUser.id);
+      
+      if (!hasAccess) {
+        // Redirect to first accessible route
+        const firstAccessible = await getFirstAccessibleRoute(
+          businessUnit,
+          'finance/reports',
+          currentUser.id
+        );
+        navigate(firstAccessible, { replace: true });
+      }
+    };
+
+    checkRouteAccess();
+  }, [location.pathname, navigate]);
 
   const handleBackToSelector = () => {
     localStorage.removeItem('selectedBusiness');

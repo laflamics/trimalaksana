@@ -14,6 +14,7 @@ interface Notification {
 interface NotificationBellProps {
   notifications: Notification[];
   onNotificationClick?: (notification: Notification) => void;
+  onDeleteNotification?: (notification: Notification) => void;
   icon?: string;
   emptyMessage?: string;
 }
@@ -21,6 +22,7 @@ interface NotificationBellProps {
 const NotificationBell = ({ 
   notifications, 
   onNotificationClick,
+  onDeleteNotification,
   icon = '🔔',
   emptyMessage = 'Tidak ada notifikasi'
 }: NotificationBellProps) => {
@@ -237,13 +239,12 @@ const NotificationBell = ({
               sortedNotifications.map((notification, idx) => (
                 <div
                   key={notification.id || idx}
-                  onClick={() => handleNotificationClick(notification)}
                   style={{
                     padding: '12px 16px',
                     borderBottom: idx < sortedNotifications.length - 1 ? '1px solid var(--border-color)' : 'none',
-                    cursor: 'pointer',
                     transition: 'background-color 0.2s ease',
                     backgroundColor: 'var(--bg-secondary)',
+                    position: 'relative',
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = 'var(--hover-bg)';
@@ -253,35 +254,77 @@ const NotificationBell = ({
                   }}
                 >
                   <div
+                    onClick={() => handleNotificationClick(notification)}
                     style={{
-                      fontSize: '13px',
-                      fontWeight: '600',
-                      color: 'var(--text-primary)',
-                      marginBottom: '4px',
+                      cursor: 'pointer',
+                      paddingRight: onDeleteNotification ? '30px' : '0',
                     }}
                   >
-                    {notification.title}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '12px',
-                      color: 'var(--text-secondary)',
-                      marginBottom: '4px',
-                      lineHeight: '1.4',
-                    }}
-                  >
-                    {notification.message}
-                  </div>
-                  {notification.timestamp && (
                     <div
                       style={{
-                        fontSize: '10px',
-                        color: 'var(--text-secondary)',
-                        opacity: 0.7,
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        color: 'var(--text-primary)',
+                        marginBottom: '4px',
                       }}
                     >
-                      {formatTime(notification.timestamp)}
+                      {notification.title}
                     </div>
+                    <div
+                      style={{
+                        fontSize: '12px',
+                        color: 'var(--text-secondary)',
+                        marginBottom: '4px',
+                        lineHeight: '1.4',
+                      }}
+                    >
+                      {notification.message}
+                    </div>
+                    {notification.timestamp && (
+                      <div
+                        style={{
+                          fontSize: '10px',
+                          color: 'var(--text-secondary)',
+                          opacity: 0.7,
+                        }}
+                      >
+                        {formatTime(notification.timestamp)}
+                      </div>
+                    )}
+                  </div>
+                  {onDeleteNotification && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteNotification(notification);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        top: '8px',
+                        right: '8px',
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#EF4444',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        padding: '4px',
+                        borderRadius: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '24px',
+                        height: '24px',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
+                      title="Hapus notifikasi"
+                    >
+                      ×
+                    </button>
                   )}
                 </div>
               ))

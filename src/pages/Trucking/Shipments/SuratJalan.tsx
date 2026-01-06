@@ -3,9 +3,11 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
+import NotificationBell from '../../../components/NotificationBell';
 import { storageService } from '../../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
 import { generateSuratJalanHtml } from '../../../pdf/suratjalan-pdf-template';
-import { openPrintWindow } from '../../../utils/actions';
+import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../../utils/actions';
 import { loadLogoAsBase64 } from '../../../utils/logo-loader';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
@@ -258,7 +260,6 @@ const SuratJalan = () => {
   const [showReceiptDateDialog, setShowReceiptDateDialog] = useState(false);
   const [receiptDate, setReceiptDate] = useState('');
   const [pendingUploadItem, setPendingUploadItem] = useState<SuratJalan | null>(null);
-  const [showNotifications, setShowNotifications] = useState(true);
   const [showFormDialog, setShowFormDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<SuratJalan | null>(null);
   const [notificationDialog, setNotificationDialog] = useState<{
@@ -349,35 +350,36 @@ const SuratJalan = () => {
 
   const loadData = async () => {
     try {
-      // Initialize empty arrays in local storage first to prevent 404 errors
-      if (typeof window !== 'undefined') {
-        const localStorageKeys = [
-          'trucking/suratJalan',
-          'trucking_suratJalanNotifications'
-        ];
-        
-        for (const localStorageKey of localStorageKeys) {
-          const existing = localStorage.getItem(localStorageKey);
-          if (!existing) {
-            localStorage.setItem(localStorageKey, JSON.stringify({ value: [], timestamp: new Date().toISOString() }));
-          }
-        }
+      // Load semua data menggunakan storageService
+      const [sjDataRaw, notifDataRaw, doDataRaw, schedulesDataRaw, driversData, vehiclesData, routesData] = await Promise.all([
+        storageService.get<SuratJalan[]>('trucking_suratJalan'),
+        storageService.get<any[]>('trucking_suratJalanNotifications'),
+        storageService.get<any[]>('trucking_delivery_orders'),
+        storageService.get<any[]>('trucking_unitSchedules'),
+        storageService.get<any[]>('trucking_drivers'),
+        storageService.get<any[]>('trucking_vehicles'),
+        storageService.get<any[]>('trucking_routes'),
+      ]);
+      
+      // Initialize empty arrays jika belum ada
+      if (!sjDataRaw) {
+        await storageService.set('trucking_suratJalan', []);
+      }
+      if (!notifDataRaw) {
+        await storageService.set('trucking_suratJalanNotifications', []);
       }
 
-      const [sjData, notifData, doData, schedulesData, driversData, vehiclesData, routesData] = await Promise.all([
-        storageService.get<SuratJalan[]>('trucking_suratJalan') || [],
-        storageService.get<any[]>('trucking_suratJalanNotifications') || [],
-        storageService.get<any[]>('trucking_delivery_orders') || [],
-        storageService.get<any[]>('trucking_unitSchedules') || [],
-        storageService.get<any[]>('trucking_drivers') || [],
-        storageService.get<any[]>('trucking_vehicles') || [],
-        storageService.get<any[]>('trucking_routes') || [],
-      ]);
+      // Ensure arrays (handle null/undefined)
+      const sjData = sjDataRaw || [];
+      const notifData = notifDataRaw || [];
+      const doData = doDataRaw || [];
+      const schedulesData = schedulesDataRaw || [];
 
-      // Filter out deleted items sebagai safety net (jaga-jaga kalau masih ada data yang ter-mark sebagai deleted)
-      const activeSJ = (sjData || []).filter((sj: any) => {
-        return !(sj?.deleted === true || sj?.deleted === 'true' || sj?.deletedAt);
-      });
+      console.log(`📊 [SuratJalan] Loaded data: ${sjData.length} SJ, ${notifData.length} notifications, ${doData.length} DOs`);
+
+      // Filter out deleted items menggunakan helper function
+      const activeSJ = filterActiveItems(sjData);
+      const activeDOs = filterActiveItems(doData);
       
       // Sort by created date (newest first), fallback to scheduledDate if created not available
       const sortedSJ = activeSJ.sort((a, b) => {
@@ -389,18 +391,32 @@ const SuratJalan = () => {
       
       // Filter notifications: hanya yang belum dibuat SJ-nya dan DO-nya masih ada
       // Hapus notification jika:
-      // 1. Sudah ada SJ untuk DO yang sama
-      // 2. DO-nya sudah di-delete (tombstone)
-      const originalNotifsCount = (notifData || []).length;
+      // 1. Sudah di-delete (tombstone pattern)
+      // 2. Sudah ada SJ untuk DO yang sama
+      // 3. DO-nya sudah di-delete (tombstone)
+      const originalNotifsCount = notifData.length;
+      console.log(`📊 [SuratJalan] Processing ${originalNotifsCount} notifications, ${activeDOs.length} active DOs, ${activeSJ.length} active SJs`);
       
-      // Filter out deleted items sebagai safety net (jaga-jaga kalau masih ada data yang ter-mark sebagai deleted)
-      const activeDOs = (doData || []).filter((doItem: any) => {
-        return !(doItem?.deleted === true || doItem?.deleted === 'true' || doItem?.deletedAt);
-      });
+      // CRITICAL: Filter deleted items FIRST menggunakan filterActiveItems
+      const activeNotifData = filterActiveItems(notifData);
+      console.log(`📊 [SuratJalan] After filtering deleted items: ${activeNotifData.length} active notifications (from ${originalNotifsCount} total)`);
       
-      const allNotifs = (notifData || []).filter((n: any) => {
+      const allNotifs = activeNotifData.filter((n: any) => {
         // Keep notification jika belum dibuat SJ-nya
         if (n.type === 'PETTY_CASH_DISTRIBUTED' && (n.status || 'Open') === 'Open') {
+          // CRITICAL FIX: Jika DO data kosong (belum ada file), jangan filter notification
+          // Ini untuk handle case dimana DO belum pernah di-save ke file storage
+          if (activeDOs.length === 0) {
+            console.log(`⚠️ [SuratJalan] No DO data found, keeping notification ${n.id} for DO ${n.doNo}`);
+            // Cek apakah sudah ada SJ untuk DO ini
+            const hasSJ = activeSJ.some((sj: any) => sj.doNo === n.doNo);
+            if (hasSJ) {
+              console.log(`🧹 [SuratJalan] Filtering out notification for DO ${n.doNo} - SJ already exists`);
+              return false;
+            }
+            return true; // Keep notification jika DO data kosong (belum ada file)
+          }
+          
           // Cek apakah DO-nya sudah di-delete
           const doExists = activeDOs.some((doItem: any) => doItem.doNo === n.doNo);
           if (!doExists && n.doNo) {
@@ -429,8 +445,13 @@ const SuratJalan = () => {
       // SELALU update notifications di storage untuk memastikan data konsisten
       // Hapus notification yang sudah tidak relevan (DO deleted atau sudah ada SJ)
       // Update storage setiap kali ada perubahan atau jika ada notification yang perlu dihapus
-      const shouldUpdate = allNotifs.length !== originalNotifsCount || 
-        (notifData || []).some((n: any) => {
+      // Note: Keep deleted items (tombstones) in storage for sync, but don't include them in allNotifs
+      // Merge allNotifs dengan deleted items dari original notifData untuk preserve tombstones
+      const deletedNotifs = notifData.filter((n: any) => n.deleted === true || n.deletedAt);
+      const allNotifsWithTombstones = [...allNotifs, ...deletedNotifs];
+      
+      const shouldUpdate = allNotifs.length !== activeNotifData.length || 
+        (activeNotifData || []).some((n: any) => {
           if (n.type === 'PETTY_CASH_DISTRIBUTED' && (n.status || 'Open') === 'Open') {
             // Cek apakah DO sudah di-delete
             const doExists = activeDOs.some((doItem: any) => doItem.doNo === n.doNo);
@@ -445,14 +466,30 @@ const SuratJalan = () => {
         });
       
       if (shouldUpdate) {
-        await storageService.set('trucking_suratJalanNotifications', allNotifs);
-        console.log(`🧹 [SuratJalan] Cleaned up ${originalNotifsCount - allNotifs.length} obsolete notifications (from ${originalNotifsCount} to ${allNotifs.length})`);
+        // Save dengan tombstones untuk sync
+        await storageService.set('trucking_suratJalanNotifications', allNotifsWithTombstones);
+        console.log(`🧹 [SuratJalan] Cleaned up ${activeNotifData.length - allNotifs.length} obsolete notifications (from ${activeNotifData.length} active to ${allNotifs.length} relevant)`);
       }
       
       // Filter untuk display: hanya yang PENDING, belum dibuat SJ-nya, dan DO-nya masih ada
+      // Note: allNotifs sudah di-filter untuk deleted items, jadi tidak perlu filter lagi
       const activeNotifs = allNotifs.filter((n: any) => {
+        // Double-check: pastikan tidak deleted (shouldn't happen but safety check)
+        if (n.deleted === true || n.deletedAt) {
+          return false;
+        }
         if (n.type !== 'PETTY_CASH_DISTRIBUTED' || (n.status || 'Open') !== 'Open') {
           return false;
+        }
+        // CRITICAL FIX: Jika DO data kosong (belum ada file), tetap tampilkan notification
+        if (activeDOs.length === 0) {
+          // Cek apakah sudah ada SJ untuk DO ini
+          const hasSJ = activeSJ.some((sj: any) => sj.doNo === n.doNo);
+          if (hasSJ) {
+            console.log(`🧹 [SuratJalan] Filtering out notification for display: DO ${n.doNo} - SJ already exists`);
+            return false;
+          }
+          return true; // Keep notification jika DO data kosong
         }
         // Double-check: pastikan DO-nya masih ada
         const doExists = activeDOs.some((doItem: any) => doItem.doNo === n.doNo);
@@ -481,6 +518,17 @@ const SuratJalan = () => {
     }
   };
 
+  // Format notifications untuk NotificationBell
+  const sjNotifications = useMemo(() => {
+    return notifications.map((notif: any) => ({
+      id: notif.id,
+      title: `PC ${notif.pettyCashRequestNo || 'N/A'} - DO ${notif.doNo || 'N/A'}`,
+      message: `Driver: ${notif.driverName || 'N/A'} | Amount: Rp ${(notif.amount || 0).toLocaleString('id-ID')} | Vehicle: ${notif.vehicleNo || 'N/A'}`,
+      timestamp: notif.created || notif.distributedDate || notif.timestamp,
+      notif: notif, // Keep original data
+    }));
+  }, [notifications]);
+
   const generateSJNo = () => {
     const date = new Date();
     const year = date.getFullYear();
@@ -496,6 +544,41 @@ const SuratJalan = () => {
       show: true,
       notif: notif,
     });
+  };
+
+  const handleDeleteNotification = async (notif: any) => {
+    try {
+      // Gunakan safeDeleteItem untuk soft delete (tombstone pattern)
+      const success = await safeDeleteItem('trucking_suratJalanNotifications', notif.id, 'id');
+      
+      if (success) {
+        // Reload data dengan filter active items
+        const allNotifications = await storageService.get<any[]>('trucking_suratJalanNotifications') || [];
+        const activeNotifs = filterActiveItems(allNotifications).filter((n: any) => {
+          if (n.type !== 'PETTY_CASH_DISTRIBUTED' || (n.status || 'Open') !== 'Open') {
+            return false;
+          }
+          // Filter jika sudah ada SJ untuk DO ini
+          const sjDONos = new Set(suratJalan.map((sj: any) => sj.doNo));
+          if (n.doNo && sjDONos.has(n.doNo)) {
+            return false;
+          }
+          // Filter jika DO sudah di-delete
+          const activeDOs = filterActiveItems(deliveryOrders);
+          const doNos = new Set(activeDOs.map((doItem: any) => doItem.doNo));
+          if (n.doNo && !doNos.has(n.doNo)) {
+            return false;
+          }
+          return true;
+        });
+        setNotifications(activeNotifs);
+        showAlert('Notifikasi berhasil dihapus', 'Success');
+      } else {
+        showAlert('Error menghapus notifikasi. Silakan coba lagi.', 'Error');
+      }
+    } catch (error: any) {
+      showAlert(`Error deleting notification: ${error.message}`, 'Error');
+    }
   };
 
   const handleLoadFormFromNotification = (notif: any) => {
@@ -672,7 +755,7 @@ const SuratJalan = () => {
           distributedDate: formData.distributedDate || '',
           scheduledDate: formData.scheduledDate || '',
           scheduledTime: formData.scheduledTime || '',
-            status: formData.status || 'Open',
+          status: formData.status || 'Open',
           notes: formData.notes || '',
           created: now.toISOString(),
           lastUpdate: now.toISOString(),
@@ -734,7 +817,7 @@ const SuratJalan = () => {
   };
 
   // Helper function untuk save tombstone ke audit log
-  const saveTombstoneToAuditLog = (item: any, refType: string) => {
+  const saveTombstoneToAuditLog = async (item: any, refType: string) => {
     try {
       const timestamp = new Date().toISOString();
       const itemId = item.id || item.sjNo || item.doNo || item.requestNo || item.memoNo || item.vehicleNo || item.driverCode || item.routeCode || item.kode || 'unknown';
@@ -750,20 +833,9 @@ const SuratJalan = () => {
         createdAt: timestamp,
       };
       
-      // Simpan audit log
-      const auditKey = 'trucking/auditLogs';
-      const auditStr = localStorage.getItem(auditKey);
-      let auditLogs: any[] = [];
-      if (auditStr) {
-        const parsed = JSON.parse(auditStr);
-        auditLogs = Array.isArray(parsed?.value) ? parsed.value : (Array.isArray(parsed) ? parsed : []);
-      }
-      auditLogs.push(auditLog);
-      localStorage.setItem(auditKey, JSON.stringify({
-        value: auditLogs,
-        timestamp: new Date().toISOString(),
-        _timestamp: Date.now(),
-      }));
+      // Simpan audit log menggunakan storageService
+      const auditLogs = await storageService.get<any[]>('trucking_auditLogs') || [];
+      await storageService.set('trucking_auditLogs', [...auditLogs, auditLog]);
       return true;
     } catch (error) {
       console.error('Error saving tombstone to audit log:', error);
@@ -777,21 +849,27 @@ const SuratJalan = () => {
       async () => {
         try {
           // Simpan tombstone ke audit log sebelum menghapus
-          saveTombstoneToAuditLog(item, 'trucking_suratJalan');
+          await saveTombstoneToAuditLog(item, 'trucking_suratJalan');
           
-          // Hapus data benar-benar dari array
-          const allSJ = await storageService.get<SuratJalan[]>('trucking_suratJalan') || [];
-          const updated = allSJ.filter(sj => sj.id !== item.id);
-          await storageService.set('trucking_suratJalan', updated);
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('trucking_suratJalan', item.id, 'id');
           
-          // Sort by created date (newest first)
-          const sortedUpdated = updated.sort((a, b) => {
-            const dateA = a.created ? new Date(a.created).getTime() : (a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0);
-            const dateB = b.created ? new Date(b.created).getTime() : (b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0);
-            return dateB - dateA; // Newest first
-          });
-          setSuratJalan(sortedUpdated.map((sj, idx) => ({ ...sj, no: idx + 1 })));
-          showAlert(`Surat Jalan "${item.sjNo}" deleted successfully`, 'Success');
+          if (success) {
+            // Reload data dengan filter active items
+            const updatedSJ = await storageService.get<SuratJalan[]>('trucking_suratJalan') || [];
+            const activeSJ = filterActiveItems(updatedSJ);
+            
+            // Sort by created date (newest first)
+            const sortedUpdated = activeSJ.sort((a, b) => {
+              const dateA = a.created ? new Date(a.created).getTime() : (a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0);
+              const dateB = b.created ? new Date(b.created).getTime() : (b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0);
+              return dateB - dateA; // Newest first
+            });
+            setSuratJalan(sortedUpdated.map((sj, idx) => ({ ...sj, no: idx + 1 })));
+            showAlert(`Surat Jalan "${item.sjNo}" deleted successfully`, 'Success');
+          } else {
+            showAlert(`Error deleting surat jalan "${item.sjNo}". Please try again.`, 'Error');
+          }
         } catch (error: any) {
           showAlert(`Error deleting surat jalan: ${error.message}`, 'Error');
         }
@@ -887,6 +965,7 @@ const SuratJalan = () => {
       const fileName = `${viewPdfData.sjNo}.pdf`;
 
       if (electronAPI && typeof electronAPI.savePdf === 'function') {
+        // Electron: Use file picker to select save location
         const result = await electronAPI.savePdf(viewPdfData.html, fileName);
         if (result.success) {
           showAlert(`PDF saved successfully to:\n${result.path}`, 'Success');
@@ -894,8 +973,38 @@ const SuratJalan = () => {
         } else if (!result.canceled) {
           showAlert(`Error saving PDF: ${result.error || 'Unknown error'}`, 'Error');
         }
+      } else if (isMobile() || isCapacitor()) {
+        // Mobile/Capacitor: Use Web Share API or download link
+        await savePdfForMobile(
+          viewPdfData.html,
+          fileName,
+          (message) => {
+            showAlert(message, 'Success');
+            setViewPdfData(null); // Close view setelah save
+          },
+          (message) => showAlert(message, 'Error')
+        );
       } else {
-        openPrintWindow(viewPdfData.html, { autoPrint: false });
+        // Browser: Buka window baru dengan print dialog langsung
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.open();
+          printWindow.document.write(viewPdfData.html);
+          printWindow.document.close();
+          printWindow.onload = () => {
+            setTimeout(() => {
+              printWindow.print();
+            }, 250);
+          };
+          setTimeout(() => {
+            if (printWindow && !printWindow.closed) {
+              printWindow.print();
+            }
+          }, 500);
+          showAlert('Print dialog akan muncul. Pilih "Save as PDF" untuk menyimpan dokumen.', 'Info');
+        } else {
+          openPrintWindow(viewPdfData.html, { autoPrint: true });
+        }
       }
     } catch (error: any) {
       showAlert(`Error saving PDF: ${error.message}`, 'Error');
@@ -1379,15 +1488,17 @@ const SuratJalan = () => {
           <h2>Surat Jalan</h2>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
             {notifications.length > 0 && (
-              <Button
-                variant="secondary"
-                onClick={() => setShowNotifications((prev) => !prev)}
-                style={{ padding: '6px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                <span role="img" aria-label="bell">🔔</span>
-                {notifications.length}
-                {showNotifications ? ' Hide' : ' Show'}
-              </Button>
+              <NotificationBell
+                notifications={sjNotifications}
+                onNotificationClick={(notification) => {
+                  if (notification.notif) {
+                    handleCreateFromNotification(notification.notif);
+                  }
+                }}
+                onDeleteNotification={handleDeleteNotification}
+                icon="📄"
+                emptyMessage="Tidak ada notifikasi Petty Cash yang perlu dibuat Surat Jalan"
+              />
             )}
             <Button onClick={() => {
               setEditingItem(null);
@@ -1412,96 +1523,6 @@ const SuratJalan = () => {
             </Button>
           </div>
         </div>
-
-        {/* Notifications Panel */}
-        {notifications.length > 0 && showNotifications && (
-          <Card className="mb-4" style={{ 
-            backgroundColor: document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(33, 150, 243, 0.1)' : 'rgba(33, 150, 243, 0.15)', 
-            border: '2px solid #2196F3',
-            padding: '12px 16px', 
-            borderRadius: '6px',
-            pointerEvents: 'auto',
-            position: 'relative',
-            zIndex: 1,
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '10px' }}>
-              <div>
-                <strong>📄 Petty Cash Distributed Notifications ({notifications.length})</strong>
-                <div style={{ fontSize: '13px', opacity: '0.9' }}>Klik untuk langsung buat Surat Jalan</div>
-              </div>
-              <Button
-                variant="secondary"
-                onClick={() => setShowNotifications(false)}
-                style={{ 
-                  padding: '6px 12px', 
-                  color: document.documentElement.getAttribute('data-theme') === 'light' ? '#1a1a1a' : '#1b1b1b', 
-                  backgroundColor: document.documentElement.getAttribute('data-theme') === 'light' ? '#ffffff' : '#ffffff', 
-                  border: 'none' 
-                }}
-              >
-                Hide
-              </Button>
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', pointerEvents: 'auto', position: 'relative', zIndex: 2 }}>
-              {notifications.map((notif: any) => (
-                <button
-                  key={notif.id}
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log('[SuratJalan] Notification clicked:', notif.id);
-                    handleCreateFromNotification(notif);
-                  }}
-                  style={{
-                    flex: '0 1 280px',
-                    minWidth: '240px',
-                    maxWidth: '320px',
-                    padding: '12px',
-                    backgroundColor: document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.08)',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                    cursor: 'pointer',
-                    border: `1px solid ${document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(33, 150, 243, 0.3)' : 'rgba(33, 150, 243, 0.35)'}`,
-                    transition: 'all 0.2s ease',
-                    pointerEvents: 'auto',
-                    position: 'relative',
-                    zIndex: 10,
-                    userSelect: 'none',
-                    textAlign: 'left',
-                    width: '100%',
-                    color: 'var(--text-primary)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.15)';
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.3)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.08)';
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
-                  }}
-                >
-                  <div style={{ fontWeight: 600, marginBottom: '6px', color: '#2196F3', fontSize: '14px' }}>
-                    💰 PC {notif.pettyCashRequestNo}
-                  </div>
-                  <div style={{ marginBottom: '4px' }}>DO: <strong>{notif.doNo}</strong></div>
-                  <div style={{ marginBottom: '4px' }}>Driver: <strong>{notif.driverName}</strong></div>
-                  <div style={{ marginBottom: '4px' }}>Amount: <strong>Rp {(notif.amount || 0).toLocaleString('id-ID')}</strong></div>
-                  <div style={{ marginBottom: '4px', fontSize: '11px', opacity: 0.9 }}>
-                    Scheduled: {notif.scheduledDate} {notif.scheduledTime || ''}
-                  </div>
-                  {notif.vehicleNo && <div style={{ fontSize: '11px' }}>Vehicle: {notif.vehicleNo}</div>}
-                  <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.2)' }}>
-                    Click to create SJ →
-                  </div>
-                </button>
-              ))}
-            </div>
-          </Card>
-        )}
 
         {/* Notification Dialog */}
         {notificationDialog.show && notificationDialog.notif && (
@@ -1765,6 +1786,7 @@ const SuratJalan = () => {
                     <option value="TON">TON</option>
                     <option value="M3">M3</option>
                     <option value="BOX">BOX</option>
+                    <option value="LOT">LOT</option>
                   </select>
                 </div>
                 <div>

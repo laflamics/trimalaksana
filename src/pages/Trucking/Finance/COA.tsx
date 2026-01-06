@@ -5,6 +5,7 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
+import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 
 interface Account {
@@ -83,18 +84,14 @@ const COA = () => {
   const loadData = async () => {
     // Load journal entries dulu
     const entriesRaw = await storageService.get<any[]>('trucking_journalEntries') || [];
-    // Filter out deleted items (tombstone pattern)
-    const entries = (entriesRaw || []).filter((e: any) => {
-      return !(e?.deleted === true || e?.deleted === 'true' || e?.deletedAt);
-    });
+    // Filter out deleted items menggunakan helper function
+    const entries = filterActiveItems(entriesRaw || []);
     setJournalEntries(entries);
     
     // Load accounts - pastikan selalu load dari storage
     let dataRaw = await storageService.get<Account[]>('trucking_accounts') || [];
-    // Filter out deleted items (tombstone pattern)
-    let data = (dataRaw || []).filter((a: any) => {
-      return !(a?.deleted === true || a?.deleted === 'true' || a?.deletedAt);
-    });
+    // Filter out deleted items menggunakan helper function
+    let data = filterActiveItems(dataRaw || []);
     
     // Default accounts yang harus ada
     // AKTIVA (Assets)

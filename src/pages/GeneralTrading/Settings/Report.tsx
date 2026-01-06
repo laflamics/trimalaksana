@@ -5,7 +5,7 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
-import { openPrintWindow } from '../../../utils/actions';
+import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../../utils/actions';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -1034,6 +1034,14 @@ const Report = () => {
         } else if (!result.canceled) {
           showAlert(`❌ Error saving PDF: ${result.error || 'Unknown error'}`, 'Error');
         }
+      } else if (isMobile() || isCapacitor()) {
+        // Mobile/Capacitor: Use Web Share API or download link
+        await savePdfForMobile(
+          html,
+          fileName,
+          (message) => showAlert('Success', message),
+          (message) => showAlert('Error', message)
+        );
       } else {
         // Browser: Open print dialog, user can select "Save as PDF"
         openPrintWindow(html, { autoPrint: false });

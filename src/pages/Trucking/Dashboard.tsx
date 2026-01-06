@@ -53,11 +53,11 @@ const TrackingDashboard = () => {
 
   const loadData = async () => {
     const [vehiclesData, driversData, ordersData, billsData, paymentsData] = await Promise.all([
-      storageService.get<any[]>('tracking_vehicles') || [],
-      storageService.get<any[]>('tracking_drivers') || [],
-      storageService.get<any[]>('tracking_delivery_orders') || [],
-      storageService.get<any[]>('tracking_bills') || [],
-      storageService.get<any[]>('tracking_payments') || [],
+      storageService.get<any[]>('trucking_vehicles') || [],
+      storageService.get<any[]>('trucking_drivers') || [],
+      storageService.get<any[]>('trucking_delivery_orders') || [],
+      storageService.get<any[]>('trucking_bills') || [],
+      storageService.get<any[]>('trucking_payments') || [],
     ]);
     setVehicles(vehiclesData || []);
     setDrivers(driversData || []);

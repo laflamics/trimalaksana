@@ -550,6 +550,49 @@
   letter-spacing: 1px;
 }
 
+/* Logout Button */
+.business-selector-logout-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+  padding: 10px 20px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  backdrop-filter: blur(10px);
+  white-space: nowrap;
+}
+
+.business-selector-logout-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.business-selector-logout-btn:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 768px) {
+  .business-selector-logout-btn {
+    padding: 8px 16px;
+    font-size: 12px;
+  }
+  
+  .business-selector-logout-btn span:last-child {
+    display: none;
+  }
+  
+  .business-selector-logout-btn {
+    padding: 8px 12px;
+  }
+}
+
 /* Tablet */
 @media (min-width: 769px) and (max-width: 1199px) {
   .business-selector-container {

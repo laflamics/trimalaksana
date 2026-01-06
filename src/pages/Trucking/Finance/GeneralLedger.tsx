@@ -5,6 +5,7 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -108,10 +109,8 @@ const GeneralLedger = () => {
   const loadEntries = async () => {
     let data = await storageService.get<JournalEntry[]>('trucking_journalEntries') || [];
     
-    // Filter out deleted items (tombstone pattern)
-    const activeData = (data || []).filter((e: any) => {
-      return !(e?.deleted === true || e?.deleted === 'true' || e?.deletedAt);
-    });
+    // Filter out deleted items menggunakan helper function
+    const activeData = filterActiveItems(data || []);
     
     // Jika journal entries kosong, generate dari transaksi yang sudah ada
     if (activeData.length === 0) {
@@ -119,10 +118,8 @@ const GeneralLedger = () => {
       await generateJournalEntriesFromTransactions();
       // Reload setelah generate
       data = await storageService.get<JournalEntry[]>('trucking_journalEntries') || [];
-      // Filter out deleted items again after reload
-      const reloadedActiveData = (data || []).filter((e: any) => {
-        return !(e?.deleted === true || e?.deleted === 'true' || e?.deletedAt);
-      });
+      // Filter out deleted items again after reload menggunakan helper function
+      const reloadedActiveData = filterActiveItems(data || []);
       console.log(`✅ Generated ${reloadedActiveData.length} journal entries`);
       setEntries(reloadedActiveData.map((e, idx) => ({ ...e, no: idx + 1 })));
     } else {
@@ -666,12 +663,19 @@ const GeneralLedger = () => {
           showConfirm(
             'Delete this entry?',
             async () => {
-              // Ensure entries is always an array
-              const entriesArray = Array.isArray(entries) ? entries : [];
-              const updated = entriesArray.filter(e => e.id !== item.id);
-              await storageService.set('trucking_journalEntries', updated);
-              setEntries(updated.map((e, idx) => ({ ...e, no: idx + 1 })));
-              closeDialog();
+              // Pakai helper function untuk safe delete (tombstone pattern)
+              const success = await safeDeleteItem('trucking_journalEntries', item.id, 'id');
+              
+              if (success) {
+                // Reload data dengan filter active items
+                const updatedEntries = await storageService.get<any[]>('trucking_journalEntries') || [];
+                const activeEntries = filterActiveItems(updatedEntries);
+                setEntries(activeEntries.map((e, idx) => ({ ...e, no: idx + 1 })));
+                closeDialog();
+              } else {
+                closeDialog();
+                showAlert('Error deleting entry. Please try again.', 'Error');
+              }
             },
             () => closeDialog(),
             'Delete Confirmation'

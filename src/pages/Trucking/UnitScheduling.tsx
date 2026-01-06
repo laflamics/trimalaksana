@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import NotificationBell from '../../components/NotificationBell';
 import { storageService } from '../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
 import '../../styles/common.css';
 import '../../styles/compact.css';
 
@@ -28,6 +29,225 @@ interface UnitSchedule {
   notes?: string;
   created: string;
 }
+
+// Action Menu Component untuk compact actions
+const ActionMenu = ({ onEdit, onClose, onReopen, onDelete, status, onCreateSchedule }: {
+  onEdit: () => void;
+  onClose?: () => void;
+  onReopen?: () => void;
+  onDelete?: () => void;
+  onCreateSchedule?: () => void;
+  status: 'Open' | 'Close';
+}) => {
+  const [showMenu, setShowMenu] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
+  const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node) &&
+          buttonRef.current && !buttonRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showMenu]);
+
+  useEffect(() => {
+    if (showMenu && buttonRef.current) {
+      const updatePosition = () => {
+        if (!buttonRef.current) return;
+        
+        const buttonRect = buttonRef.current.getBoundingClientRect();
+        const estimatedMenuHeight = 200; // Estimate menu height
+        const spaceBelow = window.innerHeight - buttonRect.bottom;
+        const spaceAbove = buttonRect.top;
+        
+        // Check if menu is rendered and get actual height
+        if (menuRef.current) {
+          const actualMenuHeight = menuRef.current.offsetHeight;
+          const openUpward = spaceBelow < actualMenuHeight && spaceAbove > spaceBelow;
+          
+          setMenuPosition({
+            top: openUpward ? buttonRect.top - actualMenuHeight - 4 : buttonRect.bottom + 4,
+            right: window.innerWidth - buttonRect.right,
+          });
+        } else {
+          // Initial position before menu is rendered
+          const openUpward = spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow;
+          setMenuPosition({
+            top: openUpward ? buttonRect.top - estimatedMenuHeight - 4 : buttonRect.bottom + 4,
+            right: window.innerWidth - buttonRect.right,
+          });
+        }
+      };
+      
+      // Update position immediately
+      updatePosition();
+      
+      // Update again after menu is rendered (using setTimeout to ensure DOM is updated)
+      const timeoutId = setTimeout(updatePosition, 0);
+      
+      // Also update on window resize or scroll
+      window.addEventListener('resize', updatePosition);
+      window.addEventListener('scroll', updatePosition, true);
+      
+      return () => {
+        clearTimeout(timeoutId);
+        window.removeEventListener('resize', updatePosition);
+        window.removeEventListener('scroll', updatePosition, true);
+      };
+    }
+  }, [showMenu]);
+  
+  return (
+    <>
+      <div ref={buttonRef} style={{ position: 'relative', display: 'inline-block' }}>
+        <Button 
+          variant="secondary" 
+          onClick={() => setShowMenu(!showMenu)}
+          style={{ fontSize: '10px', padding: '3px 6px', minHeight: '24px' }}
+        >
+          ⋮
+        </Button>
+      </div>
+      {showMenu && (
+        <div 
+          ref={menuRef}
+          style={{
+            position: 'fixed',
+            top: `${Math.max(4, Math.min(menuPosition.top, window.innerHeight - 100))}px`,
+            right: `${Math.max(4, Math.min(menuPosition.right, window.innerWidth - 170))}px`,
+            backgroundColor: 'var(--bg-primary)',
+            border: '1px solid var(--border)',
+            borderRadius: '6px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            zIndex: 10000,
+            minWidth: '160px',
+            maxWidth: '220px',
+            padding: '4px',
+            display: 'flex',
+            flexDirection: 'column',
+            maxHeight: 'calc(100vh - 8px)',
+            overflowY: 'auto',
+          }}
+        >
+          {onCreateSchedule && (
+            <button
+              onClick={() => { onCreateSchedule(); setShowMenu(false); }}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                fontSize: '11px',
+                borderRadius: '4px',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              ➕ Create Schedule
+            </button>
+          )}
+          {!onCreateSchedule && onEdit && (
+            <button
+              onClick={() => { onEdit(); setShowMenu(false); }}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                fontSize: '11px',
+                borderRadius: '4px',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              ✏️ Edit
+            </button>
+          )}
+          {status === 'Open' && onClose && (
+            <button
+              onClick={() => { onClose(); setShowMenu(false); }}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                fontSize: '11px',
+                borderRadius: '4px',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              ✓ Close
+            </button>
+          )}
+          {status === 'Close' && onReopen && (
+            <button
+              onClick={() => { onReopen(); setShowMenu(false); }}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                fontSize: '11px',
+                borderRadius: '4px',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              🔄 Reopen
+            </button>
+          )}
+          {onDelete && (
+            <>
+              {(!!onCreateSchedule || (!onCreateSchedule && !!onEdit) || (status === 'Open' && !!onClose) || (status === 'Close' && !!onReopen)) && (
+                <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
+              )}
+              <button
+                onClick={() => { onDelete(); setShowMenu(false); }}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '6px 10px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#EF4444',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  borderRadius: '4px',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                🗑️ Delete
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </>
+  );
+};
 
 const UnitScheduling = () => {
   const [activeTab, setActiveTab] = useState<'confirmed' | 'schedules' | 'completed'>('confirmed');
@@ -124,51 +344,38 @@ const UnitScheduling = () => {
 
   const loadData = async () => {
     try {
-      // Initialize empty arrays in local storage first to prevent 404 errors
-      if (typeof window !== 'undefined') {
-        const localStorageKey = 'trucking/unitNotifications';
-        const existing = localStorage.getItem(localStorageKey);
-        if (!existing) {
-          localStorage.setItem(localStorageKey, JSON.stringify({ value: [], timestamp: new Date().toISOString() }));
-        }
-      }
-
-      // Load schedules dan DO langsung dari localStorage untuk memastikan data yang sudah di-mark sebagai deleted tetap terbaca
-      const scheduleStorageKey = 'trucking/trucking_unitSchedules';
-      const scheduleValueStr = localStorage.getItem(scheduleStorageKey);
-      let scheduleData: UnitSchedule[] = [];
-      if (scheduleValueStr) {
-        const parsed = JSON.parse(scheduleValueStr);
-        scheduleData = Array.isArray(parsed?.value) ? parsed.value : (Array.isArray(parsed) ? parsed : []);
-      }
-      
-      const doStorageKey = 'trucking/trucking_delivery_orders';
-      const doValueStr = localStorage.getItem(doStorageKey);
-      let doData: any[] = [];
-      if (doValueStr) {
-        const parsed = JSON.parse(doValueStr);
-        doData = Array.isArray(parsed?.value) ? parsed.value : (Array.isArray(parsed) ? parsed : []);
-      }
-      
-      const [notifData, vehiclesData, driversData, routesData] = await Promise.all([
-        storageService.get<any[]>('trucking_unitNotifications') || [],
-        storageService.get<any[]>('trucking_vehicles') || [],
-        storageService.get<any[]>('trucking_drivers') || [],
-        storageService.get<any[]>('trucking_routes') || [],
+      // Load semua data menggunakan storageService untuk membaca dari file storage juga
+      const [scheduleDataRaw, doDataRaw, notifDataRaw, vehiclesDataRaw, driversDataRaw, routesDataRaw] = await Promise.all([
+        storageService.get<UnitSchedule[]>('trucking_unitSchedules'),
+        storageService.get<any[]>('trucking_delivery_orders'),
+        storageService.get<any[]>('trucking_unitNotifications'),
+        storageService.get<any[]>('trucking_vehicles'),
+        storageService.get<any[]>('trucking_drivers'),
+        storageService.get<any[]>('trucking_routes'),
       ]);
+      
+      // Ensure arrays (handle null/undefined)
+      const scheduleData = scheduleDataRaw || [];
+      const doData = doDataRaw || [];
+      const notifData = notifDataRaw || [];
+      const vehiclesData = vehiclesDataRaw || [];
+      const driversData = driversDataRaw || [];
+      const routesData = routesDataRaw || [];
 
-      // Filter out deleted items (tombstone pattern)
-      const activeDoData = (doData || []).filter((d: any) => {
-        return !(d?.deleted === true || d?.deleted === 'true' || d?.deletedAt);
-      });
+      console.log(`📊 [UnitScheduling] Loaded data: ${scheduleData.length} schedules, ${notifData.length} notifications, ${doData.length} DOs`);
+
+      // Filter out deleted items menggunakan helper function
+      const activeDoData = filterActiveItems(doData);
       
       // Create set of active DO numbers untuk validasi schedule dan notification
       const activeDONos = new Set(activeDoData.map((d: any) => d.doNo));
       
-      const activeNotifData = (notifData || []).filter((n: any) => {
-        // Filter jika notification sendiri sudah di-delete
-        if (n?.deleted === true || n?.deleted === 'true' || n?.deletedAt) {
-          return false;
+      const activeNotifData = filterActiveItems(notifData).filter((n: any) => {
+        // CRITICAL FIX: Jika DO data kosong (belum ada file), jangan filter notification
+        // Ini untuk handle case dimana DO belum pernah di-save ke file storage
+        if (activeDONos.size === 0) {
+          console.log(`⚠️ [UnitScheduling] No DO data found, keeping notification ${n.id} for DO ${n.doNo}`);
+          return true; // Keep notification jika DO data kosong
         }
         // Filter jika DO yang di-reference sudah di-delete
         if (n.doNo && !activeDONos.has(n.doNo)) {
@@ -178,11 +385,9 @@ const UnitScheduling = () => {
         return true;
       });
       
-      const activeScheduleData = (scheduleData || []).filter((s: any) => {
-        // Filter jika schedule sendiri sudah di-delete
-        if (s?.deleted === true || s?.deleted === 'true' || s?.deletedAt) {
-          return false;
-        }
+      // Filter deleted schedules menggunakan helper function
+      const activeScheduleData = filterActiveItems(scheduleData).filter((s: any) => {
+        // Filter jika schedule sendiri sudah di-delete (sudah di-filter oleh filterActiveItems)
         // Filter jika DO yang di-reference sudah di-delete
         if (s.doNo && !activeDONos.has(s.doNo)) {
           console.log(`[UnitScheduling] Filtering out schedule for deleted DO: ${s.doNo}`);
@@ -191,15 +396,9 @@ const UnitScheduling = () => {
         return true;
       });
       
-      const activeVehiclesData = (vehiclesData || []).filter((v: any) => {
-        return !(v?.deleted === true || v?.deleted === 'true' || v?.deletedAt);
-      });
-      const activeDriversData = (driversData || []).filter((d: any) => {
-        return !(d?.deleted === true || d?.deleted === 'true' || d?.deletedAt);
-      });
-      const activeRoutesData = (routesData || []).filter((r: any) => {
-        return !(r?.deleted === true || r?.deleted === 'true' || r?.deletedAt);
-      });
+      const activeVehiclesData = filterActiveItems(vehiclesData || []);
+      const activeDriversData = filterActiveItems(driversData || []);
+      const activeRoutesData = filterActiveItems(routesData || []);
       
       // Filter notifications: hanya yang belum punya schedule
       const scheduledDONos = new Set(activeScheduleData.map((s: any) => s.doNo));
@@ -454,16 +653,25 @@ const UnitScheduling = () => {
       `Are you sure you want to delete schedule for DO "${schedule.doNo}"?`,
       async () => {
         try {
-          const updated = schedules.filter(s => s.id !== schedule.id);
-          await storageService.set('trucking_unitSchedules', updated);
-          // Sort by created date (newest first)
-          const sortedSchedules = updated.sort((a: any, b: any) => {
-            const dateA = a.created ? new Date(a.created).getTime() : (a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0);
-            const dateB = b.created ? new Date(b.created).getTime() : (b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0);
-            return dateB - dateA; // Newest first
-          });
-          setSchedules(sortedSchedules.map((s, idx) => ({ ...s, no: idx + 1 })) as any);
-          showAlert(`Schedule for DO "${schedule.doNo}" deleted successfully`, 'Success');
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('trucking_unitSchedules', schedule.id, 'id');
+          
+          if (success) {
+            // Reload data dengan filter active items
+            const updatedSchedules = await storageService.get<UnitSchedule[]>('trucking_unitSchedules') || [];
+            const activeSchedules = filterActiveItems(updatedSchedules);
+            
+            // Sort by created date (newest first)
+            const sortedSchedules = activeSchedules.sort((a: any, b: any) => {
+              const dateA = a.created ? new Date(a.created).getTime() : (a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0);
+              const dateB = b.created ? new Date(b.created).getTime() : (b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0);
+              return dateB - dateA; // Newest first
+            });
+            setSchedules(sortedSchedules.map((s, idx) => ({ ...s, no: idx + 1 })) as any);
+            showAlert(`Schedule for DO "${schedule.doNo}" deleted successfully`, 'Success');
+          } else {
+            showAlert(`Error deleting schedule for DO "${schedule.doNo}". Please try again.`, 'Error');
+          }
         } catch (error: any) {
           showAlert(`Error deleting schedule: ${error.message}`, 'Error');
         }
@@ -490,6 +698,68 @@ const UnitScheduling = () => {
       setSchedules(sortedSchedules.map((s, idx) => ({ ...s, no: idx + 1 })) as any);
     } catch (error: any) {
       showAlert(`Error updating status: ${error.message}`, 'Error');
+    }
+  };
+
+  const handleDeleteNotification = async (notification: any) => {
+    try {
+      // Gunakan safeDeleteItem untuk soft delete (tombstone pattern)
+      const notifId = notification.notif?.id || notification.id;
+      if (!notifId) {
+        showAlert('Error: Notification ID tidak ditemukan', 'Error');
+        return;
+      }
+      
+      const success = await safeDeleteItem('trucking_unitNotifications', notifId, 'id');
+      
+      if (success) {
+        // Reload data dengan filter active items
+        const allNotifications = await storageService.get<any[]>('trucking_unitNotifications') || [];
+        const activeNotifs = filterActiveItems(allNotifications).filter((n: any) => {
+          if (n.type !== 'DO_CONFIRMED' || (n.status || 'Open') !== 'Open') {
+            return false;
+          }
+          // Filter jika sudah ada schedule untuk DO ini
+          const scheduledDONos = new Set(schedules.map((s: any) => s.doNo));
+          if (n.doNo && scheduledDONos.has(n.doNo)) {
+            return false;
+          }
+          return true;
+        });
+        setNotifications(activeNotifs);
+        showAlert('Notifikasi berhasil dihapus', 'Success');
+      } else {
+        showAlert('Error menghapus notifikasi. Silakan coba lagi.', 'Error');
+      }
+    } catch (error: any) {
+      showAlert(`Error deleting notification: ${error.message}`, 'Error');
+    }
+  };
+
+  const handleDeleteConfirmedDO = async (confirmedDO: any) => {
+    try {
+      // Cari notification yang sesuai dengan DO ini
+      const allNotifications = await storageService.get<any[]>('trucking_unitNotifications') || [];
+      const matchingNotif = allNotifications.find((n: any) => 
+        n.type === 'DO_CONFIRMED' && n.doNo === confirmedDO.doNo
+      );
+      
+      if (!matchingNotif || !matchingNotif.id) {
+        showAlert('Error: Notification untuk DO ini tidak ditemukan', 'Error');
+        return;
+      }
+      
+      const success = await safeDeleteItem('trucking_unitNotifications', matchingNotif.id, 'id');
+      
+      if (success) {
+        // Reload data
+        await loadData();
+        showAlert('Confirmed DO berhasil dihapus', 'Success');
+      } else {
+        showAlert('Error menghapus confirmed DO. Silakan coba lagi.', 'Error');
+      }
+    } catch (error: any) {
+      showAlert(`Error deleting confirmed DO: ${error.message}`, 'Error');
     }
   };
 
@@ -557,6 +827,18 @@ const UnitScheduling = () => {
         return <span style={{ fontSize: '12px' }}>{date}</span>;
       },
     },
+    {
+      key: 'actions',
+      header: 'Actions',
+      render: (item: any) => (
+        <ActionMenu
+          onEdit={() => {}}
+          onCreateSchedule={() => handleCreateScheduleFromNotification(item)}
+          onDelete={() => handleDeleteConfirmedDO(item)}
+          status="Open"
+        />
+      ),
+    },
   ];
 
   const columns = [
@@ -592,22 +874,13 @@ const UnitScheduling = () => {
       key: 'actions',
       header: 'Actions',
       render: (item: UnitSchedule) => (
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <Button variant="secondary" onClick={() => handleEditSchedule(item)}>Edit</Button>
-          {item.status === 'Open' && (
-            <Button variant="success" onClick={() => handleStatusChange(item, 'Close')}>
-              Close
-            </Button>
-          )}
-          {item.status === 'Close' && (
-            <Button variant="secondary" onClick={() => handleStatusChange(item, 'Open')}>
-              Reopen
-            </Button>
-          )}
-          {item.status === 'Open' && (
-            <Button variant="danger" onClick={() => handleDeleteSchedule(item)}>Delete</Button>
-          )}
-        </div>
+        <ActionMenu
+          onEdit={() => handleEditSchedule(item)}
+          onClose={item.status === 'Open' ? () => handleStatusChange(item, 'Close') : undefined}
+          onReopen={item.status === 'Close' ? () => handleStatusChange(item, 'Open') : undefined}
+          onDelete={item.status === 'Open' ? () => handleDeleteSchedule(item) : undefined}
+          status={item.status}
+        />
       ),
     },
   ];
@@ -655,6 +928,7 @@ const UnitScheduling = () => {
                   handleCreateScheduleFromNotification(notification.notif);
                 }
               }}
+              onDeleteNotification={handleDeleteNotification}
               icon="🚚"
               emptyMessage="Tidak ada DO yang perlu di-schedule"
             />
@@ -805,6 +1079,14 @@ const UnitScheduling = () => {
                           {item.items.length > 3 && <div style={{ opacity: 0.7 }}>... and {item.items.length - 3} more</div>}
                         </div>
                       )}
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px' }}>
+                        <ActionMenu
+                          onEdit={() => {}}
+                          onCreateSchedule={() => handleCreateScheduleFromNotification(item)}
+                          onDelete={() => handleDeleteConfirmedDO(item)}
+                          status="Open"
+                        />
+                      </div>
                     </Card>
                   ))}
                 </div>
@@ -883,20 +1165,13 @@ const UnitScheduling = () => {
                         )}
                       </div>
                       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        <Button variant="secondary" onClick={() => handleEditSchedule(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>Edit</Button>
-                        {item.status === 'Open' && (
-                          <Button variant="success" onClick={() => handleStatusChange(item, 'Close')} style={{ fontSize: '11px', padding: '4px 8px' }}>
-                            Close
-                          </Button>
-                        )}
-                        {item.status === 'Close' && (
-                          <Button variant="secondary" onClick={() => handleStatusChange(item, 'Open')} style={{ fontSize: '11px', padding: '4px 8px' }}>
-                            Reopen
-                          </Button>
-                        )}
-                        {item.status === 'Open' && (
-                          <Button variant="danger" onClick={() => handleDeleteSchedule(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>Delete</Button>
-                        )}
+                        <ActionMenu
+                          onEdit={() => handleEditSchedule(item)}
+                          onClose={item.status === 'Open' ? () => handleStatusChange(item, 'Close') : undefined}
+                          onReopen={item.status === 'Close' ? () => handleStatusChange(item, 'Open') : undefined}
+                          onDelete={item.status === 'Open' ? () => handleDeleteSchedule(item) : undefined}
+                          status={item.status}
+                        />
                       </div>
                     </Card>
                   ))}

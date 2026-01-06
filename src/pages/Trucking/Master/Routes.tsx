@@ -4,6 +4,7 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -108,7 +109,8 @@ const Routes = () => {
 
   const loadRoutes = async () => {
     const data = await storageService.get<Route[]>('trucking_routes') || [];
-    setRoutes(data.map((r, idx) => ({ ...r, no: idx + 1 })));
+    const activeRoutes = filterActiveItems(data);
+    setRoutes(activeRoutes.map((r, idx) => ({ ...r, no: idx + 1 })));
   };
 
   const handleSave = async () => {
@@ -169,10 +171,18 @@ const Routes = () => {
       `Are you sure you want to delete route "${item.routeName}"?`,
       async () => {
         try {
-          const updated = routes.filter(r => r.id !== item.id);
-          await storageService.set('trucking_routes', updated);
-          setRoutes(updated.map((r, idx) => ({ ...r, no: idx + 1 })));
-          showAlert(`Route "${item.routeName}" deleted successfully`, 'Success');
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('trucking_routes', item.id, 'id');
+          
+          if (success) {
+            // Reload data dengan filter active items
+            const updatedRoutes = await storageService.get<Route[]>('trucking_routes') || [];
+            const activeRoutes = filterActiveItems(updatedRoutes);
+            setRoutes(activeRoutes.map((r, idx) => ({ ...r, no: idx + 1 })));
+            showAlert(`Route "${item.routeName}" deleted successfully`, 'Success');
+          } else {
+            showAlert(`Error deleting route "${item.routeName}". Please try again.`, 'Error');
+          }
         } catch (error: any) {
           showAlert(`Error deleting route: ${error.message}`, 'Error');
         }

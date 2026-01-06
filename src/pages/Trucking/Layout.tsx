@@ -3,6 +3,15 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { storageService, type SyncStatus } from '../../services/storage';
 import { getTheme, applyTheme, type Theme } from '../../utils/theme';
 import { loadIconAsBase64 } from '../../utils/icon-loader';
+import { 
+  hasRouteAccess, 
+  getFirstAccessibleRoute, 
+  isDefaultAdmin, 
+  getCurrentUser,
+  normalizePath,
+  getUserAccessData
+} from '../../utils/access-control-helper';
+import { filterActiveItems } from '../../utils/data-persistence-helper';
 import '../../components/Layout.css';
 
 interface LayoutProps {
@@ -95,24 +104,25 @@ const TruckingLayout = ({ children }: LayoutProps) => {
   useEffect(() => {
     const loadUserAccess = async () => {
       try {
-        const currentUserStr = localStorage.getItem('currentUser');
-        if (!currentUserStr) {
+        const currentUser = getCurrentUser();
+        if (!currentUser) {
           setUserMenuAccess({});
           return;
         }
-        const currentUser = JSON.parse(currentUserStr);
         
-        if (currentUser.username === 'admin') {
+        // Default admin gets full access (null means no restrictions)
+        if (isDefaultAdmin(currentUser)) {
           setUserMenuAccess(null);
           return;
         }
         
-        const users = await storageService.get<UserAccess[]>('userAccessControl');
-        const userData = users?.find((u) => u.id === currentUser.id);
+        // Pakai helper function yang sudah pakai filterActiveItems
+        const userData = await getUserAccessData(currentUser.id);
         
         if (userData?.menuAccess) {
           setUserMenuAccess(userData.menuAccess);
         } else {
+          // User not found or no menuAccess = no access
           setUserMenuAccess({});
         }
       } catch (error) {
@@ -125,7 +135,8 @@ const TruckingLayout = ({ children }: LayoutProps) => {
     const handleStorageChange = (event: Event) => {
       const detail = (event as CustomEvent<{ key?: string }>).detail;
       const storageKey = detail?.key?.split('/').pop();
-      if (storageKey === 'userAccessControl' || storageKey === 'currentUser') {
+      // Handle both 'userAccessControl' (global) and prefixed versions
+      if (storageKey === 'userAccessControl' || detail?.key === 'userAccessControl' || detail?.key?.endsWith('/userAccessControl') || storageKey === 'currentUser') {
         loadUserAccess();
       }
     };
@@ -181,24 +192,99 @@ const TruckingLayout = ({ children }: LayoutProps) => {
     },
   ];
 
-  const isActive = (path: string) => location.pathname === path;
+  // Normalize path for comparison (handle trailing slash and hash router)
+  const isActive = (path: string) => {
+    const currentPath = normalizePath(location.pathname);
+    const menuPath = normalizePath(path);
+    return currentPath === menuPath || currentPath.startsWith(menuPath + '/');
+  };
 
   // Filter menu items based on user access
   const filteredMenuItems = useMemo(() => {
-    const currentUserStr = localStorage.getItem('currentUser');
-    const isDefaultAdmin = currentUserStr && JSON.parse(currentUserStr).username === 'admin';
+    const currentUser = getCurrentUser();
+    const isAdmin = currentUser ? isDefaultAdmin(currentUser) : false;
     
-    if (isDefaultAdmin || userMenuAccess === null) {
+    if (isAdmin || userMenuAccess === null) {
       return menuItems;
     }
 
     const allowedMenus = new Set(userMenuAccess['trucking'] || []);
     
+    // Settings menu items that are admin-only
+    const adminOnlySettingsPaths = [
+      '/trucking/settings/db-activity',
+      '/trucking/settings/user-control'
+    ];
+    
     return menuItems.map((section) => ({
       ...section,
-      items: section.items.filter((item) => allowedMenus.has(item.path)),
+      items: section.items.filter((item) => {
+        const normalizedItemPath = normalizePath(item.path);
+        
+        // Admin-only Settings items: only show to admin
+        if (adminOnlySettingsPaths.some(adminPath => normalizePath(adminPath) === normalizedItemPath)) {
+          return isAdmin;
+        }
+        
+        // Other items: check against allowed menus
+        return Array.from(allowedMenus).some(allowed => 
+          normalizePath(allowed) === normalizedItemPath || 
+          normalizedItemPath.startsWith(normalizePath(allowed) + '/')
+        );
+      }),
     })).filter((section) => section.items.length > 0);
   }, [userMenuAccess]);
+
+  // Route protection: Check access when location changes
+  useEffect(() => {
+    const checkRouteAccess = async () => {
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        navigate('/login', { replace: true });
+        return;
+      }
+
+      // Default admin has full access
+      if (isDefaultAdmin(currentUser)) {
+        return;
+      }
+
+      const currentPath = normalizePath(location.pathname);
+      const businessUnit = 'trucking';
+
+      // Admin-only Settings paths - block non-admin access
+      const adminOnlySettingsPaths = [
+        '/trucking/settings/db-activity',
+        '/trucking/settings/user-control'
+      ];
+      
+      if (adminOnlySettingsPaths.some(adminPath => normalizePath(adminPath) === currentPath)) {
+        // Redirect non-admin users away from admin-only Settings pages
+        const firstAccessible = await getFirstAccessibleRoute(
+          businessUnit,
+          'dashboard',
+          currentUser.id
+        );
+        navigate(firstAccessible, { replace: true });
+        return;
+      }
+
+      // Check if user has access to current route
+      const hasAccess = await hasRouteAccess(currentPath, businessUnit, currentUser.id);
+      
+      if (!hasAccess) {
+        // Redirect to first accessible route
+        const firstAccessible = await getFirstAccessibleRoute(
+          businessUnit,
+          'dashboard',
+          currentUser.id
+        );
+        navigate(firstAccessible, { replace: true });
+      }
+    };
+
+    checkRouteAccess();
+  }, [location.pathname, navigate]);
 
   const handleBackToSelector = () => {
     localStorage.removeItem('selectedBusiness');

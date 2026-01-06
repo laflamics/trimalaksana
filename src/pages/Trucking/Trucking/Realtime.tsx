@@ -27,7 +27,7 @@ const Realtime = () => {
   }, []);
 
   const loadVehicles = async () => {
-    const orders = await storageService.get<any[]>('tracking_delivery_orders') || [];
+    const orders = await storageService.get<any[]>('trucking_delivery_orders') || [];
     const vehiclesData: VehicleLocation[] = orders
       .filter(o => o.status === 'In Transit' && o.vehicleId)
       .map(o => ({

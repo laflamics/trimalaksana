@@ -4,6 +4,7 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 
 interface Payment {
@@ -102,13 +103,9 @@ const Payments = () => {
       storageService.get<any[]>('trucking_bills') || [],
     ]);
     
-    // Filter out deleted items (tombstone pattern)
-    const activePayments = (paymentsData || []).filter((p: any) => {
-      return !(p?.deleted === true || p?.deleted === 'true' || p?.deletedAt);
-    });
-    const activeBills = (billsData || []).filter((b: any) => {
-      return !(b?.deleted === true || b?.deleted === 'true' || b?.deletedAt);
-    });
+    // Filter out deleted items menggunakan helper function
+    const activePayments = filterActiveItems(paymentsData || []);
+    const activeBills = filterActiveItems(billsData || []);
     
     setPayments(activePayments.map((p, idx) => ({ ...p, no: idx + 1 })));
     setBills(activeBills.filter(b => b.status === 'Sent' || b.status === 'Overdue'));
@@ -144,17 +141,16 @@ const Payments = () => {
       }
 
       if (editingItem) {
-        const updated = payments.map(p =>
+        // Load semua data dari storage untuk update
+        const allPayments = await storageService.get<Payment[]>('trucking_payments') || [];
+        const updated = allPayments.map(p =>
           p.id === editingItem.id
             ? { ...formData, id: editingItem.id, no: editingItem.no } as Payment
             : p
         );
         await storageService.set('trucking_payments', updated);
-        // Filter out deleted items setelah update
-        const activeUpdated = updated.filter((p: any) => {
-          return !(p?.deleted === true || p?.deleted === 'true' || p?.deletedAt);
-        });
-        setPayments(activeUpdated.map((p, idx) => ({ ...p, no: idx + 1 })));
+        // Reload data dengan filter active items menggunakan helper function
+        await loadData();
       } else {
         const newPayment: Payment = {
           id: Date.now().toString(),
@@ -204,10 +200,18 @@ const Payments = () => {
       `Are you sure you want to delete payment "${item.paymentNo}"?`,
       async () => {
         try {
-          const updated = payments.filter(p => p.id !== item.id);
-          await storageService.set('trucking_payments', updated);
-          setPayments(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
-          showAlert(`Payment "${item.paymentNo}" deleted successfully`, 'Success');
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('trucking_payments', item.id, 'id');
+          
+          if (success) {
+            // Reload data dengan filter active items
+            const updatedPayments = await storageService.get<Payment[]>('trucking_payments') || [];
+            const activePayments = filterActiveItems(updatedPayments);
+            setPayments(activePayments.map((p, idx) => ({ ...p, no: idx + 1 })));
+            showAlert(`Payment "${item.paymentNo}" deleted successfully`, 'Success');
+          } else {
+            showAlert(`Error deleting payment "${item.paymentNo}". Please try again.`, 'Error');
+          }
         } catch (error: any) {
           showAlert(`Error deleting payment: ${error.message}`, 'Error');
         }

@@ -9,11 +9,12 @@ import { safeDeleteItem, safeDeleteMultipleItems, filterActiveItems } from '../.
 import { generatePOHtml } from '../../pdf/po-pdf-template';
 import { generatePOSheetHtml } from '../../pdf/po-sheet-template';
 import { generatePRHtml } from '../../pdf/pr-pdf-template';
-import { openPrintWindow } from '../../utils/actions';
+import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
 import { useDialog } from '../../hooks/useDialog';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
+import { logCreate, logUpdate, logDelete } from '../../utils/activity-logger';
 import '../../styles/common.css';
 import '../../styles/compact.css';
 
@@ -666,6 +667,17 @@ const Purchasing = () => {
       const updated = ordersArray.map(o => o.id === editingItem.id ? updatedPO : o);
       await storageService.set('purchaseOrders', updated);
       setOrders(updated);
+      // Log activity
+      try {
+        await logUpdate('PURCHASE_ORDER', editingItem.id, '/packaging/purchasing', {
+          poNo: editingItem.poNo,
+          supplier: updatedPO.supplier,
+          materialItem: updatedPO.materialItem,
+          qty: updatedPO.qty,
+        });
+      } catch (logError) {
+        // Silent fail
+      }
       showAlert(`PO updated: ${editingItem.poNo}`, 'Success');
       setShowEditDialog(false);
       setEditingItem(null);
@@ -723,6 +735,20 @@ const Purchasing = () => {
         const updated = [...ordersArray, newPO];
         await storageService.set('purchaseOrders', updated);
         setOrders(updated);
+        
+        // Log activity
+        try {
+          await logCreate('PURCHASE_ORDER', newPO.id, '/packaging/purchasing', {
+            poNo: newPO.poNo,
+            supplier: newPO.supplier,
+            materialItem: newPO.materialItem,
+            qty: newPO.qty,
+            soNo: newPO.soNo,
+            spkNo: newPO.spkNo,
+          });
+        } catch (logError) {
+          // Silent fail
+        }
         
         // Update PR status jika PO dibuat manual dengan spkNo yang match
         // IMPORTANT: Hanya update berdasarkan spkNo, BUKAN soNo (karena 1 SO bisa punya banyak SPK dengan PR berbeda)
@@ -955,12 +981,22 @@ const Purchasing = () => {
           showAlert(`Error saving PDF: ${result.error || 'Unknown error'}`, 'Error');
         }
         // If canceled, do nothing (user closed dialog)
+      } else if (isMobile() || isCapacitor()) {
+        // Mobile/Capacitor: Use Web Share API or print dialog
+        await savePdfForMobile(
+          viewPdfData.html,
+          fileName,
+          (message) => {
+            showAlert(message, 'Success');
+            setViewPdfData(null); // Close view setelah save
+          },
+          (message) => showAlert(message, 'Error')
+        );
       } else {
         // Browser: Open print dialog, user can select "Save as PDF"
         openPrintWindow(viewPdfData.html);
       }
     } catch (error: any) {
-      console.error('Error saving PDF:', error);
       showAlert(`Error: ${error.message || 'Unknown error'}`, 'Error');
     }
   };

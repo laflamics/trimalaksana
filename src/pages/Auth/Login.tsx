@@ -3,25 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import Card from '../../components/Card';
 import Input from '../../components/Input';
 import Button from '../../components/Button';
-import { storageService } from '../../services/storage';
+import { validateUserLogin } from '../../utils/access-control-helper';
+import { logLogin } from '../../utils/activity-logger';
 import './Login.css';
-
-interface StoredUserAccess {
-  id: string;
-  fullName: string;
-  username: string;
-  role?: string;
-  accessCode?: string;
-  defaultBusiness?: string;
-  businessUnits?: string[];
-}
 
 const DEFAULT_ADMIN = {
   id: 'default-admin',
   fullName: 'System Administrator',
   username: 'admin',
   role: 'Administrator',
-  accessCode: 'admin',
+  accessCode: '8888', // Super admin password
   defaultBusiness: 'packaging',
   businessUnits: ['packaging'],
 };
@@ -51,27 +42,67 @@ const Login = () => {
 
     try {
       const normalizedUsername = username.trim().toLowerCase();
-      const users =
-        (await storageService.get<StoredUserAccess[]>('userAccessControl')) || [];
-      let target =
-        users.find(
-          (user) => (user.username || '').toLowerCase() === normalizedUsername
-        ) || null;
-
-      if (!target) {
-        if (
-          normalizedUsername === DEFAULT_ADMIN.username &&
-          accessCode.trim() === DEFAULT_ADMIN.accessCode
-        ) {
-          target = DEFAULT_ADMIN;
-        } else {
-          setError('User tidak ditemukan. Hubungi admin untuk registrasi.');
-          return;
+      const providedCode = accessCode.trim();
+      
+      // Debug logging (remove in production)
+      console.log('[Login] Username:', normalizedUsername, 'Expected:', DEFAULT_ADMIN.username);
+      console.log('[Login] AccessCode:', providedCode, 'Expected:', DEFAULT_ADMIN.accessCode);
+      
+      // Check for default admin first (BEFORE checking userAccessControl)
+      if (
+        normalizedUsername === DEFAULT_ADMIN.username &&
+        providedCode === DEFAULT_ADMIN.accessCode
+      ) {
+        console.log('[Login] Admin login successful');
+        const currentUser = {
+          id: DEFAULT_ADMIN.id,
+          fullName: DEFAULT_ADMIN.fullName,
+          username: DEFAULT_ADMIN.username,
+          role: DEFAULT_ADMIN.role,
+          defaultBusiness: DEFAULT_ADMIN.defaultBusiness,
+        };
+        localStorage.setItem('currentUser', JSON.stringify(currentUser));
+        if (DEFAULT_ADMIN.defaultBusiness) {
+          localStorage.setItem('selectedBusiness', DEFAULT_ADMIN.defaultBusiness);
         }
+        // Log login activity (pass user info directly since currentUser not yet in localStorage)
+        try {
+          await logLogin(
+            DEFAULT_ADMIN.id,
+            DEFAULT_ADMIN.username,
+            DEFAULT_ADMIN.fullName
+          );
+        } catch (logError) {
+          // Silent fail - don't block login if logging fails
+        }
+        navigate('/', { replace: true });
+        return;
       }
+      
+      // If admin username but wrong password
+      if (normalizedUsername === DEFAULT_ADMIN.username && providedCode !== DEFAULT_ADMIN.accessCode) {
+        setError('PIN / Access Code salah untuk admin.');
+        setLoading(false);
+        return;
+      }
+      
+      // If admin username but no password provided
+      if (normalizedUsername === DEFAULT_ADMIN.username && !providedCode) {
+        setError('PIN / Access Code wajib untuk admin.');
+        setLoading(false);
+        return;
+      }
+      
+      // Validate user login (checks isActive and deleted status)
+      const validation = await validateUserLogin(normalizedUsername);
+      if (!validation.valid || !validation.user) {
+        setError(validation.error || 'User tidak ditemukan. Hubungi admin untuk registrasi.');
+        return;
+      }
+      
+      const target = validation.user;
 
       const requiredCode = target.accessCode?.trim();
-      const providedCode = accessCode.trim();
 
       if (requiredCode) {
         if (!providedCode) {
@@ -100,6 +131,16 @@ const Login = () => {
         localStorage.removeItem('selectedBusiness');
       }
 
+      // Log login activity (pass user info directly)
+      try {
+        await logLogin(
+          target.id,
+          target.username,
+          target.fullName
+        );
+      } catch (logError) {
+        // Silent fail - don't block login if logging fails
+      }
       navigate('/', { replace: true });
     } catch (err: any) {
       console.error(err);

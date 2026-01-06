@@ -4,8 +4,9 @@ import Card from '../../../components/Card';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
+import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import * as XLSX from 'xlsx';
- import '../../../styles/common.css';
+import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
 interface JournalEntry {
@@ -93,13 +94,9 @@ const FinancialReports = () => {
       storageService.get<Account[]>('trucking_accounts') || [],
     ]);
     
-    // Filter out deleted items (tombstone pattern)
-    const activeEntries = (ent || []).filter((e: any) => {
-      return !(e?.deleted === true || e?.deleted === 'true' || e?.deletedAt);
-    });
-    const activeAccounts = (acc || []).filter((a: any) => {
-      return !(a?.deleted === true || a?.deleted === 'true' || a?.deletedAt);
-    });
+    // Filter out deleted items menggunakan helper function
+    const activeEntries = filterActiveItems(ent || []);
+    const activeAccounts = filterActiveItems(acc || []);
     
     setEntries(activeEntries);
     if (!activeAccounts || activeAccounts.length === 0) {
@@ -111,10 +108,8 @@ const FinancialReports = () => {
 
   const loadAccounts = async () => {
     const dataRaw = await storageService.get<Account[]>('trucking_accounts') || [];
-    // Filter out deleted items (tombstone pattern)
-    const data = (dataRaw || []).filter((a: any) => {
-      return !(a?.deleted === true || a?.deleted === 'true' || a?.deletedAt);
-    });
+    // Filter out deleted items menggunakan helper function
+    const data = filterActiveItems(dataRaw || []);
     setAccounts(data);
   };
 

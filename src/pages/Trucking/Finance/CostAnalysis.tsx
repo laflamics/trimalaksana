@@ -5,6 +5,7 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
+import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -113,10 +114,8 @@ const CostAnalysis = () => {
         storageService.get<Product[]>('trucking_products') || [],
       ]);
       
-      // Filter out deleted items (tombstone pattern)
-      const activeProducts = (prods || []).filter((p: any) => {
-        return !(p?.deleted === true || p?.deleted === 'true' || p?.deletedAt);
-      });
+      // Filter out deleted items menggunakan helper function
+      const activeProducts = filterActiveItems(prods || []);
       
       setProducts(activeProducts);
     } finally {
