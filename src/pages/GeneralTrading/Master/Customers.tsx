@@ -5,6 +5,7 @@ import type { Column } from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
 import { useDialog } from '../../../hooks/useDialog';
 import * as XLSX from 'xlsx';
 import '../../../styles/common.css';
@@ -33,6 +34,8 @@ const Customers = () => {
 
   const [editingItem, setEditingItem] = useState<Customer | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
   const [formData, setFormData] = useState<Partial<Customer>>({
     kode: '',
     nama: '',
@@ -50,7 +53,9 @@ const Customers = () => {
 
   const loadCustomers = async () => {
     const data = await storageService.get<Customer[]>('gt_customers') || [];
-    setCustomers(data.map((c, idx) => ({ ...c, no: idx + 1 })));
+    // Filter out deleted items menggunakan helper function
+    const activeCustomers = filterActiveItems(data);
+    setCustomers(activeCustomers.map((c, idx) => ({ ...c, no: idx + 1 })));
   };
 
   // Auto generate kode customer: CUST-001, CUST-002, dst
@@ -124,10 +129,18 @@ const Customers = () => {
       `Are you sure you want to delete customer "${item.nama}"? This action cannot be undone.`,
       async () => {
         try {
-          const updated = customers.filter(c => c.id !== item.id);
-          await storageService.set('gt_customers', updated);
-          setCustomers(updated.map((c, idx) => ({ ...c, no: idx + 1 })));
-          showAlert(`Customer "${item.nama}" deleted successfully`, 'Success');
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('gt_customers', item.id, 'id');
+          
+          if (success) {
+            // Reload data dengan filter active items
+            const updatedCustomers = await storageService.get<Customer[]>('gt_customers') || [];
+            const activeCustomers = filterActiveItems(updatedCustomers);
+            setCustomers(activeCustomers.map((c, idx) => ({ ...c, no: idx + 1 })));
+            showAlert(`Customer "${item.nama}" deleted successfully`, 'Success');
+          } else {
+            showAlert(`Error deleting customer. Silakan coba lagi.`, 'Error');
+          }
         } catch (error: any) {
           showAlert(`Error deleting customer: ${error.message}`, 'Error');
         }
@@ -332,11 +345,12 @@ const Customers = () => {
   };
 
   const filteredCustomers = useMemo(() => {
-    // Ensure customers is always an array
+    // Ensure customers is always an array and filter deleted items
     const customersArray = Array.isArray(customers) ? customers : [];
+    const activeCustomers = filterActiveItems(customersArray);
     
     // Filter by search query
-    let filtered = customersArray.filter(customer => {
+    let filtered = activeCustomers.filter(customer => {
       if (!customer) return false;
       if (!searchQuery) return true;
       const query = searchQuery.toLowerCase();
@@ -373,6 +387,17 @@ const Customers = () => {
     
     return filtered;
   }, [customers, searchQuery]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedCustomers = filteredCustomers.slice(startIndex, endIndex);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
 
   // Fixed columns - show all fields
   const columns = useMemo((): Column<Customer>[] => {
@@ -506,7 +531,79 @@ const Customers = () => {
             }}
           />
         </div>
-        <Table columns={columns} data={filteredCustomers} emptyMessage={searchQuery ? "No customers found matching your search" : "No customers data"} />
+        <Table columns={columns} data={paginatedCustomers} emptyMessage={searchQuery ? "No customers found matching your search" : "No customers data"} />
+        
+        {/* Pagination Controls */}
+        {(totalPages > 1 || filteredCustomers.length > 0) && (
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            gap: '8px', 
+            marginTop: '20px',
+            padding: '16px',
+            borderTop: '1px solid var(--border)'
+          }}>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+              Showing {startIndex + 1}-{Math.min(endIndex, filteredCustomers.length)} of {filteredCustomers.length} customers
+              {searchQuery && ` (filtered from ${customers.length} total)`}
+            </div>
+            {totalPages > 1 && (
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center', 
+              gap: '8px'
+          }}>
+            <Button 
+              variant="secondary" 
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </Button>
+            <div style={{ 
+              display: 'flex', 
+              gap: '4px',
+              alignItems: 'center'
+            }}>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={currentPage === pageNum ? 'primary' : 'secondary'}
+                    onClick={() => setCurrentPage(pageNum)}
+                    style={{ minWidth: '40px', padding: '6px 12px' }}
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+            </div>
+            <Button 
+              variant="secondary" 
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Next
+            </Button>
+            <div style={{ marginLeft: '16px', color: 'var(--text-secondary)', fontSize: '14px' }}>
+              Page {currentPage} of {totalPages}
+            </div>
+        </div>
+      )}
+          </div>
+        )}
       </Card>
       {/* Custom Dialog - menggunakan hook terpusat */}
       <DialogComponent />

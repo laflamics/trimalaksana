@@ -6,6 +6,7 @@ import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import { storageService, extractStorageValue } from '../../services/storage';
+import { filterActiveItems } from '../../utils/data-persistence-helper';
 import { getCurrentUser } from '../../utils/access-control-helper';
 import { logCreate } from '../../utils/activity-logger';
 import { useDialog } from '../../hooks/useDialog';
@@ -268,6 +269,9 @@ const Inventory = () => {
       
       // Extract and validate data using global helper
       let data = extractStorageValue(rawData);
+      
+      // Filter out deleted items menggunakan helper function
+      data = filterActiveItems(data);
       
       // IMPORTANT: Deduplicate berdasarkan codeItem (unique identifier)
       // Mencegah duplicate data dari sync atau multiple loads

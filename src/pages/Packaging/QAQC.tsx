@@ -5,6 +5,7 @@ import Button from '../../components/Button';
 import NotificationBell from '../../components/NotificationBell';
 import { storageService } from '../../services/storage';
 import { openPrintWindow } from '../../utils/actions';
+import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
 import '../../styles/common.css';
@@ -33,11 +34,13 @@ const QCActionMenu = ({
   onViewDetail,
   onQCCheck,
   onPrint,
+  onDelete,
 }: {
   item: QCResult;
   onViewDetail?: () => void;
   onQCCheck?: () => void;
   onPrint?: () => void;
+  onDelete?: () => void;
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
@@ -176,6 +179,29 @@ const QCActionMenu = ({
               🖨️ Print Preview
             </button>
           )}
+          {onDelete && (
+            <button
+              onClick={() => { onDelete(); setShowMenu(false); }}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                border: 'none',
+                background: 'transparent',
+                color: '#f44336',
+                cursor: 'pointer',
+                fontSize: '11px',
+                borderRadius: '4px',
+                borderTop: '1px solid var(--border-color)',
+                marginTop: '4px',
+                paddingTop: '8px',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              🗑️ Delete
+            </button>
+          )}
         </div>
       )}
     </>
@@ -194,6 +220,7 @@ const QAQC = () => {
     message: string;
     confirmLabel?: string;
     onConfirm?: () => void;
+    onCancel?: () => void;
   }>({
     show: false,
     type: 'alert',
@@ -232,9 +259,10 @@ const QAQC = () => {
 
   const loadQCResults = async () => {
     let data = await storageService.get<QCResult[]>('qc') || [];
-    // Ensure data is always an array
-    data = Array.isArray(data) ? data : [];
-    setQcResults(data);
+    // Ensure data is always an array and filter deleted items (tombstone pattern)
+    const dataArray = Array.isArray(data) ? data : [];
+    const activeData = filterActiveItems(dataArray);
+    setQcResults(activeData);
     
     // Helper function untuk match SPK (handle batch format)
     const matchSPK = (spk1: string, spk2: string): boolean => {
@@ -251,14 +279,14 @@ const QAQC = () => {
     
     // Filter notifications - QC yang status OPEN (baru dari Production)
     // IMPORTANT: Exclude QC yang sudah CLOSE atau sudah ada QC record dengan status CLOSE untuk SPK yang sama
-    const pendingQC = data.filter((q: any) => {
+    const pendingQC = activeData.filter((q: any) => {
       // Skip jika status bukan OPEN
       if (q.status !== 'OPEN') {
         return false;
       }
       
       // Skip jika sudah ada QC record dengan status CLOSE untuk SPK yang sama
-      const hasClosedQC = data.some((existingQC: any) => {
+      const hasClosedQC = activeData.some((existingQC: any) => {
         if (existingQC.id === q.id) return false; // Skip diri sendiri
         if (existingQC.status !== 'CLOSE') return false; // Hanya cek yang CLOSE
         
@@ -677,6 +705,71 @@ const QAQC = () => {
     openPrintWindow(html);
   };
 
+  const handleDeleteQC = async (item: QCResult) => {
+    if (!item || !item.id) {
+      showAlert('QC tidak valid. Mohon coba lagi.', 'Error');
+      return;
+    }
+
+    const qcNo = item.qcNo || item.id;
+    
+    // Check if QC has related data (production, delivery, etc.)
+    try {
+      const [productionList, deliveryList] = await Promise.all([
+        storageService.get<any[]>('production') || [],
+        storageService.get<any[]>('delivery') || [],
+      ]);
+
+      const hasProduction = productionList.some((p: any) => 
+        p.soNo === item.soNo || (item.spkNo && p.spkNo === item.spkNo)
+      );
+      
+      const hasDelivery = deliveryList.some((dn: any) => 
+        dn.soNo === item.soNo || (item.spkNo && dn.spkNo === item.spkNo) ||
+        (dn.items || []).some((itm: any) => itm.spkNo === item.spkNo)
+      );
+
+      if (hasProduction || hasDelivery) {
+        const reasons: string[] = [];
+        if (hasProduction) reasons.push('Production data');
+        if (hasDelivery) reasons.push('Delivery Note data');
+        
+        showAlert(
+          `Tidak bisa menghapus QC ${qcNo} karena masih memiliki data turunan:\n\n${reasons.map(r => `• ${r}`).join('\n')}\n\nSilakan bersihkan data turunan tersebut terlebih dahulu.`,
+          'Cannot Delete QC'
+        );
+        return;
+      }
+
+      // Show confirmation dialog
+      setDialogState({
+        show: true,
+        type: 'confirm',
+        title: 'Delete QC',
+        message: `Hapus QC ${qcNo}?\n\nTindakan ini akan:\n• Menghapus QC dari daftar\n• Menghapus notifikasi terkait\n\nPastikan tidak ada proses lanjutan untuk QC ini.`,
+        onConfirm: async () => {
+          try {
+            // Use tombstone pattern untuk prevent data resurrection dari sync
+            const success = await safeDeleteItem('qc', item.id, 'id');
+            if (!success) {
+              showAlert('Gagal menghapus QC. Silakan coba lagi.', 'Error');
+              return;
+            }
+            
+            // Reload QC data dengan filter active items (after tombstone deletion)
+            await loadQCResults();
+            
+            showAlert(`QC ${qcNo} berhasil dihapus.`, 'Success');
+          } catch (error: any) {
+            showAlert(`Error deleting QC: ${error.message}`, 'Error');
+          }
+        },
+      });
+    } catch (error: any) {
+      showAlert(`Error checking QC dependencies: ${error.message}`, 'Error');
+    }
+  };
+
   const columns = [
     { key: 'qcNo', header: 'QC No' },
     { key: 'productionNo', header: 'Production No' },
@@ -755,6 +848,7 @@ const QAQC = () => {
           onViewDetail={() => handleViewDetail(item)}
           onQCCheck={() => handleQCCheck(item)}
           onPrint={() => handlePrint(item)}
+          onDelete={() => handleDeleteQC(item)}
         />
       ),
     },
@@ -1049,14 +1143,29 @@ const QAQC = () => {
                 {dialogState.message}
               </div>
               <div className="dialog-actions">
+                {dialogState.type === 'confirm' && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      if (dialogState.onCancel) dialogState.onCancel();
+                      closeDialog();
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                )}
                 <Button
                   variant="primary"
                   onClick={() => {
-                    dialogState.onConfirm?.();
-                    closeDialog();
+                    if (dialogState.onConfirm) {
+                      dialogState.onConfirm();
+                    }
+                    if (dialogState.type === 'alert') {
+                      closeDialog();
+                    }
                   }}
                 >
-                  {dialogState.confirmLabel || 'OK'}
+                  {dialogState.type === 'confirm' ? 'Confirm' : (dialogState.confirmLabel || 'OK')}
                 </Button>
               </div>
             </div>

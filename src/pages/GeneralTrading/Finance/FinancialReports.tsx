@@ -5,6 +5,7 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
 import { loadGTDataFromLocalStorage } from '../../../utils/gtStorageHelper';
+import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import * as XLSX from 'xlsx';
  import '../../../styles/common.css';
 import '../../../styles/compact.css';
@@ -101,11 +102,15 @@ const FinancialReports = () => {
           async () => await storageService.get<Account[]>('gt_accounts') || []
         ),
       ]);
-      setEntries(ent || []);
-      if (!acc || acc.length === 0) {
+      // Filter out deleted items menggunakan helper function
+      const activeEntries = filterActiveItems(ent || []);
+      const activeAccounts = filterActiveItems(acc || []);
+      
+      setEntries(activeEntries);
+      if (!activeAccounts || activeAccounts.length === 0) {
         await loadAccounts();
       } else {
-        setAccounts(acc || []);
+        setAccounts(activeAccounts);
       }
     } catch (error: any) {
       console.error('Error loading report data:', error);
@@ -115,10 +120,12 @@ const FinancialReports = () => {
 
   const loadAccounts = async () => {
     // Load langsung dari localStorage untuk memastikan data terbaru
-    const data = await loadGTDataFromLocalStorage<Account>(
+    const dataRaw = await loadGTDataFromLocalStorage<Account>(
       'gt_accounts',
       async () => await storageService.get<Account[]>('gt_accounts') || []
     );
+    // Filter out deleted items menggunakan helper function
+    const data = filterActiveItems(dataRaw || []);
     setAccounts(data);
   };
 

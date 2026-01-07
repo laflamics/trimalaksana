@@ -6,6 +6,7 @@ import Button from '../../components/Button';
 import Input from '../../components/Input';
 import BOMDialog from '../../components/BOMDialog';
 import { storageService, extractStorageValue } from '../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
 import { useDialog } from '../../hooks/useDialog';
 import * as XLSX from 'xlsx';
 import '../../styles/common.css';
@@ -90,7 +91,9 @@ const Products = () => {
   });
 
   const loadProducts = useCallback(async () => {
-    const data = extractStorageValue(await storageService.get<Product[]>('products'));
+    const dataRaw = extractStorageValue(await storageService.get<Product[]>('products'));
+    // Filter out deleted items menggunakan helper function
+    const data = filterActiveItems(dataRaw);
     const bom = extractStorageValue(await storageService.get<any[]>('bom'));
     
     // Update bomData (simple update, no comparison needed for now)
@@ -456,9 +459,18 @@ const Products = () => {
       `Are you sure you want to delete product "${item.nama}"? This action cannot be undone.`,
       async () => {
         try {
-          const updated = products.filter(p => p.id !== item.id);
-          await storageService.set('products', updated);
-          setProducts(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('products', item.id, 'id');
+          
+          if (success) {
+            // Reload data dengan filter active items
+            const dataRaw = extractStorageValue(await storageService.get<Product[]>('products'));
+            const data = filterActiveItems(dataRaw);
+            setProducts(data.map((p, idx) => ({ ...p, no: idx + 1 })));
+            showAlert(`Product "${item.nama}" deleted successfully`, 'Success');
+          } else {
+            showAlert(`Error deleting product. Silakan coba lagi.`, 'Error');
+          }
         } catch (error: any) {
           showAlert(`Error deleting product: ${error.message}`, 'Error');
         }

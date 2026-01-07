@@ -6,6 +6,7 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
 import { loadGTDataFromLocalStorage } from '../../../utils/gtStorageHelper';
+import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -82,15 +83,20 @@ const AccountsReceivable = () => {
         ),
       ]);
       
+      // Filter out deleted items menggunakan helper function
+      const activeEntries = filterActiveItems(entries || []);
+      const activeInvoices = filterActiveItems(invs || []);
+      const activeCustomers = filterActiveItems(cust || []);
+      
       console.log(`📦 Loaded data:`, {
-        journalEntries: entries?.length || 0,
-        invoices: invs?.length || 0,
-        customers: cust?.length || 0,
+        journalEntries: activeEntries.length,
+        invoices: activeInvoices.length,
+        customers: activeCustomers.length,
       });
       
-      setJournalEntries(entries || []);
-      setInvoices(invs || []);
-      setCustomers(cust || []);
+      setJournalEntries(activeEntries);
+      setInvoices(activeInvoices);
+      setCustomers(activeCustomers);
     } catch (error: any) {
       console.error('❌ Error loading data:', error);
       showAlert(`Error loading data: ${error.message}`, 'Error');

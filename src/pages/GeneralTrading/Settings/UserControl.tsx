@@ -347,6 +347,7 @@ const UserControl = () => {
   const [pinInput, setPinInput] = useState('');
   const [pendingEditAction, setPendingEditAction] = useState<(() => void) | null>(null);
   const [currentBusinessUnit, setCurrentBusinessUnit] = useState<string>('');
+  const [currentUserBusinessUnits, setCurrentUserBusinessUnits] = useState<BusinessId[]>([]);
   
   // Custom Dialog state
   const [dialogState, setDialogState] = useState<{
@@ -514,17 +515,82 @@ const UserControl = () => {
   }, [loadUsers]);
 
   const filteredUsers = useMemo(() => {
-    if (!searchQuery) return users;
+    const currentUser = getCurrentUser();
+    const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+    
+    // For GT UserControl: Filter users based on business unit access
+    let businessFilteredUsers: UserAccess[] = [];
+    
+    if (isSuperAdmin) {
+      // Super admin can see all users
+      businessFilteredUsers = users;
+    } else if (currentUserBusinessUnits.length > 0) {
+      // Check if current user has all 3 business units (packaging, general-trading, trucking)
+      const hasAllThree = currentUserBusinessUnits.length === 3 &&
+        currentUserBusinessUnits.includes('packaging' as BusinessId) &&
+        currentUserBusinessUnits.includes('general-trading' as BusinessId) &&
+        currentUserBusinessUnits.includes('trucking' as BusinessId);
+      
+      if (hasAllThree) {
+        // User dengan 3 business units bisa lihat semua user yang punya GT access
+        businessFilteredUsers = users.filter((user) => {
+          return user.businessUnits.includes('general-trading' as BusinessId);
+        });
+      } else {
+        // User dengan kurang dari 3 business units hanya bisa lihat user yang business units-nya sama persis
+        // Tapi tetap harus punya GT
+        businessFilteredUsers = users.filter((user) => {
+          // User harus punya GT
+          if (!user.businessUnits.includes('general-trading' as BusinessId)) {
+            return false;
+          }
+          
+          // Check if user has the same business units as current user
+          if (user.businessUnits.length !== currentUserBusinessUnits.length) {
+            return false;
+          }
+          
+          // Check if all business units match
+          const userUnitsSet = new Set(user.businessUnits);
+          const currentUnitsSet = new Set(currentUserBusinessUnits);
+          
+          // Check if sets are equal
+          if (userUnitsSet.size !== currentUnitsSet.size) {
+            return false;
+          }
+          
+          for (const unit of userUnitsSet) {
+            if (!currentUnitsSet.has(unit)) {
+              return false;
+            }
+          }
+          
+          return true;
+        });
+      }
+    } else if (!isSuperAdmin) {
+      // If currentUserBusinessUnits is empty (user belum di-load), show all users with GT access temporarily
+      // This will be filtered once currentUserBusinessUnits is loaded
+      businessFilteredUsers = users.filter((user) => {
+        return user.businessUnits.includes('general-trading' as BusinessId);
+      });
+    }
+    
+    // Then filter by search query
+    if (!searchQuery) return businessFilteredUsers;
     const query = searchQuery.toLowerCase();
-    return users.filter((user) => {
+    return businessFilteredUsers.filter((user) => {
       return (
         user.fullName.toLowerCase().includes(query) ||
         (user.username || '').toLowerCase().includes(query) ||
         (user.role || '').toLowerCase().includes(query) ||
-        user.businessUnits.some((unit) => BUSINESS_MENU_MAP[unit]?.label.toLowerCase().includes(query))
+        user.businessUnits.some((unit) => {
+          const config = BUSINESS_MENU_MAP[unit];
+          return config?.label?.toLowerCase().includes(query) || false;
+        })
       );
     });
-  }, [users, searchQuery]);
+  }, [users, searchQuery, currentUserBusinessUnits]);
 
   useEffect(() => {
     if (!selectedUser && filteredUsers.length > 0) {
@@ -541,10 +607,22 @@ const UserControl = () => {
     setFormVisible(true);
   };
 
-  // Get current business unit from localStorage
+  // Get current business unit - always general-trading for GT UserControl
   useEffect(() => {
-    const selectedBusiness = localStorage.getItem('selectedBusiness') || '';
-    setCurrentBusinessUnit(selectedBusiness);
+    setCurrentBusinessUnit('general-trading');
+    
+    // Load current user's business units
+    const loadCurrentUserBusinessUnits = async () => {
+      const currentUser = getCurrentUser();
+      if (currentUser) {
+        const users = await storageService.get<UserAccess[]>('userAccessControl') || [];
+        const userData = users.find((u: UserAccess) => u.id === currentUser.id);
+        if (userData) {
+          setCurrentUserBusinessUnits(userData.businessUnits || []);
+        }
+      }
+    };
+    loadCurrentUserBusinessUnits();
   }, []);
 
   // Get User Control PIN
@@ -609,6 +687,17 @@ const UserControl = () => {
   const handleEditUser = (user: UserAccess) => {
     // Store the edit action
     const editAction = () => {
+      // Ensure GT business unit is included when editing for GT UserControl
+      const businessUnits = user.businessUnits.includes('general-trading' as BusinessId)
+        ? user.businessUnits
+        : [...user.businessUnits, 'general-trading' as BusinessId];
+      
+      // Ensure menuAccess for GT is initialized
+      const menuAccess = { ...user.menuAccess };
+      if (!menuAccess['general-trading']) {
+        menuAccess['general-trading'] = [];
+      }
+      
       setFormState({
         id: user.id,
         fullName: user.fullName,
@@ -618,9 +707,9 @@ const UserControl = () => {
         role: user.role || '',
         accessCode: user.accessCode || '',
         isActive: user.isActive,
-        businessUnits: user.businessUnits,
-        defaultBusiness: user.defaultBusiness || user.businessUnits[0] || '',
-        menuAccess: user.menuAccess || {},
+        businessUnits: businessUnits,
+        defaultBusiness: user.defaultBusiness || (businessUnits.includes('general-trading' as BusinessId) ? 'general-trading' : businessUnits[0] || ''),
+        menuAccess: menuAccess,
         notes: user.notes || '',
       });
       setFormVisible(true);
@@ -1070,11 +1159,25 @@ const UserControl = () => {
   ];
 
   const stats = useMemo(() => {
-    const total = users.length;
-    const active = users.filter((u) => u.isActive).length;
-    const businessUsage = BUSINESS_MENU_CONFIG.map((config) => ({
+    const currentUser = getCurrentUser();
+    const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+    
+    // For GT UserControl: Calculate stats based on filtered users, not all users
+    const filteredForStats = isSuperAdmin 
+      ? users 
+      : users.filter((u) => u.businessUnits.includes('general-trading' as BusinessId));
+    
+    const total = filteredForStats.length;
+    const active = filteredForStats.filter((u) => u.isActive).length;
+    
+    // For GT UserControl: Only show GT stats for non-admin
+    const businessConfigsToShow = isSuperAdmin 
+      ? BUSINESS_MENU_CONFIG 
+      : BUSINESS_MENU_CONFIG.filter(config => config.id === 'general-trading');
+    
+    const businessUsage = businessConfigsToShow.map((config) => ({
       ...config,
-      count: users.filter((u) => u.businessUnits.includes(config.id)).length,
+      count: filteredForStats.filter((u) => u.businessUnits.includes(config.id)).length,
     }));
     return { total, active, businessUsage };
   }, [users]);

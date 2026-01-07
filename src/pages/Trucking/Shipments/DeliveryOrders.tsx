@@ -62,6 +62,8 @@ const DeliveryOrders = () => {
   const [routes, setRoutes] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [viewMode, setViewMode] = useState<'card' | 'table'>('table');
+  const [showRouteDialog, setShowRouteDialog] = useState(false);
+  const [routeDialogSearch, setRouteDialogSearch] = useState('');
   // Custom Dialog state
   const [dialogState, setDialogState] = useState<{
     show: boolean;
@@ -1397,75 +1399,83 @@ const DeliveryOrders = () => {
               <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-primary)', fontWeight: '500', fontSize: '13px' }}>
                 Route <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 'normal' }}>(auto-detect, pilih dari list, atau ketik manual)</span>
               </label>
-              <input
-                type="text"
-                list={`route-list-${editingItem?.id || 'new'}`}
-                value={formData.routeName || ''}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  // Cari route yang match dengan input
-                  const matchedRoute = routes.find(r => {
-                    const routeDisplay = `${r.routeName} (${r.origin} - ${r.destination})`;
-                    const routeDisplayWithCustomer = `${r.routeName} (${r.origin} - ${r.destination}) [${r._customer || ''}]`;
-                    return routeDisplay === value || 
-                           routeDisplayWithCustomer === value ||
-                           r.routeName === value ||
-                           (r._customer && value.includes(r._customer));
-                  });
-                  
-                  setFormData({ 
-                    ...formData, 
-                    routeId: matchedRoute?.id || '',
-                    routeName: matchedRoute ? `${matchedRoute.routeName} (${matchedRoute.origin} - ${matchedRoute.destination})` : value, // Bisa input manual
-                    // Auto-fill totalDeal dari _price route jika ada
-                    totalDeal: matchedRoute?._price ? (matchedRoute._price + (matchedRoute.tollCost || 0) + (matchedRoute.fuelCost || 0)) : formData.totalDeal || 0,
-                  });
-                  
-                  // Update totalDealInputValue jika route match
-                  if (matchedRoute?._price) {
-                    const total = matchedRoute._price + (matchedRoute.tollCost || 0) + (matchedRoute.fuelCost || 0);
-                    setTotalDealInputValue(total > 0 ? String(total) : '');
-                  }
-                }}
-                onBlur={(e) => {
-                  const value = e.target.value;
-                  // Saat blur, coba match dengan route yang ada
-                  const matchedRoute = routes.find(r => {
-                    const routeDisplay = `${r.routeName} (${r.origin} - ${r.destination})`;
-                    const routeDisplayWithCustomer = `${r.routeName} (${r.origin} - ${r.destination}) [${r._customer || ''}]`;
-                    return routeDisplay === value || 
-                           routeDisplayWithCustomer === value ||
-                           r.routeName === value ||
-                           (r._customer && value.includes(r._customer));
-                  });
-                  
-                  if (matchedRoute) {
-                    const totalDeal = matchedRoute._price ? (matchedRoute._price + (matchedRoute.tollCost || 0) + (matchedRoute.fuelCost || 0)) : formData.totalDeal || 0;
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  value={formData.routeName || ''}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    // Cari route yang match dengan input
+                    const matchedRoute = routes.find(r => {
+                      const routeDisplay = `${r.routeName} (${r.origin} - ${r.destination})`;
+                      const routeDisplayWithCustomer = `${r.routeName} (${r.origin} - ${r.destination}) [${r._customer || ''}]`;
+                      return routeDisplay === value || 
+                             routeDisplayWithCustomer === value ||
+                             r.routeName === value ||
+                             (r._customer && value.includes(r._customer));
+                    });
+                    
                     setFormData({ 
                       ...formData, 
-                      routeId: matchedRoute.id,
-                      routeName: `${matchedRoute.routeName} (${matchedRoute.origin} - ${matchedRoute.destination})`,
+                      routeId: matchedRoute?.id || '',
+                      routeName: matchedRoute ? `${matchedRoute.routeName} (${matchedRoute.origin} - ${matchedRoute.destination})` : value, // Bisa input manual
                       // Auto-fill totalDeal dari _price route jika ada
-                      totalDeal: totalDeal,
+                      totalDeal: matchedRoute?._price ? (matchedRoute._price + (matchedRoute.tollCost || 0) + (matchedRoute.fuelCost || 0)) : formData.totalDeal || 0,
                     });
-                    // Update totalDealInputValue
-                    if (matchedRoute._price) {
-                      setTotalDealInputValue(totalDeal > 0 ? String(totalDeal) : '');
+                    
+                    // Update totalDealInputValue jika route match
+                    if (matchedRoute?._price) {
+                      const total = matchedRoute._price + (matchedRoute.tollCost || 0) + (matchedRoute.fuelCost || 0);
+                      setTotalDealInputValue(total > 0 ? String(total) : '');
                     }
-                  }
-                }}
-                placeholder="Ketik route atau pilih dari list"
-                style={{
-                  width: '100%',
-                  padding: '6px 10px',
-                  border: '1px solid var(--border)',
-                  borderRadius: '4px',
-                  backgroundColor: 'var(--bg-primary)',
-                  color: 'var(--text-primary)',
-                  fontSize: '13px',
-                }}
-              />
-              <datalist id={`route-list-${editingItem?.id || 'new'}`}>
+                  }}
+                  onBlur={(e) => {
+                    const value = e.target.value;
+                    // Saat blur, coba match dengan route yang ada
+                    const matchedRoute = routes.find(r => {
+                      const routeDisplay = `${r.routeName} (${r.origin} - ${r.destination})`;
+                      const routeDisplayWithCustomer = `${r.routeName} (${r.origin} - ${r.destination}) [${r._customer || ''}]`;
+                      return routeDisplay === value || 
+                             routeDisplayWithCustomer === value ||
+                             r.routeName === value ||
+                             (r._customer && value.includes(r._customer));
+                    });
+                    
+                    if (matchedRoute) {
+                      const totalDeal = matchedRoute._price ? (matchedRoute._price + (matchedRoute.tollCost || 0) + (matchedRoute.fuelCost || 0)) : formData.totalDeal || 0;
+                      setFormData({ 
+                        ...formData, 
+                        routeId: matchedRoute.id,
+                        routeName: `${matchedRoute.routeName} (${matchedRoute.origin} - ${matchedRoute.destination})`,
+                        // Auto-fill totalDeal dari _price route jika ada
+                        totalDeal: totalDeal,
+                      });
+                      // Update totalDealInputValue
+                      if (matchedRoute._price) {
+                        setTotalDealInputValue(totalDeal > 0 ? String(totalDeal) : '');
+                      }
+                    }
+                  }}
+                  placeholder="Ketik route atau klik Select untuk pilih"
+                  style={{
+                    flex: 1,
+                    padding: '6px 10px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '13px',
+                  }}
+                />
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowRouteDialog(true)}
+                  style={{ fontSize: '12px', padding: '6px 12px' }}
+                >
+                  Select
+                </Button>
+              </div>
+              <datalist id={`route-list-${editingItem?.id || 'new'}`} style={{ display: 'none' }}>
                 {routes
                   .filter(r => {
                     // Filter by status Active
@@ -1701,6 +1711,177 @@ const DeliveryOrders = () => {
                   }}
                 >
                   {dialogState.type === 'confirm' ? 'Confirm' : 'OK'}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Route Selection Dialog */}
+      {showRouteDialog && (
+        <div className="dialog-overlay" onClick={() => {
+          setShowRouteDialog(false);
+          setRouteDialogSearch('');
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <Card
+              title="Select Route"
+              className="dialog-card"
+            >
+              <div style={{ marginBottom: '16px' }}>
+                <input
+                  type="text"
+                  value={routeDialogSearch}
+                  onChange={(e) => setRouteDialogSearch(e.target.value)}
+                  placeholder="Search by route name, origin, or destination..."
+                  autoFocus
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+              <div style={{ 
+                maxHeight: '60vh', 
+                overflowY: 'auto',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+              }}>
+                {(() => {
+                  const activeRoutes = routes.filter(r => r.status === 'Active');
+                  let filtered = activeRoutes;
+                  if (routeDialogSearch) {
+                    const query = routeDialogSearch.toLowerCase();
+                    filtered = activeRoutes.filter(r => {
+                      const routeName = (r.routeName || '').toLowerCase();
+                      const origin = (r.origin || '').toLowerCase();
+                      const destination = (r.destination || '').toLowerCase();
+                      return routeName.includes(query) || origin.includes(query) || destination.includes(query);
+                    });
+                  }
+                  const filteredRoutes = filtered.slice(0, 200);
+                  
+                  if (filteredRoutes.length === 0) {
+                    return (
+                      <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                        No routes found
+                      </div>
+                    );
+                  }
+                  
+                  return (
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-tertiary)', zIndex: 10 }}>
+                        <tr>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Route Name</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Origin</th>
+                          <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Destination</th>
+                          <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid var(--border)' }}>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredRoutes.map(r => {
+                          const handleSelect = () => {
+                            const routeDisplay = `${r.routeName} (${r.origin} - ${r.destination})`;
+                            setFormData({ 
+                              ...formData, 
+                              routeId: r.id,
+                              routeName: routeDisplay,
+                              // Auto-fill totalDeal dari _price route jika ada
+                              totalDeal: r._price ? (r._price + (r.tollCost || 0) + (r.fuelCost || 0)) : formData.totalDeal || 0,
+                            });
+                            
+                            // Update totalDealInputValue jika route match
+                            if (r._price) {
+                              const total = r._price + (r.tollCost || 0) + (r.fuelCost || 0);
+                              setTotalDealInputValue(total > 0 ? String(total) : '');
+                            }
+                            
+                            setShowRouteDialog(false);
+                            setRouteDialogSearch('');
+                          };
+                          return (
+                            <tr
+                              key={r.id}
+                              style={{
+                                borderBottom: '1px solid var(--border)',
+                                cursor: 'pointer',
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--hover-bg)'}
+                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                              onClick={handleSelect}
+                            >
+                              <td style={{ padding: '12px' }}>{r.routeName || '-'}</td>
+                              <td style={{ padding: '12px' }}>{r.origin || '-'}</td>
+                              <td style={{ padding: '12px' }}>{r.destination || '-'}</td>
+                              <td style={{ padding: '12px', textAlign: 'center' }}>
+                                <Button
+                                  variant="primary"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSelect();
+                                  }}
+                                  style={{ fontSize: '12px', padding: '4px 12px' }}
+                                >
+                                  Select
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  );
+                })()}
+              </div>
+              <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+                  Showing {(() => {
+                    const activeRoutes = routes.filter(r => r.status === 'Active');
+                    let filtered = activeRoutes;
+                    if (routeDialogSearch) {
+                      const query = routeDialogSearch.toLowerCase();
+                      filtered = activeRoutes.filter(r => {
+                        const routeName = (r.routeName || '').toLowerCase();
+                        const origin = (r.origin || '').toLowerCase();
+                        const destination = (r.destination || '').toLowerCase();
+                        return routeName.includes(query) || origin.includes(query) || destination.includes(query);
+                      });
+                    }
+                    return Math.min(filtered.length, 200);
+                  })()} of {(() => {
+                    const activeRoutes = routes.filter(r => r.status === 'Active');
+                    if (routeDialogSearch) {
+                      const query = routeDialogSearch.toLowerCase();
+                      return activeRoutes.filter(r => {
+                        const routeName = (r.routeName || '').toLowerCase();
+                        const origin = (r.origin || '').toLowerCase();
+                        const destination = (r.destination || '').toLowerCase();
+                        return routeName.includes(query) || origin.includes(query) || destination.includes(query);
+                      }).length;
+                    }
+                    return activeRoutes.length;
+                  })()} route{Math.min(routes.filter(r => r.status === 'Active').length, 200) !== 1 ? 's' : ''}
+                  {routes.filter(r => r.status === 'Active').length >= 200 && (
+                    <span style={{ color: '#ff9800', marginLeft: '8px' }}>
+                      (Limited to 200. Use search to narrow down)
+                    </span>
+                  )}
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowRouteDialog(false);
+                    setRouteDialogSearch('');
+                  }}
+                >
+                  Close
                 </Button>
               </div>
             </Card>

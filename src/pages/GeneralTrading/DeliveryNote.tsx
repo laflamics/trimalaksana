@@ -5,7 +5,8 @@ import Button from '../../components/Button';
 import Input from '../../components/Input';
 import ScheduleTable from '../../components/ScheduleTable';
 import NotificationBell from '../../components/NotificationBell';
- import { storageService, extractStorageValue } from '../../services/storage';
+import { storageService, extractStorageValue } from '../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
 import { generateSuratJalanHtml, generateGTDeliveryNoteHtml } from '../../pdf/suratjalan-pdf-template';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import { useDialog } from '../../hooks/useDialog';
@@ -470,29 +471,35 @@ const DeliveryNote = () => {
 
   const loadScheduleData = async () => {
     // Load schedule data dari gt_schedule untuk ditampilkan di tab Schedule
-    const scheduleList = await storageService.get<any[]>('gt_schedule') || [];
+    const scheduleListRaw = await storageService.get<any[]>('gt_schedule') || [];
+    // Filter out deleted items menggunakan helper function
+    const activeScheduleList = filterActiveItems(scheduleListRaw);
     setScheduleData((prev: any[]) => {
       // Optimize: hanya update jika data benar-benar berubah
-      if (JSON.stringify(prev) === JSON.stringify(scheduleList)) {
+      if (JSON.stringify(prev) === JSON.stringify(activeScheduleList)) {
         return prev;
       }
-      return scheduleList;
+      return activeScheduleList;
     });
     
     // Load SPK data untuk enrich schedule
-    const spkList = await storageService.get<any[]>('gt_spk') || [];
+    const spkListRaw = await storageService.get<any[]>('gt_spk') || [];
+    // Filter out deleted items menggunakan helper function
+    const activeSpkList = filterActiveItems(spkListRaw);
     setSpkData((prev: any[]) => {
       // Optimize: hanya update jika data benar-benar berubah
-      if (JSON.stringify(prev) === JSON.stringify(spkList)) {
+      if (JSON.stringify(prev) === JSON.stringify(activeSpkList)) {
         return prev;
       }
-      return spkList;
+      return activeSpkList;
     });
   };
 
   const loadCustomers = async () => {
-    const data = await storageService.get<Customer[]>('gt_customers') || [];
-    setCustomers(data);
+    const dataRaw = await storageService.get<Customer[]>('gt_customers') || [];
+    // Filter out deleted items menggunakan helper function
+    const activeCustomers = filterActiveItems(dataRaw);
+    setCustomers(activeCustomers);
   };
 
   // Helper function untuk remove leading zero dari input angka
@@ -616,13 +623,18 @@ const DeliveryNote = () => {
   };
 
   const loadProducts = async () => {
-    const data = await storageService.get<any[]>('gt_products') || [];
-    setProducts(data);
+    const dataRaw = await storageService.get<any[]>('gt_products') || [];
+    // Filter out deleted items menggunakan helper function
+    const activeProducts = filterActiveItems(dataRaw);
+    setProducts(activeProducts);
   };
 
   const loadSalesOrders = async () => {
-    const data = await storageService.get<SalesOrder[]>('gt_salesOrders') || [];
-    setSalesOrders(data.filter(so => so.status === 'OPEN' || so.status === 'CLOSE'));
+    const dataRaw = await storageService.get<SalesOrder[]>('gt_salesOrders') || [];
+    // Filter out deleted items menggunakan helper function
+    const activeSalesOrders = filterActiveItems(dataRaw);
+    // Filter by status
+    setSalesOrders(activeSalesOrders.filter(so => so.status === 'OPEN' || so.status === 'CLOSE'));
   };
 
   // Helper function untuk match SPK (handle batch format dan SJ suffix) - harus di scope component agar bisa diakses semua function
@@ -678,13 +690,15 @@ const DeliveryNote = () => {
   };
 
   const loadDeliveries = async () => {
-    const data = await storageService.get<DeliveryNote[]>('gt_delivery') || [];
+    const dataRaw = await storageService.get<DeliveryNote[]>('gt_delivery') || [];
+    // Filter out deleted items menggunakan helper function
+    const activeData = filterActiveItems(dataRaw);
     setDeliveries((prev: DeliveryNote[]) => {
       // Optimize: hanya update jika data benar-benar berubah
-      if (JSON.stringify(prev) === JSON.stringify(data)) {
+      if (JSON.stringify(prev) === JSON.stringify(activeData)) {
         return prev;
       }
-      return data;
+      return activeData;
     });
   };
 
@@ -702,7 +716,9 @@ const DeliveryNote = () => {
       const deliveryNotificationsRaw = await storageService.get<any[]>('gt_deliveryNotifications') || [];
     
     // Load SPK data untuk validasi notification dari PPIC
-    const currentSpkData = extractStorageValue(await storageService.get<any[]>('gt_spk')) || [];
+    const currentSpkDataRaw = await storageService.get<any[]>('gt_spk') || [];
+    // Filter out deleted items menggunakan helper function
+    const currentSpkData = filterActiveItems(currentSpkDataRaw);
     
     // Filter: Hanya tampilkan notifikasi yang valid untuk GT
     // IMPORTANT: Notification dari PPIC (READY_TO_DELIVER dengan spkNo) harus tetap ditampilkan meskipun SO tidak ada
@@ -783,7 +799,9 @@ const DeliveryNote = () => {
     });
     
     // Load deliveries untuk cek apakah sudah dibuat
-    const currentDeliveries = await storageService.get<any[]>('gt_delivery') || [];
+    const currentDeliveriesRaw = await storageService.get<any[]>('gt_delivery') || [];
+    // Filter out deleted items menggunakan helper function
+    const currentDeliveries = filterActiveItems(currentDeliveriesRaw);
     
     // Note: matchSPK helper function sudah didefinisikan di component scope (line ~280)
 
@@ -935,10 +953,9 @@ const DeliveryNote = () => {
       // Helper function untuk cek delivery
       const checkDelivery = (n: any) => {
         const spkList = n.spkNos || (n.spkNo ? [n.spkNo] : []);
-        return currentDeliveries.find((d: any) => {
-          if (d.deleted === true || d.deleted === 'true' || d.deletedAt) {
-            return false;
-          }
+        // Filter active deliveries menggunakan helper function
+        const activeDeliveries = filterActiveItems(currentDeliveries);
+        return activeDeliveries.find((d: any) => {
           if (d.items && Array.isArray(d.items) && d.items.length > 0) {
             return spkList.some((spk: string) => {
               return d.items.some((item: any) => matchSPK(item.spkNo, spk));
@@ -988,12 +1005,9 @@ const DeliveryNote = () => {
     });
     
     // Auto-cleanup: Sama seperti Packaging - sederhana
-    const cleanedNotifications = updatedNotificationsWithStatus.filter((n: any) => {
-      // Filter out deleted notifications
-      if (n.deleted === true || n.deleted === 'true' || n.deletedAt) {
-        return false;
-      }
-      
+    // Filter out deleted notifications menggunakan helper function
+    const activeNotifications = filterActiveItems(updatedNotificationsWithStatus);
+    const cleanedNotifications = activeNotifications.filter((n: any) => {
       // Filter out DELIVERY_CREATED notifications
       if (n.status === 'DELIVERY_CREATED') {
         return false;
@@ -1008,8 +1022,8 @@ const DeliveryNote = () => {
       // Karena setiap sjGroupId = 1 delivery terpisah (beda batch/ tanggal)
       const notifSjGroupId = n.sjGroupId || (n.deliveryBatches && n.deliveryBatches[0]?.sjGroupId) || null;
       if (notifSjGroupId) {
-        // Hanya hapus jika status DELIVERY_CREATED atau deleted
-        if (n.deleted === true || n.status === 'DELIVERY_CREATED') {
+        // Hanya hapus jika status DELIVERY_CREATED
+        if (n.status === 'DELIVERY_CREATED') {
           return false;
         }
         return true; // Keep notification yang punya sjGroupId

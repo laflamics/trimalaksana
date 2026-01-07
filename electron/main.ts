@@ -1471,7 +1471,44 @@ ipcMain.handle('install-update', async () => {
 });
 
 ipcMain.handle('get-app-version', () => {
-  return app.getVersion();
+  try {
+    // Get base version from app.getVersion() (reads from package.json)
+    const baseVersion = app.getVersion();
+    
+    // Try to get build number from package.json.build.buildVersion
+    let buildNumber: number | null = null;
+    try {
+      const packageJsonPath = path.join(__dirname, '..', 'package.json');
+      if (fs.existsSync(packageJsonPath)) {
+        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+        if (packageJson.build && packageJson.build.buildVersion) {
+          buildNumber = parseInt(packageJson.build.buildVersion) || null;
+        }
+      }
+    } catch (error) {
+      // If can't read from package.json, try .build-number file
+      try {
+        const buildNumberPath = path.join(__dirname, '..', '.build-number');
+        if (fs.existsSync(buildNumberPath)) {
+          const buildNumberContent = fs.readFileSync(buildNumberPath, 'utf8').trim();
+          buildNumber = parseInt(buildNumberContent) || null;
+        }
+      } catch (error2) {
+        // If both fail, just use base version
+      }
+    }
+    
+    // Format version with build number (same format as server: 1.0.6-build.14)
+    if (buildNumber !== null && buildNumber > 0) {
+      return `${baseVersion}-build.${buildNumber}`;
+    }
+    
+    // Fallback to base version if build number not found
+    return baseVersion;
+  } catch (error) {
+    // Fallback to app.getVersion() if anything fails
+    return app.getVersion();
+  }
 });
 
 // Seed trucking data from PC utama folder

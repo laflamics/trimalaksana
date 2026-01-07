@@ -249,6 +249,30 @@ interface SuratJalan {
   receivedBy?: string;
 }
 
+// Format date function untuk Created column (sama seperti di SO)
+const formatDateSimple = (dateString: string | undefined) => {
+  if (!dateString) return { date: '-', time: '', full: '-' };
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return { date: '-', time: '', full: '-' };
+    
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    
+    return {
+      date: `${day}/${month}/${year}`,
+      time: `${hours}:${minutes}:${seconds}`,
+      full: `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`
+    };
+  } catch {
+    return { date: '-', time: '', full: '-' };
+  }
+};
+
 const SuratJalan = () => {
   const [suratJalan, setSuratJalan] = useState<SuratJalan[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -262,6 +286,8 @@ const SuratJalan = () => {
   const [pendingUploadItem, setPendingUploadItem] = useState<SuratJalan | null>(null);
   const [showFormDialog, setShowFormDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<SuratJalan | null>(null);
+  const [showRouteDialog, setShowRouteDialog] = useState(false);
+  const [routeDialogSearch, setRouteDialogSearch] = useState('');
   const [notificationDialog, setNotificationDialog] = useState<{
     show: boolean;
     notif: any | null;
@@ -1464,6 +1490,19 @@ const SuratJalan = () => {
           {item.status}
         </span>
       ),
+    },
+    { 
+      key: 'created', 
+      header: 'Created',
+      render: (item: SuratJalan) => {
+        const { date, time } = formatDateSimple(item.created);
+        return (
+          <div style={{ fontSize: '12px' }}>
+            <div style={{ fontWeight: '500' }}>{date}</div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>{time}</div>
+          </div>
+        );
+      },
     },
     {
       key: 'actions',

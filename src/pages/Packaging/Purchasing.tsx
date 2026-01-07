@@ -349,7 +349,7 @@ const POActionMenu = ({
               🔄 Update Status
             </button>
           )}
-          {onDelete && item.status !== 'CLOSE' && (
+          {onDelete && (
             <button
               onClick={() => { onDelete(); setShowMenu(false); }}
               style={{
@@ -362,6 +362,9 @@ const POActionMenu = ({
                 cursor: 'pointer',
                 fontSize: '11px',
                 borderRadius: '4px',
+                borderTop: '1px solid var(--border-color)',
+                marginTop: '4px',
+                paddingTop: '8px',
               }}
               onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -419,6 +422,8 @@ const Purchasing = () => {
   const [itemsPerPage] = useState(50); // 50 items per page untuk performa optimal
   const [materialInputValue, setMaterialInputValue] = useState('');
   const [supplierInputValue, setSupplierInputValue] = useState('');
+  const [showSupplierDialog, setShowSupplierDialog] = useState(false);
+  const [supplierDialogSearch, setSupplierDialogSearch] = useState('');
   const [qtyInputValue, setQtyInputValue] = useState('');
   const [priceInputValue, setPriceInputValue] = useState('');
   const [formData, setFormData] = useState<Partial<PurchaseOrder>>({
@@ -1216,6 +1221,7 @@ const Purchasing = () => {
         invoiceNo: receiptData.invoiceNo || '',
         invoiceFile: receiptData.invoiceFile || '',
         invoiceFileName: receiptData.invoiceFileName || '',
+        sitePlan: receiptData.sitePlan || 'Site Plan 1',
         created: new Date().toISOString(),
       };
       
@@ -1367,6 +1373,7 @@ const Purchasing = () => {
                     nextStock: newNextStock,
                     processedPOs: processedPOs, // Track PO yang sudah diproses
                     allocatedSPKs: allocatedSPKs, // Track SPK yang menerima material dari GRN
+                    sitePlan: receiptData.sitePlan || 'Site Plan 1', // Site Plan dari GRN
                     lastUpdate: new Date().toISOString() 
                   }
                 : inv
@@ -1402,6 +1409,7 @@ const Purchasing = () => {
               nextStock: 0 + qtyReceived - 0 + 0, // stockPremonth + receive - outgoing + return
               processedPOs: poNo ? [poNo] : [], // Track PO yang sudah diproses
               allocatedSPKs: allocatedSPKs, // Track SPK yang menerima material (empty jika PO tanpa SO)
+              sitePlan: receiptData.sitePlan || 'Site Plan 1', // Site Plan dari GRN
               lastUpdate: new Date().toISOString(),
             };
             inventory.push(newInventoryEntry);
@@ -2881,41 +2889,35 @@ const Purchasing = () => {
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
               Supplier *
             </label>
-            <input
-              type="text"
-              list="supplier-list-new"
-              value={getSupplierInputDisplayValue()}
-              onChange={(e) => {
-                handleSupplierInputChange(e.target.value);
-              }}
-              onBlur={(e) => {
-                const value = e.target.value;
-                const matchedSupplier = suppliers.find(s => {
-                  const label = `${s.kode || ''}${s.kode ? ' - ' : ''}${s.nama || ''}`;
-                  return label === value;
-                });
-                if (matchedSupplier) {
-                  setFormData({ ...formData, supplier: matchedSupplier.nama });
-                }
-              }}
-              placeholder="-- Pilih Supplier --"
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-              }}
-            />
-            <datalist id="supplier-list-new">
-              {suppliers.map(s => (
-                <option key={s.id} value={`${s.kode} - ${s.nama}`}>
-                  {s.kode} - {s.nama}
-                </option>
-              ))}
-            </datalist>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                value={getSupplierInputDisplayValue()}
+                onChange={(e) => {
+                  handleSupplierInputChange(e.target.value);
+                }}
+                placeholder="-- Pilih Supplier --"
+                readOnly
+                onClick={() => setShowSupplierDialog(true)}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                }}
+              />
+              <Button
+                variant="secondary"
+                onClick={() => setShowSupplierDialog(true)}
+                style={{ fontSize: '12px', padding: '8px 16px' }}
+              >
+                Select
+              </Button>
+            </div>
           </div>
           <Input
             label={editingItem ? "SO No (Linked - Cannot Edit)" : "SO No (Optional)"}
@@ -4422,7 +4424,7 @@ const PRApprovalDialog = ({ pr, suppliers, materials, onClose, onApprove, onView
 };
 
 // Receipt/GRN Dialog Component - OPTIMIZED dengan pre-loaded data dan memoization
-const ReceiptDialog = React.memo(({ po, onClose, onSave }: { po: PurchaseOrder & { _preloadedGRNData?: { totalReceived: number; grnsForPO: any[] } }; onClose: () => void; onSave: (data: { qtyReceived: number; receivedDate: string; notes?: string; suratJalan?: string; suratJalanName?: string; invoiceNo?: string; invoiceFile?: string; invoiceFileName?: string }) => void }) => {
+const ReceiptDialog = React.memo(({ po, onClose, onSave }: { po: PurchaseOrder & { _preloadedGRNData?: { totalReceived: number; grnsForPO: any[] } }; onClose: () => void; onSave: (data: { qtyReceived: number; receivedDate: string; notes?: string; suratJalan?: string; suratJalanName?: string; invoiceNo?: string; invoiceFile?: string; invoiceFileName?: string; sitePlan?: string }) => void }) => {
   // Use pre-loaded data jika ada, jika tidak baru load
   const preloadedData = (po as any)._preloadedGRNData;
   const initialTotalReceived = preloadedData?.totalReceived || 0;
@@ -4430,6 +4432,7 @@ const ReceiptDialog = React.memo(({ po, onClose, onSave }: { po: PurchaseOrder &
   const [qtyReceived, setQtyReceived] = useState<string>('');
   const [receivedDate, setReceivedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState<string>('');
+  const [sitePlan, setSitePlan] = useState<string>('Site Plan 1');
   const [suratJalanFile, setSuratJalanFile] = useState<File | null>(null);
   const [invoiceNo, setInvoiceNo] = useState<string>('');
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
@@ -4573,7 +4576,8 @@ const ReceiptDialog = React.memo(({ po, onClose, onSave }: { po: PurchaseOrder &
           qtyReceived: qty, 
           receivedDate, 
           notes,
-          invoiceNo: invoiceNo || undefined
+          invoiceNo: invoiceNo || undefined,
+          sitePlan: sitePlan || 'Site Plan 1'
         });
         return;
       }
@@ -4605,7 +4609,8 @@ const ReceiptDialog = React.memo(({ po, onClose, onSave }: { po: PurchaseOrder &
               suratJalanName: results.suratJalanName,
               invoiceNo: invoiceNo || undefined,
               invoiceFile: results.invoiceFile,
-              invoiceFileName: results.invoiceFileName
+              invoiceFileName: results.invoiceFileName,
+              sitePlan: sitePlan || 'Site Plan 1'
             });
           }
         };
@@ -4990,41 +4995,33 @@ const EditPODialog = ({
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
               Supplier *
             </label>
-            <input
-              type="text"
-              list={`supplier-list-edit-${po.id}`}
-              value={getSupplierInputDisplayValue()}
-              onChange={(e) => {
-                handleSupplierInputChange(e.target.value);
-              }}
-              onBlur={(e) => {
-                const value = e.target.value;
-                const matchedSupplier = suppliers.find(s => {
-                  const label = `${s.kode || ''}${s.kode ? ' - ' : ''}${s.nama || ''}`;
-                  return label === value;
-                });
-                if (matchedSupplier) {
-                  setFormData({ ...formData, supplier: matchedSupplier.nama });
-                }
-              }}
-              placeholder="-- Pilih Supplier --"
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-              }}
-            />
-            <datalist id={`supplier-list-edit-${po.id}`}>
-              {suppliers.map(s => (
-                <option key={s.id} value={`${s.kode} - ${s.nama}`}>
-                  {s.kode} - {s.nama}
-                </option>
-              ))}
-            </datalist>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                value={getSupplierInputDisplayValue()}
+                onChange={() => {}}
+                placeholder="-- Pilih Supplier --"
+                readOnly
+                onClick={() => setShowSupplierDialog(true)}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                }}
+              />
+              <Button
+                variant="secondary"
+                onClick={() => setShowSupplierDialog(true)}
+                style={{ fontSize: '12px', padding: '8px 16px' }}
+              >
+                Select
+              </Button>
+            </div>
           </div>
           <Input
             label="SO No (Linked - Cannot Edit)"

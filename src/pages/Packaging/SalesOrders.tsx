@@ -325,6 +325,8 @@ const SalesOrders = () => {
   const [customerSearch, setCustomerSearch] = useState('');
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [isSelectingCustomer, setIsSelectingCustomer] = useState(false);
+  const [showCustomerDialog, setShowCustomerDialog] = useState(false);
+  const [customerDialogSearch, setCustomerDialogSearch] = useState('');
   const [productInputValue, setProductInputValue] = useState<{ [key: number]: string }>({});
   // TODO: Implement product search functionality in form
   const [productSearch, setProductSearch] = useState<{ [key: number]: string }>({});
@@ -612,7 +614,9 @@ const SalesOrders = () => {
   };
 
   const loadProducts = async () => {
-    const data = await storageService.get<Product[]>('products') || [];
+    const dataRaw = await storageService.get<Product[]>('products') || [];
+    // Filter out deleted items menggunakan helper function
+    const data = filterActiveItems(dataRaw);
     setProducts(data);
   };
 
@@ -637,6 +641,21 @@ const SalesOrders = () => {
         c.kode.toLowerCase().includes(query)
       );
   }, [customerSearch, customers]);
+
+  // Filtered customers for dialog
+  const filteredCustomersForDialog = useMemo(() => {
+    let filtered = customers;
+    if (customerDialogSearch) {
+      const query = customerDialogSearch.toLowerCase();
+      filtered = customers.filter(c => {
+        const code = (c.kode || '').toLowerCase();
+        const name = (c.nama || '').toLowerCase();
+        return code.includes(query) || name.includes(query);
+      });
+    }
+    // Limit to 200 items for performance
+    return filtered.slice(0, 200);
+  }, [customerDialogSearch, customers]);
 
   // Filtered products for dialog with limit for performance
   const filteredProductsForDialog = useMemo(() => {
@@ -2965,165 +2984,34 @@ const SalesOrders = () => {
           
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Customer * (Type to search)
+              Customer *
             </label>
-            <div style={{ position: 'relative' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
               <input
-                key={`customer-${formKey}`}
                 type="text"
                 value={customerSearch}
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  // Force focus immediately
-                  (e.target as HTMLInputElement).focus();
-                }}
-                onBeforeInput={(e) => {
-                  e.stopPropagation();
-                }}
-                onChange={(e) => {
-                  e.stopPropagation();
-                  const searchValue = e.target.value;
-                  setCustomerSearch(searchValue);
-                  setShowCustomerDropdown(true);
-                  const customer = customers.find(c => 
-                    c.nama.toLowerCase() === searchValue.toLowerCase() ||
-                    c.kode.toLowerCase() === searchValue.toLowerCase()
-                  );
-                  if (customer) {
-                    setFormData(prev => ({
-                      ...prev,
-                      customer: customer.nama,
-                      customerKode: customer.kode,
-                    }));
-                  } else {
-                    setFormData(prev => ({
-                      ...prev,
-                      customer: searchValue,
-                      customerKode: '',
-                    }));
-                  }
-                }}
-                onInput={(e) => {
-                  e.stopPropagation();
-                  const searchValue = (e.target as HTMLInputElement).value;
-                  setCustomerSearch(searchValue);
-                  setShowCustomerDropdown(true);
-                  const customer = customers.find(c => 
-                    c.nama.toLowerCase() === searchValue.toLowerCase() ||
-                    c.kode.toLowerCase() === searchValue.toLowerCase()
-                  );
-                  if (customer) {
-                    setFormData(prev => ({
-                      ...prev,
-                      customer: customer.nama,
-                      customerKode: customer.kode,
-                    }));
-                  } else {
-                    setFormData(prev => ({
-                      ...prev,
-                      customer: searchValue,
-                      customerKode: '',
-                    }));
-                  }
-                }}
-                onFocus={(e) => {
-                  e.stopPropagation();
-                  if (!customerSearch && formData.customer) {
-                    setCustomerSearch(formData.customer);
-                  }
-                  setShowCustomerDropdown(true);
-                }}
-                onBlur={(e) => {
-                  e.stopPropagation();
-                  setCustomerSearch(e.target.value);
-                  // Delay closing dropdown to allow click on dropdown item
-                  setTimeout(() => {
-                    if (!isSelectingCustomer) {
-                      setShowCustomerDropdown(false);
-                    }
-                    setIsSelectingCustomer(false);
-                  }, 300);
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                }}
-                onKeyDown={(e) => {
-                  e.stopPropagation();
-                }}
-                placeholder="Type customer name or code..."
+                onChange={() => {}}
+                placeholder="Click to select customer..."
+                readOnly
+                onClick={() => setShowCustomerDialog(true)}
                 style={{
-                  width: '100%',
+                  flex: 1,
                   padding: '8px 12px',
                   border: '1px solid var(--border)',
                   borderRadius: '4px',
                   backgroundColor: 'var(--bg-primary)',
                   color: 'var(--text-primary)',
                   fontSize: '14px',
+                  cursor: 'pointer',
                 }}
               />
-              {showCustomerDropdown && filteredCustomers.length > 0 && (
-                <div 
-                  style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    backgroundColor: 'var(--bg-secondary)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '4px',
-                    marginTop: '4px',
-                    maxHeight: '400px',
-                    overflowY: 'auto',
-                    zIndex: 1001,
-                  }}
-                  onMouseDown={(e) => {
-                    // Prevent input blur when clicking dropdown
-                    e.preventDefault();
-                  }}
-                >
-                  {filteredCustomers.map(c => (
-                    <div
-                      key={c.id}
-                      onMouseDown={(e) => {
-                        // Prevent blur and select immediately
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setIsSelectingCustomer(true);
-                        setCustomerSearch(c.nama);
-                        setFormData(prev => ({
-                          ...prev,
-                          customer: c.nama,
-                          customerKode: c.kode,
-                        }));
-                        setShowCustomerDropdown(false);
-                        // Focus back to input after selection
-                        setTimeout(() => {
-                          const input = document.querySelector('input[placeholder*="customer"]') as HTMLInputElement;
-                          if (input) {
-                            input.focus();
-                            input.blur();
-                          }
-                          setIsSelectingCustomer(false);
-                        }, 100);
-                      }}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                      }}
-                      style={{
-                        padding: '8px 12px',
-                        cursor: 'pointer',
-                        borderBottom: '1px solid var(--border)',
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--hover-bg)'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
-                      {c.kode} - {c.nama}
-                    </div>
-                  ))}
-                </div>
-              )}
+              <Button
+                variant="secondary"
+                onClick={() => setShowCustomerDialog(true)}
+                style={{ fontSize: '12px', padding: '8px 16px' }}
+              >
+                Select
+              </Button>
             </div>
             {formData.customer && (
               <p style={{ marginTop: '4px', fontSize: '12px', color: 'var(--text-secondary)' }}>
@@ -3898,6 +3786,127 @@ const SalesOrders = () => {
                   onClick={() => {
                     setShowProductDialog(null);
                     setProductDialogSearch('');
+                  }}
+                >
+                  Close
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Customer Selection Dialog */}
+      {showCustomerDialog && (
+        <div className="dialog-overlay" onClick={() => {
+          setShowCustomerDialog(false);
+          setCustomerDialogSearch('');
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <Card
+              title="Select Customer"
+              className="dialog-card"
+            >
+              <div style={{ marginBottom: '16px' }}>
+                <input
+                  type="text"
+                  value={customerDialogSearch}
+                  onChange={(e) => setCustomerDialogSearch(e.target.value)}
+                  placeholder="Search by customer code or name..."
+                  autoFocus
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+              <div style={{ 
+                maxHeight: '60vh', 
+                overflowY: 'auto',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+              }}>
+                {filteredCustomersForDialog.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    No customers found
+                  </div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-tertiary)', zIndex: 10 }}>
+                      <tr>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Code</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Name</th>
+                        <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid var(--border)' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredCustomersForDialog.map(c => {
+                        const handleSelect = () => {
+                          setCustomerSearch(c.nama);
+                          setFormData(prev => ({
+                            ...prev,
+                            customer: c.nama,
+                            customerKode: c.kode,
+                          }));
+                          setShowCustomerDialog(false);
+                          setCustomerDialogSearch('');
+                        };
+                        return (
+                          <tr
+                            key={c.id}
+                            style={{
+                              borderBottom: '1px solid var(--border)',
+                              cursor: 'pointer',
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--hover-bg)'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                            onClick={handleSelect}
+                          >
+                            <td style={{ padding: '12px' }}>{c.kode || '-'}</td>
+                            <td style={{ padding: '12px' }}>{c.nama || '-'}</td>
+                            <td style={{ padding: '12px', textAlign: 'center' }}>
+                              <Button
+                                variant="primary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSelect();
+                                }}
+                                style={{ fontSize: '12px', padding: '4px 12px' }}
+                              >
+                                Select
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+                  Showing {filteredCustomersForDialog.length} of {customerDialogSearch ? customers.filter(c => {
+                    const query = customerDialogSearch.toLowerCase();
+                    const code = (c.kode || '').toLowerCase();
+                    const name = (c.nama || '').toLowerCase();
+                    return code.includes(query) || name.includes(query);
+                  }).length : customers.length} customer{filteredCustomersForDialog.length !== 1 ? 's' : ''}
+                  {filteredCustomersForDialog.length >= 200 && (
+                    <span style={{ color: '#ff9800', marginLeft: '8px' }}>
+                      (Limited to 200. Use search to narrow down)
+                    </span>
+                  )}
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowCustomerDialog(false);
+                    setCustomerDialogSearch('');
                   }}
                 >
                   Close

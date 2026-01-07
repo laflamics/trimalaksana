@@ -4,6 +4,7 @@ import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import { storageService } from '../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
 import { openPrintWindow, focusAppWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
@@ -881,9 +882,11 @@ const SalesOrders = () => {
 
   const loadOrders = async () => {
     const data = await storageService.get<SalesOrder[]>('gt_salesOrders') || [];
+    // Filter out deleted items menggunakan helper function
+    const activeOrders = filterActiveItems(data);
     // Filter hanya SO (bukan quotation - quotation punya soNo yang link ke SO atau null)
     // Quotation disimpan terpisah di gt_quotations
-    setOrders(data);
+    setOrders(activeOrders);
   };
 
   const loadQuotations = async () => {
@@ -963,7 +966,9 @@ const SalesOrders = () => {
   };
 
   const loadProducts = async () => {
-    const data = await storageService.get<Product[]>('gt_products') || [];
+    const dataRaw = await storageService.get<Product[]>('gt_products') || [];
+    // Filter out deleted items menggunakan helper function
+    const data = filterActiveItems(dataRaw);
     setProducts(data);
   };
 
@@ -980,14 +985,24 @@ const SalesOrders = () => {
 
   // Filtered products for dialog with limit for performance
   const filteredProductsForDialog = useMemo(() => {
+    // Pastikan products sudah di-filter deleted items (sudah dilakukan di loadProducts)
     let filtered = products;
     if (productDialogSearch) {
       const query = productDialogSearch.toLowerCase();
       filtered = products.filter(p => {
+        // Pastikan product valid dan tidak null/undefined
+        if (!p) return false;
         const code = (p.product_id || p.kode || '').toLowerCase();
         const name = (p.nama || '').toLowerCase();
+        const kategori = (p.kategori || '').toLowerCase();
+        const customer = (p.customer || p.supplier || '').toLowerCase();
         const label = `${code}${code ? ' - ' : ''}${name}`.toLowerCase();
-        return code.includes(query) || name.includes(query) || label.includes(query);
+        // Sama seperti filter di Master Product: cari di kode, product_id, nama, kategori, customer, supplier
+        return code.includes(query) || 
+               name.includes(query) || 
+               label.includes(query) ||
+               kategori.includes(query) ||
+               customer.includes(query);
       });
     }
     // Limit to 200 items for performance (user can search to narrow down)
@@ -1001,8 +1016,15 @@ const SalesOrders = () => {
       filtered = products.filter(p => {
         const code = (p.product_id || p.kode || '').toLowerCase();
         const name = (p.nama || '').toLowerCase();
+        const kategori = (p.kategori || '').toLowerCase();
+        const customer = (p.customer || p.supplier || '').toLowerCase();
         const label = `${code}${code ? ' - ' : ''}${name}`.toLowerCase();
-        return code.includes(query) || name.includes(query) || label.includes(query);
+        // Sama seperti filter di Master Product: cari di kode, product_id, nama, kategori, customer, supplier
+        return code.includes(query) || 
+               name.includes(query) || 
+               label.includes(query) ||
+               kategori.includes(query) ||
+               customer.includes(query);
       });
     }
     // Limit to 200 items for performance (user can search to narrow down)
@@ -2308,9 +2330,14 @@ const SalesOrders = () => {
   // Handle Delete
   const handleDelete = async (item: SalesOrder) => {
     // Cek apakah SO sudah punya turunan (PO/Delivery)
-    const poList = await storageService.get<any[]>('gt_purchaseOrders') || [];
-    const deliveryList = await storageService.get<any[]>('gt_delivery') || [];
-    const prList = await storageService.get<any[]>('gt_purchaseRequests') || [];
+    const poListRaw = await storageService.get<any[]>('gt_purchaseOrders') || [];
+    const deliveryListRaw = await storageService.get<any[]>('gt_delivery') || [];
+    const prListRaw = await storageService.get<any[]>('gt_purchaseRequests') || [];
+    
+    // Filter active items untuk cek turunan
+    const poList = filterActiveItems(poListRaw);
+    const deliveryList = filterActiveItems(deliveryListRaw);
+    const prList = filterActiveItems(prListRaw);
     
     const hasPO = poList.some((po: any) => po.soNo === item.soNo);
     const hasDelivery = deliveryList.some((del: any) => del.soNo === item.soNo);
@@ -2339,22 +2366,29 @@ const SalesOrders = () => {
       `Hapus SO: ${item.soNo}?\n\nTindakan ini tidak bisa dibatalkan.`,
       async () => {
         try {
-          const ordersArray = Array.isArray(orders) ? orders : [];
-          const updated = ordersArray.filter(o => o.id !== item.id);
-          // Save dengan timestamp terbaru untuk ensure last write wins saat sync
-          await storageService.set('gt_salesOrders', updated);
-          setOrders(updated);
-          // Log activity
-          try {
-            await logDelete('SALES_ORDER', item.id, '/general-trading/sales-orders', {
-              soNo: item.soNo,
-              customer: item.customer,
-            });
-          } catch (logError) {
-            // Silent fail
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('gt_salesOrders', item.id, 'id');
+          
+          if (success) {
+            // Reload data dengan filter active items
+            const updatedOrders = await storageService.get<SalesOrder[]>('gt_salesOrders') || [];
+            const activeOrders = filterActiveItems(updatedOrders);
+            setOrders(activeOrders);
+            
+            // Log activity
+            try {
+              await logDelete('SALES_ORDER', item.id, '/general-trading/sales-orders', {
+                soNo: item.soNo,
+                customer: item.customer,
+              });
+            } catch (logError) {
+              // Silent fail
+            }
+            closeDialog();
+            showAlert(`SO ${item.soNo} berhasil dihapus.`, 'Success');
+          } else {
+            showAlert(`Error deleting SO. Silakan coba lagi.`, 'Error');
           }
-          closeDialog();
-          showAlert(`SO ${item.soNo} berhasil dihapus.`, 'Success');
         } catch (error: any) {
           showAlert(`Error deleting SO: ${error.message}`, 'Error');
         }
@@ -4239,7 +4273,12 @@ const SalesOrders = () => {
                     const query = productDialogSearch.toLowerCase();
                     const code = (p.product_id || p.kode || '').toLowerCase();
                     const name = (p.nama || '').toLowerCase();
-                    return code.includes(query) || name.includes(query);
+                    const kategori = (p.kategori || '').toLowerCase();
+                    const customer = (p.customer || p.supplier || '').toLowerCase();
+                    return code.includes(query) || 
+                           name.includes(query) || 
+                           kategori.includes(query) ||
+                           customer.includes(query);
                   }).length : products.length} product{filteredProductsForDialog.length !== 1 ? 's' : ''}
                   {filteredProductsForDialog.length >= 200 && (
                     <span style={{ color: '#ff9800', marginLeft: '8px' }}>
@@ -4385,7 +4424,12 @@ const SalesOrders = () => {
                     const query = quotationProductDialogSearch.toLowerCase();
                     const code = (p.product_id || p.kode || '').toLowerCase();
                     const name = (p.nama || '').toLowerCase();
-                    return code.includes(query) || name.includes(query);
+                    const kategori = (p.kategori || '').toLowerCase();
+                    const customer = (p.customer || p.supplier || '').toLowerCase();
+                    return code.includes(query) || 
+                           name.includes(query) || 
+                           kategori.includes(query) ||
+                           customer.includes(query);
                   }).length : products.length} product{filteredProductsForQuotationDialog.length !== 1 ? 's' : ''}
                   {filteredProductsForQuotationDialog.length >= 200 && (
                     <span style={{ color: '#ff9800', marginLeft: '8px' }}>

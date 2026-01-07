@@ -5,6 +5,7 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import NotificationBell from '../../../components/NotificationBell';
 import { storageService } from '../../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
 import { loadGTDataFromLocalStorage } from '../../../utils/gtStorageHelper';
 import { generateInvoiceHtml } from '../../../pdf/invoice-pdf-template';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../../utils/actions';
@@ -119,34 +120,46 @@ const Accounting = () => {
 
   const loadData = async () => {
     // Load langsung dari localStorage untuk memastikan data terbaru
-    const inv = await loadGTDataFromLocalStorage<any>(
+    const invRaw = await loadGTDataFromLocalStorage<any>(
       'gt_invoices',
       async () => await storageService.get<any[]>('gt_invoices') || []
     );
-    const exp = await loadGTDataFromLocalStorage<any>(
+    const expRaw = await loadGTDataFromLocalStorage<any>(
       'gt_expenses',
       async () => await storageService.get<any[]>('gt_expenses') || []
     );
-    const notifs = await loadGTDataFromLocalStorage<any>(
+    const notifsRaw = await loadGTDataFromLocalStorage<any>(
       'gt_invoiceNotifications',
       async () => await storageService.get<any[]>('gt_invoiceNotifications') || []
     );
-    const cust = await loadGTDataFromLocalStorage<any>(
+    const custRaw = await loadGTDataFromLocalStorage<any>(
       'gt_customers',
       async () => await storageService.get<any[]>('gt_customers') || []
     );
     // Load langsung dari localStorage untuk memastikan data terbaru
-    const prod = await loadGTDataFromLocalStorage<any>(
+    const prodRaw = await loadGTDataFromLocalStorage<any>(
       'gt_products',
       async () => await storageService.get<any[]>('gt_products') || []
     );
-    const so = await loadGTDataFromLocalStorage<any>(
+    const soRaw = await loadGTDataFromLocalStorage<any>(
       'gt_salesOrders',
       async () => await storageService.get<any[]>('gt_salesOrders') || []
     );
     
+    // Filter out deleted items menggunakan helper function
+    const inv = filterActiveItems(Array.isArray(invRaw) ? invRaw : []);
+    const exp = filterActiveItems(Array.isArray(expRaw) ? expRaw : []);
+    const notifs = filterActiveItems(Array.isArray(notifsRaw) ? notifsRaw : []);
+    const cust = filterActiveItems(Array.isArray(custRaw) ? custRaw : []);
+    const prod = filterActiveItems(Array.isArray(prodRaw) ? prodRaw : []);
+    const so = filterActiveItems(Array.isArray(soRaw) ? soRaw : []);
+    
     setInvoices(inv);
     setExpenses(exp);
+    setInvoiceNotifications(notifs);
+    setCustomers(cust);
+    setProducts(prod);
+    setSalesOrders(so);
     
     // Auto-cleanup: Hapus notifications yang sudah dibuat invoice atau status PROCESSED
     // Ensure notifs and inv are always arrays
@@ -1187,24 +1200,26 @@ const Accounting = () => {
     showConfirm(
       `Delete expense: ${item.expenseNo}?`,
       async () => {
-        await proceedWithDeleteExpense();
+        try {
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('gt_expenses', item.id, 'id');
+          
+          if (success) {
+            // Reload data dengan filter active items
+            const updatedExpenses = await storageService.get<any[]>('gt_expenses') || [];
+            const activeExpenses = filterActiveItems(updatedExpenses);
+            setExpenses(activeExpenses);
+            showAlert(`Expense ${item.expenseNo} deleted successfully`, 'Success');
+          } else {
+            showAlert(`Error deleting expense. Silakan coba lagi.`, 'Error');
+          }
+        } catch (error: any) {
+          showAlert(`Error deleting expense: ${error.message}`, 'Error');
+        }
       },
       () => {},
       'Delete Expense'
     );
-    return;
-    
-    async function proceedWithDeleteExpense() {
-      try {
-        // Ensure expenses is always an array
-        const expensesArray = Array.isArray(expenses) ? expenses : [];
-        const updated = expensesArray.filter(e => e.id !== item.id);
-        await storageService.set('gt_expenses', updated);
-        setExpenses(updated);
-      } catch (error: any) {
-        showAlert(`Error deleting expense: ${error.message}`, 'Error');
-      }
-    }
   };
 
   const tabs = [
@@ -3003,19 +3018,17 @@ const CreateInvoiceDialog = ({
         ]);
         
         // Filter: hanya yang belum di-delete dan belum ada invoice (gunakan snapshot)
-        const activeSOs = (soData || []).filter((soItem: any) => {
-          if (soItem?.deleted === true || soItem?.deleted === 'true' || soItem?.deletedAt) {
-            return false;
-          }
+        // Filter out deleted items menggunakan helper function
+        const activeSOsRaw = filterActiveItems(soData || []);
+        const activeSOs = activeSOsRaw.filter((soItem: any) => {
           // Filter: belum ada invoice untuk SO ini (gunakan snapshot)
           const hasInvoice = invoicesSnapshotRef.current.some((inv: any) => inv.soNo === soItem.soNo);
           return !hasInvoice;
         });
         
-        const activeSJ = (sjData || []).filter((sj: any) => {
-          if (sj?.deleted === true || sj?.deleted === 'true' || sj?.deletedAt) {
-            return false;
-          }
+        // Filter out deleted items menggunakan helper function
+        const activeSJRaw = filterActiveItems(sjData || []);
+        const activeSJ = activeSJRaw.filter((sj: any) => {
           const hasInvoice = invoicesSnapshotRef.current.some((inv: any) => inv.sjNo === sj.sjNo);
           return !hasInvoice;
         });

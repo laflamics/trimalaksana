@@ -1,6 +1,6 @@
 {
   "name": "trima-laksana-erp",
-  "version": "1.0.6",
+  "version": "1.0.6-build.21",
   "description": "PT.Trima Laksana Jaya Pratama - Enterprise Resource Planning System",
   "main": "dist/main.js",
   "scripts": {
@@ -132,6 +132,6 @@
       "perMachine": false,
       "differentialPackage": true
     },
-    "buildVersion": "9"
+    "buildVersion": "21"
   }
 }

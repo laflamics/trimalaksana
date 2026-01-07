@@ -259,6 +259,8 @@ const UnitScheduling = () => {
   const [routes, setRoutes] = useState<any[]>([]);
   const [deliveryOrders, setDeliveryOrders] = useState<any[]>([]);
   const [selectedNotification, setSelectedNotification] = useState<any | null>(null);
+  const [showRouteDialog, setShowRouteDialog] = useState(false);
+  const [routeDialogSearch, setRouteDialogSearch] = useState('');
   
   // Format notifications untuk NotificationBell
   const unitNotifications = useMemo(() => {

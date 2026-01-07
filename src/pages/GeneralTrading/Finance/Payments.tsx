@@ -7,6 +7,7 @@ import Input from '../../../components/Input';
 import NotificationBell from '../../../components/NotificationBell';
 import { storageService } from '../../../services/storage';
 import { loadGTDataFromLocalStorage } from '../../../utils/gtStorageHelper';
+import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -134,10 +135,12 @@ const Payments = () => {
 
   const loadAccounts = async () => {
     // Load langsung dari localStorage untuk memastikan data terbaru
-    const data = await loadGTDataFromLocalStorage<any>(
+    const dataRaw = await loadGTDataFromLocalStorage<any>(
       'gt_accounts',
       async () => await storageService.get<any[]>('gt_accounts') || []
     );
+    // Filter out deleted items menggunakan helper function
+    const data = filterActiveItems(dataRaw || []);
     if (!data || data.length === 0) {
       const defaultAccounts: any[] = [
         { code: '1000', name: 'Cash', type: 'Asset', balance: 0 },
@@ -252,12 +255,12 @@ const Payments = () => {
   const loadPayments = async () => {
     // Load from both 'gt_payments' (existing) and create unified list
     // Load langsung dari localStorage untuk memastikan data terbaru
-    const existingPayments = await loadGTDataFromLocalStorage<any>(
+    const existingPaymentsRaw = await loadGTDataFromLocalStorage<any>(
       'gt_payments',
       async () => await storageService.get<any[]>('gt_payments') || []
     );
-    // Ensure existingPayments is always an array
-    const existingPaymentsArray = Array.isArray(existingPayments) ? existingPayments : [];
+    // Filter out deleted items menggunakan helper function
+    const existingPaymentsArray = filterActiveItems(Array.isArray(existingPaymentsRaw) ? existingPaymentsRaw : []);
     const allPayments = existingPaymentsArray.map((p, idx) => ({
       id: p.id || Date.now().toString() + idx,
       no: idx + 1,
@@ -279,17 +282,17 @@ const Payments = () => {
 
   const loadInvoices = async () => {
     // Load langsung dari localStorage untuk memastikan data terbaru
-    const data = await loadGTDataFromLocalStorage<any>(
+    const dataRaw = await loadGTDataFromLocalStorage<any>(
       'gt_invoices',
       async () => await storageService.get<any[]>('gt_invoices') || []
     );
-    const paymentsData = await loadGTDataFromLocalStorage<any>(
+    const paymentsDataRaw = await loadGTDataFromLocalStorage<any>(
       'gt_payments',
       async () => await storageService.get<any[]>('gt_payments') || []
     );
-    // Ensure data and paymentsData are always arrays
-    const dataArray = Array.isArray(data) ? data : [];
-    const paymentsDataArray = Array.isArray(paymentsData) ? paymentsData : [];
+    // Filter out deleted items menggunakan helper function
+    const dataArray = filterActiveItems(Array.isArray(dataRaw) ? dataRaw : []);
+    const paymentsDataArray = filterActiveItems(Array.isArray(paymentsDataRaw) ? paymentsDataRaw : []);
     // Calculate balance for each invoice
     const invoicesWithBalance = dataArray.map(inv => {
       const invoicePayments = paymentsDataArray.filter((p: any) => p.invoiceNo === inv.invoiceNo);
@@ -301,11 +304,16 @@ const Payments = () => {
   };
 
   const loadPurchaseOrders = async () => {
-    const [poData, financeNotifData, grnData] = await Promise.all([
+    const [poDataRaw, financeNotifDataRaw, grnDataRaw] = await Promise.all([
       storageService.get<any[]>('gt_purchaseOrders') || [],
       storageService.get<any[]>('gt_financeNotifications') || [],
       storageService.get<any[]>('gt_grn') || [],
     ]);
+    
+    // Filter out deleted items menggunakan helper function
+    const poData = filterActiveItems(poDataRaw || []);
+    const financeNotifData = filterActiveItems(financeNotifDataRaw || []);
+    const grnData = filterActiveItems(grnDataRaw || []);
     
     // Auto-fix: Recalculate total untuk notification yang masih pakai total PO (fix untuk notification lama)
     // Ensure all data is always an array

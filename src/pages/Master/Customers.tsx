@@ -5,6 +5,7 @@ import type { Column } from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import { storageService } from '../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
 import * as XLSX from 'xlsx';
 import '../../styles/common.css';
 import './Master.css';
@@ -97,7 +98,9 @@ const Customers = () => {
   }, []);
 
   const loadCustomers = async () => {
-    const data = await storageService.get<Customer[]>('customers') || [];
+    const dataRaw = await storageService.get<Customer[]>('customers') || [];
+    // Filter out deleted items menggunakan helper function
+    const data = filterActiveItems(dataRaw);
     setCustomers(data.map((c, idx) => ({ ...c, no: idx + 1 })));
   };
 
@@ -159,9 +162,18 @@ const Customers = () => {
       `Are you sure you want to delete customer "${item.nama}"? This action cannot be undone.`,
       async () => {
         try {
-          const updated = customers.filter(c => c.id !== item.id);
-          await storageService.set('customers', updated);
-          setCustomers(updated.map((c, idx) => ({ ...c, no: idx + 1 })));
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('customers', item.id, 'id');
+          
+          if (success) {
+            // Reload data dengan filter active items
+            const dataRaw = await storageService.get<Customer[]>('customers') || [];
+            const data = filterActiveItems(dataRaw);
+            setCustomers(data.map((c, idx) => ({ ...c, no: idx + 1 })));
+            showAlert(`Customer "${item.nama}" deleted successfully`, 'Success');
+          } else {
+            showAlert(`Error deleting customer. Silakan coba lagi.`, 'Error');
+          }
         } catch (error: any) {
           showAlert(`Error deleting customer: ${error.message}`, 'Error');
         }

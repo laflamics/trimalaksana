@@ -5,6 +5,7 @@ import Button from '../../components/Button';
 import Input from '../../components/Input';
 import NotificationBell from '../../components/NotificationBell';
 import { storageService, extractStorageValue } from '../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
 import { generatePOHtml } from '../../pdf/po-pdf-template';
 import { generatePOSheetHtml } from '../../pdf/po-sheet-template';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
@@ -491,9 +492,10 @@ const Purchasing = () => {
         storageService.get<any[]>('gt_financeNotifications'),
         storageService.get<any[]>('gt_salesOrders'),
       ]);
-      let poData = Array.isArray(poDataRaw) ? poDataRaw : [];
-      const financeNotifData = Array.isArray(financeNotifDataRaw) ? financeNotifDataRaw : [];
-      const salesOrders = Array.isArray(salesOrdersRaw) ? salesOrdersRaw : [];
+      // Filter out deleted items menggunakan helper function
+      let poData = filterActiveItems(Array.isArray(poDataRaw) ? poDataRaw : []);
+      const financeNotifData = filterActiveItems(Array.isArray(financeNotifDataRaw) ? financeNotifDataRaw : []);
+      const salesOrders = filterActiveItems(Array.isArray(salesOrdersRaw) ? salesOrdersRaw : []);
       
       // Enrich PO dengan spkNo dari SO jika belum ada
       let poDataUpdated = false;
@@ -1256,10 +1258,7 @@ const Purchasing = () => {
             
             await storageService.set('gt_grn', cleanedGRNs);
             
-            // Force sync to server immediately
-            if ((storageService as any).syncToServer) {
-              await (storageService as any).syncToServer();
-            }
+            // Note: storageService.set() already triggers sync automatically, no need for manual sync
             
             showAlert(`✅ Berhasil hapus ${existingGRNsForPO.length} GRN corrupt untuk PO ${item.poNo}.\n\nData sudah di-sync ke server.\n\nSilakan create GRN baru.`, 'Success');
             setSelectedPOForReceipt(null);
@@ -1351,14 +1350,7 @@ const Purchasing = () => {
       // Update grnList immediately untuk UI responsiveness
       setGrnList(Array.isArray(updatedGRNs) ? updatedGRNs : []);
       
-      // Sync to server in background (non-blocking) - jangan block UI
-      if ((storageService as any).syncToServer) {
-        setTimeout(() => {
-          (storageService as any).syncToServer().catch(() => {
-            // Silent fail untuk background operation
-          });
-        }, 100);
-      }
+      // Note: storageService.set() already triggers sync automatically, no need for manual sync
       
       // Update PO status: CLOSE hanya jika semua qty benar-benar sudah diterima (tidak ada outstanding)
       // IMPORTANT: Reload GRN data untuk memastikan kita menggunakan data terbaru setelah save
@@ -2586,8 +2578,17 @@ const Purchasing = () => {
       `Hapus PO ${poNo}?\n\nTindakan ini akan:\n• Menghapus PO dari daftar\n• Menghapus notifikasi Finance terkait\n• Mengembalikan PR ke status APPROVED (jika ada)\n\nPastikan tidak ada proses lanjutan untuk PO ini.`,
       async () => {
         try {
-          const updatedOrders = orders.filter(po => po.id !== item.id);
-          await storageService.set('gt_purchaseOrders', updatedOrders);
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('gt_purchaseOrders', item.id, 'id');
+          
+          if (!success) {
+            showAlert(`Error deleting PO. Silakan coba lagi.`, 'Error');
+            return;
+          }
+          
+          // Reload data dengan filter active items
+          const updatedOrdersRaw = await storageService.get<PurchaseOrder[]>('gt_purchaseOrders') || [];
+          const updatedOrders = filterActiveItems(updatedOrdersRaw);
           setOrders(updatedOrders);
 
           let updatedPRs = purchaseRequests;

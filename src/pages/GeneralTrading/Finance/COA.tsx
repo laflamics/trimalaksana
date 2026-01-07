@@ -6,6 +6,7 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
 import { loadGTDataFromLocalStorage } from '../../../utils/gtStorageHelper';
+import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 
 interface Account {
@@ -83,17 +84,21 @@ const COA = () => {
 
   const loadData = async () => {
     // Load langsung dari localStorage untuk memastikan data terbaru
-    const entries = await loadGTDataFromLocalStorage<any>(
+    const entriesRaw = await loadGTDataFromLocalStorage<any>(
       'gt_journalEntries',
       async () => await storageService.get<any[]>('gt_journalEntries') || []
     );
+    // Filter out deleted items menggunakan helper function
+    const entries = filterActiveItems(entriesRaw || []);
     setJournalEntries(entries);
     
     // Load accounts - pastikan selalu load dari storage
-    let data = await loadGTDataFromLocalStorage<Account>(
+    let dataRaw = await loadGTDataFromLocalStorage<Account>(
       'gt_accounts',
       async () => await storageService.get<Account[]>('gt_accounts') || []
     );
+    // Filter out deleted items menggunakan helper function
+    let data = filterActiveItems(dataRaw || []);
     
     // Default accounts yang harus ada
     // AKTIVA (Assets)

@@ -6,6 +6,7 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
 import { loadGTDataFromLocalStorage } from '../../../utils/gtStorageHelper';
+import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -82,15 +83,20 @@ const AccountsPayable = () => {
         ),
       ]);
       
+      // Filter out deleted items menggunakan helper function
+      const activeEntries = filterActiveItems(entries || []);
+      const activePurchaseOrders = filterActiveItems(pos || []);
+      const activeSuppliers = filterActiveItems(supp || []);
+      
       console.log(`📦 Loaded data:`, {
-        journalEntries: entries?.length || 0,
-        purchaseOrders: pos?.length || 0,
-        suppliers: supp?.length || 0,
+        journalEntries: activeEntries.length,
+        purchaseOrders: activePurchaseOrders.length,
+        suppliers: activeSuppliers.length,
       });
       
-      setJournalEntries(entries || []);
-      setPurchaseOrders(pos || []);
-      setSuppliers(supp || []);
+      setJournalEntries(activeEntries);
+      setPurchaseOrders(activePurchaseOrders);
+      setSuppliers(activeSuppliers);
     } catch (error: any) {
       console.error('❌ Error loading data:', error);
       showAlert(`Error loading data: ${error.message}`, 'Error');

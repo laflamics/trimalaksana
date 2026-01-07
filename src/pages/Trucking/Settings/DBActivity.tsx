@@ -3,6 +3,7 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import { storageService } from '../../../services/storage';
+import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -74,8 +75,15 @@ const DBActivity = () => {
     // Finance
     { id: 'coa', label: 'Chart of Accounts', category: 'Finance' },
     { id: 'journal-entries', label: 'Journal Entries', category: 'Finance' },
+    { id: 'accounting', label: 'Accounting', category: 'Finance' },
+    { id: 'general-ledger', label: 'General Ledger', category: 'Finance' },
+    { id: 'financial-reports', label: 'Financial Reports', category: 'Finance' },
     { id: 'invoices', label: 'Invoices', category: 'Finance' },
     { id: 'payments', label: 'Payments', category: 'Finance' },
+    { id: 'accounts-receivable', label: 'Accounts Receivable', category: 'Finance' },
+    { id: 'accounts-payable', label: 'Accounts Payable', category: 'Finance' },
+    { id: 'tax-management', label: 'Tax Management', category: 'Finance' },
+    { id: 'cost-analysis', label: 'Cost Analysis', category: 'Finance' },
     // Notifications
     { id: 'notifications', label: 'Notifications', category: 'Notifications' },
     // System
@@ -214,6 +222,64 @@ const DBActivity = () => {
         { key: 'paymentMethod', header: 'Method' },
         { key: 'paymentDate', header: 'Date' },
       ];
+      case 'accounting': return [
+        { key: 'no', header: 'No' },
+        { key: 'entryDate', header: 'Date' },
+        { key: 'reference', header: 'Reference' },
+        { key: 'account', header: 'Account' },
+        { key: 'debit', header: 'Debit' },
+        { key: 'credit', header: 'Credit' },
+        { key: 'description', header: 'Description' },
+      ];
+      case 'general-ledger': return [
+        { key: 'no', header: 'No' },
+        { key: 'entryDate', header: 'Date' },
+        { key: 'reference', header: 'Reference' },
+        { key: 'account', header: 'Account' },
+        { key: 'debit', header: 'Debit' },
+        { key: 'credit', header: 'Credit' },
+        { key: 'description', header: 'Description' },
+      ];
+      case 'financial-reports': return [
+        { key: 'reportType', header: 'Report Type' },
+        { key: 'period', header: 'Period' },
+        { key: 'totalRevenue', header: 'Total Revenue' },
+        { key: 'totalExpenses', header: 'Total Expenses' },
+        { key: 'netIncome', header: 'Net Income' },
+        { key: 'created', header: 'Created' },
+      ];
+      case 'accounts-receivable': return [
+        { key: 'invoiceNo', header: 'Invoice No' },
+        { key: 'customer', header: 'Customer' },
+        { key: 'amount', header: 'Amount' },
+        { key: 'dueDate', header: 'Due Date' },
+        { key: 'status', header: 'Status' },
+        { key: 'created', header: 'Created' },
+      ];
+      case 'accounts-payable': return [
+        { key: 'billNo', header: 'Bill No' },
+        { key: 'supplier', header: 'Supplier' },
+        { key: 'amount', header: 'Amount' },
+        { key: 'dueDate', header: 'Due Date' },
+        { key: 'status', header: 'Status' },
+        { key: 'created', header: 'Created' },
+      ];
+      case 'tax-management': return [
+        { key: 'taxType', header: 'Tax Type' },
+        { key: 'reference', header: 'Reference' },
+        { key: 'amount', header: 'Amount' },
+        { key: 'taxAmount', header: 'Tax Amount' },
+        { key: 'period', header: 'Period' },
+        { key: 'status', header: 'Status' },
+        { key: 'created', header: 'Created' },
+      ];
+      case 'cost-analysis': return [
+        { key: 'category', header: 'Category' },
+        { key: 'description', header: 'Description' },
+        { key: 'amount', header: 'Amount' },
+        { key: 'period', header: 'Period' },
+        { key: 'created', header: 'Created' },
+      ];
       case 'notifications': return notificationColumns;
       case 'audit': return auditColumns;
       default: return vehicleColumns;
@@ -221,78 +287,96 @@ const DBActivity = () => {
   };
 
   const getAllData = () => {
-    // Helper function to filter out deleted items (tombstone pattern)
-    const filterDeleted = (items: any[]) => {
-      if (!Array.isArray(items)) return [];
-      const filtered = items.filter((item: any) => {
-        // Filter out items that are marked as deleted (tombstone pattern)
-        // Check multiple ways: deleted === true, deleted === 'true', or deletedAt exists
-        const isDeleted = item?.deleted === true || item?.deleted === 'true' || item?.deletedAt;
-        if (isDeleted) {
-          console.log(`[DBActivity] Filtering out deleted item:`, item?.id || item?.driverCode || item?.vehicleNo || item?.kode || 'unknown');
-        }
-        return !isDeleted;
-      });
-      console.log(`[DBActivity] filterDeleted: ${items.length} items -> ${filtered.length} items (filtered out ${items.length - filtered.length} deleted items)`);
-      return filtered;
-    };
-
     switch (activeSection) {
       case 'vehicles': {
         const vehicles = data.trucking_vehicles || [];
-        const vehiclesArray = Array.isArray(vehicles) ? vehicles : [];
-        console.log(`[DBActivity] getAllData vehicles: ${vehiclesArray.length} items before filter`);
-        const filtered = filterDeleted(vehiclesArray);
-        console.log(`[DBActivity] getAllData vehicles: ${filtered.length} items after filter`);
-        return filtered;
+        return filterActiveItems(Array.isArray(vehicles) ? vehicles : []);
       }
       case 'drivers': {
         const drivers = data.trucking_drivers || [];
-        return filterDeleted(Array.isArray(drivers) ? drivers : []);
+        return filterActiveItems(Array.isArray(drivers) ? drivers : []);
       }
       case 'routes': {
         const routes = data.trucking_routes || [];
-        return filterDeleted(Array.isArray(routes) ? routes : []);
+        return filterActiveItems(Array.isArray(routes) ? routes : []);
       }
       case 'customers': {
         const customers = data.trucking_customers || [];
-        return filterDeleted(Array.isArray(customers) ? customers : []);
+        return filterActiveItems(Array.isArray(customers) ? customers : []);
       }
       case 'delivery-orders': {
         const doData = data.trucking_delivery_orders || [];
-        const doArray = Array.isArray(doData) ? doData : [];
-        console.log(`[DBActivity] getAllData delivery-orders: ${doArray.length} items before filter, deleted: ${doArray.filter((i: any) => i?.deleted || i?.deletedAt).length}`);
-        const filtered = filterDeleted(doArray);
-        console.log(`[DBActivity] getAllData delivery-orders: ${filtered.length} items after filter`);
-        return filtered;
+        return filterActiveItems(Array.isArray(doData) ? doData : []);
       }
       case 'unit-schedules': {
         const schedules = data.trucking_unitSchedules || [];
-        return filterDeleted(Array.isArray(schedules) ? schedules : []);
+        return filterActiveItems(Array.isArray(schedules) ? schedules : []);
       }
       case 'petty-cash': {
         const pettyCash = data.trucking_pettycash_requests || [];
-        return filterDeleted(Array.isArray(pettyCash) ? pettyCash : []);
+        return filterActiveItems(Array.isArray(pettyCash) ? pettyCash : []);
       }
       case 'surat-jalan': {
         const sj = data.trucking_suratJalan || [];
-        return filterDeleted(Array.isArray(sj) ? sj : []);
+        return filterActiveItems(Array.isArray(sj) ? sj : []);
       }
       case 'coa': {
         const coa = data.trucking_accounts || [];
-        return filterDeleted(Array.isArray(coa) ? coa : []);
+        return filterActiveItems(Array.isArray(coa) ? coa : []);
       }
       case 'journal-entries': {
         const entries = data.trucking_journalEntries || [];
-        return filterDeleted(Array.isArray(entries) ? entries : []);
+        return filterActiveItems(Array.isArray(entries) ? entries : []);
+      }
+      case 'accounting': {
+        const entries = data.trucking_journalEntries || [];
+        return filterActiveItems(Array.isArray(entries) ? entries : []);
+      }
+      case 'general-ledger': {
+        const entries = data.trucking_journalEntries || [];
+        return filterActiveItems(Array.isArray(entries) ? entries : []);
+      }
+      case 'financial-reports': {
+        // Financial reports are generated from journal entries, so return empty array
+        // Reports are typically generated on-demand, not stored
+        return [];
       }
       case 'invoices': {
         const invoices = data.trucking_invoices || [];
-        return filterDeleted(Array.isArray(invoices) ? invoices : []);
+        return filterActiveItems(Array.isArray(invoices) ? invoices : []);
       }
       case 'payments': {
         const payments = data.trucking_payments || [];
-        return filterDeleted(Array.isArray(payments) ? payments : []);
+        return filterActiveItems(Array.isArray(payments) ? payments : []);
+      }
+      case 'accounts-receivable': {
+        // AR is calculated from invoices, show invoices with outstanding balance
+        const invoices = data.trucking_invoices || [];
+        const filtered = filterActiveItems(Array.isArray(invoices) ? invoices : []);
+        return filtered.filter((inv: any) => {
+          const paid = inv.paidAmount || 0;
+          const total = inv.total || 0;
+          return total > paid;
+        });
+      }
+      case 'accounts-payable': {
+        // AP is calculated from bills/purchase orders, show bills with outstanding balance
+        const bills = data.trucking_bills || [];
+        const filtered = filterActiveItems(Array.isArray(bills) ? bills : []);
+        return filtered.filter((bill: any) => {
+          const paid = bill.paidAmount || 0;
+          const total = bill.amount || 0;
+          return total > paid;
+        });
+      }
+      case 'tax-management': {
+        const taxRecords = data.trucking_taxRecords || [];
+        return filterActiveItems(Array.isArray(taxRecords) ? taxRecords : []);
+      }
+      case 'cost-analysis': {
+        // Cost analysis is typically calculated from expenses and journal entries
+        const expenses = data.trucking_expenses || [];
+        return filterActiveItems(Array.isArray(expenses) ? expenses : []);
       }
       case 'notifications': {
         // Combine all notification types
@@ -301,7 +385,7 @@ const DBActivity = () => {
           ...(Array.isArray(data.trucking_pettyCashNotifications) ? data.trucking_pettyCashNotifications : []).map((n: any) => ({ ...n, type: n.type || 'SCHEDULE_CREATED' })),
           ...(Array.isArray(data.trucking_suratJalanNotifications) ? data.trucking_suratJalanNotifications : []).map((n: any) => ({ ...n, type: n.type || 'PETTY_CASH_DISTRIBUTED' })),
         ];
-        return filterDeleted(allNotifs);
+        return filterActiveItems(allNotifs);
       }
       case 'audit': {
         const audit = data.trucking_audit || [];
@@ -372,7 +456,7 @@ const DBActivity = () => {
         'trucking_vehicles', 'trucking_drivers', 'trucking_routes', 'trucking_customers',
         'trucking_delivery_orders', 'trucking_unitSchedules', 'trucking_pettycash_requests', 'trucking_pettycash_memos', 'trucking_suratJalan',
         'trucking_accounts', 'trucking_journalEntries', 'trucking_invoices', 'trucking_payments',
-        'trucking_expenses', 'trucking_taxRecords', 'trucking_bills', 'trucking_invoiceNotifications',
+        'trucking_expenses', 'trucking_taxRecords', 'trucking_bills', 'trucking_purchaseOrders', 'trucking_invoiceNotifications',
         'trucking_unitNotifications', 'trucking_pettyCashNotifications', 'trucking_suratJalanNotifications',
         'trucking_audit',
       ];
@@ -383,19 +467,15 @@ const DBActivity = () => {
         try {
           // Pakai storageService.get() untuk konsistensi, tapi tetap simpan semua data termasuk deleted
           const dataArray = await storageService.get<any[]>(key) || [];
-          const deletedCount = dataArray.filter((i: any) => i?.deleted === true || i?.deleted === 'true' || i?.deletedAt).length;
-          console.log(`[DBActivity] Loaded ${key}: ${dataArray.length} items (including ${deletedCount} deleted items)`);
           allData[key] = dataArray;
         } catch (error) {
-          console.warn(`[DBActivity] Error loading ${key}:`, error);
           allData[key] = [];
         }
       }
       
-      console.log(`[DBActivity] Loaded all data, setting state...`);
       setData(allData);
     } catch (error) {
-      console.error('[DBActivity] Error loading data:', error);
+      // Error loading data
     } finally {
       setLoading(false);
     }
@@ -422,7 +502,6 @@ const DBActivity = () => {
         setSeedMessage(`✗ No data files found in data/ folder`);
       }
     } catch (error: any) {
-      console.error('Import from files error:', error);
       setSeedMessage(`✗ Error: ${error.message || 'Failed to import data'}`);
     } finally {
       setSeedLoading(false);
@@ -458,7 +537,6 @@ const DBActivity = () => {
         setExportMessage(`✗ Export failed: ${result.error || 'Unknown error'}`);
       }
     } catch (error: any) {
-      console.error('Export error:', error);
       setExportMessage(`✗ Error: ${error.message || 'Failed to export data'}`);
     } finally {
       setExportLoading(false);
@@ -512,10 +590,8 @@ const DBActivity = () => {
           for (const storageKey of possibleKeys) {
             try {
               await electronAPI.deleteStorage(storageKey);
-              console.log(`[Clear] Deleted from file storage: ${storageKey}`);
             } catch (error: any) {
               // File might not exist, that's okay
-              console.warn(`[Clear] File storage delete warning for ${storageKey}:`, error.message);
             }
           }
         }
@@ -525,7 +601,6 @@ const DBActivity = () => {
           try {
             // Remove directly from localStorage
             localStorage.removeItem(storageKey);
-            console.log(`[Clear] Removed from localStorage: ${storageKey}`);
             
             // Also use storageService.remove for consistency
             await storageService.remove(storageKey);
@@ -569,33 +644,29 @@ const DBActivity = () => {
         for (const storageKey of keysToRemove) {
           try {
             localStorage.removeItem(storageKey);
-            console.log(`[Clear] Removed additional key from localStorage: ${storageKey}`);
             if (electronAPI && electronAPI.deleteStorage) {
               await electronAPI.deleteStorage(storageKey);
             }
           } catch (error: any) {
-            console.warn(`[Clear] Error removing additional key ${storageKey}:`, error);
+            // Ignore errors
           }
         }
       } catch (error: any) {
-        console.warn('[Clear] Error scanning localStorage for additional keys:', error);
+        // Ignore scanning errors
       }
 
       if (errors.length > 0) {
         setClearMessage(`⚠ Cleared ${cleared} items, but ${errors.length} errors occurred`);
-        console.error('Clear errors:', errors);
       } else {
         setClearMessage(`✓ Successfully cleared ${cleared} data items`);
       }
 
       // Force clear localStorage for selected keys (double-check)
-      console.log('[Clear] Double-checking storage after clear...');
       for (const key of keys) {
         try {
           // Double-check menggunakan storageService untuk konsistensi
           const stillExists = await storageService.get<any[]>(key);
           if (stillExists && Array.isArray(stillExists) && stillExists.length > 0) {
-            console.warn(`[Clear] ⚠️ Key still exists after clear: ${key}, forcing removal...`);
             // Force clear dengan set empty array
             await storageService.set(key, []);
             // Juga clear dari localStorage langsung untuk memastikan
@@ -621,7 +692,6 @@ const DBActivity = () => {
         loadData();
       }, 500);
     } catch (error: any) {
-      console.error('Clear error:', error);
       setClearMessage(`✗ Error: ${error.message || 'Failed to clear data'}`);
     } finally {
       setClearLoading(false);

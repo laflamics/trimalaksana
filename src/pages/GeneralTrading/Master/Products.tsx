@@ -4,6 +4,7 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
 import { useDialog } from '../../../hooks/useDialog';
 import * as XLSX from 'xlsx';
 import '../../../styles/common.css';
@@ -29,6 +30,7 @@ interface Product {
   hargaFg?: number; // Harga jual (alias untuk hargaSales)
   parentProductId?: string; // ID product parent (untuk product turunan)
   isTurunan?: boolean; // Flag apakah ini product turunan
+  imageKey?: string; // Key untuk image di GT_productimage storage
 }
 
 interface Customer {
@@ -55,6 +57,9 @@ const Products = () => {
   const [stockMinimumInputValue, setStockMinimumInputValue] = useState('');
   const [hargaBeliInputValue, setHargaBeliInputValue] = useState('');
   const [hargaJualInputValue, setHargaJualInputValue] = useState('');
+  // Structure: Record<productId, { image: string, deleted?: boolean, deletedAt?: string, deletedTimestamp?: number }>
+  const [productImages, setProductImages] = useState<Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }>>({});
+  const [uploadingImage, setUploadingImage] = useState<string | null>(null); // productId yang sedang upload
   
   // Format date function - format: dd/mm/yyyy hh:mm:ss
   const formatDateTime = (dateString: string | undefined) => {
@@ -88,9 +93,40 @@ const Products = () => {
     hargaFg: 0, // Alias untuk hargaSales (backward compatibility)
   });
 
+  // Helper to get image data (handle both old format string and new format object)
+  const getImageData = (imageEntry: string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number } | undefined): string | null => {
+    if (!imageEntry) return null;
+    if (typeof imageEntry === 'string') return imageEntry; // Old format (backward compatibility)
+    if (imageEntry.deleted) return null; // Tombstone - image deleted
+    return imageEntry.image || null;
+  };
+
+  // Helper to check if image is deleted
+  const isImageDeleted = (imageEntry: string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number } | undefined): boolean => {
+    if (!imageEntry) return false;
+    if (typeof imageEntry === 'string') return false; // Old format - not deleted
+    return imageEntry.deleted === true;
+  };
+
   const loadProducts = useCallback(async () => {
     const data = await storageService.get<Product[]>('gt_products') || [];
-    setProducts(data.map((p, idx) => ({ ...p, no: idx + 1 })));
+    // Filter out deleted items menggunakan helper function
+    const activeProducts = filterActiveItems(data);
+    setProducts(activeProducts.map((p, idx) => ({ ...p, no: idx + 1 })));
+    
+    // Load product images (support both old format string and new format object with tombstone)
+    const imagesDataRaw = await storageService.get<Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }>>('GT_productimage') || {};
+    
+    // Filter out deleted images (tombstone) for display
+    const activeImages: Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }> = {};
+    Object.keys(imagesDataRaw).forEach(productId => {
+      const imageEntry = imagesDataRaw[productId];
+      if (!isImageDeleted(imageEntry)) {
+        activeImages[productId] = imageEntry;
+      }
+    });
+    
+    setProductImages(activeImages);
   }, []);
 
   const loadCustomers = useCallback(async () => {
@@ -114,7 +150,7 @@ const Products = () => {
       const changedKey = customEvent.detail?.key || '';
       const normalizedKey = changedKey.split('/').pop();
 
-      if (normalizedKey === 'gt_products') {
+      if (normalizedKey === 'gt_products' || normalizedKey === 'GT_productimage') {
         // Debounce: hanya reload setelah 100ms tanpa event baru
         if (timeoutId) {
           clearTimeout(timeoutId);
@@ -209,7 +245,10 @@ const Products = () => {
   // Filter products based on search query
   // Ensure products is always an array
   const productsArray = Array.isArray(products) ? products : [];
-  const filteredProducts = productsArray
+  // Filter out deleted items menggunakan helper function
+  const activeProducts = filterActiveItems(productsArray);
+  
+  const filteredProducts = activeProducts
     .filter(product => {
       if (!searchQuery) return true;
       const query = searchQuery.toLowerCase();
@@ -435,7 +474,8 @@ const Products = () => {
 
   const handleDelete = async (item: Product) => {
     // Cek apakah ada product turunan yang menggunakan product ini sebagai parent
-    const turunanProducts = products.filter(p => p.parentProductId === item.id);
+    const activeProducts = filterActiveItems(products);
+    const turunanProducts = activeProducts.filter(p => p.parentProductId === item.id);
     if (turunanProducts.length > 0) {
       showAlert(`Cannot delete product "${item.nama}" because it has ${turunanProducts.length} turunan product(s). Please delete the turunan products first.`, 'Error');
       return;
@@ -445,10 +485,18 @@ const Products = () => {
       `Are you sure you want to delete product "${item.nama}"? This action cannot be undone.`,
       async () => {
         try {
-          const updated = products.filter(p => p.id !== item.id);
-          await storageService.set('gt_products', updated);
-          setProducts(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
-          showAlert(`Product "${item.nama}" deleted successfully`, 'Success');
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('gt_products', item.id, 'id');
+          
+          if (success) {
+            // Reload data dengan filter active items
+            const updatedProducts = await storageService.get<Product[]>('gt_products') || [];
+            const activeProducts = filterActiveItems(updatedProducts);
+            setProducts(activeProducts.map((p, idx) => ({ ...p, no: idx + 1 })));
+            showAlert(`Product "${item.nama}" deleted successfully`, 'Success');
+          } else {
+            showAlert(`Error deleting product. Silakan coba lagi.`, 'Error');
+          }
         } catch (error: any) {
           showAlert(`Error deleting product: ${error.message}`, 'Error');
         }
@@ -699,6 +747,254 @@ const Products = () => {
   };
 
 
+  // Show image in full size modal
+  const showImageModal = (imageData: string, productName: string, productId: string) => {
+    const modal = document.createElement('div');
+    modal.style.position = 'fixed';
+    modal.style.top = '0';
+    modal.style.left = '0';
+    modal.style.right = '0';
+    modal.style.bottom = '0';
+    modal.style.backgroundColor = 'rgba(0,0,0,0.9)';
+    modal.style.display = 'flex';
+    modal.style.alignItems = 'center';
+    modal.style.justifyContent = 'center';
+    modal.style.zIndex = '10000';
+    modal.style.cursor = 'pointer';
+    modal.style.transition = 'opacity 0.3s ease';
+    
+    const container = document.createElement('div');
+    container.style.position = 'relative';
+    container.style.maxWidth = '95vw';
+    container.style.maxHeight = '95vh';
+    container.style.display = 'flex';
+    container.style.alignItems = 'center';
+    container.style.justifyContent = 'center';
+    container.style.cursor = 'default';
+    container.onclick = (e) => e.stopPropagation();
+    
+    const img = document.createElement('img');
+    img.src = imageData;
+    img.style.maxWidth = '100%';
+    img.style.maxHeight = '95vh';
+    img.style.objectFit = 'contain';
+    img.style.borderRadius = '8px';
+    img.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5)';
+    
+    const removeModal = () => {
+      modal.style.opacity = '0';
+      setTimeout(() => {
+        if (document.body.contains(modal)) {
+          document.body.removeChild(modal);
+        }
+      }, 300);
+    };
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '✕';
+    closeBtn.style.position = 'absolute';
+    closeBtn.style.top = '-40px';
+    closeBtn.style.right = '50px';
+    closeBtn.style.width = '36px';
+    closeBtn.style.height = '36px';
+    closeBtn.style.borderRadius = '50%';
+    closeBtn.style.backgroundColor = 'rgba(255,255,255,0.2)';
+    closeBtn.style.color = 'white';
+    closeBtn.style.border = '2px solid rgba(255,255,255,0.3)';
+    closeBtn.style.cursor = 'pointer';
+    closeBtn.style.fontSize = '20px';
+    closeBtn.style.display = 'flex';
+    closeBtn.style.alignItems = 'center';
+    closeBtn.style.justifyContent = 'center';
+    closeBtn.style.transition = 'all 0.2s ease';
+    closeBtn.onmouseenter = () => {
+      closeBtn.style.backgroundColor = 'rgba(255,255,255,0.3)';
+      closeBtn.style.transform = 'scale(1.1)';
+    };
+    closeBtn.onmouseleave = () => {
+      closeBtn.style.backgroundColor = 'rgba(255,255,255,0.2)';
+      closeBtn.style.transform = 'scale(1)';
+    };
+    closeBtn.onclick = (e) => {
+      e.stopPropagation();
+      removeModal();
+    };
+    
+    const deleteBtn = document.createElement('button');
+    deleteBtn.innerHTML = '🗑️';
+    deleteBtn.style.position = 'absolute';
+    deleteBtn.style.top = '-40px';
+    deleteBtn.style.right = '0';
+    deleteBtn.style.width = '36px';
+    deleteBtn.style.height = '36px';
+    deleteBtn.style.borderRadius = '50%';
+    deleteBtn.style.backgroundColor = 'rgba(244,67,54,0.8)';
+    deleteBtn.style.color = 'white';
+    deleteBtn.style.border = '2px solid rgba(255,255,255,0.3)';
+    deleteBtn.style.cursor = 'pointer';
+    deleteBtn.style.fontSize = '16px';
+    deleteBtn.style.display = 'flex';
+    deleteBtn.style.alignItems = 'center';
+    deleteBtn.style.justifyContent = 'center';
+    deleteBtn.style.transition = 'all 0.2s ease';
+    deleteBtn.title = 'Hapus foto';
+    deleteBtn.onmouseenter = () => {
+      deleteBtn.style.backgroundColor = 'rgba(244,67,54,1)';
+      deleteBtn.style.transform = 'scale(1.1)';
+    };
+    deleteBtn.onmouseleave = () => {
+      deleteBtn.style.backgroundColor = 'rgba(244,67,54,0.8)';
+      deleteBtn.style.transform = 'scale(1)';
+    };
+    deleteBtn.onclick = (e) => {
+      e.stopPropagation();
+      removeModal();
+      handleImageDelete(productId);
+    };
+    
+    const title = document.createElement('div');
+    title.textContent = productName;
+    title.style.position = 'absolute';
+    title.style.top = '-40px';
+    title.style.left = '0';
+    title.style.color = 'white';
+    title.style.fontSize = '16px';
+    title.style.fontWeight = '500';
+    title.style.maxWidth = 'calc(100% - 100px)';
+    title.style.overflow = 'hidden';
+    title.style.textOverflow = 'ellipsis';
+    title.style.whiteSpace = 'nowrap';
+    
+    modal.onclick = removeModal;
+    
+    // Close on ESC key
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        removeModal();
+        document.removeEventListener('keydown', handleEsc);
+      }
+    };
+    document.addEventListener('keydown', handleEsc);
+    
+    container.appendChild(img);
+    container.appendChild(closeBtn);
+    container.appendChild(deleteBtn);
+    container.appendChild(title);
+    modal.appendChild(container);
+    document.body.appendChild(modal);
+    
+    // Animate in
+    setTimeout(() => {
+      modal.style.opacity = '1';
+    }, 10);
+  };
+
+  // Handle image upload
+  const handleImageUpload = async (productId: string, file: File) => {
+    if (!file.type.startsWith('image/')) {
+      showAlert('File harus berupa gambar (JPG, PNG, dll)', 'Error');
+      return;
+    }
+    
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      showAlert('Ukuran file maksimal 5MB', 'Error');
+      return;
+    }
+    
+    setUploadingImage(productId);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = e.target?.result as string;
+        
+        // Load existing images
+        const existingImages = await storageService.get<Record<string, string>>('GT_productimage') || {};
+        
+        // Update with new image
+        const updatedImages = {
+          ...existingImages,
+          [productId]: base64
+        };
+        
+        // Save to storage
+        await storageService.set('GT_productimage', updatedImages);
+        setProductImages(updatedImages);
+        setUploadingImage(null);
+        showAlert('Foto berhasil diupload', 'Success');
+      };
+      reader.onerror = () => {
+        setUploadingImage(null);
+        showAlert('Error membaca file', 'Error');
+      };
+      reader.readAsDataURL(file);
+    } catch (error: any) {
+      setUploadingImage(null);
+      showAlert(`Error uploading image: ${error.message}`, 'Error');
+    }
+  };
+
+  // Handle image delete
+  const handleImageDelete = async (productId: string) => {
+    showConfirm(
+      'Hapus foto product ini?',
+      async () => {
+        try {
+          // Load existing images (support both old and new format)
+          const existingImagesRaw = await storageService.get<Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }>>('GT_productimage') || {};
+          
+          // Convert to new format and mark as deleted (tombstone pattern)
+          const updatedImages: Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }> = {};
+          Object.keys(existingImagesRaw).forEach(key => {
+            const entry = existingImagesRaw[key];
+            if (key === productId) {
+              // Mark as deleted (tombstone pattern)
+              if (typeof entry === 'string') {
+                // Old format - convert to new format with tombstone
+                updatedImages[key] = {
+                  image: entry,
+                  deleted: true,
+                  deletedAt: new Date().toISOString(),
+                  deletedTimestamp: Date.now()
+                };
+              } else {
+                // New format - update with tombstone
+                updatedImages[key] = {
+                  ...entry,
+                  deleted: true,
+                  deletedAt: new Date().toISOString(),
+                  deletedTimestamp: Date.now()
+                };
+              }
+            } else {
+              // Keep other images as is
+              updatedImages[key] = entry;
+            }
+          });
+          
+          // Save tombstone to storage (sync ke server)
+          await storageService.set('GT_productimage', updatedImages);
+          
+          // Reload images (filter out deleted/tombstone)
+          const reloadedImagesRaw = await storageService.get<Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }>>('GT_productimage') || {};
+          const activeImages: Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }> = {};
+          Object.keys(reloadedImagesRaw).forEach(key => {
+            const entry = reloadedImagesRaw[key];
+            if (!isImageDeleted(entry)) {
+              activeImages[key] = entry;
+            }
+          });
+          setProductImages(activeImages);
+          
+          showAlert('Foto berhasil dihapus', 'Success');
+        } catch (error: any) {
+          showAlert(`Error deleting image: ${error.message}`, 'Error');
+        }
+      },
+      undefined,
+      'Konfirmasi Hapus Foto'
+    );
+  };
+
   const columns = [
     { 
       key: 'no', 
@@ -706,6 +1002,99 @@ const Products = () => {
       render: (item: Product) => {
         const index = paginatedProducts.findIndex(p => p.id === item.id);
         return index >= 0 ? startIndex + index + 1 : '';
+      },
+    },
+    {
+      key: 'image',
+      header: 'Foto',
+      render: (item: Product) => {
+        const imageEntry = productImages[item.id];
+        const imageData = getImageData(imageEntry);
+        const isUploading = uploadingImage === item.id;
+        
+        if (isUploading) {
+          return (
+            <div style={{
+              width: '50px',
+              height: '50px',
+              backgroundColor: 'var(--bg-secondary)',
+              borderRadius: '4px',
+              border: '1px dashed var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--text-secondary)',
+              fontSize: '10px'
+            }}>
+              Uploading...
+            </div>
+          );
+        }
+        
+        if (imageData) {
+          return (
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <img 
+                src={imageData} 
+                alt={item.nama}
+                style={{
+                  width: '50px',
+                  height: '50px',
+                  objectFit: 'cover',
+                  borderRadius: '4px',
+                  border: '1px solid var(--border)',
+                  cursor: 'pointer'
+                }}
+                onClick={() => showImageModal(imageData, item.nama, item.id)}
+              />
+            </div>
+          );
+        }
+        return (
+          <label style={{
+            width: '50px',
+            height: '50px',
+            backgroundColor: 'var(--bg-secondary)',
+            borderRadius: '4px',
+            border: '1px dashed var(--border)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-secondary)',
+            fontSize: '9px',
+            textAlign: 'center',
+            padding: '4px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = 'var(--primary)';
+            e.currentTarget.style.color = 'white';
+            e.currentTarget.style.borderColor = 'var(--primary)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'var(--bg-secondary)';
+            e.currentTarget.style.color = 'var(--text-secondary)';
+            e.currentTarget.style.borderColor = 'var(--border)';
+          }}
+          >
+            📷
+            <span style={{ fontSize: '8px', marginTop: '2px' }}>Upload</span>
+            <input
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  handleImageUpload(item.id, file);
+                }
+                e.target.value = ''; // Reset input
+              }}
+            />
+          </label>
+        );
       },
     },
     { key: 'kode', header: 'Kode (SKU/ID)' },

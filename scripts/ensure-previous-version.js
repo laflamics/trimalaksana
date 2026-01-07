@@ -11,7 +11,12 @@ const PACKAGE_JSON = path.join(__dirname, '..', 'package.json');
 
 // Read current version
 const packageJson = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8'));
-const currentVersion = packageJson.version;
+let currentVersion = packageJson.version;
+
+// Extract base version if it includes build number (format: 1.0.6-build.14)
+if (currentVersion.includes('-build.')) {
+  currentVersion = currentVersion.split('-build.')[0];
+}
 
 console.log(`📦 Current version: ${currentVersion}`);
 

@@ -6,6 +6,7 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
 import { loadGTDataFromLocalStorage } from '../../../utils/gtStorageHelper';
+import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -110,13 +111,15 @@ const CostAnalysis = () => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [prods] = await Promise.all([
+      const [prodsRaw] = await Promise.all([
         loadGTDataFromLocalStorage<Product>(
           'gt_products',
           async () => await storageService.get<Product[]>('gt_products') || []
         ),
       ]);
-      setProducts(prods || []);
+      // Filter out deleted items menggunakan helper function
+      const activeProducts = filterActiveItems(prodsRaw || []);
+      setProducts(activeProducts);
     } finally {
       setIsLoading(false);
     }

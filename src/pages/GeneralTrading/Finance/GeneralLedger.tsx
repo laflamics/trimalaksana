@@ -6,6 +6,7 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
 import { loadGTDataFromLocalStorage } from '../../../utils/gtStorageHelper';
+import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -125,7 +126,9 @@ const GeneralLedger = () => {
     
     // Ensure data is always an array
     const dataArray = Array.isArray(data) ? data : [];
-    setEntries(dataArray.map((e, idx) => ({ ...e, no: idx + 1 })));
+    // Filter out deleted items menggunakan helper function
+    const activeEntries = filterActiveItems(dataArray);
+    setEntries(activeEntries.map((e, idx) => ({ ...e, no: idx + 1 })));
   };
 
   // Generate journal entries dari transaksi yang sudah ada
@@ -343,10 +346,13 @@ const GeneralLedger = () => {
 
   const loadAccounts = async () => {
     // Load langsung dari localStorage (sama seperti DB Activity) untuk memastikan data terbaru
-    let data = await loadGTDataFromLocalStorage<Account>(
+    let dataRaw = await loadGTDataFromLocalStorage<Account>(
       'gt_accounts',
       async () => await storageService.get<Account[]>('gt_accounts') || []
     );
+    
+    // Filter out deleted items menggunakan helper function
+    const data = filterActiveItems(dataRaw || []);
     
     if (!data || data.length === 0) {
       const defaultAccounts: Account[] = [

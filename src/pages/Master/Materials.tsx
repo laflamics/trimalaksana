@@ -4,6 +4,7 @@ import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import { storageService } from '../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
 import * as XLSX from 'xlsx';
 import '../../styles/common.css';
 import './Master.css';
@@ -135,7 +136,9 @@ const Materials = () => {
   }, []);
 
   const loadMaterials = async () => {
-    const data = await storageService.get<Material[]>('materials') || [];
+    const dataRaw = await storageService.get<Material[]>('materials') || [];
+    // Filter out deleted items menggunakan helper function
+    const data = filterActiveItems(dataRaw);
     setMaterials(data.map((m, idx) => ({ ...m, no: idx + 1 })));
   };
 
@@ -253,9 +256,18 @@ const Materials = () => {
       `Are you sure you want to delete material "${item.nama}"? This action cannot be undone.`,
       async () => {
         try {
-          const updated = materials.filter(m => m.id !== item.id);
-          await storageService.set('materials', updated);
-          setMaterials(updated.map((m, idx) => ({ ...m, no: idx + 1 })));
+          // Pakai helper function untuk safe delete (tombstone pattern)
+          const success = await safeDeleteItem('materials', item.id, 'id');
+          
+          if (success) {
+            // Reload data dengan filter active items
+            const dataRaw = await storageService.get<Material[]>('materials') || [];
+            const data = filterActiveItems(dataRaw);
+            setMaterials(data.map((m, idx) => ({ ...m, no: idx + 1 })));
+            showAlert(`Material "${item.nama}" deleted successfully`, 'Success');
+          } else {
+            showAlert(`Error deleting material. Silakan coba lagi.`, 'Error');
+          }
         } catch (error: any) {
           showAlert(`Error deleting material: ${error.message}`, 'Error');
         }

@@ -15,7 +15,16 @@ const buildNumber = getBuildNumber();
 // Format dengan 4 bagian (1.0.6.4) tidak valid untuk semver
 // Gunakan prerelease format: 1.0.6-build.4 atau build metadata: 1.0.6+4
 // Untuk generic provider, gunakan prerelease format: 1.0.6-build.4
-const versionWithBuild = `${version}-build.${buildNumber}`;
+// Note: package.json.version sudah di-update dengan build number di update-build-version.js
+// Jadi kita bisa langsung pakai version dari package.json, atau extract base version
+let versionWithBuild;
+if (version.includes('-build.')) {
+  // Version sudah include build number, pakai langsung
+  versionWithBuild = version;
+} else {
+  // Version belum include build number, tambahkan
+  versionWithBuild = `${version}-build.${buildNumber}`;
+}
 
 // Find the AppImage file
 const files = fs.readdirSync(RELEASE_DIR);

@@ -5,6 +5,7 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService, extractStorageValue } from '../../../services/storage';
+import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 import './Inventory.css';
@@ -34,7 +35,11 @@ interface InventoryItem {
 const Inventory = () => {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  // Structure: Record<productId, string | { image: string, deleted?: boolean, deletedAt?: string, deletedTimestamp?: number }>
+  const [productImages, setProductImages] = useState<Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }>>({});
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
   const [loading, setLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
   const [error, setError] = useState<string>('');
@@ -47,11 +52,42 @@ const Inventory = () => {
     loadInventory();
     loadProducts();
   }, []);
+
+  // Helper to get image data (handle both old format string and new format object)
+  const getImageData = (imageEntry: string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number } | undefined): string | null => {
+    if (!imageEntry) return null;
+    if (typeof imageEntry === 'string') return imageEntry; // Old format (backward compatibility)
+    if (imageEntry.deleted) return null; // Tombstone - image deleted
+    return imageEntry.image || null;
+  };
+
+  // Helper to check if image is deleted
+  const isImageDeleted = (imageEntry: string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number } | undefined): boolean => {
+    if (!imageEntry) return false;
+    if (typeof imageEntry === 'string') return false; // Old format - not deleted
+    return imageEntry.deleted === true;
+  };
   
   const loadProducts = async () => {
     try {
-      const data = extractStorageValue(await storageService.get<any[]>('gt_products')) || [];
-      setProducts(data);
+      const dataRaw = extractStorageValue(await storageService.get<any[]>('gt_products')) || [];
+      // Filter out deleted items menggunakan helper function
+      const activeProducts = filterActiveItems(dataRaw);
+      setProducts(activeProducts);
+      
+      // Load product images (support both old format string and new format object with tombstone)
+      const imagesDataRaw = await storageService.get<Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }>>('GT_productimage') || {};
+      
+      // Filter out deleted images (tombstone) for display
+      const activeImages: Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }> = {};
+      Object.keys(imagesDataRaw).forEach(productId => {
+        const imageEntry = imagesDataRaw[productId];
+        if (!isImageDeleted(imageEntry)) {
+          activeImages[productId] = imageEntry;
+        }
+      });
+      
+      setProductImages(activeImages);
     } catch (error) {
       console.error('Error loading products:', error);
     }
@@ -123,22 +159,25 @@ const Inventory = () => {
       if (data.length === 0) {
         console.log('[Inventory] localStorage empty, trying storageService...');
         const rawData = await storageService.get<InventoryItem[]>('gt_inventory');
-        data = extractStorageValue(rawData);
+        data = extractStorageValue(rawData) || [];
         console.log(`[Inventory] Loaded from storageService: ${data.length} items`);
       }
       
+      // Filter out deleted items menggunakan helper function
+      const activeData = filterActiveItems(data);
+      
       // Debug logging
-      console.log('[Inventory] Final data count:', data.length);
+      console.log('[Inventory] Final data count:', activeData.length, `(filtered from ${data.length} total)`);
       
       // If empty, just set empty array
-      if (data.length === 0) {
+      if (activeData.length === 0) {
         console.warn('[Inventory] No inventory data found. Make sure to run seed script: node scripts/seedgt.js');
         setInventory([]);
         return;
       }
       
       // Calculate nextStock for each item (premonth + received - outgoing)
-      const calculatedData = data.map(item => {
+      const calculatedData = activeData.map(item => {
         const stockPremonth = item.stockPremonth || 0;
         const receiveQty = item.receive || 0;
         const outgoingQty = item.outgoing || 0;
@@ -184,6 +223,17 @@ const Inventory = () => {
       return codeItem.includes(query) || description.includes(query) || supplierName.includes(query);
     });
   }, [inventory, searchQuery]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredInventory.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedInventory = filteredInventory.slice(startIndex, endIndex);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
 
   // Handle Manual Reset
   const handleResetData = async () => {
@@ -976,8 +1026,78 @@ const Inventory = () => {
       key: 'supplierName', 
       header: 'Supplier Name',
     },
-    { 
-      key: 'codeItem', 
+    {
+      key: 'image',
+      header: 'Foto',
+      render: (item: InventoryItem) => {
+        // Find product by codeItem to get productId
+        const product = products.find((p: any) => {
+          const pCode = (p.product_id || p.kode || '').toString().trim();
+          return pCode === (item.codeItem || '').toString().trim();
+        });
+        
+        if (!product) {
+          return (
+            <div style={{
+              width: '50px',
+              height: '50px',
+              backgroundColor: 'var(--bg-secondary)',
+              borderRadius: '4px',
+              border: '1px dashed var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--text-secondary)',
+              fontSize: '10px',
+              textAlign: 'center',
+              padding: '4px'
+            }}>
+              No Image
+            </div>
+          );
+        }
+        
+        const imageEntry = productImages[product.id];
+        const imageData = getImageData(imageEntry);
+        if (imageData) {
+          return (
+            <img 
+              src={imageData} 
+              alt={item.description}
+              style={{
+                width: '50px',
+                height: '50px',
+                objectFit: 'cover',
+                borderRadius: '4px',
+                border: '1px solid var(--border)',
+                cursor: 'pointer'
+              }}
+              onClick={() => showImageModal(imageData, item.description || item.codeItem || 'Product Image')}
+            />
+          );
+        }
+        return (
+          <div style={{
+            width: '50px',
+            height: '50px',
+            backgroundColor: 'var(--bg-secondary)',
+            borderRadius: '4px',
+            border: '1px dashed var(--border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-secondary)',
+            fontSize: '10px',
+            textAlign: 'center',
+            padding: '4px'
+          }}>
+            No Image
+          </div>
+        );
+      },
+    },
+    {
+      key: 'codeItem',
       header: 'CODE item',
       render: (item: InventoryItem) => (
         <span 
@@ -1352,11 +1472,85 @@ const Inventory = () => {
             {error ? 'Tidak ada data yang bisa ditampilkan karena terjadi error.' : searchQuery ? 'No items found matching your search.' : 'No inventory data. Click "Import Stock Opname" to import from Excel.'}
             </div>
         ) : (
-          <Table
-            columns={columns}
-            data={filteredInventory}
-            emptyMessage="No inventory data available"
-          />
+          <>
+            <Table
+              columns={columns}
+              data={paginatedInventory}
+              emptyMessage="No inventory data available"
+            />
+            
+            {/* Pagination Controls */}
+            {(totalPages > 1 || filteredInventory.length > 0) && (
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                gap: '8px', 
+                marginTop: '20px',
+                padding: '16px',
+                borderTop: '1px solid var(--border)'
+              }}>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+                  Showing {startIndex + 1}-{Math.min(endIndex, filteredInventory.length)} of {filteredInventory.length} items
+                  {searchQuery && ` (filtered from ${inventory.length} total)`}
+                </div>
+                {totalPages > 1 && (
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'center', 
+                  alignItems: 'center', 
+                  gap: '8px'
+              }}>
+                <Button 
+                  variant="secondary" 
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <div style={{ 
+                  display: 'flex', 
+                  gap: '4px',
+                  alignItems: 'center'
+                }}>
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? 'primary' : 'secondary'}
+                        onClick={() => setCurrentPage(pageNum)}
+                        style={{ minWidth: '40px', padding: '6px 12px' }}
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <Button 
+                  variant="secondary" 
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </Button>
+                <div style={{ marginLeft: '16px', color: 'var(--text-secondary)', fontSize: '14px' }}>
+                  Page {currentPage} of {totalPages}
+                </div>
+            </div>
+          )}
+              </div>
+            )}
+          </>
         )}
         
         {/* Inventory Detail Dialog */}

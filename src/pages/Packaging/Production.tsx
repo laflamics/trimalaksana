@@ -63,6 +63,7 @@ interface InventoryItem {
   return: number;
   nextStock: number;
   lastUpdate?: string;
+  sitePlan?: string; // Site Plan 1 or Site Plan 2
   // Tracking untuk anti-duplicate
   processedPOs?: string[]; // PO numbers yang sudah diproses (untuk material: RECEIVE dari GRN)
   processedSPKs?: string[]; // SPK numbers yang sudah diproses (untuk product: RECEIVE dari QC PASS dan OUTGOING dari Delivery)
@@ -2103,6 +2104,8 @@ const Production = () => {
                   newReceive -
                   oldOutgoing +
                   oldReturn;
+                // Get sitePlan from item (passed from handleSaveProductionResult)
+                existingProductInventory.sitePlan = (item as any).sitePlan || 'Site Plan 1';
                 existingProductInventory.lastUpdate = new Date().toISOString();
                 
                 console.log(`✅ [Production Inventory] Product inventory updated (RECEIVE from Production):`);
@@ -2716,6 +2719,30 @@ const Production = () => {
       return `${day}/${month}/${year}`;
     } catch {
       return '-';
+    }
+  };
+
+  // Format date function untuk Created column (sama seperti di SO)
+  const formatDateSimpleWithTime = (dateString: string | undefined) => {
+    if (!dateString) return { date: '-', time: '', full: '-' };
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return { date: '-', time: '', full: '-' };
+      
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      
+      return {
+        date: `${day}/${month}/${year}`,
+        time: `${hours}:${minutes}:${seconds}`,
+        full: `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`
+      };
+    } catch {
+      return { date: '-', time: '', full: '-' };
     }
   };
 
@@ -3349,6 +3376,20 @@ const Production = () => {
           {item.scheduleEndDate && item.scheduleEndDate !== '-' ? formatDateSimple(item.scheduleEndDate) : '-'}
         </span>
       ),
+    },
+    { 
+      key: 'created', 
+      header: 'Created',
+      render: (item: any) => {
+        const createdDate = item.created || item.date || '';
+        const { date, time } = formatDateSimpleWithTime(createdDate);
+        return (
+          <div style={{ fontSize: '12px' }}>
+            <div style={{ fontWeight: '500' }}>{date}</div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>{time}</div>
+          </div>
+        );
+      },
     },
   ];
 
@@ -4165,6 +4206,7 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
   const [availableMaterials, setAvailableMaterials] = useState<any[]>([]);
   const [resultFiles, setResultFiles] = useState<File[]>([]);
   const [isPartial, setIsPartial] = useState<boolean>(true);
+  const [sitePlan, setSitePlan] = useState<string>('Site Plan 1');
   const [loading, setLoading] = useState<boolean>(false);
 
   // Custom Dialog state untuk component ini
@@ -4935,6 +4977,7 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
       qtyProduced: String(qtyProducedNum),
       qtySurplus: String(parseFloat(qtySurplus || '0') || 0),
       qtySurplusUnit: qtySurplusUnit.trim() || 'pcs',
+      sitePlan: sitePlan || 'Site Plan 1',
       materials: materialsUsed.map((m: any) => ({
         materialId: m.materialId,
         materialName: m.materialName,
@@ -4995,6 +5038,28 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
               <div><strong>Product:</strong> {production.product || '-'}</div>
               <div><strong>Target:</strong> {production.target || 0} PCS</div>
             </div>
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+              Site Plan *
+            </label>
+            <select
+              value={sitePlan}
+              onChange={(e) => setSitePlan(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            >
+              <option value="Site Plan 1">Site Plan 1</option>
+              <option value="Site Plan 2">Site Plan 2</option>
+            </select>
           </div>
 
           <div style={{ marginBottom: '16px' }}>

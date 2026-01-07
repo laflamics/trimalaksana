@@ -640,7 +640,8 @@ const PPIC = () => {
   const loadData = async () => {
     // OPTIMIZATION: Load from localStorage FIRST (instant, non-blocking)
     // Then sync from server in background if needed
-    let spk = loadFromLocalStorage('spk');
+    const spkRaw = loadFromLocalStorage('spk');
+    let spk = filterActiveItems(spkRaw); // Filter deleted SPK items (tombstone pattern)
     const ptpRaw = loadFromLocalStorage('ptp');
     const ptp = filterActiveItems(ptpRaw); // Filter deleted PTP items
     let schedule = loadFromLocalStorage('schedule');
@@ -3504,6 +3505,30 @@ const PPIC = () => {
     );
   };
 
+  // Format date function untuk Created column (sama seperti di SO)
+  const formatDateSimple = (dateString: string | undefined) => {
+    if (!dateString) return { date: '-', time: '', full: '-' };
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return { date: '-', time: '', full: '-' };
+      
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      
+      return {
+        date: `${day}/${month}/${year}`,
+        time: `${hours}:${minutes}:${seconds}`,
+        full: `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`
+      };
+    } catch {
+      return { date: '-', time: '', full: '-' };
+    }
+  };
+
   // Table columns untuk SPK (simplified table view)
   // Flatten SPK data untuk table view (Excel-like) - setiap SPK jadi row terpisah
   const flattenedSpkData = useMemo(() => {
@@ -3692,6 +3717,20 @@ const PPIC = () => {
           <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
             {`${day}/${month}/${year}`}
           </span>
+        );
+      },
+    },
+    { 
+      key: 'created', 
+      header: 'Created',
+      render: (item: any) => {
+        const createdDate = item.created || item._spk?.created || '';
+        const { date, time } = formatDateSimple(createdDate);
+        return (
+          <div style={{ fontSize: '12px' }}>
+            <div style={{ fontWeight: '500' }}>{date}</div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>{time}</div>
+          </div>
         );
       },
     },
@@ -6351,16 +6390,14 @@ const PPIC = () => {
         `Hapus SPK ${spkNo}?\n\nTindakan ini akan:\n• Menghapus SPK dari daftar\n• Menghapus schedule & notifikasi terkait\n• Melepas alokasi stok material (jika ada)\n\nPastikan tidak ada proses lanjutan untuk SPK ini.`,
         async () => {
           try {
-            const [spkList, scheduleList, inventoryData, productionNotifications, deliveryNotifications] =
+            const [scheduleList, inventoryData, productionNotifications, deliveryNotifications] =
               await Promise.all([
-                storageService.get<any[]>('spk'),
                 storageService.get<any[]>('schedule'),
                 storageService.get<any[]>('inventory'),
                 storageService.get<any[]>('productionNotifications'),
                 storageService.get<any[]>('deliveryNotifications'),
               ]);
 
-            const spkListSafe = extractStorageValue(spkList);
             const scheduleListSafe = extractStorageValue(scheduleList);
             const inventorySafe = extractStorageValue(inventoryData);
             const productionNotifSafe = extractStorageValue(productionNotifications);
@@ -6404,28 +6441,39 @@ const PPIC = () => {
               }
             }
 
-            // Remove SPK record
-            const updatedSPK = spkListSafe.filter((item: any) => item.id !== spk.id && item.spkNo !== spkNo);
-            await storageService.set('spk', updatedSPK);
-            setSpkData(updatedSPK);
+            // Remove SPK record using tombstone pattern (soft delete)
+            // IMPORTANT: Use safeDeleteItem to prevent data resurrection from sync
+            const success = await safeDeleteItem('spk', spk.id, 'id');
+            if (!success) {
+              showAlert('Gagal menghapus SPK. Silakan coba lagi.', 'Error');
+              return;
+            }
+            
+            // Reload SPK data dengan filter active items (after tombstone deletion)
+            const spkListAfterDelete = await storageService.get<any[]>('spk') || [];
+            const activeSPKs = filterActiveItems(spkListAfterDelete);
+            setSpkData(activeSPKs);
             setPendingSPKs(prev => prev.filter((pending: any) => pending.spkNo !== spkNo));
 
-            // Remove schedule
-            const updatedSchedule = scheduleListSafe.filter((schedule: any) => schedule.spkNo !== spkNo);
-            if (updatedSchedule.length !== scheduleListSafe.length) {
-              await storageService.set('schedule', updatedSchedule);
-              setScheduleData(updatedSchedule);
+            // Remove schedule using tombstone pattern (soft delete)
+            const scheduleToDelete = scheduleListSafe.find((schedule: any) => schedule.spkNo === spkNo);
+            if (scheduleToDelete) {
+              await safeDeleteItem('schedule', scheduleToDelete.id, 'id');
+              // Reload schedule data dengan filter active items
+              const scheduleListAfterDelete = await storageService.get<any[]>('schedule') || [];
+              const activeSchedules = filterActiveItems(scheduleListAfterDelete);
+              setScheduleData(activeSchedules);
             }
 
-            // Remove notifications
-            const updatedProductionNotif = productionNotifSafe.filter((notif: any) => notif.spkNo !== spkNo);
-            if (updatedProductionNotif.length !== productionNotifSafe.length) {
-              await storageService.set('productionNotifications', updatedProductionNotif);
+            // Remove notifications using tombstone pattern (soft delete)
+            const productionNotifToDelete = productionNotifSafe.filter((notif: any) => notif.spkNo === spkNo);
+            for (const notif of productionNotifToDelete) {
+              await safeDeleteItem('productionNotifications', notif.id, 'id');
             }
 
-            const updatedDeliveryNotif = deliveryNotifSafe.filter((notif: any) => notif.spkNo !== spkNo);
-            if (updatedDeliveryNotif.length !== deliveryNotifSafe.length) {
-              await storageService.set('deliveryNotifications', updatedDeliveryNotif);
+            const deliveryNotifToDelete = deliveryNotifSafe.filter((notif: any) => notif.spkNo === spkNo);
+            for (const notif of deliveryNotifToDelete) {
+              await safeDeleteItem('deliveryNotifications', notif.id, 'id');
             }
 
             closeDialog();

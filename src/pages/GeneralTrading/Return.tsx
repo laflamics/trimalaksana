@@ -4,6 +4,7 @@ import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import { storageService, extractStorageValue } from '../../services/storage';
+import { filterActiveItems } from '../../utils/data-persistence-helper';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
 import { generateBacHtml } from '../../pdf/bac-pdf-template';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
@@ -97,15 +98,24 @@ const Return = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [returnsData, soData, poData] = await Promise.all([
+      const [returnsDataRaw, soDataRaw, poDataRaw] = await Promise.all([
         storageService.get<ReturnItem[]>('gt_returns'),
         storageService.get<SalesOrder[]>('gt_salesOrders'),
         storageService.get<PurchaseOrder[]>('gt_purchaseOrders'),
       ]);
 
-      setReturns(extractStorageValue(returnsData) || []);
-      setSalesOrders(extractStorageValue(soData) || []);
-      setPurchaseOrders(extractStorageValue(poData) || []);
+      const returnsData = extractStorageValue(returnsDataRaw) || [];
+      const soData = extractStorageValue(soDataRaw) || [];
+      const poData = extractStorageValue(poDataRaw) || [];
+      
+      // Filter out deleted items menggunakan helper function
+      const activeReturns = filterActiveItems(returnsData);
+      const activeSalesOrders = filterActiveItems(soData);
+      const activePurchaseOrders = filterActiveItems(poData);
+
+      setReturns(activeReturns);
+      setSalesOrders(activeSalesOrders);
+      setPurchaseOrders(activePurchaseOrders);
     } catch (error: any) {
       console.error('Error loading data:', error);
     } finally {

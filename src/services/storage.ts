@@ -309,7 +309,7 @@ class StorageService {
     
     // General Trading & Trucking: must have prefix OR direct prefix (gt_* or trucking_*)
     if (business === 'general-trading') {
-      const prefix = `${business}/`;
+    const prefix = `${business}/`;
       // Accept: general-trading/gt_products OR gt_products (from server)
       return key.startsWith(prefix) || key.startsWith('gt_') || key.startsWith('storage_config');
     }
@@ -965,6 +965,27 @@ class StorageService {
       const localData: Record<string, any> = {};
       const timestamps: Record<string, number> = {};
       
+      // Helper function to check if data is too large for sync
+      const isDataTooLarge = (key: string, value: any): boolean => {
+        // Skip GT_productimage dari normal sync jika terlalu besar (akan di-sync terpisah)
+        if (key === 'GT_productimage' || key.includes('GT_productimage')) {
+          try {
+            const sizeEstimate = JSON.stringify(value).length;
+            const sizeMB = sizeEstimate / (1024 * 1024);
+            // Jika lebih dari 2MB, skip dari normal sync (akan di-sync terpisah dengan batch kecil)
+            if (sizeMB > 2) {
+              this.log(`[Storage] Skipping ${key} from normal sync (${sizeMB.toFixed(2)}MB), will sync separately`);
+              return true;
+            }
+          } catch (e) {
+            // If can't estimate, skip to be safe
+            this.log(`[Storage] Cannot estimate size for ${key}, skipping from normal sync`);
+            return true;
+          }
+        }
+        return false;
+      };
+
       // Helper function to process a key-value pair
       const processKeyValue = (key: string, valueStr: string | null, _source: 'localStorage' | 'fileStorage') => {
         if (!key || key.startsWith('storage_config')) return;
@@ -1054,6 +1075,23 @@ class StorageService {
         }
         
         if (shouldSync) {
+          // Skip GT_productimage dari normal sync jika terlalu besar (akan di-sync terpisah)
+          if (normalizedKey === 'GT_productimage') {
+            try {
+              const sizeEstimate = JSON.stringify(value).length;
+              const sizeMB = sizeEstimate / (1024 * 1024);
+              // Jika lebih dari 2MB, skip dari normal sync (akan di-sync terpisah dengan batch kecil)
+              if (sizeMB > 2) {
+                this.log(`[Storage] Skipping ${normalizedKey} from normal sync (${sizeMB.toFixed(2)}MB), will sync separately`);
+                return; // Skip this key
+              }
+            } catch (e) {
+              // If can't estimate, skip to be safe
+              this.log(`[Storage] Cannot estimate size for ${normalizedKey}, skipping from normal sync`);
+              return;
+            }
+          }
+          
           // Use normalized key for server sync
           localData[normalizedKey] = value;
           timestamps[normalizedKey] = timestamp || Date.now(); // Use current time if timestamp missing
@@ -1219,6 +1257,12 @@ class StorageService {
       if (Object.keys(localData).length > 0) {
         // Sync to server with timestamps (with retry)
         await this.syncToServerWithRetry(config.serverUrl, localData, timestamps);
+        
+        // Sync GT_productimage separately if exists (optimized for large images)
+        const lastSyncTimestamp = this.getLastSyncTimestamp();
+        const isFirstSync = lastSyncTimestamp === 0;
+        await this.syncProductImagesSeparately(config.serverUrl, lastSyncTimestamp, isFirstSync);
+        
         this.setLastSyncTimestamp(Date.now()); // Update last sync timestamp (persistent)
       }
       
@@ -1291,6 +1335,112 @@ class StorageService {
       if (this.retryCount === 0) {
         this.syncInProgress = false;
       }
+    }
+  }
+
+  // Helper method to sync product images separately (optimized for large base64 data)
+  private async syncProductImagesSeparately(serverUrl: string, lastSyncTimestamp: number, isFirstSync: boolean): Promise<void> {
+    try {
+      const imageKey = 'GT_productimage';
+      const storageKey = this.getStorageKey(imageKey, false);
+      const valueStr = localStorage.getItem(storageKey);
+      
+      if (!valueStr) return;
+      
+      let imagesData: Record<string, string> = {};
+      try {
+        const parsed = JSON.parse(valueStr);
+        imagesData = (parsed && typeof parsed === 'object' && parsed.value !== undefined) 
+          ? parsed.value 
+          : (typeof parsed === 'object' ? parsed : {});
+      } catch {
+        return; // Invalid data, skip
+      }
+      
+      if (!imagesData || Object.keys(imagesData).length === 0) return;
+      
+      // Get only changed images (incremental sync)
+      const changedImages: Record<string, string> = {};
+      if (isFirstSync) {
+        // First sync: sync all images
+        changedImages = imagesData;
+      } else {
+        // Incremental: sync all images (since we don't track per-image timestamp)
+        // In practice, images are rarely changed, so this is acceptable
+        changedImages = imagesData;
+      }
+      
+      if (Object.keys(changedImages).length === 0) return;
+      
+      // Sync images in small batches (max 5 images per batch to avoid payload too large)
+      const imageKeys = Object.keys(changedImages);
+      const IMAGE_BATCH_SIZE = 5;
+      
+      for (let i = 0; i < imageKeys.length; i += IMAGE_BATCH_SIZE) {
+        const batch = imageKeys.slice(i, i + IMAGE_BATCH_SIZE);
+        const batchData: Record<string, string> = {};
+        batch.forEach(key => {
+          batchData[key] = changedImages[key];
+        });
+        
+        const batchPayload = {
+          [imageKey]: batchData
+        };
+        
+        const batchSizeEstimate = JSON.stringify(batchPayload).length;
+        const batchSizeMB = batchSizeEstimate / (1024 * 1024);
+        
+        // Skip batch if still too large (individual image > 2MB)
+        if (batchSizeMB > 10) {
+          console.warn(`[Storage] Skipping image batch (${batchSizeMB.toFixed(2)}MB too large)`);
+          continue;
+        }
+        
+        try {
+          const syncTimeout = isFirstSync ? 120000 : 60000; // 2 min first sync, 1 min incremental
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), syncTimeout);
+          
+          const response = await fetch(`${serverUrl}/api/storage/sync`, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify({ 
+              data: batchPayload,
+              timestamp: Date.now(),
+            }),
+            mode: 'cors',
+            credentials: 'omit',
+            signal: controller.signal,
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) {
+            if (response.status === 413) {
+              console.warn(`[Storage] Image batch too large, skipping...`);
+              continue;
+            }
+            throw new Error(`Server responded with status ${response.status}`);
+          }
+          
+          await response.json();
+          const deletedCount = batch.filter(key => isDeleted(imagesToSync[key])).length;
+          this.log(`[Storage] ✅ Synced ${batch.length} product image(s)${deletedCount > 0 ? ` (${deletedCount} tombstone(s))` : ''}`);
+        } catch (error: any) {
+          if (error.name === 'AbortError') {
+            console.warn(`[Storage] Image sync timeout, skipping batch...`);
+            continue;
+          }
+          console.warn(`[Storage] Failed to sync image batch:`, error.message);
+          // Continue with next batch even if this one fails
+        }
+      }
+    } catch (error: any) {
+      // Silent fail - images sync is not critical for app functionality
+      console.warn(`[Storage] Error syncing product images:`, error.message);
     }
   }
 
@@ -1728,7 +1878,44 @@ class StorageService {
           let finalValue: any = actualServerValue;
           let finalTimestamp = serverTimestamp;
           
-          if (localValue && localTimestamp > 0) {
+          // SPECIAL CASE: GT_productimage - handle delete properly before merge
+          if (key === 'GT_productimage' && typeof localValue === 'object' && typeof actualServerValue === 'object' && 
+              localValue !== null && actualServerValue !== null && 
+              !Array.isArray(localValue) && !Array.isArray(actualServerValue)) {
+            // For GT_productimage: if local doesn't have a key that server has, it means it was deleted locally
+            // Don't restore deleted images from server
+            const localKeys = Object.keys(localValue);
+            const serverKeys = Object.keys(actualServerValue);
+            const mergedImages: Record<string, string> = {};
+            
+            // Add all local images (preserve local deletions - keys that don't exist)
+            localKeys.forEach(localKey => {
+              if (localValue[localKey]) {
+                mergedImages[localKey] = localValue[localKey];
+              }
+            });
+            
+            // Only add server images if they don't exist in local (new images from other devices)
+            // If local doesn't have a key, it means it was deleted locally, so don't restore it
+            serverKeys.forEach(serverKey => {
+              if (!(serverKey in localValue) && actualServerValue[serverKey]) {
+                // New image from server (not deleted locally)
+                mergedImages[serverKey] = actualServerValue[serverKey];
+              }
+            });
+            
+            // Use newer timestamp
+            if (localTimestamp > serverTimestamp) {
+              finalValue = mergedImages;
+              finalTimestamp = localTimestamp;
+              conflicts++;
+              localChangesToPush[key] = { value: finalValue, timestamp: finalTimestamp };
+            } else {
+              finalValue = mergedImages;
+              finalTimestamp = serverTimestamp;
+              merged++;
+            }
+          } else if (localValue && localTimestamp > 0) {
             // IMPORTANT: Cek apakah local data punya item yang sudah di-delete (tombstone pattern)
             // Jika ada, pastikan item tersebut tidak di-overwrite oleh server
             const hasDeletedItems = Array.isArray(localValue) && localValue.some((item: any) => item.deleted === true || item.deletedAt);
@@ -1811,6 +1998,47 @@ class StorageService {
                 
                 finalValue = this.mergeData(filteredServerValue, localValue, serverTimestamp, localTimestamp);
                 finalTimestamp = serverTimestamp;
+              }
+              
+              // CRITICAL: Apply deleted items dari server ke local items yang belum di-delete
+              // Ini memastikan ketika server kirim tombstone, local items dengan ID yang sama ikut di-mark deleted
+              if (Array.isArray(actualServerValue) && Array.isArray(finalValue)) {
+                const serverDeletedItems = (actualServerValue as any[]).filter((item: any) => item.deleted === true || item.deletedAt);
+                if (serverDeletedItems.length > 0) {
+                  const serverDeletedIds = new Set<string | number>();
+                  serverDeletedItems.forEach((item: any) => {
+                    const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
+                    if (id !== undefined && id !== null) {
+                      serverDeletedIds.add(id);
+                    }
+                  });
+                  
+                  // Apply deleted status dari server ke local items yang belum di-delete
+                  const finalValueArray = finalValue as any[];
+                  finalValue = finalValueArray.map((item: any) => {
+                    const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
+                    if (id !== undefined && id !== null && serverDeletedIds.has(id)) {
+                      // Server kirim deleted item dengan ID ini
+                      if (!(item.deleted === true || item.deletedAt)) {
+                        // Local item belum di-delete, apply deleted status dari server
+                        const serverDeletedItem = serverDeletedItems.find((si: any) => {
+                          const siId = si.id || si._id || si.code || si.number || si.sjNo || si.soNo || si.kode || si.product_id;
+                          return siId === id;
+                        });
+                        if (serverDeletedItem) {
+                          this.log(`[Storage] Applying deleted status from server to local item ${id} (tombstone sync from server)`);
+                          return {
+                            ...item,
+                            deleted: true,
+                            deletedAt: serverDeletedItem.deletedAt || new Date().toISOString(),
+                            deletedTimestamp: serverDeletedItem.deletedTimestamp || Date.now()
+                          };
+                        }
+                      }
+                    }
+                    return item;
+                  });
+                }
               }
               
               // IMPORTANT: Jika ada deleted items di local, pastikan mereka tetap ada di finalValue
@@ -2253,23 +2481,61 @@ class StorageService {
     const merged: any[] = [];
     const seenIds = new Set<string | number>();
     
+    // CRITICAL: Check for deleted items from server - they should be applied to local items
+    const serverDeletedItems = serverProducts.filter((item: any) => item.deleted === true || item.deletedAt);
+    const serverDeletedIds = new Set<string | number>();
+    serverDeletedItems.forEach((item: any) => {
+      const id = item.product_id || item.kode || item.id;
+      if (id !== undefined && id !== null) {
+        serverDeletedIds.add(id);
+      }
+    });
+    
     // First, add local products (they have priority for price data)
+    // BUT: Skip local products that are deleted on server (will be replaced with server deleted item)
     localProducts.forEach((localItem: any) => {
       const id = localItem.product_id || localItem.kode || localItem.id;
       if (id !== undefined && id !== null) {
+        // If server has deleted version of this item, skip local item (will add server deleted item later)
+        if (serverDeletedIds.has(id)) {
+          this.log(`[Storage] Skipping local GT product ${id} - server has deleted version (tombstone sync)`);
+          return; // Skip local item, will add server deleted item
+        }
         seenIds.add(id);
       }
       merged.push(localItem);
     });
     
     // Then, add server products that don't exist in local (by ID)
+    // CRITICAL: Include deleted items from server to apply deletion to local
     serverProducts.forEach((serverItem: any) => {
       const id = serverItem.product_id || serverItem.kode || serverItem.id;
       if (id !== undefined && id !== null && !seenIds.has(id)) {
+        // Add server item (including deleted items for tombstone sync)
         merged.push(serverItem);
         seenIds.add(id);
+        if (serverItem.deleted === true || serverItem.deletedAt) {
+          this.log(`[Storage] Adding deleted GT product ${id} from server (tombstone sync)`);
+        }
       } else if (id !== undefined && id !== null && seenIds.has(id)) {
-        // Product exists in both - update local product with server data but preserve price if local has complete price
+        // Product exists in both
+        // CRITICAL: If server item is deleted, apply deleted status to local item
+        if (serverItem.deleted === true || serverItem.deletedAt) {
+          const localIndex = merged.findIndex((item: any) => {
+            const itemId = item.product_id || item.kode || item.id;
+            return itemId === id;
+          });
+          if (localIndex >= 0) {
+            this.log(`[Storage] Applying deleted status from server to local GT product ${id} (tombstone sync)`);
+            merged[localIndex] = {
+              ...serverItem, // Use server deleted item
+              padCode: merged[localIndex].padCode || serverItem.padCode || '', // Preserve padCode from local
+            };
+          }
+          return; // Skip further processing for deleted items
+        }
+        
+        // Product exists in both and NOT deleted - update local product with server data but preserve price if local has complete price
         const localIndex = merged.findIndex((item: any) => {
           const itemId = item.product_id || item.kode || item.id;
           return itemId === id;
@@ -2343,6 +2609,7 @@ class StorageService {
         });
         
         // Add newer items first (skip yang sudah di-delete di local)
+        // IMPORTANT: Jika server kirim item dengan deleted: true, gunakan server item (deleted) untuk apply deletion ke local
         newerData.forEach((item: any) => {
           const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
           // Skip jika item ini sudah di-delete di local
@@ -2357,15 +2624,26 @@ class StorageService {
             if (localItem && localItem.padCode && !item.padCode) {
               item = { ...item, padCode: localItem.padCode };
             }
+            // CRITICAL: Jika server kirim item dengan deleted: true, pastikan local item ikut di-mark deleted
+            // Server item (deleted) akan menggantikan local item yang belum di-delete
+            if (item.deleted === true || item.deletedAt) {
+              this.log(`[Storage] Applying deleted status from server to local item ${id} (tombstone sync)`);
           }
-          merged.push(item);
+          }
+          merged.push(item); // Server item (termasuk yang deleted) di-add, akan menggantikan local item dengan ID sama
         });
         
         // Add older items that don't exist in newer (termasuk yang sudah di-delete untuk tombstone)
+        // IMPORTANT: Local items yang ID-nya sudah ada di server (termasuk yang deleted) tidak akan di-add
+        // Ini memastikan server items (termasuk deleted) menggantikan local items
         olderData.forEach((item: any) => {
           const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
           if (id === undefined || id === null || !seenIds.has(id)) {
             merged.push(item); // Include deleted items untuk tombstone pattern
+          } else {
+            // Local item dengan ID yang sama sudah ada di server
+            // Server item (yang mungkin deleted) sudah di-add, jadi skip local item
+            this.log(`[Storage] Skipping local item ${id} - server item (possibly deleted) already added`);
           }
         });
         
@@ -2396,6 +2674,7 @@ class StorageService {
           
           // Merge dengan olderData (local) yang mungkin punya deleted items
           // IMPORTANT: Preserve padCode from local if server doesn't have it
+          // CRITICAL: Jika server kirim item dengan deleted: true, gunakan server item (deleted) untuk apply deletion ke local
           const merged: any[] = filteredNewer.map((item: any) => {
             const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
             if (id !== undefined && id !== null) {
@@ -2403,8 +2682,13 @@ class StorageService {
               if (localItem && localItem.padCode && !item.padCode) {
                 return { ...item, padCode: localItem.padCode };
               }
+              // CRITICAL: Jika server kirim item dengan deleted: true, pastikan local item ikut di-mark deleted
+              // Server item (deleted) akan menggantikan local item yang belum di-delete
+              if (item.deleted === true || item.deletedAt) {
+                this.log(`[Storage] Applying deleted status from server to local item ${id} (tombstone sync, timestamp different)`);
             }
-            return item;
+            }
+            return item; // Server item (termasuk yang deleted) digunakan, akan menggantikan local item dengan ID sama
           });
           
           const seenIds = new Set<string | number>();
@@ -2416,10 +2700,16 @@ class StorageService {
           });
           
           // Add older items (local) yang tidak ada di newer (termasuk deleted items)
+          // IMPORTANT: Local items yang ID-nya sudah ada di server (termasuk yang deleted) tidak akan di-add
+          // Ini memastikan server items (termasuk deleted) menggantikan local items
           olderData.forEach((item: any) => {
             const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
             if (id === undefined || id === null || !seenIds.has(id)) {
               merged.push(item); // Include deleted items untuk tombstone pattern
+            } else {
+              // Local item dengan ID yang sama sudah ada di server
+              // Server item (yang mungkin deleted) sudah di-add, jadi skip local item
+              this.log(`[Storage] Skipping local item ${id} - server item (possibly deleted) already added (timestamp different)`);
             }
           });
           
@@ -2436,6 +2726,7 @@ class StorageService {
           });
           
           // Preserve padCode from local if server doesn't have it
+          // CRITICAL: Jika server kirim item dengan deleted: true, gunakan server item (deleted) untuk apply deletion ke local
           const preservedData = newerData.map((item: any) => {
             const id = item.id || item._id || item.code || item.number || item.sjNo || item.soNo || item.kode || item.product_id;
             if (id !== undefined && id !== null) {
@@ -2443,8 +2734,13 @@ class StorageService {
               if (localItem && localItem.padCode && !item.padCode) {
                 return { ...item, padCode: localItem.padCode };
               }
+              // CRITICAL: Jika server kirim item dengan deleted: true, pastikan local item ikut di-mark deleted
+              // Server item (deleted) akan menggantikan local item yang belum di-delete
+              if (item.deleted === true || item.deletedAt) {
+                this.log(`[Storage] Applying deleted status from server to local item ${id} (tombstone sync, no local deleted items)`);
             }
-            return item;
+            }
+            return item; // Server item (termasuk yang deleted) digunakan, akan menggantikan local item dengan ID sama
           });
           
           this.log(`[Storage] Array conflict: newer timestamp ${newerTimestamp} vs older ${olderTimestamp}, using newer array with padCode preservation (${preservedData.length} items)`);
@@ -2457,6 +2753,67 @@ class StorageService {
     if (typeof newerData === 'object' && newerData !== null && 
         typeof olderData === 'object' && olderData !== null &&
         !Array.isArray(newerData) && !Array.isArray(olderData)) {
+      
+      // SPECIAL CASE: GT_productimage - handle delete properly with tombstone pattern
+      // Check if this looks like GT_productimage (Record<string, string | object>)
+      const isProductImage = Object.keys(newerData).every(k => {
+        const newerVal = newerData[k];
+        return typeof newerVal === 'string' || (typeof newerVal === 'object' && newerVal !== null && ('image' in newerVal || 'deleted' in newerVal));
+      }) && Object.keys(olderData).every(k => {
+        const olderVal = olderData[k];
+        return typeof olderVal === 'string' || (typeof olderVal === 'object' && olderVal !== null && ('image' in olderVal || 'deleted' in olderVal));
+      });
+      
+      if (isProductImage) {
+        // For GT_productimage: merge dengan respect tombstone pattern
+        const olderKeys = Object.keys(olderData);
+        const newerKeys = Object.keys(newerData);
+        const mergedImages: Record<string, any> = {};
+        
+        // Helper to check if entry is deleted (tombstone)
+        const isDeleted = (entry: any): boolean => {
+          if (!entry) return false;
+          if (typeof entry === 'string') return false; // Old format - not deleted
+          return entry.deleted === true;
+        };
+        
+        // Add all older (local) entries first (including tombstones for sync)
+        olderKeys.forEach(olderKey => {
+          const olderEntry = olderData[olderKey];
+          if (olderEntry) {
+            mergedImages[olderKey] = olderEntry;
+          }
+        });
+        
+        // Add newer (server) entries:
+        // - If older has tombstone (deleted), don't restore (local delete wins)
+        // - If older doesn't have key, add new image from server
+        // - If both exist, use newer (server) unless older is deleted
+        newerKeys.forEach(newerKey => {
+          const newerEntry = newerData[newerKey];
+          const olderEntry = olderData[newerKey];
+          
+          if (!olderEntry) {
+            // New image from server (not in local)
+            if (!isDeleted(newerEntry)) {
+              mergedImages[newerKey] = newerEntry;
+            }
+          } else if (isDeleted(olderEntry)) {
+            // Local has tombstone (deleted) - keep tombstone, don't restore from server
+            mergedImages[newerKey] = olderEntry;
+          } else if (isDeleted(newerEntry)) {
+            // Server has tombstone (deleted) - apply deletion to local
+            mergedImages[newerKey] = newerEntry;
+          } else {
+            // Both exist and not deleted - use newer (server)
+            mergedImages[newerKey] = newerEntry;
+          }
+        });
+        
+        return mergedImages;
+      }
+      
+      // Normal object merge (newer wins for conflicts)
       return {
         ...olderData,
         ...newerData,

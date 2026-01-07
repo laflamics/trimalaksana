@@ -6,6 +6,7 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
 import { loadGTDataFromLocalStorage } from '../../../utils/gtStorageHelper';
+import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -144,13 +145,19 @@ const TaxManagement = () => {
 
   const loadData = async () => {
     // Load accounts
-    const accs = await storageService.get<Account[]>('gt_accounts') || [];
+    const accsRaw = await storageService.get<Account[]>('gt_accounts') || [];
+    // Filter out deleted items menggunakan helper function
+    const accs = filterActiveItems(accsRaw);
     setAccounts(accs);
 
     // Load invoices, purchase orders, payments
-    const invs = await storageService.get<any[]>('gt_invoices') || [];
-    const pos = await storageService.get<any[]>('gt_purchaseOrders') || [];
-    const pays = await storageService.get<any[]>('gt_payments') || [];
+    const invsRaw = await storageService.get<any[]>('gt_invoices') || [];
+    const posRaw = await storageService.get<any[]>('gt_purchaseOrders') || [];
+    const paysRaw = await storageService.get<any[]>('gt_payments') || [];
+    // Filter out deleted items menggunakan helper function
+    const invs = filterActiveItems(invsRaw);
+    const pos = filterActiveItems(posRaw);
+    const pays = filterActiveItems(paysRaw);
     setInvoices(invs);
     setPurchaseOrders(pos);
     setPayments(pays);
@@ -159,6 +166,8 @@ const TaxManagement = () => {
     let recordsRaw = await storageService.get<TaxRecord[]>('gt_taxRecords') || [];
     // Ensure records is always an array
     let records = Array.isArray(recordsRaw) ? recordsRaw : [];
+    // Filter out deleted items menggunakan helper function
+    records = filterActiveItems(records);
 
     // Generate tax records dari invoices, purchase orders jika belum ada
     const generatedRecords: TaxRecord[] = [];

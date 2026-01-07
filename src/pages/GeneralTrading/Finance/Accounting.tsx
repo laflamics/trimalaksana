@@ -5,6 +5,7 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
 import { loadGTDataFromLocalStorage } from '../../../utils/gtStorageHelper';
+import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -107,26 +108,26 @@ const Accounting = () => {
 
   const loadEntries = async () => {
     // Load langsung dari localStorage untuk memastikan data terbaru
-    let data = await loadGTDataFromLocalStorage<JournalEntry>(
+    let dataRaw = await loadGTDataFromLocalStorage<JournalEntry>(
       'gt_journalEntries',
       async () => await storageService.get<JournalEntry[]>('gt_journalEntries') || []
     );
     
-    // Ensure data is always an array before checking length
-    const dataArray = Array.isArray(data) ? data : [];
+    // Filter out deleted items menggunakan helper function
+    let data = filterActiveItems(Array.isArray(dataRaw) ? dataRaw : []);
     
     // Jika journal entries kosong, generate dari transaksi yang sudah ada
-    if (dataArray.length === 0) {
+    if (data.length === 0) {
       await generateJournalEntriesFromTransactions();
-      data = await loadGTDataFromLocalStorage<JournalEntry>(
+      const reloadedDataRaw = await loadGTDataFromLocalStorage<JournalEntry>(
         'gt_journalEntries',
         async () => await storageService.get<JournalEntry[]>('gt_journalEntries') || []
       );
-      // Ensure data is still an array after reload
-      const reloadedDataArray = Array.isArray(data) ? data : [];
-      setEntries(reloadedDataArray.map((e, idx) => ({ ...e, no: idx + 1 })));
+      // Filter out deleted items menggunakan helper function
+      const reloadedData = filterActiveItems(Array.isArray(reloadedDataRaw) ? reloadedDataRaw : []);
+      setEntries(reloadedData.map((e, idx) => ({ ...e, no: idx + 1 })));
     } else {
-      setEntries(dataArray.map((e, idx) => ({ ...e, no: idx + 1 })));
+      setEntries(data.map((e, idx) => ({ ...e, no: idx + 1 })));
     }
   };
 
@@ -142,9 +143,12 @@ const Accounting = () => {
       const newEntries: JournalEntry[] = [];
       let entryNo = 1;
 
+      // Filter out deleted items menggunakan helper function
+      const invoicesArray = filterActiveItems(Array.isArray(invoices) ? invoices : []);
+      const paymentsArray = filterActiveItems(Array.isArray(payments) ? payments : []);
+      const purchaseOrdersArray = filterActiveItems(Array.isArray(purchaseOrders) ? purchaseOrders : []);
+      
       // Generate dari Invoices (AR + Revenue)
-      // Ensure invoices is always an array
-      const invoicesArray = Array.isArray(invoices) ? invoices : [];
       invoicesArray.forEach((inv: any) => {
         const invoiceTotal = inv.bom?.total || inv.total || 0;
         if (invoiceTotal > 0) {
@@ -175,8 +179,6 @@ const Accounting = () => {
       });
 
       // Generate dari Payments (Receipt: Cash + AR, Payment: AP + Cash)
-      // Ensure payments is always an array
-      const paymentsArray = Array.isArray(payments) ? payments : [];
       paymentsArray.forEach((pay: any) => {
         const amount = pay.amount || pay.total || 0;
         if (amount > 0) {
@@ -273,8 +275,7 @@ const Accounting = () => {
       });
 
       // Generate dari Purchase Orders yang sudah CLOSE/RECEIVED (Inventory + AP)
-      // Ensure purchaseOrders is always an array
-      const purchaseOrdersArray = Array.isArray(purchaseOrders) ? purchaseOrders : [];
+      // purchaseOrdersArray already declared above with filterActiveItems
       purchaseOrdersArray.forEach((po: any) => {
         if ((po.status === 'CLOSE' || po.status === 'RECEIVED') && po.total > 0) {
           // Cek apakah sudah ada journal entry untuk PO ini

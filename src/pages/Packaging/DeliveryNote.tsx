@@ -5079,6 +5079,31 @@ const DeliveryNote = () => {
       ),
     },
     {
+      key: 'created',
+      header: 'Created',
+      render: (item: DeliveryNote) => {
+        const createdDate = item.created || '';
+        if (!createdDate) return <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>-</span>;
+        try {
+          const date = new Date(createdDate);
+          const day = String(date.getDate()).padStart(2, '0');
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const year = date.getFullYear();
+          const hours = String(date.getHours()).padStart(2, '0');
+          const minutes = String(date.getMinutes()).padStart(2, '0');
+          const seconds = String(date.getSeconds()).padStart(2, '0');
+          return (
+            <div style={{ fontSize: '12px' }}>
+              <div style={{ fontWeight: '500' }}>{`${day}/${month}/${year}`}</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>{`${hours}:${minutes}:${seconds}`}</div>
+            </div>
+          );
+        } catch {
+          return <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>-</span>;
+        }
+      },
+    },
+    {
       key: 'actions',
       header: 'Actions',
       render: (item: DeliveryNote) => renderDeliveryActions(item),

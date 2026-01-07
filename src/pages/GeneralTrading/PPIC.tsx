@@ -6,6 +6,7 @@ import Input from '../../components/Input';
 import DeliveryScheduleDialog from '../../components/DeliveryScheduleDialog';
 import NotificationBell from '../../components/NotificationBell';
 import { storageService, extractStorageValue } from '../../services/storage';
+import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
 import { useDialog } from '../../hooks/useDialog';
 // import { openPrintWindow } from '../../utils/actions'; // Not used yet
 import '../../styles/common.css';
@@ -16,12 +17,14 @@ import './PPIC.css';
 const SPKActionMenu = ({
   onCheckCreatePR,
   onScheduleDelivery,
+  onDelete,
   hasSchedule,
   hasPR,
   isCreatingPR,
 }: {
   onCheckCreatePR?: () => void;
   onScheduleDelivery?: () => void;
+  onDelete?: () => void;
   hasSchedule?: boolean;
   hasPR?: boolean;
   isCreatingPR?: boolean;
@@ -153,6 +156,29 @@ const SPKActionMenu = ({
               ✅ Schedule Created
             </div>
           )}
+          {onDelete && (
+            <button
+              onClick={() => { onDelete(); setShowMenu(false); }}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                border: 'none',
+                background: 'transparent',
+                color: '#f44336',
+                cursor: 'pointer',
+                fontSize: '11px',
+                borderRadius: '4px',
+                borderTop: '1px solid var(--border-color)',
+                marginTop: '4px',
+                paddingTop: '8px',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              🗑️ Delete
+            </button>
+          )}
         </div>
       )}
     </>
@@ -274,15 +300,26 @@ const PPIC = () => {
       }
     }
     
-    let spk = extractStorageValue(await storageService.get<any[]>('gt_spk')) || [];
-    let schedule = extractStorageValue(await storageService.get<any[]>('gt_schedule')) || [];
-    const customersData = extractStorageValue(await storageService.get<any[]>('gt_customers')) || [];
-    const productsData = extractStorageValue(await storageService.get<any[]>('gt_products')) || [];
-    const salesOrdersData = extractStorageValue(await storageService.get<any[]>('gt_salesOrders')) || [];
-    const inventoryData = extractStorageValue(await storageService.get<any[]>('gt_inventory')) || [];
-    const purchaseOrdersData = extractStorageValue(await storageService.get<any[]>('gt_purchaseOrders')) || [];
-    const deliveryNotesData = extractStorageValue(await storageService.get<any[]>('gt_delivery')) || [];
-    const purchaseRequestsData = extractStorageValue(await storageService.get<any[]>('gt_purchaseRequests')) || [];
+    const spkRaw = extractStorageValue(await storageService.get<any[]>('gt_spk')) || [];
+    const scheduleRaw = extractStorageValue(await storageService.get<any[]>('gt_schedule')) || [];
+    const customersDataRaw = extractStorageValue(await storageService.get<any[]>('gt_customers')) || [];
+    const productsDataRaw = extractStorageValue(await storageService.get<any[]>('gt_products')) || [];
+    const salesOrdersDataRaw = extractStorageValue(await storageService.get<any[]>('gt_salesOrders')) || [];
+    const inventoryDataRaw = extractStorageValue(await storageService.get<any[]>('gt_inventory')) || [];
+    const purchaseOrdersDataRaw = extractStorageValue(await storageService.get<any[]>('gt_purchaseOrders')) || [];
+    const deliveryNotesDataRaw = extractStorageValue(await storageService.get<any[]>('gt_delivery')) || [];
+    const purchaseRequestsDataRaw = extractStorageValue(await storageService.get<any[]>('gt_purchaseRequests')) || [];
+    
+    // Filter out deleted items menggunakan helper function
+    let spk = filterActiveItems(spkRaw);
+    let schedule = filterActiveItems(scheduleRaw);
+    const customersData = filterActiveItems(customersDataRaw);
+    const productsData = filterActiveItems(productsDataRaw);
+    const salesOrdersData = filterActiveItems(salesOrdersDataRaw);
+    const inventoryData = filterActiveItems(inventoryDataRaw);
+    const purchaseOrdersData = filterActiveItems(purchaseOrdersDataRaw);
+    const deliveryNotesData = filterActiveItems(deliveryNotesDataRaw);
+    const purchaseRequestsData = filterActiveItems(purchaseRequestsDataRaw);
     
     // Auto-update SPK status berdasarkan delivery
     let updatedSPK = false;
@@ -1378,6 +1415,68 @@ const PPIC = () => {
     loadData();
   };
 
+  const handleDeleteSPK = async (spk: any) => {
+    if (!spk || !spk.id) {
+      showAlert('SPK tidak valid. Mohon coba lagi.', 'Error');
+      return;
+    }
+
+    const spkNo = spk.spkNo || spk.id;
+    
+    // Check if SPK has related data (schedule, delivery, etc.)
+    try {
+      const [scheduleListRaw, deliveryListRaw] = await Promise.all([
+        storageService.get<any[]>('gt_schedule'),
+        storageService.get<any[]>('gt_delivery'),
+      ]);
+
+      const scheduleList = scheduleListRaw || [];
+      const deliveryList = deliveryListRaw || [];
+
+      const hasSchedule = scheduleList.some((s: any) => s.spkNo === spkNo);
+      const hasDelivery = deliveryList.some((dn: any) => 
+        dn.spkNo === spkNo || (dn.items || []).some((itm: any) => itm.spkNo === spkNo)
+      );
+
+      if (hasSchedule || hasDelivery) {
+        const reasons: string[] = [];
+        if (hasSchedule) reasons.push('Schedule data');
+        if (hasDelivery) reasons.push('Delivery Note data');
+        
+        showAlert(
+          `Tidak bisa menghapus SPK ${spkNo} karena masih memiliki data turunan:\n\n${reasons.map(r => `• ${r}`).join('\n')}\n\nSilakan bersihkan data turunan tersebut terlebih dahulu.`,
+          'Cannot Delete SPK'
+        );
+        return;
+      }
+
+      // Show confirmation dialog
+      showConfirm(
+        'Delete SPK',
+        `Hapus SPK ${spkNo}?\n\nTindakan ini akan:\n• Menghapus SPK dari daftar\n• Menghapus notifikasi terkait\n\nPastikan tidak ada proses lanjutan untuk SPK ini.`,
+        async () => {
+          try {
+            // Use tombstone pattern untuk prevent data resurrection dari sync
+            const success = await safeDeleteItem('gt_spk', spk.id, 'id');
+            if (!success) {
+              showAlert('Gagal menghapus SPK. Silakan coba lagi.', 'Error');
+              return;
+            }
+            
+            // Reload SPK data dengan filter active items (after tombstone deletion)
+            await loadData();
+            
+            showAlert(`SPK ${spkNo} berhasil dihapus.`, 'Success');
+          } catch (error: any) {
+            showAlert(`Error deleting SPK: ${error.message}`, 'Error');
+          }
+        },
+      );
+    } catch (error: any) {
+      showAlert(`Error checking SPK dependencies: ${error.message}`, 'Error');
+    }
+  };
+
   // Format date
   const formatDate = (dateStr: string | undefined) => {
     if (!dateStr) return '-';
@@ -1619,6 +1718,31 @@ const PPIC = () => {
       ),
     },
     {
+      key: 'created',
+      header: 'Created',
+      render: (item: any) => {
+        const createdDate = item.created || item._spk?.created;
+        if (!createdDate) return <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>-</span>;
+        try {
+          const date = new Date(createdDate);
+          const day = String(date.getDate()).padStart(2, '0');
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const year = date.getFullYear();
+          const hours = String(date.getHours()).padStart(2, '0');
+          const minutes = String(date.getMinutes()).padStart(2, '0');
+          const seconds = String(date.getSeconds()).padStart(2, '0');
+          return (
+            <div style={{ fontSize: '12px' }}>
+              <div style={{ fontWeight: '500' }}>{day}/{month}/{year}</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>{hours}:{minutes}:{seconds}</div>
+            </div>
+          );
+        } catch {
+          return <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>-</span>;
+        }
+      },
+    },
+    {
       key: 'actions',
       header: 'Actions',
       render: (item: any) => (
@@ -1639,6 +1763,7 @@ const PPIC = () => {
               }],
             });
           }}
+          onDelete={() => handleDeleteSPK(item._spk)}
           hasSchedule={item.hasSchedule}
           hasPR={item.hasPR}
           isCreatingPR={creatingPR[item.spkNo]}
