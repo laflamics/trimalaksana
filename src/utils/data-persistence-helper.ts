@@ -31,11 +31,21 @@ export const safeDeleteItem = async (
 
 /**
  * Filter out deleted items for display (but keep them in storage for tombstone)
+ * 🚀 FIX: Cek semua deleted flags untuk konsistensi
  */
 export const filterActiveItems = <T extends Record<string, any>>(items: T[]): T[] => {
   if (!Array.isArray(items)) return [];
   
-  return items.filter(item => !item.deleted);
+  return items.filter(item => {
+    if (!item) return false;
+    // Cek semua kemungkinan deleted flag
+    return !(
+      item.deleted === true ||
+      item.deleted === 'true' ||
+      !!item.deletedAt ||
+      !!item.deletedTimestamp
+    );
+  });
 };
 
 /**

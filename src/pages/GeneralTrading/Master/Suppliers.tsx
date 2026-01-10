@@ -4,7 +4,7 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
+import { deleteGTItem, reloadGTData, filterActiveItems } from '../../../utils/gt-delete-helper';
 import { useDialog } from '../../../hooks/useDialog';
 import * as XLSX from 'xlsx';
 import '../../../styles/common.css';
@@ -48,10 +48,42 @@ const Suppliers = () => {
   }, []);
 
   const loadSuppliers = async () => {
-    const data = await storageService.get<Supplier[]>('gt_suppliers') || [];
+    console.log('[GT Suppliers] Loading suppliers...');
+    const dataRaw = await storageService.get<Supplier[]>('gt_suppliers') || [];
+    console.log('[GT Suppliers] Raw data length:', dataRaw.length);
+    
     // Filter out deleted items menggunakan helper function
-    const activeSuppliers = filterActiveItems(data);
-    setSuppliers(activeSuppliers.map((s, idx) => ({ ...s, no: idx + 1 })));
+    const data = filterActiveItems(dataRaw);
+    console.log('[GT Suppliers] Filtered data length:', data.length);
+    
+    // CRITICAL: Remove duplicates by kode before setting state
+    const seen = new Set<string>();
+    const uniqueData: Supplier[] = [];
+    
+    data.forEach(supplier => {
+      if (supplier && supplier.kode) {
+        const key = supplier.kode.toLowerCase().trim();
+        if (!seen.has(key)) {
+          seen.add(key);
+          uniqueData.push(supplier);
+        } else {
+          console.log('[GT Suppliers] Removed duplicate:', supplier.kode, '-', supplier.nama);
+        }
+      }
+    });
+    
+    console.log('[GT Suppliers] Unique data length:', uniqueData.length);
+    
+    const numberedData = uniqueData.map((s, idx) => ({ ...s, no: idx + 1 }));
+    console.log('[GT Suppliers] Final data length:', numberedData.length);
+    
+    setSuppliers(numberedData);
+    
+    // Save cleaned data back to storage if duplicates were removed
+    if (uniqueData.length < data.length) {
+      console.log('[GT Suppliers] Saving cleaned data to storage...');
+      await storageService.set('gt_suppliers', numberedData);
+    }
   };
 
   // Auto generate kode supplier: SUP-001, SUP-002, dst
@@ -123,20 +155,21 @@ const Suppliers = () => {
       `Are you sure you want to delete supplier "${item.nama}"? This action cannot be undone.`,
       async () => {
         try {
-          // Pakai helper function untuk safe delete (tombstone pattern)
-          const success = await safeDeleteItem('gt_suppliers', item.id, 'id');
+          // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
+          const deleteResult = await deleteGTItem('gt_suppliers', item.id, 'id');
           
-          if (success) {
-            // Reload data dengan filter active items
-            const updatedSuppliers = await storageService.get<Supplier[]>('gt_suppliers') || [];
-            const activeSuppliers = filterActiveItems(updatedSuppliers);
+          if (deleteResult.success) {
+            // Reload data dengan helper (handle race condition)
+            const activeSuppliers = await reloadGTData('gt_suppliers', setSuppliers);
+            // Re-number suppliers
             setSuppliers(activeSuppliers.map((s, idx) => ({ ...s, no: idx + 1 })));
-            showAlert(`Supplier "${item.nama}" deleted successfully`, 'Success');
+            showAlert(`✅ Supplier "${item.nama}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
           } else {
-            showAlert(`Error deleting supplier. Silakan coba lagi.`, 'Error');
+            showAlert(`❌ Error deleting supplier "${item.nama}": ${deleteResult.error || 'Unknown error'}`, 'Error');
           }
         } catch (error: any) {
-          showAlert(`Error deleting supplier: ${error.message}`, 'Error');
+          console.error('[Suppliers] Error in safe delete:', error);
+          showAlert(`❌ Error deleting supplier: ${error.message}`, 'Error');
         }
       },
       undefined,
@@ -357,24 +390,40 @@ const Suppliers = () => {
       );
     });
     
-    // Sort by completeness (most complete first)
-    // Count filled fields: kode, nama, kontak, npwp, email, telepon, alamat
-    filtered.sort((a, b) => {
-      const countFields = (s: Supplier) => {
-        let count = 0;
-        if (s.kode && s.kode.trim()) count++;
-        if (s.nama && s.nama.trim()) count++;
-        if (s.kontak && s.kontak.trim()) count++;
-        if (s.npwp && s.npwp.trim()) count++;
-        if (s.email && s.email.trim()) count++;
-        if (s.telepon && s.telepon.trim()) count++;
-        if (s.alamat && s.alamat.trim()) count++;
-        return count;
+    // Sort berdasarkan kode ID secara natural (SPL-0001, SPL-0002, CTM-068, dst)
+    const sorted = filtered.sort((a, b) => {
+      const kodeA = a.kode || '';
+      const kodeB = b.kode || '';
+      
+      // Natural sort untuk kode dengan format PREFIX-NUMBER
+      // Contoh: SPL-0001, SPL-0002, CTM-068, dll
+      const parseKode = (kode: string) => {
+        const match = kode.match(/^([A-Z]+)-?(\d+)$/i);
+        if (match) {
+          return {
+            prefix: match[1].toUpperCase(),
+            number: parseInt(match[2], 10)
+          };
+        }
+        return { prefix: kode.toUpperCase(), number: 0 };
       };
-      return countFields(b) - countFields(a);
+      
+      const parsedA = parseKode(kodeA);
+      const parsedB = parseKode(kodeB);
+      
+      // Sort by prefix first, then by number
+      if (parsedA.prefix !== parsedB.prefix) {
+        return parsedA.prefix.localeCompare(parsedB.prefix);
+      }
+      
+      return parsedA.number - parsedB.number;
     });
     
-    return filtered;
+    // CRITICAL: Re-number after sorting untuk memastikan No urut 1, 2, 3, dst
+    return sorted.map((supplier, index) => ({
+      ...supplier,
+      no: index + 1
+    }));
   }, [suppliers, searchQuery]);
 
   // Pagination

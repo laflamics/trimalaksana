@@ -4,7 +4,7 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
+import { deleteGTItem, reloadGTData, filterActiveItems } from '../../../utils/gt-delete-helper';
 import { useDialog } from '../../../hooks/useDialog';
 import * as XLSX from 'xlsx';
 import '../../../styles/common.css';
@@ -109,9 +109,23 @@ const Products = () => {
   };
 
   const loadProducts = useCallback(async () => {
-    const data = await storageService.get<Product[]>('gt_products') || [];
+    console.log('[GT Products] Loading products...');
+    let data = await storageService.get<Product[]>('gt_products') || [];
+    console.log(`[GT Products] Raw data from storage: ${data.length} items`);
+    
+    // If we have very few products, try force reload from file
+    if (data.length <= 1) {
+      console.log('[GT Products] Few products detected, trying force reload from file...');
+      const fileData = await storageService.forceReloadFromFile<Product[]>('gt_products');
+      if (fileData && Array.isArray(fileData) && fileData.length > data.length) {
+        console.log(`[GT Products] Force reload successful: ${fileData.length} products from file`);
+        data = fileData;
+      }
+    }
+    
     // Filter out deleted items menggunakan helper function
     const activeProducts = filterActiveItems(data);
+    console.log(`[GT Products] Active products after filtering: ${activeProducts.length} items`);
     setProducts(activeProducts.map((p, idx) => ({ ...p, no: idx + 1 })));
     
     // Load product images (support both old format string and new format object with tombstone)
@@ -130,8 +144,24 @@ const Products = () => {
   }, []);
 
   const loadCustomers = useCallback(async () => {
-    const data = await storageService.get<Customer[]>('gt_customers') || [];
-    setCustomers(data);
+    console.log('[GT Products] Loading customers...');
+    let data = await storageService.get<Customer[]>('gt_customers') || [];
+    console.log(`[GT Products] Raw customers from storage: ${data.length} items`);
+    
+    // If we have very few customers, try force reload from file
+    if (data.length <= 1) {
+      console.log('[GT Products] Few customers detected, trying force reload from file...');
+      const fileData = await storageService.forceReloadFromFile<Customer[]>('gt_customers');
+      if (fileData && Array.isArray(fileData) && fileData.length > data.length) {
+        console.log(`[GT Products] Force reload successful: ${fileData.length} customers from file`);
+        data = fileData;
+      }
+    }
+    
+    // CRITICAL: Filter deleted items using helper function
+    const activeCustomers = filterActiveItems(data);
+    console.log(`[GT Products] Active customers after filtering: ${activeCustomers.length} items`);
+    setCustomers(activeCustomers);
   }, []);
 
   useEffect(() => {
@@ -485,20 +515,21 @@ const Products = () => {
       `Are you sure you want to delete product "${item.nama}"? This action cannot be undone.`,
       async () => {
         try {
-          // Pakai helper function untuk safe delete (tombstone pattern)
-          const success = await safeDeleteItem('gt_products', item.id, 'id');
+          // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
+          const deleteResult = await deleteGTItem('gt_products', item.id, 'id');
           
-          if (success) {
-            // Reload data dengan filter active items
-            const updatedProducts = await storageService.get<Product[]>('gt_products') || [];
-            const activeProducts = filterActiveItems(updatedProducts);
+          if (deleteResult.success) {
+            // Reload data dengan helper (handle race condition)
+            const activeProducts = await reloadGTData('gt_products', setProducts);
+            // Re-number products
             setProducts(activeProducts.map((p, idx) => ({ ...p, no: idx + 1 })));
-            showAlert(`Product "${item.nama}" deleted successfully`, 'Success');
+            showAlert(`✅ Product "${item.nama}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
           } else {
-            showAlert(`Error deleting product. Silakan coba lagi.`, 'Error');
+            showAlert(`❌ Error deleting product "${item.nama}": ${deleteResult.error || 'Unknown error'}`, 'Error');
           }
         } catch (error: any) {
-          showAlert(`Error deleting product: ${error.message}`, 'Error');
+          console.error('[Products] Error in safe delete:', error);
+          showAlert(`❌ Error deleting product: ${error.message}`, 'Error');
         }
       },
       undefined,

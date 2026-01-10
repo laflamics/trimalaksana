@@ -13,9 +13,9 @@
       "balance": 0
     },
     {
-      "code": "1200",
-      "name": "Inventory",
-      "type": "Asset",
+      "code": "2000",
+      "name": "Accounts Payable",
+      "type": "Liability",
       "balance": 0
     },
     {
@@ -85,6 +85,6 @@
       "balance": 0
     }
   ],
-  "timestamp": 1767601525326,
-  "_timestamp": 1767601525326
+  "timestamp": 1767602087829,
+  "_timestamp": 1767602087829
 }

@@ -1,0 +1,39 @@
+{
+  "value": [
+    {
+      "id": "1768031143819",
+      "soNo": "00001/QUO/TLJP/I/2026",
+      "customer": "FURINDAH FURNITUR",
+      "customerKode": "CTM-002",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-10T07:45:43.819Z",
+      "items": [
+        {
+          "id": "1768031133755p2pr9p3rf",
+          "productId": "FG-ABM-00001",
+          "productKode": "FG-ABM-00001",
+          "productName": "KARTON BOX 430X350X350",
+          "qty": 10,
+          "unit": "PCS",
+          "price": 8000,
+          "total": 80000,
+          "specNote": "",
+          "discountPercent": 0
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "discountPercent": 0,
+      "signatureBase64": "",
+      "signatureName": "",
+      "signatureTitle": "",
+      "deleted": true,
+      "deletedAt": "2026-01-10T08:15:34.118Z",
+      "deletedTimestamp": 1768032934118
+    }
+  ],
+  "timestamp": 1768032934118,
+  "_timestamp": 1768032934118
+}

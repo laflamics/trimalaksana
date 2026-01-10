@@ -9,16 +9,22 @@ const execAsync = promisify(exec);
 
 const RELEASE_DIR = path.join(__dirname, '..', 'release-build');
 
-// Helper untuk get upload server URL (khusus upload apps pakai port 8888)
+// Helper untuk get upload server URL (pakai Vercel proxy)
 function getUploadServerUrl() {
-  // Untuk upload apps, pakai Tailscale URL dengan port 8888
-  // Port 8888 adalah HTTP server yang sudah running di PC utama
+  // Cek environment variable untuk Vercel URL
+  const vercelUrl = process.env.VERCEL_URL || process.env.UPDATE_SERVER_VERCEL_URL;
+  
+  if (vercelUrl) {
+    // Pakai Vercel URL langsung (sudah include https://)
+    const url = vercelUrl.startsWith('http') ? vercelUrl : `https://${vercelUrl}`;
+    return url;
+  }
+  
+  // Fallback: pakai server lama (untuk backward compatibility)
   const serverUrl = getServerUrl();
-  // Extract hostname dan port dari server URL
   try {
     const url = new URL(serverUrl);
     // Override port ke 8888 untuk upload (HTTP server)
-    // Pakai http:// karena port 8888 biasanya HTTP, bukan HTTPS
     return `http://${url.hostname}:8888`;
   } catch {
     // Fallback ke default Tailscale URL dengan port 8888
@@ -39,7 +45,7 @@ function testConnection(serverUrl) {
       port: url.port || (url.protocol === 'https:' ? 443 : 80),
       path: '/', // Root endpoint pasti ada
       method: 'GET',
-      timeout: 3000, // 3 detik timeout untuk test (lebih cepat)
+      timeout: 2000, // 2 detik timeout untuk test (lebih cepat)
       rejectUnauthorized: !isDirectIP
     }, (res) => {
       // Any response means server is reachable
@@ -190,8 +196,8 @@ function uploadFile(filePath, serverUrl) {
       },
       // Untuk Tailscale, skip certificate verification (direct IP pakai HTTP jadi tidak perlu)
       rejectUnauthorized: !isTailscale,
-      // Timeout untuk file besar: 30 menit
-      timeout: 30 * 60 * 1000,
+      // Timeout untuk file besar: 10 menit (lebih cepat, kalau timeout berarti server bermasalah)
+      timeout: 10 * 60 * 1000,
       // Optimize untuk Tailscale
       agent: isTailscale ? new (isHttps ? https : http).Agent({
         keepAlive: true,
@@ -436,7 +442,7 @@ async function uploadFiles() {
         console.error(`🔍 Found ${allAppImageFiles.length} .AppImage files: ${allAppImageFiles.join(', ')}`);
       }
       
-      // Handle Windows build (latest.yml)
+      // 🚀 Handle Windows build: Hanya upload 1 file .exe dan 1 file latest.yml
       const latestYmlPath = path.join(RELEASE_DIR, 'latest.yml');
       if (fs.existsSync(latestYmlPath)) {
         const latestYmlContent = fs.readFileSync(latestYmlPath, 'utf8');
@@ -450,6 +456,7 @@ async function uploadFiles() {
           }
         }
         filesToUpload.push({ path: latestYmlPath, name: 'latest.yml' });
+        // Skip patch files dan blockmap - hanya upload main installer dan yaml
       }
       
       // Handle Linux build (latest-linux.yml)
@@ -476,21 +483,29 @@ async function uploadFiles() {
         filesToUpload.push({ path: latestLinuxYmlPath, name: 'latest-linux.yml' });
       }
       
-      // Fallback: jika tidak ada latest.yml atau latest-linux.yml, cari file langsung
+      // 🚀 Fallback: jika tidak ada latest.yml atau latest-linux.yml, cari file langsung
+      // Hanya ambil 1 file .exe atau 1 file .AppImage (skip patch, blockmap)
       if (filesToUpload.length === 0) {
-        // Cari .exe files
-        const exeFiles = files.filter(f => f.endsWith('.exe') && !f.includes('blockmap') && !f.endsWith('.exe.patch'));
+        // Cari .exe files (hanya main installer, skip patch)
+        const exeFiles = files.filter(f => 
+          f.endsWith('.exe') && 
+          !f.includes('blockmap') && 
+          !f.endsWith('.exe.patch') &&
+          !f.includes('unpacked')
+        );
         if (exeFiles.length > 0) {
-          exeFiles.forEach(exeFile => {
-            filesToUpload.push({ path: path.join(RELEASE_DIR, exeFile), name: exeFile });
-          });
+          // Hanya ambil yang pertama (main installer)
+          const mainExe = exeFiles[0];
+          filesToUpload.push({ path: path.join(RELEASE_DIR, mainExe), name: mainExe });
+          console.error(`✅ Found main .exe file: ${mainExe}`);
         }
-        // Cari .AppImage files
+        // Cari .AppImage files (hanya 1 file)
         const appImageFiles = files.filter(f => f.endsWith('.AppImage') && !f.includes('unpacked'));
         if (appImageFiles.length > 0) {
-          appImageFiles.forEach(appImageFile => {
-            filesToUpload.push({ path: path.join(RELEASE_DIR, appImageFile), name: appImageFile });
-          });
+          // Hanya ambil yang pertama
+          const mainAppImage = appImageFiles[0];
+          filesToUpload.push({ path: path.join(RELEASE_DIR, mainAppImage), name: mainAppImage });
+          console.error(`✅ Found main .AppImage file: ${mainAppImage}`);
         }
       }
       
@@ -526,20 +541,25 @@ async function uploadFiles() {
     }
     
     // HTTP upload method (existing code)
+    // Cek apakah skip upload (untuk build cepat)
+    if (process.env.SKIP_UPLOAD === 'true' || process.env.SKIP_UPDATE_UPLOAD === 'true') {
+      console.error(`⏭️  Skipping upload (SKIP_UPLOAD=true)`);
+      return;
+    }
+    
     // Coba pakai IP langsung dulu, fallback ke Tailscale jika tidak bisa
     let serverUrl = getUploadServerUrl();
     console.error(`🌐 Testing connection to ${serverUrl}...`);
     
-    // Test connection dulu (timeout 5 detik)
+    // Test connection dulu (timeout 3 detik - lebih cepat)
     const canConnect = await testConnection(serverUrl);
     
     if (!canConnect) {
-      console.error(`⚠️  Direct IP tidak bisa diakses, fallback ke Tailscale URL...`);
-      // Fallback ke Tailscale URL
-      serverUrl = getServerUrl();
-      console.error(`🌐 Using Tailscale URL: ${serverUrl}`);
+      console.error(`⚠️  Server tidak bisa diakses, skip upload untuk mempercepat build...`);
+      console.error(`💡 Untuk upload manual, set VERCEL_URL atau UPDATE_SERVER_VERCEL_URL`);
+      return; // Skip upload kalau server tidak accessible
     } else {
-      console.error(`✅ Direct IP accessible, using: ${serverUrl}`);
+      console.error(`✅ Server accessible, using: ${serverUrl}`);
     }
     
     // Check release directory
@@ -617,17 +637,8 @@ async function uploadFiles() {
         }
       });
       
-      // Blockmap tidak perlu di-upload (tidak digunakan untuk update)
-      
-      // Tambahkan patch file jika ada (tidak perlu filter nama spesifik)
-      const patchFiles = files.filter(f => 
-        f.endsWith('.exe.patch')
-      );
-      patchFiles.forEach(patchFile => {
-        if (!filesToUpload.includes(patchFile)) {
-          filesToUpload.push(patchFile);
-        }
-      });
+      // 🚀 Hanya upload main installer .exe dan latest.yml
+      // Skip patch files dan blockmap (user minta hanya 1 file .exe dan 1 file .yaml)
       
       // Selalu include latest.yml di akhir
       filesToUpload.push('latest.yml');
@@ -715,13 +726,15 @@ async function uploadFiles() {
     process.exit(0);
   }
   
-  // Filter ulang untuk memastikan hanya file yang perlu di-upload
+  // 🚀 Filter ulang: Hanya upload main installer dan yaml (skip patch, blockmap)
+  // User minta hanya 1 file .exe dan 1 file .yaml untuk Windows
+  // User minta hanya 1 file untuk Android
   filesToUpload = filesToUpload.filter(f => {
-    if (f === 'latest.yml' || f === 'latest-linux.yml') return true;
-    if (f.endsWith('.exe') && !f.includes('blockmap') && !f.endsWith('.exe.patch')) return true;
-    if (f.endsWith('.exe.patch')) return true;
-    if (f.endsWith('.AppImage')) return true;
-    // Blockmap tidak perlu di-upload
+    if (f === 'latest.yml' || f === 'latest-linux.yml' || f === 'latest-android.yml') return true;
+    if (f.endsWith('.exe') && !f.includes('blockmap') && !f.endsWith('.exe.patch') && !f.includes('unpacked')) return true;
+    if (f.endsWith('.AppImage') && !f.includes('unpacked')) return true;
+    if (f.endsWith('.apk') && !f.includes('unaligned')) return true;
+    // Skip patch files, blockmap, dan file lainnya
     return false;
   });
   

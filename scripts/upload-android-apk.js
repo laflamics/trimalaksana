@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
+const crypto = require('crypto');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 
@@ -9,6 +10,8 @@ const execAsync = promisify(exec);
 
 // Android APK output directory
 const ANDROID_APK_DIR = path.join(__dirname, '..', 'android', 'app', 'build', 'outputs', 'apk', 'release');
+const PACKAGE_JSON = path.join(__dirname, '..', 'package.json');
+const { getBuildNumber } = require('./get-build-number');
 
 // Helper untuk get upload server URL (pakai port 8888)
 function getUploadServerUrl() {
@@ -206,6 +209,91 @@ async function uploadAndroidAPK() {
     try {
       await uploadFile(apkPath, serverUrl);
       console.error(`✅ Upload berhasil! APK ter-upload ke server.`);
+      
+      // Generate latest-android.yml setelah upload berhasil
+      console.error(`📝 Generating latest-android.yml...`);
+      
+      // Read package.json untuk get version
+      const packageJson = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8'));
+      const version = packageJson.version;
+      const buildNumber = getBuildNumber();
+      
+      // Extract base version
+      let baseVersion = version;
+      if (baseVersion.includes('-build.')) {
+        baseVersion = baseVersion.split('-build.')[0];
+      }
+      const versionWithBuild = `${baseVersion}-build.${buildNumber}`;
+      
+      // Calculate SHA512 hash untuk APK
+      const fileBuffer = fs.readFileSync(apkPath);
+      const hashSum = crypto.createHash('sha512');
+      hashSum.update(fileBuffer);
+      const sha512 = hashSum.digest('hex');
+      const fileSize = fs.statSync(apkPath).size;
+      
+      // Generate latest-android.yml
+      const latestAndroidYml = `version: ${versionWithBuild}
+files:
+  - url: ${apkFile}
+    sha512: ${sha512}
+    size: ${fileSize}
+path: ${apkFile}
+sha512: ${sha512}
+releaseDate: '${new Date().toISOString()}'
+`;
+      
+      // Save latest-android.yml locally
+      const ymlPath = path.join(__dirname, '..', 'release-build', 'latest-android.yml');
+      const releaseDir = path.dirname(ymlPath);
+      if (!fs.existsSync(releaseDir)) {
+        fs.mkdirSync(releaseDir, { recursive: true });
+      }
+      fs.writeFileSync(ymlPath, latestAndroidYml, 'utf8');
+      console.error(`✅ Generated latest-android.yml locally`);
+      
+      // Upload latest-android.yml ke server
+      // Note: uploadFile akan extract filename dari path, jadi kita perlu pastikan filename benar
+      console.error(`📤 Uploading latest-android.yml...`);
+      const ymlFileBuffer = fs.readFileSync(ymlPath);
+      const url = new URL(serverUrl);
+      const httpModule = url.protocol === 'https:' ? https : http;
+      const isTailscale = url.hostname.includes('.ts.net');
+      
+      await new Promise((resolve, reject) => {
+        const options = {
+          hostname: url.hostname,
+          port: url.port || (url.protocol === 'https:' ? 443 : 80),
+          path: `/api/updates/upload-binary?filename=latest-android.yml`,
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'Content-Length': ymlFileBuffer.length,
+            'X-Filename': 'latest-android.yml',
+          },
+          rejectUnauthorized: !isTailscale,
+          timeout: 30000,
+        };
+        
+        const req = httpModule.request(options, (res) => {
+          let data = '';
+          res.on('data', (chunk) => { data += chunk; });
+          res.on('end', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              console.error(`✅ latest-android.yml uploaded successfully`);
+              resolve(data);
+            } else {
+              reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+            }
+          });
+        });
+        
+        req.on('error', reject);
+        req.write(ymlFileBuffer);
+        req.end();
+      });
+      
+      console.error(`✅ All done! APK and latest-android.yml uploaded.`);
     } catch (error) {
       console.error(`❌ Error uploading ${apkFile}: ${error.message}`);
       process.exit(1);

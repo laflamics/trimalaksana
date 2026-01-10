@@ -5,6 +5,7 @@ import Input from '../../components/Input';
 import { storageService, StorageType, SyncStatus } from '../../services/storage';
 import { dockerServerService } from '../../services/docker-server';
 import { getTheme, applyTheme, Theme } from '../../utils/theme';
+import { checkMobileUpdate, downloadMobileAPK, getAPKFileName } from '../../utils/actions';
 import '../../styles/compact.css';
 
 const Settings = () => {
@@ -107,6 +108,10 @@ const Settings = () => {
         if (status.status === 'not-available' || status.status === 'error') {
           setCheckingUpdate(false);
         }
+        // Clear progress when download is complete
+        if (status.status === 'downloaded') {
+          setUpdateProgress(null);
+        }
       });
     }
 
@@ -114,6 +119,12 @@ const Settings = () => {
     if (window.electronAPI?.onUpdateProgress) {
       window.electronAPI.onUpdateProgress((progress: any) => {
         setUpdateProgress(progress);
+        // Clear progress when download reaches 100%
+        if (progress.percent >= 100) {
+          setTimeout(() => {
+            setUpdateProgress(null);
+          }, 1000);
+        }
       });
     }
   }, []);
@@ -131,9 +142,6 @@ const Settings = () => {
         setServerUrl(hostname);
         // Tailscale funnel tidak perlu port, set default 8888 hanya untuk display
         if (isTailscaleFunnel) {
-          setServerPort(8888); // Default untuk display, tapi tidak digunakan
-        } else {
-          setServerPort(Number(url.port) || 8888);
         }
       } catch (e) {
         // If URL parsing fails, try to extract from string
@@ -144,16 +152,15 @@ const Settings = () => {
           
           setServerUrl(hostname);
           if (isTailscaleFunnel) {
-            setServerPort(8888); // Default untuk display
           } else {
-            setServerPort(match[2] ? Number(match[2]) : 8888);
           }
         }
       }
     } else if (config.type === 'server') {
-      // Auto-set default Tailscale server jika mode server tapi belum ada URL
-      setServerUrl('server-tljp.tail75a421.ts.net');
-      setServerPort(8888);
+      // Auto-set default Vercel server jika mode server tapi belum ada URL
+      if (!config.serverUrl) {
+        setServerUrl('vercel-proxy-blond-nine.vercel.app');
+      }
     }
 
     // Load company settings
@@ -176,13 +183,12 @@ const Settings = () => {
   useEffect(() => {
     loadSettings();
     
-    // Start auto-sync jika sudah mode server (saat app load)
+    // 🚀 NEW ARCHITECTURE: Tidak perlu auto-sync
+    // Server adalah single source of truth, client langsung fetch dari server saat get()
+    // Tidak perlu sync complex, langsung POST saat set()
     const config = storageService.getConfig();
     if (config.type === 'server' && config.serverUrl) {
-      // Start auto-sync jika belum running
-      // Note: startAutoSync akan dipanggil otomatis oleh setConfig saat save,
-      // tapi kita pastikan juga di sini saat load settings (karena setConfig tidak dipanggil saat load)
-      storageService.startAutoSync();
+      console.log('✅ Server mode: Server is single source of truth');
     }
     
     // Subscribe to sync status changes
@@ -202,13 +208,14 @@ const Settings = () => {
     setConnectionStatus('checking');
     try {
       // Normalize serverUrl (remove http:// or https:// if user accidentally included it)
-      const cleanUrl = serverUrl.replace(/^https?:\/\//, '').trim();
-      // Use https for Tailscale funnel, http for others
+      let cleanUrl = serverUrl.replace(/^https?:\/\//, '').trim();
+      // Use https for Tailscale funnel and Vercel, http for others
       const isTailscaleFunnel = cleanUrl.includes('tailscale') || cleanUrl.includes('tail') || cleanUrl.includes('.ts.net');
-      const protocol = isTailscaleFunnel ? 'https' : 'http';
+      const isVercel = cleanUrl.includes('vercel.app');
+      const protocol = (isTailscaleFunnel || isVercel) ? 'https' : 'http';
       
-      // Tailscale funnel tidak perlu port (sudah di-proxy)
-      const fullUrl = isTailscaleFunnel 
+      // Tailscale funnel and Vercel tidak perlu port (sudah di-proxy)
+      const fullUrl = (isTailscaleFunnel || isVercel)
         ? `${protocol}://${cleanUrl}` 
         : `${protocol}://${cleanUrl}:${serverPort}`;
       
@@ -280,21 +287,31 @@ const Settings = () => {
     } catch (error: any) {
       console.error(`[Settings] Connection error:`, error);
       setConnectionStatus('failed');
-      const errorUrl = serverUrl.includes('.ts.net') 
-        ? `https://${serverUrl}` 
-        : `http://${serverUrl}:${serverPort}`;
+      // Normalize error URL display (same logic as handleCheckConnection)
+      let cleanErrorUrl = serverUrl.replace(/^https?:\/\//, '').trim();
+      const isTailscaleFunnel = cleanErrorUrl.includes('tailscale') || cleanErrorUrl.includes('tail') || cleanErrorUrl.includes('.ts.net');
+      const isVercel = cleanErrorUrl.includes('vercel.app');
+      const protocol = (isTailscaleFunnel || isVercel) ? 'https' : 'http';
+      const errorUrl = (isTailscaleFunnel || isVercel)
+        ? `${protocol}://${cleanErrorUrl}`
+        : `${protocol}://${cleanErrorUrl}:${serverPort}`;
       showAlert(`Connection error: ${error.message}\n\nURL: ${errorUrl}\n\nPlease check console for details.`, 'Error');
     }
   };
 
   const handleSave = async () => {
     // Trim serverUrl to remove any spaces
-    const cleanServerUrl = serverUrl.trim();
-    // Use https for Tailscale funnel, http for others
+    let cleanServerUrl = serverUrl.trim();
+    // Remove protocol if user accidentally included it
+    cleanServerUrl = cleanServerUrl.replace(/^https?:\/\//, '');
+    
+    // Use https for Tailscale funnel and Vercel, http for others
     const isTailscaleFunnel = cleanServerUrl.includes('tailscale') || cleanServerUrl.includes('tail') || cleanServerUrl.includes('.ts.net');
-    const protocol = isTailscaleFunnel ? 'https' : 'http';
-    // Tailscale funnel tidak perlu port (sudah di-proxy)
-    const finalServerUrl = isTailscaleFunnel
+    const isVercel = cleanServerUrl.includes('vercel.app');
+    const protocol = (isTailscaleFunnel || isVercel) ? 'https' : 'http';
+    
+    // Tailscale funnel and Vercel tidak perlu port (sudah di-proxy)
+    const finalServerUrl = (isTailscaleFunnel || isVercel)
       ? `${protocol}://${cleanServerUrl}`
       : `${protocol}://${cleanServerUrl}:${serverPort}`;
     const config = {
@@ -327,21 +344,55 @@ const Settings = () => {
   };
 
   const handleCheckUpdate = async () => {
-    if (!window.electronAPI?.checkForUpdates) {
-      showAlert('Update feature only available in desktop app', 'Information');
-      return;
-    }
     setCheckingUpdate(true);
     setUpdateStatus(null);
     setUpdateProgress(null);
+    
     try {
+      // Desktop (Electron) - use electron-updater
       if (window.electronAPI?.checkForUpdates) {
         const result = await window.electronAPI.checkForUpdates();
         if (!result.success) {
           showAlert(result.message || 'Failed to check for updates', 'Error');
           setCheckingUpdate(false);
         }
+        return;
       }
+      
+      // Mobile (Capacitor) - check server for APK updates
+      if ((window as any).Capacitor) {
+        try {
+          const currentVersion = appVersion || '1.0.0';
+          const result = await checkMobileUpdate(currentVersion, storageService);
+          
+          if (result.available && result.version) {
+            setUpdateStatus({
+              status: 'available',
+              message: result.message,
+              version: result.version
+            });
+          } else {
+            setUpdateStatus({
+              status: result.available ? 'available' : 'not-available',
+              message: result.message,
+              version: result.version || undefined
+            });
+          }
+        } catch (error: any) {
+          console.error('Error checking for mobile update:', error);
+          setUpdateStatus({
+            status: 'error',
+            message: `Failed to check for updates: ${error.message}`
+          });
+        } finally {
+          setCheckingUpdate(false);
+        }
+        return;
+      }
+      
+      // Fallback
+      showAlert('Update feature not available', 'Information');
+      setCheckingUpdate(false);
     } catch (error: any) {
       showAlert(`Error: ${error.message}`, 'Error');
       setCheckingUpdate(false);
@@ -364,7 +415,25 @@ const Settings = () => {
     
     // Mobile (Capacitor) - download APK
     if ((window as any).Capacitor) {
-      await downloadMobileUpdate();
+      // Set loading state immediately
+      setUpdateProgress({ percent: 0 });
+      setUpdateStatus({
+        status: 'downloading',
+        message: 'Preparing download...',
+        version: updateStatus?.version
+      });
+      
+      try {
+        await downloadMobileUpdate();
+      } catch (error: any) {
+        showAlert(`Error: ${error.message}`, 'Error');
+        setUpdateProgress(null);
+        setUpdateStatus({
+          status: 'error',
+          message: `Download failed: ${error.message}`,
+          version: updateStatus?.version
+        });
+      }
       return;
     }
     
@@ -375,101 +444,71 @@ const Settings = () => {
     try {
       if (!updateStatus?.version) {
         showAlert('No update available', 'Information');
+        setUpdateProgress(null);
         return;
       }
       
-      // Get server URL
-      const config: any = await storageService.get('storage_config');
-      let serverUrl = 'https://server-tljp.tail75a421.ts.net';
+      // Get server URL from config
+      const config = storageService.getConfig();
+      let serverUrl = config.serverUrl || 'vercel-proxy-blond-nine.vercel.app';
       
-      if (config && (config as any).serverUrl) {
-        serverUrl = (config as any).serverUrl.replace(/:\d+$/, '');
+      // Normalize server URL (same logic as handleCheckConnection)
+      if (!serverUrl.startsWith('http')) {
+        const isTailscaleFunnel = serverUrl.includes('.ts.net') || serverUrl.includes('tailscale') || serverUrl.includes('tail');
+        const isVercel = serverUrl.includes('vercel.app');
+        const protocol = (isTailscaleFunnel || isVercel) ? 'https' : 'http';
+        serverUrl = `${protocol}://${serverUrl}`;
       }
+      serverUrl = serverUrl.replace(/:\d+$/, ''); // Remove port if exists
       
-      // Find APK file name from latest.yml
-      const updateUrl = `${serverUrl}/api/updates/latest.yml`;
-      const response = await fetch(updateUrl);
-      const ymlContent = await response.text();
+      // Get APK filename using helper
+      setUpdateStatus({
+        status: 'downloading',
+        message: 'Fetching update information...',
+        version: updateStatus.version
+      });
+      setUpdateProgress({ percent: 5 });
       
-      // Parse APK filename from YAML
-      const apkMatch = ymlContent.match(/url:\s*([^\n]+\.apk)/);
-      if (!apkMatch) {
-        // Fallback: try to find any .apk file
-        const filesMatch = ymlContent.match(/- url:\s*([^\n]+)/g);
-        if (filesMatch) {
-          for (const match of filesMatch) {
-            if (match.includes('.apk')) {
-              const apkFile = match.replace(/- url:\s*/, '').trim();
-              await downloadAndInstallAPK(serverUrl, apkFile);
-              return;
-            }
-          }
-        }
-        throw new Error('APK file not found in update info');
-      }
-      
-      const apkFile = apkMatch[1].trim();
-      await downloadAndInstallAPK(serverUrl, apkFile);
-    } catch (error: any) {
-      showAlert(`Error: ${error.message}`, 'Error');
-    }
-  };
-
-  const downloadAndInstallAPK = async (serverUrl: string, apkFile: string) => {
-    try {
-      setUpdateProgress({ percent: 0 });
-      
-      const apkUrl = `${serverUrl}/api/updates/${apkFile}`;
-      
-      // Download APK
-      const response = await fetch(apkUrl);
-      if (!response.ok) {
-        throw new Error('Failed to download APK');
-      }
-      
-      const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
-      const reader = response.body?.getReader();
-      const chunks: Uint8Array[] = [];
-      let receivedLength = 0;
-      
-      if (!reader) {
-        throw new Error('Failed to read response');
-      }
-      
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        chunks.push(value);
-        receivedLength += value.length;
-        
-        if (contentLength > 0) {
-          const percent = Math.round((receivedLength / contentLength) * 100);
-          setUpdateProgress({ percent });
-        }
-      }
-      
-      // Combine chunks (fix type for Blob)
-      const blob = new Blob(chunks as BlobPart[], { type: 'application/vnd.android.package-archive' });
-      const url = URL.createObjectURL(blob);
-      
-      // Open APK for installation (Android will handle it)
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = apkFile;
-      link.click();
+      const apkFile = await getAPKFileName(serverUrl);
       
       setUpdateStatus({
+        status: 'downloading',
+        message: `Downloading ${apkFile}...`,
+        version: updateStatus.version
+      });
+      
+      // Download APK using helper with progress callback
+      const downloadResult = await downloadMobileAPK(serverUrl, apkFile, (percent, message) => {
+        setUpdateProgress({ percent });
+        setUpdateStatus({
+          status: 'downloading',
+          message,
+          version: updateStatus.version
+        });
+      });
+      
+      // Download complete - APK sudah di-save ke Downloads dan install dialog sudah muncul
+      setUpdateStatus({
         status: 'downloaded',
-        message: 'APK downloaded. Please install manually.',
+        message: `APK saved to Downloads folder.\nFile: ${downloadResult.filePath}\n\nInstall dialog should appear automatically. If not, check Downloads folder.`,
+        version: updateStatus.version
+      });
+      
+      // Keep progress for 2 seconds, then clear
+      setTimeout(() => {
+        setUpdateProgress(null);
+      }, 2000);
+      
+      showAlert(`APK berhasil di-download dan disimpan ke folder Downloads.\n\nFile: ${downloadResult.filePath}\n\nDialog install seharusnya muncul otomatis. Jika tidak, buka folder Downloads dan klik file APK untuk install.`, 'Success');
+    } catch (error: any) {
+      console.error('[Mobile Update] Error:', error);
+      setUpdateProgress(null);
+      setUpdateStatus({
+        status: 'error',
+        message: `Download failed: ${error.message}`,
         version: updateStatus?.version
       });
-      setUpdateProgress(null);
-      
-      showAlert('APK downloaded. Please install it manually from your downloads folder.', 'Information');
-    } catch (error: any) {
-      showAlert(`Error downloading APK: ${error.message}`, 'Error');
-      setUpdateProgress(null);
+      throw error; // Re-throw untuk handleDownloadUpdate
     }
   };
 
@@ -601,10 +640,9 @@ const Settings = () => {
                 checked={storageType === 'server'}
                 onChange={(e) => {
                   setStorageType(e.target.value as StorageType);
-                  // Auto-set Tailscale server URL saat pilih server mode
+                  // Auto-set Vercel server URL saat pilih server mode
                   if (!serverUrl || serverUrl.trim() === '') {
-                    setServerUrl('server-tljp.tail75a421.ts.net');
-                    setServerPort(8888);
+                    setServerUrl('vercel-proxy-blond-nine.vercel.app');
                   }
                 }}
               />
@@ -619,13 +657,7 @@ const Settings = () => {
               label="Server URL"
               value={serverUrl}
               onChange={setServerUrl}
-              placeholder="server-tljp.tail75a421.ts.net (default Tailscale)"
-            />
-            <Input
-              label="Server Port"
-              type="number"
-              value={String(serverPort)}
-              onChange={(v) => setServerPort(Number(v))}
+              placeholder="vercel-proxy-blond-nine.vercel.app (default Vercel)"
             />
             <div className="settings-actions">
               <Button onClick={handleCheckConnection} variant="secondary">
@@ -679,7 +711,8 @@ const Settings = () => {
         </div>
       </Card>
 
-      {window.electronAPI && (
+      {/* Application Update - Show for both Desktop (Electron) and Mobile (Capacitor) */}
+      {(window.electronAPI || (window as any).Capacitor) && (
         <Card title="Application Update" style={{ marginTop: '20px' }}>
           <div style={{ marginBottom: '16px' }}>
             <div style={{ marginBottom: '8px', fontSize: '14px', color: 'var(--text-secondary)' }}>
@@ -725,13 +758,26 @@ const Settings = () => {
             )}
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <Button 
-              onClick={handleCheckUpdate} 
-              variant="secondary"
-              disabled={checkingUpdate}
-            >
-              {checkingUpdate ? 'Checking...' : 'Check for Updates'}
-            </Button>
+            {/* Desktop: Check for Updates via electron-updater */}
+            {window.electronAPI && (
+              <Button 
+                onClick={handleCheckUpdate} 
+                variant="secondary"
+                disabled={checkingUpdate}
+              >
+                {checkingUpdate ? 'Checking...' : 'Check for Updates'}
+              </Button>
+            )}
+            {/* Mobile: Check for Updates via server API */}
+            {(window as any).Capacitor && !window.electronAPI && (
+              <Button 
+                onClick={handleCheckUpdate} 
+                variant="secondary"
+                disabled={checkingUpdate}
+              >
+                {checkingUpdate ? 'Checking...' : 'Check for Updates'}
+              </Button>
+            )}
             {updateStatus?.status === 'available' && (
               <Button 
                 onClick={handleDownloadUpdate} 

@@ -37,6 +37,10 @@ if [ "$JAVA_VERSION" -gt 19 ]; then
   echo "   Now using Java: $NEW_JAVA_VERSION"
 fi
 
+# Update Android build version (sync dari package.json)
+echo "📱 Updating Android build version..."
+node scripts/update-android-build-version.js
+
 # Build renderer
 echo "📦 Building renderer..."
 npm run build:renderer

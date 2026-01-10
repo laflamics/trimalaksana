@@ -4,7 +4,8 @@ import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import { storageService } from '../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
+import { filterActiveItems } from '../../utils/data-persistence-helper';
+import { deletePackagingItem } from '../../utils/packaging-delete-helper';
 import * as XLSX from 'xlsx';
 import '../../styles/common.css';
 import './Master.css';
@@ -97,10 +98,42 @@ const Suppliers = () => {
   }, []);
 
   const loadSuppliers = async () => {
+    console.log('[Suppliers] Loading suppliers...');
     const dataRaw = await storageService.get<Supplier[]>('suppliers') || [];
+    console.log('[Suppliers] Raw data length:', dataRaw.length);
+    
     // Filter out deleted items menggunakan helper function
     const data = filterActiveItems(dataRaw);
-    setSuppliers(data.map((s, idx) => ({ ...s, no: idx + 1 })));
+    console.log('[Suppliers] Filtered data length:', data.length);
+    
+    // CRITICAL: Remove duplicates by kode before setting state
+    const seen = new Set<string>();
+    const uniqueData: Supplier[] = [];
+    
+    data.forEach(supplier => {
+      if (supplier && supplier.kode) {
+        const key = supplier.kode.toLowerCase().trim();
+        if (!seen.has(key)) {
+          seen.add(key);
+          uniqueData.push(supplier);
+        } else {
+          console.log('[Suppliers] Removed duplicate:', supplier.kode, '-', supplier.nama);
+        }
+      }
+    });
+    
+    console.log('[Suppliers] Unique data length:', uniqueData.length);
+    
+    const numberedData = uniqueData.map((s, idx) => ({ ...s, no: idx + 1 }));
+    console.log('[Suppliers] Final data length:', numberedData.length);
+    
+    setSuppliers(numberedData);
+    
+    // Save cleaned data back to storage if duplicates were removed
+    if (uniqueData.length < data.length) {
+      console.log('[Suppliers] Saving cleaned data to storage...');
+      await storageService.set('suppliers', numberedData);
+    }
   };
 
   const handleSave = async () => {
@@ -159,17 +192,17 @@ const Suppliers = () => {
       `Are you sure you want to delete supplier "${item.nama}"? This action cannot be undone.`,
       async () => {
         try {
-          // Pakai helper function untuk safe delete (tombstone pattern)
-          const success = await safeDeleteItem('suppliers', item.id, 'id');
+          // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
+          const deleteResult = await deletePackagingItem('suppliers', item.id, 'id');
           
-          if (success) {
+          if (deleteResult.success) {
             // Reload data dengan filter active items
             const dataRaw = await storageService.get<Supplier[]>('suppliers') || [];
             const data = filterActiveItems(dataRaw);
             setSuppliers(data.map((s, idx) => ({ ...s, no: idx + 1 })));
             showAlert(`Supplier "${item.nama}" deleted successfully`, 'Success');
           } else {
-            showAlert(`Error deleting supplier. Silakan coba lagi.`, 'Error');
+            showAlert(`Error deleting supplier: ${deleteResult.error || 'Unknown error'}`, 'Error');
           }
         } catch (error: any) {
           showAlert(`Error deleting supplier: ${error.message}`, 'Error');
@@ -370,7 +403,7 @@ const Suppliers = () => {
   const filteredSuppliers = useMemo(() => {
     // Ensure suppliers is always an array
     const suppliersArray = Array.isArray(suppliers) ? suppliers : [];
-    return suppliersArray.filter(supplier => {
+    let filtered = suppliersArray.filter(supplier => {
       if (!supplier) return false;
       if (!searchQuery) return true;
       const query = searchQuery.toLowerCase();
@@ -384,6 +417,41 @@ const Suppliers = () => {
         (supplier.kategori || '').toLowerCase().includes(query)
       );
     });
+    
+    // Sort berdasarkan kode ID secara natural (SPL-0001, SPL-0002, CTM-068, dst)
+    const sorted = filtered.sort((a, b) => {
+      const kodeA = a.kode || '';
+      const kodeB = b.kode || '';
+      
+      // Natural sort untuk kode dengan format PREFIX-NUMBER
+      // Contoh: SPL-0001, SPL-0002, CTM-068, dll
+      const parseKode = (kode: string) => {
+        const match = kode.match(/^([A-Z]+)-?(\d+)$/i);
+        if (match) {
+          return {
+            prefix: match[1].toUpperCase(),
+            number: parseInt(match[2], 10)
+          };
+        }
+        return { prefix: kode.toUpperCase(), number: 0 };
+      };
+      
+      const parsedA = parseKode(kodeA);
+      const parsedB = parseKode(kodeB);
+      
+      // Sort by prefix first, then by number
+      if (parsedA.prefix !== parsedB.prefix) {
+        return parsedA.prefix.localeCompare(parsedB.prefix);
+      }
+      
+      return parsedA.number - parsedB.number;
+    });
+    
+    // CRITICAL: Re-number after sorting untuk memastikan No urut 1, 2, 3, dst
+    return sorted.map((supplier, index) => ({
+      ...supplier,
+      no: index + 1
+    }));
   }, [suppliers, searchQuery]);
 
   // Dynamic columns based on filled data (memoized to recalculate when suppliers change)

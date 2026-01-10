@@ -5,6 +5,7 @@ import Button from '../../components/Button';
 import Input from '../../components/Input';
 import NotificationBell from '../../components/NotificationBell';
 import { storageService } from '../../services/storage';
+import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import { generateInvoiceHtml } from '../../pdf/invoice-pdf-template';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
@@ -21,6 +22,7 @@ const InvoiceActionMenu: React.FC<{
   onUploadPaymentProof?: () => void;
   onViewPaymentProof?: () => void;
   onViewSuratJalan?: () => void;
+  onDelete?: () => void;
 }> = ({
   item,
   onViewDetail,
@@ -29,6 +31,7 @@ const InvoiceActionMenu: React.FC<{
   onUploadPaymentProof,
   onViewPaymentProof,
   onViewSuratJalan,
+  onDelete,
 }) => {
   const [showMenu, setShowMenu] = React.useState<boolean>(false);
   const [menuPosition, setMenuPosition] = React.useState<{ top: number; right: number }>({ top: 0, right: 0 });
@@ -209,6 +212,26 @@ const InvoiceActionMenu: React.FC<{
               📋 Cek SJ
             </button>
           )}
+          {onDelete && (
+            <button
+              onClick={() => { onDelete(); setShowMenu(false); }}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                border: 'none',
+                background: 'transparent',
+                color: '#ff4444',
+                cursor: 'pointer',
+                fontSize: '11px',
+                borderRadius: '4px',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              🗑️ Delete
+            </button>
+          )}
         </div>
       )}
     </>
@@ -268,24 +291,34 @@ const Accounting = () => {
     const prod = await storageService.get<any[]>('products') || [];
     const so = await storageService.get<any[]>('salesOrders') || [];
     
+    // 🚀 FIX: CRITICAL - Filter deleted items sebelum set ke state
+    // Ini prevent data yang sudah di-delete muncul lagi setelah sync
+    const { filterActiveItems } = await import('../../utils/packaging-delete-helper');
+    const activeInvoices = filterActiveItems(Array.isArray(inv) ? inv : []);
+    const activeExpenses = filterActiveItems(Array.isArray(exp) ? exp : []);
+    const activeCustomers = filterActiveItems(Array.isArray(cust) ? cust : []);
+    const activeProducts = filterActiveItems(Array.isArray(prod) ? prod : []);
+    const activeSalesOrders = filterActiveItems(Array.isArray(so) ? so : []);
+    
     // 🚀 OPTIMASI: Hanya update state jika benar-benar ada perubahan
     setInvoices((prev: any[]) => {
-      if (JSON.stringify(prev) === JSON.stringify(inv)) {
+      if (JSON.stringify(prev) === JSON.stringify(activeInvoices)) {
         return prev;
       }
-      return inv;
+      return activeInvoices;
     });
     setExpenses((prev: any[]) => {
-      if (JSON.stringify(prev) === JSON.stringify(exp)) {
+      if (JSON.stringify(prev) === JSON.stringify(activeExpenses)) {
         return prev;
       }
-      return exp;
+      return activeExpenses;
     });
     
     // Auto-cleanup: Hapus notifications yang sudah dibuat invoice atau status PROCESSED
     // Ensure notifs and inv are always arrays
+    // 🚀 FIX: Pakai activeInvoices (sudah di-filter) bukan inv (raw data)
     const notifsArray = Array.isArray(notifs) ? notifs : [];
-    const invArray = Array.isArray(inv) ? inv : [];
+    const invArray = activeInvoices; // Pakai activeInvoices yang sudah di-filter
     const cleanedNotifs = notifsArray.filter((n: any) => {
       // Hapus jika sudah ada invoice untuk SO/SJ ini
       const existingInvoice = invArray.find((i: any) => i.soNo === n.soNo && i.sjNo === n.sjNo);
@@ -317,9 +350,10 @@ const Accounting = () => {
       }
       return pendingNotifs;
     });
-    setCustomers(cust);
-    setProducts(prod);
-    setSalesOrders(so);
+    // 🚀 FIX: Pakai active data yang sudah di-filter deleted items
+    setCustomers(activeCustomers);
+    setProducts(activeProducts);
+    setSalesOrders(activeSalesOrders);
   };
 
   // Calculate COGS (Cost of Goods Sold) dari BOM + PO price
@@ -1430,13 +1464,45 @@ const Accounting = () => {
     
     async function proceedWithDeleteExpense() {
       try {
-        // Ensure expenses is always an array
-        const expensesArray = Array.isArray(expenses) ? expenses : [];
-        const updated = expensesArray.filter(e => e.id !== item.id);
-        await storageService.set('expenses', updated);
-        setExpenses(updated);
+        // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
+        const deleteResult = await deletePackagingItem('expenses', item.id, 'id');
+        if (deleteResult.success) {
+          // Reload data dengan helper (handle race condition)
+          await reloadPackagingData('expenses', setExpenses);
+          showAlert(`Expense ${item.expenseNo} deleted successfully`, 'Success');
+        } else {
+          showAlert(`Error deleting expense: ${deleteResult.error || 'Unknown error'}`, 'Error');
+        }
       } catch (error: any) {
         showAlert(`Error deleting expense: ${error.message}`, 'Error');
+      }
+    }
+  };
+
+  const handleDeleteInvoice = async (item: any) => {
+    showConfirm(
+      `Delete invoice: ${item.invoiceNo}?`,
+      async () => {
+        await proceedWithDeleteInvoice();
+      },
+      () => {},
+      'Delete Invoice'
+    );
+    return;
+    
+    async function proceedWithDeleteInvoice() {
+      try {
+        // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
+        const deleteResult = await deletePackagingItem('invoices', item.id, 'id');
+        if (deleteResult.success) {
+          // Reload data dengan helper (handle race condition)
+          await reloadPackagingData('invoices', setInvoices);
+          showAlert(`Invoice ${item.invoiceNo} deleted successfully`, 'Success');
+        } else {
+          showAlert(`Error deleting invoice: ${deleteResult.error || 'Unknown error'}`, 'Error');
+        }
+      } catch (error: any) {
+        showAlert(`Error deleting invoice: ${error.message}`, 'Error');
       }
     }
   };
@@ -1530,6 +1596,7 @@ const Accounting = () => {
           onUploadPaymentProof={item.status === 'OPEN' ? () => handleUpdateInvoice(item) : undefined}
           onViewPaymentProof={item.status === 'CLOSE' && item.paymentProof ? () => handleViewPaymentProof(item) : undefined}
           onViewSuratJalan={item.sjNo ? () => handleViewSuratJalan(item) : undefined}
+          onDelete={() => handleDeleteInvoice(item)}
         />
       ),
     },

@@ -5,7 +5,8 @@ import Button from '../../components/Button';
 import Input from '../../components/Input';
 import NotificationBell from '../../components/NotificationBell';
 import { storageService, extractStorageValue } from '../../services/storage';
-import { safeDeleteItem, safeDeleteMultipleItems, filterActiveItems } from '../../utils/data-persistence-helper';
+import { filterActiveItems } from '../../utils/data-persistence-helper';
+import { deletePackagingItem, deletePackagingItems, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import { generatePOHtml } from '../../pdf/po-pdf-template';
 import { generatePOSheetHtml } from '../../pdf/po-sheet-template';
 import { generatePRHtml } from '../../pdf/pr-pdf-template';
@@ -50,6 +51,7 @@ interface Supplier {
 }
 
 interface Material {
+  satuan: string | undefined;
   id: string;
   kode: string;
   material_id?: string;
@@ -424,6 +426,8 @@ const Purchasing = () => {
   const [supplierInputValue, setSupplierInputValue] = useState('');
   const [showSupplierDialog, setShowSupplierDialog] = useState(false);
   const [supplierDialogSearch, setSupplierDialogSearch] = useState('');
+  const [showMaterialDialog, setShowMaterialDialog] = useState(false);
+  const [materialDialogSearch, setMaterialDialogSearch] = useState('');
   const [qtyInputValue, setQtyInputValue] = useState('');
   const [priceInputValue, setPriceInputValue] = useState('');
   const [formData, setFormData] = useState<Partial<PurchaseOrder>>({
@@ -444,6 +448,44 @@ const Purchasing = () => {
   
   // Custom Dialog - menggunakan hook terpusat
   const { showAlert, showConfirm, closeDialog, DialogComponent } = useDialog();
+
+  // Filtered suppliers for dialog
+  const filteredSuppliersForDialog = useMemo(() => {
+    // CRITICAL: Ensure suppliers is always an array
+    const suppliersArray = Array.isArray(suppliers) ? suppliers : [];
+    
+    let filtered = suppliersArray;
+    if (supplierDialogSearch) {
+      const query = supplierDialogSearch.toLowerCase();
+      filtered = suppliersArray.filter(s => {
+        if (!s) return false;
+        const code = (s.kode || '').toLowerCase();
+        const name = (s.nama || '').toLowerCase();
+        return code.includes(query) || name.includes(query);
+      });
+    }
+    // Limit to 200 items for performance
+    return filtered.slice(0, 200);
+  }, [supplierDialogSearch, suppliers]);
+
+  // Filtered materials for dialog
+  const filteredMaterialsForDialog = useMemo(() => {
+    // CRITICAL: Ensure materials is always an array
+    const materialsArray = Array.isArray(materials) ? materials : [];
+    
+    let filtered = materialsArray;
+    if (materialDialogSearch) {
+      const query = materialDialogSearch.toLowerCase();
+      filtered = materialsArray.filter(m => {
+        if (!m) return false;
+        const code = (m.material_id || m.kode || '').toLowerCase();
+        const name = (m.nama || '').toLowerCase();
+        return code.includes(query) || name.includes(query);
+      });
+    }
+    // Limit to 200 items for performance
+    return filtered.slice(0, 200);
+  }, [materialDialogSearch, materials]);
 
   // Helper function untuk remove leading zero dari input angka
   const removeLeadingZero = (value: string): string => {
@@ -498,12 +540,16 @@ const Purchasing = () => {
 
   const loadSuppliers = async () => {
     const data = await storageService.get<Supplier[]>('suppliers') || [];
-    setSuppliers(data);
+    // CRITICAL: Filter deleted items using helper function
+    const activeSuppliers = filterActiveItems(data);
+    setSuppliers(activeSuppliers);
   };
 
   const loadMaterials = async () => {
     const data = await storageService.get<Material[]>('materials') || [];
-    setMaterials(data);
+    // CRITICAL: Filter deleted items using helper function
+    const activeMaterials = filterActiveItems(data);
+    setMaterials(activeMaterials);
   };
 
   const loadOrders = async () => {
@@ -1072,7 +1118,9 @@ const Purchasing = () => {
     }
   };
 
-  const handleSaveReceipt = async (receiptData: { qtyReceived: number; receivedDate: string; notes?: string; suratJalan?: string; suratJalanName?: string; invoiceNo?: string; invoiceFile?: string; invoiceFileName?: string }) => {
+  const handleSaveReceipt = async (receiptData: {
+    qtyReceived: number; receivedDate: string; notes?: string; suratJalan?: string; suratJalanName?: string; invoiceNo?: string; invoiceFile?: string; invoiceFileName?: string; sitePlan?: string 
+}) => {
     if (!selectedPOForReceipt) return;
 
     try {
@@ -2729,7 +2777,7 @@ const Purchasing = () => {
       }
 
       // Delete PO lama menggunakan tombstone pattern (prevent data resurrection)
-      const deleteResults = await safeDeleteMultipleItems('purchaseOrders', poIdsToDelete, 'id');
+      const deleteResults = await deletePackagingItems('purchaseOrders', poIdsToDelete, 'id');
       
       if (deleteResults.failed > 0) {
         showAlert(`Warning: ${deleteResults.failed} PO gagal dihapus. ${deleteResults.success} PO berhasil dihapus.`, 'Warning');
@@ -2791,17 +2839,15 @@ const Purchasing = () => {
       `Hapus PO ${poNo}?\n\nTindakan ini akan:\n• Menghapus PO dari daftar\n• Menghapus notifikasi Finance terkait\n• Mengembalikan PR ke status APPROVED (jika ada)\n\nPastikan tidak ada proses lanjutan untuk PO ini.`,
       async () => {
         try {
-          // Use tombstone pattern untuk prevent data resurrection dari sync
-          const success = await safeDeleteItem('purchaseOrders', item.id, 'id');
-          if (!success) {
-            showAlert('Gagal menghapus PO. Silakan coba lagi.', 'Error');
+          // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
+          const deleteResult = await deletePackagingItem('purchaseOrders', item.id, 'id');
+          if (!deleteResult.success) {
+            showAlert(`Gagal menghapus PO: ${deleteResult.error || 'Unknown error'}`, 'Error');
             return;
           }
           
-          // Reload orders dengan filter active items (after tombstone deletion)
-          const ordersArray = await storageService.get<PurchaseOrder[]>('purchaseOrders') || [];
-          const activeOrders = filterActiveItems(ordersArray);
-          setOrders(activeOrders);
+          // Reload orders dengan helper (handle race condition)
+          await reloadPackagingData('purchaseOrders', setOrders);
 
           // Ensure purchaseRequests is always an array
           const prArray = Array.isArray(purchaseRequests) ? purchaseRequests : [];
@@ -2811,7 +2857,8 @@ const Purchasing = () => {
 
           const revertPRStatus = (targetId: string) => {
             // Check against active orders (after tombstone deletion)
-            const stillHasPO = activeOrders.some((po: PurchaseOrder) => normalizeId(po.sourcePRId) === targetId);
+            const currentOrders = filterActiveItems(orders);
+            const stillHasPO = currentOrders.some((po: PurchaseOrder) => normalizeId(po.sourcePRId) === targetId);
             if (stillHasPO) return;
             updatedPRs = prArray.map(pr => {
               if (pr.id === targetId && pr.status === 'PO_CREATED') {
@@ -2828,7 +2875,8 @@ const Purchasing = () => {
             const candidate = prArray.find(pr => pr.spkNo === item.spkNo && pr.status === 'PO_CREATED');
             if (candidate) {
               const candidateId = candidate.id;
-              const stillHasPO = activeOrders.some((po: PurchaseOrder) => {
+              const currentOrders = filterActiveItems(orders);
+              const stillHasPO = currentOrders.some((po: PurchaseOrder) => {
                 if (normalizeId(po.sourcePRId) === candidateId) return true;
                 return (po.spkNo || '').toString().trim() === (item.spkNo || '').toString().trim();
               });
@@ -2935,49 +2983,38 @@ const Purchasing = () => {
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
               Material/Item *
             </label>
-            <input
-              type="text"
-              list="material-list-new"
-              value={getMaterialInputDisplayValue()}
-              onChange={(e) => {
-                handleMaterialInputChange(e.target.value);
-              }}
-              onBlur={(e) => {
-                const value = e.target.value;
-                const matchedMaterial = materials.find(m => {
-                  const label = `${m.material_id || m.kode || ''}${m.material_id || m.kode ? ' - ' : ''}${m.nama || ''}`;
-                  return label === value;
-                });
-                if (matchedMaterial) {
-                  const materialPrice = matchedMaterial.priceMtr || matchedMaterial.harga || 0;
-                  const roundedPrice = Math.ceil(materialPrice);
-                  const roundedTotal = Math.ceil((formData.qty || 0) * roundedPrice);
-                setFormData({
-                  ...formData,
-                    materialItem: matchedMaterial.nama,
-                  price: roundedPrice,
-                  total: roundedTotal,
-                });
-                }
-              }}
-              placeholder="-- Pilih Material --"
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-              }}
-            />
-            <datalist id="material-list-new">
-              {materials.map(m => (
-                <option key={m.id} value={`${m.material_id || m.kode} - ${m.nama}`}>
-                  {m.material_id || m.kode} - {m.nama}
-                </option>
-              ))}
-            </datalist>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                value={getMaterialInputDisplayValue()}
+                placeholder="-- Pilih Material --"
+                readOnly
+                onClick={() => {
+                  setMaterialDialogSearch('');
+                  setShowMaterialDialog(true);
+                }}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                }}
+              />
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setMaterialDialogSearch('');
+                  setShowMaterialDialog(true);
+                }}
+                style={{ fontSize: '12px', padding: '8px 16px' }}
+              >
+                🔍
+              </Button>
+            </div>
           </div>
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
@@ -3981,6 +4018,255 @@ const Purchasing = () => {
         </div>
       )}
       
+      {/* Supplier Selection Dialog */}
+      {showSupplierDialog && (
+        <div className="dialog-overlay" onClick={() => {
+          setShowSupplierDialog(false);
+          setSupplierDialogSearch('');
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <Card
+              title="Select Supplier"
+              className="dialog-card"
+            >
+              <div style={{ marginBottom: '16px' }}>
+                <input
+                  type="text"
+                  value={supplierDialogSearch}
+                  onChange={(e) => setSupplierDialogSearch(e.target.value)}
+                  placeholder="Search by supplier code or name..."
+                  autoFocus
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+              <div style={{ 
+                maxHeight: '60vh', 
+                overflowY: 'auto',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+              }}>
+                {filteredSuppliersForDialog.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    No suppliers found
+                  </div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-tertiary)', zIndex: 10 }}>
+                      <tr>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Code</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Name</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Address</th>
+                        <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid var(--border)' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredSuppliersForDialog.map(supplier => {
+                        const handleSelect = () => {
+                          setFormData({ ...formData, supplier: supplier.nama });
+                          setSupplierInputValue(`${supplier.kode} - ${supplier.nama}`);
+                          setShowSupplierDialog(false);
+                          setSupplierDialogSearch('');
+                        };
+                        return (
+                          <tr
+                            key={supplier.id || supplier.kode}
+                            style={{
+                              borderBottom: '1px solid var(--border)',
+                              cursor: 'pointer',
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--hover-bg)'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                            onClick={handleSelect}
+                          >
+                            <td style={{ padding: '12px' }}>{supplier.kode || '-'}</td>
+                            <td style={{ padding: '12px' }}>{supplier.nama || '-'}</td>
+                            <td style={{ padding: '12px' }}>{supplier.alamat || '-'}</td>
+                            <td style={{ padding: '12px', textAlign: 'center' }}>
+                              <Button
+                                variant="primary"
+                                onClick={() => handleSelect()}
+                                style={{ fontSize: '12px', padding: '4px 12px' }}
+                              >
+                                Select
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+                  Showing {filteredSuppliersForDialog.length} of {supplierDialogSearch ? suppliers.filter(s => {
+                    const query = supplierDialogSearch.toLowerCase();
+                    const code = (s.kode || '').toLowerCase();
+                    const name = (s.nama || '').toLowerCase();
+                    return code.includes(query) || name.includes(query);
+                  }).length : suppliers.length} supplier{filteredSuppliersForDialog.length !== 1 ? 's' : ''}
+                  {filteredSuppliersForDialog.length >= 200 && (
+                    <span style={{ color: '#ff9800', marginLeft: '8px' }}>
+                      (Limited to 200. Use search to narrow down)
+                    </span>
+                  )}
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowSupplierDialog(false);
+                    setSupplierDialogSearch('');
+                  }}
+                >
+                  Close
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Material Selection Dialog */}
+      {showMaterialDialog && (
+        <div className="dialog-overlay" onClick={() => {
+          setShowMaterialDialog(false);
+          setMaterialDialogSearch('');
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <Card
+              title="Select Material"
+              className="dialog-card"
+            >
+              <div style={{ marginBottom: '16px' }}>
+                <input
+                  type="text"
+                  value={materialDialogSearch}
+                  onChange={(e) => setMaterialDialogSearch(e.target.value)}
+                  placeholder="Search by material code or name..."
+                  autoFocus
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+              <div style={{ 
+                maxHeight: '60vh', 
+                overflowY: 'auto',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+              }}>
+                {filteredMaterialsForDialog.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    No materials found
+                  </div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-tertiary)', zIndex: 10 }}>
+                      <tr>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Code</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Name</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Unit</th>
+                        <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid var(--border)' }}>Price</th>
+                        <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid var(--border)' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredMaterialsForDialog.map(material => {
+                        const price = material.priceMtr || material.harga || 0;
+                        const handleSelect = () => {
+                          const materialPrice = material.priceMtr || material.harga || 0;
+                          const roundedPrice = Math.ceil(materialPrice);
+                          const roundedTotal = Math.ceil((formData.qty || 0) * roundedPrice);
+                          setFormData({
+                            ...formData,
+                            materialItem: material.nama,
+                            price: roundedPrice,
+                            total: roundedTotal,
+                          });
+                          setMaterialInputValue(`${material.material_id || material.kode} - ${material.nama}`);
+                          setShowMaterialDialog(false);
+                          setMaterialDialogSearch('');
+                        };
+                        return (
+                          <tr
+                            key={material.id || material.kode}
+                            style={{
+                              borderBottom: '1px solid var(--border)',
+                              cursor: 'pointer',
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--hover-bg)'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                            onClick={handleSelect}
+                          >
+                            <td style={{ padding: '12px' }}>{material.material_id || material.kode || '-'}</td>
+                            <td style={{ padding: '12px' }}>{material.nama || '-'}</td>
+                            <td style={{ padding: '12px' }}>{material.unit || material.satuan || 'PCS'}</td>
+                            <td style={{ padding: '12px', textAlign: 'right' }}>
+                              {price > 0 ? new Intl.NumberFormat('id-ID', { 
+                                style: 'currency', 
+                                currency: 'IDR',
+                                minimumFractionDigits: 0 
+                              }).format(price) : '-'}
+                            </td>
+                            <td style={{ padding: '12px', textAlign: 'center' }}>
+                              <Button
+                                variant="primary"
+                                onClick={() => handleSelect()}
+                                style={{ fontSize: '12px', padding: '4px 12px' }}
+                              >
+                                Select
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+                  Showing {filteredMaterialsForDialog.length} of {materialDialogSearch ? materials.filter(m => {
+                    const query = materialDialogSearch.toLowerCase();
+                    const code = (m.material_id || m.kode || '').toLowerCase();
+                    const name = (m.nama || '').toLowerCase();
+                    return code.includes(query) || name.includes(query);
+                  }).length : materials.length} material{filteredMaterialsForDialog.length !== 1 ? 's' : ''}
+                  {filteredMaterialsForDialog.length >= 200 && (
+                    <span style={{ color: '#ff9800', marginLeft: '8px' }}>
+                      (Limited to 200. Use search to narrow down)
+                    </span>
+                  )}
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowMaterialDialog(false);
+                    setMaterialDialogSearch('');
+                  }}
+                >
+                  Close
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+      
       {/* Custom Dialog - menggunakan hook terpusat */}
       <DialogComponent />
     </div>
@@ -4975,6 +5261,10 @@ const EditPODialog = ({
     }
   };
 
+  function setShowSupplierDialog(arg0: boolean): void {
+    throw new Error('Function not implemented.');
+  }
+
   return (
     <div className="dialog-overlay" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '700px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -5361,3 +5651,4 @@ const EditPODialog = ({
 };
 
 export default Purchasing;
+

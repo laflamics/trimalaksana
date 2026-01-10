@@ -1,76 +1,1413 @@
 {
   "value": [
     {
+      "code": "1-0000",
+      "name": "AKTIVA",
+      "type": "Asset",
+      "balance": 0
+    },
+    {
+      "code": "1-1000",
+      "name": "AKTIVA LANCAR",
+      "type": "Asset",
+      "balance": 0
+    },
+    {
+      "code": "1-1100",
+      "name": "KAS & BANK",
+      "type": "Asset",
+      "balance": 0
+    },
+    {
+      "code": "1-1110",
+      "name": "KAS PETTY CASH",
+      "type": "Asset",
+      "balance": 0
+    },
+    {
+      "code": "1-1111",
+      "name": "KAS TOKO",
+      "type": "Asset",
+      "balance": 0
+    },
+    {
+      "code": "1-1112",
+      "name": "KAS MUSANTOSO",
+      "type": "Asset",
+      "balance": 0
+    },
+    {
+      "code": "1-1120",
+      "name": "BANK BCA",
+      "type": "Asset",
+      "balance": 0
+    },
+    {
+      "code": "1-1121",
+      "name": "BANK MANDIRI",
+      "type": "Asset",
+      "balance": 0
+    },
+    {
+      "code": "1-1121A",
+      "name": "BANK MANDIRI 2015 (CIKARANG)",
+      "type": "Asset",
+      "balance": 0
+    },
+    {
+      "code": "1-1121B",
+      "name": "BANK MANDIRI 7273 (OUTWARD)",
+      "type": "Asset",
+      "balance": 0
+    },
+    {
+      "code": "1-1121C",
+      "name": "BANK MANDIRI 7265 ( INWARD)",
+      "type": "Asset",
+      "balance": 0
+    },
+    {
+      "code": "1-1129",
+      "name": "BANK BNI 1790095608",
+      "type": "Asset",
+      "balance": 0
+    },
+    {
+      "code": "1-1130",
+      "name": "BANK BRI",
+      "type": "Asset",
+      "balance": 0
+    },
+    {
+      "code": "1-1131",
+      "name": "BCA ALI AUDAH",
+      "type": "Asset",
+      "balance": 0
+    },
+    {
+      "code": "1-1140",
+      "name": "KAS BIAYA PROMOSI",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1141",
+      "name": "KAS DEPOSIT",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1200",
+      "name": "PIUTANG",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1210",
+      "name": "PIUTANG USAHA",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1211",
+      "name": "PIUTANG KONSINYASI",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1212",
+      "name": "PIUTANG PPN",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1213",
+      "name": "PIUTANG REKA",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1214",
+      "name": "PIUTANG TRIDAYA",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1215",
+      "name": "PIUTANG LINTAS",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1216",
+      "name": "PIUTANG PEMILIK",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1217",
+      "name": "PIUTANG INDOPACK",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1218",
+      "name": "PIUTANG KARYAWAN",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1219",
+      "name": "PIUTANG OPRASIONAL",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1220",
+      "name": "PIUTANG KARTU KREDIT",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1221",
+      "name": "PIUTANG TRIMA",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1222",
+      "name": "PIUTANG NARA/PAK ALI",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1223",
+      "name": "PIUTANG BIG",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-122X01",
+      "name": "PIUTANG E-MONEY",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1300",
+      "name": "PAJAK DIBAYAR DIMUKA",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1310",
+      "name": "PPH PASAL 4 AYAT (2)",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1320",
+      "name": "PPH PASAL 25",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1330",
+      "name": "PPH PASAL 23",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1400",
+      "name": "PAJAK PEMBELIAN",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1410",
+      "name": "PPN MASUKAN",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-1499X01",
+      "name": "PPh 23 Dibayar Dimuka",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-2000",
+      "name": "PERSEDIAAN",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-2010",
+      "name": "PERSEDIAAN BARANG",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-2030",
+      "name": "PERSEDIIAN BARANG DIJUAL",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-2035",
+      "name": "CABANG A",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-2040",
+      "name": "CABANG B",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-2390",
+      "name": "POTONGAN BELI DAN BIAYA LAIN",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-3000",
+      "name": "PERAKITAN",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-3010",
+      "name": "PERSEDIAAN BARANG DALAM PROSES",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-4000",
+      "name": "KONSINYASI KELUAR",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-4010",
+      "name": "BARANG-BARANG KONSINYASI",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-5000",
+      "name": "AKTIVA TETAP",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-5100",
+      "name": "TANAH",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-5200",
+      "name": "BANGUNAN",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-5201",
+      "name": "AKUMULASI PENYUSUTAN BANGUNAN",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-5300",
+      "name": "KENDARAAN",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-5301",
+      "name": "AKUMULASI PENYUSUTAN KENDARAAN",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-5400",
+      "name": "PERALATAN",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-5401",
+      "name": "AKUMULASI PENYUSUTAN PERALATAN",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-5500",
+      "name": "ASSET DALAM PROSES PENGERJAAN",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-9000",
+      "name": "PEMBAYARAN DIMUKA",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-9100",
+      "name": "UANG MUKA PESANAN PEMBELIAN",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-9101",
+      "name": "DANA DEPOSIT DI SUPLIER",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "1-9699X01",
+      "name": "DANA DEPOSIT KONSINYASI MASUK DI SUPPLIER",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
       "code": "1000",
       "name": "Cash",
-      "type": "Asset"
+      "type": "Asset",
+      "padCode": ""
+    },
+    {
+      "code": "1000",
+      "name": "Cash",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
     },
     {
       "code": "1100",
       "name": "Accounts Receivable",
-      "type": "Asset"
+      "type": "Asset",
+      "padCode": ""
+    },
+    {
+      "code": "1100",
+      "name": "Accounts Receivable",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
     },
     {
       "code": "1200",
       "name": "Inventory",
-      "type": "Asset"
+      "type": "Asset",
+      "padCode": ""
+    },
+    {
+      "code": "1200",
+      "name": "Inventory",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
     },
     {
       "code": "1300",
       "name": "Fixed Assets",
-      "type": "Asset"
+      "type": "Asset",
+      "padCode": ""
+    },
+    {
+      "code": "1300",
+      "name": "Fixed Assets",
+      "type": "Asset",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-0000",
+      "name": "KEWAJIBAN",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1000",
+      "name": "KEWAJIBAN LANCAR",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1100",
+      "name": "HUTANG",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1101",
+      "name": "HUTANG USAHA",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1102",
+      "name": "HUTANG TRIDAYA",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1103",
+      "name": "HUTANG REKA/ORIX",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1104",
+      "name": "HUTANG LINTAS",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1105",
+      "name": "HUTANG PEMILIK",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1106",
+      "name": "HUTANG INDOPACK",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1107",
+      "name": "HUTANG LEASING  KENDARAAN",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1108",
+      "name": "HUTANG BRI",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1109",
+      "name": "HUTANG TRIHAMAS",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1110",
+      "name": "HUTANG BNI",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1130",
+      "name": "HUTANG KARTU KREDIT",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1140",
+      "name": "HUTANG KONSINYASI",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1200",
+      "name": "HUTANG GAJI",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1201",
+      "name": "HUTANG BPJS KES DITANGGUNG KANTOR",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1202",
+      "name": "HUTANG BPJS KET DITANGGUNG KANTOR",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1203",
+      "name": "HUTANG BPJS KES DITANGGUNG KARYAWAN",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1204",
+      "name": "HUTANG BPJS KET DITANGGUNG KARYAWAN",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1300",
+      "name": "HUTANG SALES",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1500",
+      "name": "PROSES PERAKITAN",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1501",
+      "name": "HUTANG GAJI PROSES PERAKITAN",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-1510",
+      "name": "HUTANG BIAYA OVERHEAD PROSES PERAKITAN",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-2000",
+      "name": "HUTANG NON OPERASIONAL",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-2100X01",
+      "name": "HUTANG TITIPAN ONGKIR",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-3000",
+      "name": "PENDAPATAN DITERIMA DIMUKA",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-3100",
+      "name": "UANG MUKA PESANAN PENJUALAN",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-3101",
+      "name": "DEPOSIT PELANGGAN",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-3699X01",
+      "name": "DEPOSIT PELANGGAN KONSINYASI KELUAR",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-4000",
+      "name": "HUTANG PAJAK",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-4110",
+      "name": "PPN KELUARAN",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-4200",
+      "name": "HUTANG PPH PASAL 21",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-4300",
+      "name": "HUTANG PPH PASAL 23",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-499X01",
+      "name": "PPN Barang Mewah",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-6000",
+      "name": "BARANG KONSINYASI MASUK",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "2-6100",
+      "name": "BARANG-BARANG KONSINYASI",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
     },
     {
       "code": "2000",
       "name": "Accounts Payable",
-      "type": "Liability"
+      "type": "Liability",
+      "padCode": ""
+    },
+    {
+      "code": "2000",
+      "name": "Accounts Payable",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
     },
     {
       "code": "2100",
       "name": "Accrued Expenses",
-      "type": "Liability"
+      "type": "Liability",
+      "padCode": ""
+    },
+    {
+      "code": "2100",
+      "name": "Accrued Expenses",
+      "type": "Liability",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "3-0000",
+      "name": "MODAL",
+      "type": "Equity",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "3-1000",
+      "name": "MODAL",
+      "type": "Equity",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "3-2000",
+      "name": "LABA DITAHAN",
+      "type": "Equity",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "3-3000",
+      "name": "LABA TAHUN BERJALAN",
+      "type": "Equity",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "3-8000",
+      "name": "PRIVE",
+      "type": "Equity",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "3-9000",
+      "name": "HISTORICAL BALANCING",
+      "type": "Equity",
+      "balance": 0,
+      "padCode": ""
     },
     {
       "code": "3000",
       "name": "Equity",
-      "type": "Equity"
+      "type": "Equity",
+      "padCode": ""
+    },
+    {
+      "code": "3000",
+      "name": "Equity",
+      "type": "Equity",
+      "balance": 0,
+      "padCode": ""
     },
     {
       "code": "3100",
       "name": "Retained Earnings",
-      "type": "Equity"
+      "type": "Equity",
+      "padCode": ""
+    },
+    {
+      "code": "3100",
+      "name": "Retained Earnings",
+      "type": "Equity",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "4-0000",
+      "name": "PENDAPATAN",
+      "type": "Revenue",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "4-1000",
+      "name": "PENDAPATAN DAGANG",
+      "type": "Revenue",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "4-1100",
+      "name": "PENDAPATAN JUAL",
+      "type": "Revenue",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "4-1101",
+      "name": "PENDAPATAN KONSINYASI",
+      "type": "Revenue",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "4-1500",
+      "name": "POTONGAN JUAL",
+      "type": "Revenue",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "4-1600",
+      "name": "RETUR JUAL",
+      "type": "Revenue",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "4-1700",
+      "name": "BIAYA",
+      "type": "Revenue",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "4-2000",
+      "name": "PENDAPATAN JASA",
+      "type": "Revenue",
+      "balance": 0,
+      "padCode": ""
     },
     {
       "code": "4000",
       "name": "Sales Revenue",
-      "type": "Revenue"
+      "type": "Revenue",
+      "padCode": ""
+    },
+    {
+      "code": "4000",
+      "name": "Sales Revenue",
+      "type": "Revenue",
+      "balance": 0,
+      "padCode": ""
     },
     {
       "code": "4100",
       "name": "Other Income",
-      "type": "Revenue"
+      "type": "Revenue",
+      "padCode": ""
+    },
+    {
+      "code": "4100",
+      "name": "Other Income",
+      "type": "Revenue",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "5-0000",
+      "name": "HPP",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "5-1000",
+      "name": "HPP",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "5-1300",
+      "name": "HARGA POKOK PENJUALAN",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "5-199X01",
+      "name": "POTONGAN PEMBELIAN",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "5-2000",
+      "name": "LAIN-LAIN",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "5-2100",
+      "name": "KERUGIAN PIUTANG",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "5-2200",
+      "name": "PENGATURAN STOK",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "5-2201",
+      "name": "ITEM MASUK",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "5-2202",
+      "name": "ITEM KELUAR",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
     },
     {
       "code": "5000",
       "name": "Cost of Goods Sold",
-      "type": "Expense"
+      "type": "Expense",
+      "padCode": ""
+    },
+    {
+      "code": "5000",
+      "name": "Cost of Goods Sold",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-0000",
+      "name": "BIAYA",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-1000",
+      "name": "BIAYA UMUM",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-1100",
+      "name": "BIAYA LISTRIK/AIR/TELEPON",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-1101",
+      "name": "BIAYA SEWA",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-1102",
+      "name": "BIAYA ATK",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-1103",
+      "name": "BIAYA BUNGA PINJAMAN",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-1104",
+      "name": "BIAYA INTERNET",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-1105",
+      "name": "BIAYA PENGIRIMAN",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-1106",
+      "name": "BIAYA RT KANTOR",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-1107",
+      "name": "BIAYA TRANSPORT, TOL, PARKIR",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-1108",
+      "name": "BIAYA SERVICE KENDARAAN",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-1109",
+      "name": "BIAYA MATERAI",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-1110",
+      "name": "BIAYA PEMBELIAN SPARE PART",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-1111",
+      "name": "BIAYA PENGURUSAN SURAT",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-1112",
+      "name": "BIAYA TIP / SUMBANGAN",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-1500",
+      "name": "KERUGIAN PIUTANG",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-2000",
+      "name": "BIAYA PEMASARAN",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-2001",
+      "name": "BIAYA IKLAN",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-2002",
+      "name": "BIAYA ENTERTAINMENT",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-2003",
+      "name": "BIAYA BANK",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-2004",
+      "name": "BIAYA BUNGA PINJAMAN",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-3000",
+      "name": "BIAYA GAJI DAN UPAH",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-3001",
+      "name": "BIAYA GAJI PEGAWAI",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-3002",
+      "name": "BIAYA PPH 21 KARYAWAN",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-3003",
+      "name": "BIAYA BPJS KES DITANGGUNG KANTOR",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-3004",
+      "name": "BIAYA BPJS KET DITANGGUNG KANTOR",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-3005",
+      "name": "BIAYA KESEHATAN MANDIRI",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-3010",
+      "name": "BIAYA UPAH KERJA",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-3020",
+      "name": "BIAYA KOMISI PENJUALAN",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-4000",
+      "name": "BIAYA OPERASIONAL",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-4001",
+      "name": "BIAYA BELI BAHAN BAKU",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-4002",
+      "name": "BIAYA OVERHEAD",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-5000",
+      "name": "BIAYA PAJAK",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-5001",
+      "name": "BIAYA PPH 22",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-5002",
+      "name": "BIAYA PPH 23",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-5003",
+      "name": "BIAYA PPH 25",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-5004",
+      "name": "BIAYA PPH PASA 4 AYAT (2)",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-5005",
+      "name": "BIAYA PPN",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-5006",
+      "name": "BIAYA PPN IMPOR",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-5007",
+      "name": "BIAYA PPH 29",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-6000",
+      "name": "BIAYA PENYUSUTAN",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-6001",
+      "name": "BIAYA PENYUSUTAN",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-9000",
+      "name": "BIAYA NON INVENTORY",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "6-9001",
+      "name": "BIAYA BELANJA NON INVENTORY",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
     },
     {
       "code": "6000",
       "name": "Operating Expenses",
-      "type": "Expense"
+      "type": "Expense",
+      "padCode": ""
+    },
+    {
+      "code": "6000",
+      "name": "Operating Expenses",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
     },
     {
       "code": "6100",
       "name": "Administrative Expenses",
-      "type": "Expense"
+      "type": "Expense",
+      "padCode": ""
+    },
+    {
+      "code": "6100",
+      "name": "Administrative Expenses",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
     },
     {
       "code": "6200",
       "name": "Financial Expenses",
-      "type": "Expense"
+      "type": "Expense",
+      "padCode": ""
+    },
+    {
+      "code": "6200",
+      "name": "Financial Expenses",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "7-0000",
+      "name": "PENDAPATAN LAIN",
+      "type": "Revenue",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "7-1000",
+      "name": "LABA SELISIH KURS",
+      "type": "Revenue",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "7-2000",
+      "name": "PENDAPATAN JASA",
+      "type": "Revenue",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "7-3000",
+      "name": "PENDAPTAN LAIN",
+      "type": "Revenue",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "7-4000",
+      "name": "KERINGANAN HUTANG",
+      "type": "Revenue",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "7-5000",
+      "name": "PENDAPATAN SEWA APARTEMEN",
+      "type": "Revenue",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "7-699X01",
+      "name": "PENDAPATAN PEMBULATAN",
+      "type": "Revenue",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "7-699X02",
+      "name": "PENDAPATAN DONASI",
+      "type": "Revenue",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "8-0000",
+      "name": "BIAYA LAIN",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "8-1000",
+      "name": "BIAYA LAIN",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
+    },
+    {
+      "code": "8-2000",
+      "name": "RUGI SELISIH KURS",
+      "type": "Expense",
+      "balance": 0,
+      "padCode": ""
     }
   ],
-  "timestamp": 1767602865541,
-  "_timestamp": 1767602865541
+  "timestamp": 1767929116917,
+  "_timestamp": 1767929116917
 }

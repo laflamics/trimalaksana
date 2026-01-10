@@ -1,26 +1,66 @@
 {
   "value": [
     {
-      "id": "1767603229104",
-      "sjNo": "SJ-260105-3YW7U",
-      "soNo": "PO0000010938",
-      "customer": "PT. INDONESIA KOITO",
+      "id": "1767146575002",
+      "sjNo": "SJ-251231-93LNG",
+      "soNo": "Testing_0001",
+      "customer": "PT. EVERPRO  INDONESIA TECHNOLOGIES",
       "items": [
         {
-          "spkNo": "SPK/260105/E648O-SJ1",
-          "product": "BOX X + COVER LIPAT MAGNET UK 780X470X385 mm",
-          "productCode": "FG-KOITO-0001",
-          "qty": 56,
+          "spkNo": "SPK/251231/W4UPK-SJ1",
+          "product": "CARTON BOX 9948190000010143 BOX/EUROPRAN LOGO PACKING BOX/ 370*370*430MM/YN",
+          "productCode": "FG-EIT-00002",
+          "qty": 200,
           "unit": "PCS",
-          "soNo": "PO0000010938",
+          "soNo": "Testing_0001",
           "fromInventory": true
         }
       ],
       "status": "OPEN",
-      "deliveryDate": "2026-01-12T00:00:00.000Z",
-      "productCodeDisplay": "padCode"
+      "deliveryDate": "2026-01-05T00:00:00.000Z",
+      "productCodeDisplay": "padCode",
+      "padCode": "",
+      "deleted": true,
+      "deletedAt": "2026-01-09T08:02:10.524Z",
+      "deletedTimestamp": 1767945730524
+    },
+    {
+      "id": "1767153598243",
+      "sjNo": "SJ-251231-CMSR2",
+      "soNo": "GBU/PO/C/12/2025/00103",
+      "soNos": [
+        "GBU/PO/C/12/2025/00103"
+      ],
+      "customer": "PT. GUNA BAKTI UNGGUL",
+      "items": [
+        {
+          "spkNo": "SPK/251231/T26DZ-SJ1",
+          "product": "DUS KAPSTOK FIORI UK 47 X 42 X 46 CM",
+          "productCode": "FG-GBU-00124 (SJ-251231-JEFLE) (SJ-251231-AX26M)",
+          "qty": 50,
+          "unit": "PCS",
+          "soNo": "GBU/PO/C/12/2025/00103",
+          "fromInventory": true
+        }
+      ],
+      "status": "CLOSE",
+      "deliveryDate": "2026-01-03",
+      "specNote": "",
+      "isRecap": true,
+      "mergedSjNos": [
+        "SJ-251231-JEFLE",
+        "SJ-251231-AX26M"
+      ],
+      "created": "2025-12-31T03:59:58.243Z",
+      "lastUpdate": "2025-12-31T03:59:58.244Z",
+      "timestamp": 1767153598244,
+      "_timestamp": 1767153598244,
+      "padCode": "",
+      "deleted": true,
+      "deletedAt": "2026-01-09T07:58:08.081Z",
+      "deletedTimestamp": 1767945488081
     }
   ],
-  "timestamp": 1767603229104,
-  "_timestamp": 1767603229104
+  "timestamp": 1767945730524,
+  "_timestamp": 1767945730524
 }

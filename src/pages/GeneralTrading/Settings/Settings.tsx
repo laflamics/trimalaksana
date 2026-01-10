@@ -5,6 +5,7 @@ import Input from '../../../components/Input';
 import { storageService, StorageType, SyncStatus } from '../../../services/storage';
 import { dockerServerService } from '../../../services/docker-server';
 import { getTheme, applyTheme, Theme } from '../../../utils/theme';
+import { checkMobileUpdate, downloadMobileAPK, getAPKFileName } from '../../../utils/actions';
 import '../../../styles/compact.css';
 
 const Settings = () => {
@@ -81,19 +82,35 @@ const Settings = () => {
   const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   useEffect(() => {
-    // Load app version
+    // Load app version (Electron atau Capacitor)
     if (window.electronAPI?.getAppVersion) {
+      // Desktop (Electron)
       window.electronAPI.getAppVersion().then((version: string) => {
         setAppVersion(version);
       });
+    } else if ((window as any).Capacitor) {
+      // Mobile (Capacitor) - get version from package.json via fetch
+      fetch('/package.json').then(res => res.json()).then((pkg: any) => {
+        setAppVersion(pkg.version || '1.0.0');
+      }).catch(() => {
+        // Fallback: use hardcoded version
+        setAppVersion('1.0.6');
+      });
+    } else {
+      // Web - use hardcoded version
+      setAppVersion('1.0.6');
     }
 
-    // Listen for update status
+    // Listen for update status (Desktop only)
     if (window.electronAPI?.onUpdateStatus) {
       window.electronAPI.onUpdateStatus((status: any) => {
         setUpdateStatus(status);
         if (status.status === 'not-available' || status.status === 'error') {
           setCheckingUpdate(false);
+        }
+        // Clear progress when download is complete
+        if (status.status === 'downloaded') {
+          setUpdateProgress(null);
         }
       });
     }
@@ -102,6 +119,12 @@ const Settings = () => {
     if (window.electronAPI?.onUpdateProgress) {
       window.electronAPI.onUpdateProgress((progress: any) => {
         setUpdateProgress(progress);
+        // Clear progress when download reaches 100%
+        if (progress.percent >= 100) {
+          setTimeout(() => {
+            setUpdateProgress(null);
+          }, 1000);
+        }
       });
     }
   }, []);
@@ -139,8 +162,10 @@ const Settings = () => {
         }
       }
     } else if (config.type === 'server') {
-      // Auto-set default Tailscale server jika mode server tapi belum ada URL
-      setServerUrl('server-tljp.tail75a421.ts.net');
+      // Auto-set default Vercel server jika mode server tapi belum ada URL
+      if (!config.serverUrl) {
+        setServerUrl('vercel-proxy-blond-nine.vercel.app');
+      }
       setServerPort(8888);
     }
 
@@ -164,13 +189,12 @@ const Settings = () => {
   useEffect(() => {
     loadSettings();
     
-    // Start auto-sync jika sudah mode server (saat app load)
+    // 🚀 NEW ARCHITECTURE: Tidak perlu auto-sync
+    // Server adalah single source of truth, client langsung fetch dari server saat get()
+    // Tidak perlu sync complex, langsung POST saat set()
     const config = storageService.getConfig();
     if (config.type === 'server' && config.serverUrl) {
-      // Start auto-sync jika belum running
-      // Note: startAutoSync akan dipanggil otomatis oleh setConfig saat save,
-      // tapi kita pastikan juga di sini saat load settings (karena setConfig tidak dipanggil saat load)
-      storageService.startAutoSync();
+      console.log('✅ Server mode: Server is single source of truth');
     }
     
     // Subscribe to sync status changes
@@ -190,13 +214,14 @@ const Settings = () => {
     setConnectionStatus('checking');
     try {
       // Normalize serverUrl (remove http:// or https:// if user accidentally included it)
-      const cleanUrl = serverUrl.replace(/^https?:\/\//, '').trim();
-      // Use https for Tailscale funnel, http for others
+      let cleanUrl = serverUrl.replace(/^https?:\/\//, '').trim();
+      // Use https for Tailscale funnel and Vercel, http for others
       const isTailscaleFunnel = cleanUrl.includes('tailscale') || cleanUrl.includes('tail') || cleanUrl.includes('.ts.net');
-      const protocol = isTailscaleFunnel ? 'https' : 'http';
+      const isVercel = cleanUrl.includes('vercel.app');
+      const protocol = (isTailscaleFunnel || isVercel) ? 'https' : 'http';
       
-      // Tailscale funnel tidak perlu port (sudah di-proxy)
-      const fullUrl = isTailscaleFunnel 
+      // Tailscale funnel and Vercel tidak perlu port (sudah di-proxy)
+      const fullUrl = (isTailscaleFunnel || isVercel)
         ? `${protocol}://${cleanUrl}` 
         : `${protocol}://${cleanUrl}:${serverPort}`;
       
@@ -267,21 +292,29 @@ const Settings = () => {
     } catch (error: any) {
       console.error(`[Settings] Connection error:`, error);
       setConnectionStatus('failed');
-      const errorUrl = serverUrl.includes('.ts.net') 
-        ? `https://${serverUrl}` 
-        : `http://${serverUrl}:${serverPort}`;
+      // Normalize error URL display (same logic as handleCheckConnection)
+      let cleanErrorUrl = serverUrl.replace(/^https?:\/\//, '').trim();
+      const isTailscaleFunnel = cleanErrorUrl.includes('tailscale') || cleanErrorUrl.includes('tail') || cleanErrorUrl.includes('.ts.net');
+      const isVercel = cleanErrorUrl.includes('vercel.app');
+      const protocol = (isTailscaleFunnel || isVercel) ? 'https' : 'http';
+      const errorUrl = (isTailscaleFunnel || isVercel)
+        ? `${protocol}://${cleanErrorUrl}`
+        : `${protocol}://${cleanErrorUrl}:${serverPort}`;
       showAlert(`Connection error: ${error.message}\n\nURL: ${errorUrl}\n\nPlease check console for details.`, 'Error');
     }
   };
 
   const handleSave = async () => {
     // Trim serverUrl to remove any spaces
-    const cleanServerUrl = serverUrl.trim();
-    // Use https for Tailscale funnel, http for others
+    let cleanServerUrl = serverUrl.trim();
+    // Remove protocol if user accidentally included it
+    cleanServerUrl = cleanServerUrl.replace(/^https?:\/\//, '');
+    // Use https for Tailscale funnel and Vercel, http for others
     const isTailscaleFunnel = cleanServerUrl.includes('tailscale') || cleanServerUrl.includes('tail') || cleanServerUrl.includes('.ts.net');
-    const protocol = isTailscaleFunnel ? 'https' : 'http';
-    // Tailscale funnel tidak perlu port (sudah di-proxy)
-    const finalServerUrl = isTailscaleFunnel
+    const isVercel = cleanServerUrl.includes('vercel.app');
+    const protocol = (isTailscaleFunnel || isVercel) ? 'https' : 'http';
+    // Tailscale funnel and Vercel tidak perlu port (sudah di-proxy)
+    const finalServerUrl = (isTailscaleFunnel || isVercel)
       ? `${protocol}://${cleanServerUrl}`
       : `${protocol}://${cleanServerUrl}:${serverPort}`;
     const config = {
@@ -316,19 +349,55 @@ const Settings = () => {
   };
 
   const handleCheckUpdate = async () => {
-    if (!window.electronAPI?.checkForUpdates) {
-      showAlert('Update feature only available in desktop app', 'Information');
-      return;
-    }
     setCheckingUpdate(true);
     setUpdateStatus(null);
     setUpdateProgress(null);
+    
     try {
-      const result = await window.electronAPI.checkForUpdates();
-      if (!result.success) {
-        showAlert(result.message || 'Failed to check for updates', 'Error');
-        setCheckingUpdate(false);
+      // Desktop (Electron) - use electron-updater
+      if (window.electronAPI?.checkForUpdates) {
+        const result = await window.electronAPI.checkForUpdates();
+        if (!result.success) {
+          showAlert(result.message || 'Failed to check for updates', 'Error');
+          setCheckingUpdate(false);
+        }
+        return;
       }
+      
+      // Mobile (Capacitor) - check server for APK updates
+      if ((window as any).Capacitor) {
+        try {
+          const currentVersion = appVersion || '1.0.0';
+          const result = await checkMobileUpdate(currentVersion, storageService);
+          
+          if (result.available && result.version) {
+            setUpdateStatus({
+              status: 'available',
+              message: result.message,
+              version: result.version
+            });
+          } else {
+            setUpdateStatus({
+              status: result.available ? 'available' : 'not-available',
+              message: result.message,
+              version: result.version || undefined
+            });
+          }
+        } catch (error: any) {
+          console.error('Error checking for mobile update:', error);
+          setUpdateStatus({
+            status: 'error',
+            message: `Failed to check for updates: ${error.message}`
+          });
+        } finally {
+          setCheckingUpdate(false);
+        }
+        return;
+      }
+      
+      // Fallback
+      showAlert('Update feature not available', 'Information');
+      setCheckingUpdate(false);
     } catch (error: any) {
       showAlert(`Error: ${error.message}`, 'Error');
       setCheckingUpdate(false);
@@ -336,14 +405,136 @@ const Settings = () => {
   };
 
   const handleDownloadUpdate = async () => {
-    if (!window.electronAPI?.downloadUpdate) return;
-    try {
-      const result = await window.electronAPI.downloadUpdate();
-      if (!result.success) {
-        showAlert(result.message || 'Failed to download update', 'Error');
+    // Desktop (Electron)
+    if (window.electronAPI?.downloadUpdate) {
+      try {
+        // Set initial progress
+        setUpdateProgress({ percent: 0 });
+        setUpdateStatus({
+          status: 'downloading',
+          message: 'Downloading update...',
+          version: updateStatus?.version
+        });
+        
+        const result = await window.electronAPI.downloadUpdate();
+        if (!result.success) {
+          showAlert(result.message || 'Failed to download update', 'Error');
+          setUpdateProgress(null);
+          setUpdateStatus({
+            status: 'error',
+            message: result.message || 'Failed to download update',
+            version: updateStatus?.version
+          });
+        }
+        // Note: Status 'downloaded' akan di-set otomatis oleh electron-updater via onUpdateStatus
+      } catch (error: any) {
+        showAlert(`Error: ${error.message}`, 'Error');
+        setUpdateProgress(null);
+        setUpdateStatus({
+          status: 'error',
+          message: `Download failed: ${error.message}`,
+          version: updateStatus?.version
+        });
       }
+      return;
+    }
+    
+    // Mobile (Capacitor) - download APK
+    if ((window as any).Capacitor) {
+      // Set loading state immediately
+      setUpdateProgress({ percent: 0 });
+      setUpdateStatus({
+        status: 'downloading',
+        message: 'Preparing download...',
+        version: updateStatus?.version
+      });
+      
+      try {
+        await downloadMobileUpdate();
+      } catch (error: any) {
+        showAlert(`Error: ${error.message}`, 'Error');
+        setUpdateProgress(null);
+        setUpdateStatus({
+          status: 'error',
+          message: `Download failed: ${error.message}`,
+          version: updateStatus?.version
+        });
+      }
+      return;
+    }
+    
+    showAlert('Download update not available', 'Information');
+  };
+
+  const downloadMobileUpdate = async () => {
+    try {
+      if (!updateStatus?.version) {
+        showAlert('No update available', 'Information');
+        setUpdateProgress(null);
+        return;
+      }
+      
+      // Get server URL from config
+      const config = storageService.getConfig();
+      let serverUrl = config.serverUrl || 'vercel-proxy-blond-nine.vercel.app';
+      
+      // Normalize server URL (same logic as handleCheckConnection)
+      if (!serverUrl.startsWith('http')) {
+        const isTailscaleFunnel = serverUrl.includes('.ts.net') || serverUrl.includes('tailscale') || serverUrl.includes('tail');
+        const isVercel = serverUrl.includes('vercel.app');
+        const protocol = (isTailscaleFunnel || isVercel) ? 'https' : 'http';
+        serverUrl = `${protocol}://${serverUrl}`;
+      }
+      serverUrl = serverUrl.replace(/:\d+$/, ''); // Remove port if exists
+      
+      // Get APK filename using helper
+      setUpdateStatus({
+        status: 'downloading',
+        message: 'Fetching update information...',
+        version: updateStatus.version
+      });
+      setUpdateProgress({ percent: 5 });
+      
+      const apkFile = await getAPKFileName(serverUrl);
+      
+      setUpdateStatus({
+        status: 'downloading',
+        message: `Downloading ${apkFile}...`,
+        version: updateStatus.version
+      });
+      
+      // Download APK using helper with progress callback
+      const downloadResult = await downloadMobileAPK(serverUrl, apkFile, (percent, message) => {
+        setUpdateProgress({ percent });
+        setUpdateStatus({
+          status: 'downloading',
+          message,
+          version: updateStatus.version
+        });
+      });
+      
+      // Download complete - APK sudah di-save ke Downloads dan install dialog sudah muncul
+      setUpdateStatus({
+        status: 'downloaded',
+        message: `APK saved to Downloads folder.\nFile: ${downloadResult.filePath}\n\nInstall dialog should appear automatically. If not, check Downloads folder.`,
+        version: updateStatus.version
+      });
+      
+      // Keep progress for 2 seconds, then clear
+      setTimeout(() => {
+        setUpdateProgress(null);
+      }, 2000);
+      
+      showAlert(`APK berhasil di-download dan disimpan ke folder Downloads.\n\nFile: ${downloadResult.filePath}\n\nDialog install seharusnya muncul otomatis. Jika tidak, buka folder Downloads dan klik file APK untuk install.`, 'Success');
     } catch (error: any) {
-      showAlert(`Error: ${error.message}`, 'Error');
+      console.error('[Mobile Update] Error:', error);
+      setUpdateProgress(null);
+      setUpdateStatus({
+        status: 'error',
+        message: `Download failed: ${error.message}`,
+        version: updateStatus?.version
+      });
+      throw error; // Re-throw untuk handleDownloadUpdate
     }
   };
 
@@ -469,7 +660,7 @@ const Settings = () => {
                   setStorageType(e.target.value as StorageType);
                   // Auto-set Tailscale server URL saat pilih server mode
                   if (!serverUrl || serverUrl.trim() === '') {
-                    setServerUrl('server-tljp.tail75a421.ts.net');
+                    setServerUrl('vercel-proxy-blond-nine.vercel.app');
                     setServerPort(8888);
                   }
                 }}
@@ -485,7 +676,7 @@ const Settings = () => {
               label="Server URL"
               value={serverUrl}
               onChange={setServerUrl}
-              placeholder="server-tljp.tail75a421.ts.net (default Tailscale)"
+              placeholder="vercel-proxy-blond-nine.vercel.app (default Vercel)"
             />
             <Input
               label="Server Port"
@@ -545,7 +736,8 @@ const Settings = () => {
         </div>
       </Card>
 
-      {window.electronAPI && (
+      {/* Application Update - Show for both Desktop (Electron) and Mobile (Capacitor) */}
+      {(window.electronAPI || (window as any).Capacitor) && (
         <Card title="Application Update" style={{ marginTop: '20px' }}>
           <div style={{ marginBottom: '16px' }}>
             <div style={{ marginBottom: '8px', fontSize: '14px', color: 'var(--text-secondary)' }}>
@@ -591,13 +783,26 @@ const Settings = () => {
             )}
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <Button 
-              onClick={handleCheckUpdate} 
-              variant="secondary"
-              disabled={checkingUpdate}
-            >
-              {checkingUpdate ? 'Checking...' : 'Check for Updates'}
-            </Button>
+            {/* Desktop: Check for Updates via electron-updater */}
+            {window.electronAPI && (
+              <Button 
+                onClick={handleCheckUpdate} 
+                variant="secondary"
+                disabled={checkingUpdate}
+              >
+                {checkingUpdate ? 'Checking...' : 'Check for Updates'}
+              </Button>
+            )}
+            {/* Mobile: Check for Updates via server API */}
+            {(window as any).Capacitor && !window.electronAPI && (
+              <Button 
+                onClick={handleCheckUpdate} 
+                variant="secondary"
+                disabled={checkingUpdate}
+              >
+                {checkingUpdate ? 'Checking...' : 'Check for Updates'}
+              </Button>
+            )}
             {updateStatus?.status === 'available' && (
               <Button 
                 onClick={handleDownloadUpdate} 

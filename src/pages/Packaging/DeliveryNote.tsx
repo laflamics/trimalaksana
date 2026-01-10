@@ -7,7 +7,8 @@ import Input from '../../components/Input';
 import ScheduleTable from '../../components/ScheduleTable';
 import NotificationBell from '../../components/NotificationBell';
 import { storageService } from '../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
+import { filterActiveItems } from '../../utils/data-persistence-helper';
+import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import { generateSuratJalanHtml, generateSuratJalanRecapHtml } from '../../pdf/suratjalan-pdf-template';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import { useDialog } from '../../hooks/useDialog';
@@ -691,23 +692,25 @@ const DeliveryNote = () => {
 
   const loadCustomers = async () => {
     const data = await storageService.get<Customer[]>('customers') || [];
+    // CRITICAL: Filter deleted items using helper function
+    const activeCustomers = filterActiveItems(data);
     // 🚀 OPTIMASI: Shallow comparison instead of JSON.stringify (much faster)
     setCustomers((prev: Customer[]) => {
-      if (prev.length !== data.length) {
-        return data;
+      if (prev.length !== activeCustomers.length) {
+        return activeCustomers;
       }
       if (prev.length === 0) {
         return prev; // Both empty, no change
       }
       // Quick check: compare first and last items
       const prevFirst = prev[0];
-      const newFirst = data[0];
+      const newFirst = activeCustomers[0];
       const prevLast = prev[prev.length - 1];
-      const newLast = data[data.length - 1];
+      const newLast = activeCustomers[activeCustomers.length - 1];
       if (prevFirst?.id === newFirst?.id && prevLast?.id === newLast?.id) {
         return prev; // Likely same data
       }
-      return data;
+      return activeCustomers;
     });
   };
 
@@ -4388,18 +4391,16 @@ const DeliveryNote = () => {
       `Are you sure you want to delete delivery note ${item.sjNo || item.id}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nThis action cannot be undone.`,
       async () => {
         try {
-          // ENHANCED: Use safe deletion with tombstone pattern
-          const success = await safeDeleteItem('delivery', item.id, 'id');
+          // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
+          const deleteResult = await deletePackagingItem('delivery', item.id, 'id');
           
-          if (success) {
-            // Refresh data to show updated list (without deleted items)
+          if (deleteResult.success) {
+            // Refresh data dengan helper (handle race condition)
             await loadDeliveries();
             
             showAlert('Success', `✅ Delivery Note ${item.sjNo || item.id} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`);
-            
-            // Removed console.log for performance
           } else {
-            showAlert('Error', `❌ Error deleting delivery note ${item.sjNo || item.id}. Please try again.`);
+            showAlert('Error', `❌ Error deleting delivery note ${item.sjNo || item.id}: ${deleteResult.error || 'Unknown error'}`);
           }
         } catch (error: any) {
           // Removed console.error for performance

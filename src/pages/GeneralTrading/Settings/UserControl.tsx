@@ -414,18 +414,46 @@ const UserControl = () => {
     const storageKey = 'userAccessControl';
     
     // Migration: Merge data from old business-specific keys if they exist
-    const oldGTKey = 'general-trading_userAccessControl';
-    const oldTruckingKey = 'trucking_userAccessControl';
-    const oldGTData = (await storageService.get<UserAccess[]>(oldGTKey)) || [];
-    const oldTruckingData = (await storageService.get<UserAccess[]>(oldTruckingKey)) || [];
-    const currentData = (await storageService.get<UserAccess[]>(storageKey)) || [];
+    const oldGTKey = 'general-trading/userAccessControl';
+    const oldTruckingKey = 'trucking/userAccessControl';
+    let currentData = (await storageService.get<UserAccess[]>(storageKey)) || [];
+    let oldGTData = (await storageService.get<UserAccess[]>(oldGTKey)) || [];
+    let oldTruckingData = (await storageService.get<UserAccess[]>(oldTruckingKey)) || [];
+    
+    // CRITICAL: Extract array from storage wrapper if needed
+    if (currentData && typeof currentData === 'object' && 'value' in currentData) {
+      currentData = (currentData as any).value || [];
+    }
+    if (oldGTData && typeof oldGTData === 'object' && 'value' in oldGTData) {
+      oldGTData = (oldGTData as any).value || [];
+    }
+    if (oldTruckingData && typeof oldTruckingData === 'object' && 'value' in oldTruckingData) {
+      oldTruckingData = (oldTruckingData as any).value || [];
+    }
+    
+    console.log(`[GT UserControl] Debug data loading:`);
+    console.log(`- currentData (${storageKey}):`, currentData.length, 'users');
+    console.log(`- oldGTData (${oldGTKey}):`, Array.isArray(oldGTData) ? oldGTData.length : 'not array', 'users');
+    console.log(`- oldTruckingData (${oldTruckingKey}):`, Array.isArray(oldTruckingData) ? oldTruckingData.length : 'not array', 'users');
+    
+    // Safety checks
+    if (!Array.isArray(currentData)) {
+      console.error('[GT UserControl] currentData is not an array:', currentData);
+    }
+    if (!Array.isArray(oldGTData)) {
+      console.error('[GT UserControl] oldGTData is not an array:', oldGTData);
+    }
+    if (!Array.isArray(oldTruckingData)) {
+      console.error('[GT UserControl] oldTruckingData is not an array:', oldTruckingData);
+    }
     
     // Merge: Combine data from old keys and current key, deduplicate by ID
     // CRITICAL: Use Map to ensure ID uniqueness - last one wins if duplicate
     const mergedUsers = new Map<string, UserAccess>();
     
-    // Add current data first (priority)
-    currentData.forEach(user => {
+    // Add current data first (priority) - ensure it's an array
+    const safeCurrentData = Array.isArray(currentData) ? currentData : [];
+    safeCurrentData.forEach(user => {
       if (user && user.id) {
         // If duplicate ID exists, keep the one with latest updatedAt
         const existing = mergedUsers.get(user.id);
@@ -435,8 +463,9 @@ const UserControl = () => {
       }
     });
     
-    // Add old GT data if not already exists
-    oldGTData.forEach(user => {
+    // Add old GT data if not already exists - ensure it's an array
+    const safeOldGTData = Array.isArray(oldGTData) ? oldGTData : [];
+    safeOldGTData.forEach(user => {
       if (user && user.id) {
         if (!mergedUsers.has(user.id)) {
           mergedUsers.set(user.id, user);
@@ -450,8 +479,9 @@ const UserControl = () => {
       }
     });
     
-    // Add old Trucking data if not already exists
-    oldTruckingData.forEach(user => {
+    // Add old Trucking data if not already exists - ensure it's an array
+    const safeOldTruckingData = Array.isArray(oldTruckingData) ? oldTruckingData : [];
+    safeOldTruckingData.forEach(user => {
       if (user && user.id) {
         if (!mergedUsers.has(user.id)) {
           mergedUsers.set(user.id, user);
@@ -466,6 +496,16 @@ const UserControl = () => {
     });
     
     const stored = Array.from(mergedUsers.values());
+    
+    console.log(`[GT UserControl] Merged ${stored.length} users total`);
+    
+    // Safety check: ensure stored is an array
+    if (!Array.isArray(stored)) {
+      console.error('[GT UserControl] stored is not an array:', stored);
+      setUsers([]);
+      setSelectedUser(null);
+      return;
+    }
     
     // If duplicates were found and removed, save cleaned data back
     const totalBeforeDedup = currentData.length + oldGTData.length + oldTruckingData.length;
@@ -483,6 +523,8 @@ const UserControl = () => {
     
     // Filter out deleted users for display using filterActiveItems helper
     const activeUsers = filterActiveItems(stored);
+    console.log(`[GT UserControl] Active users: ${activeUsers.length}`);
+    
     setUsers(activeUsers);
     setSelectedUser((prev) => {
       if (!prev) {

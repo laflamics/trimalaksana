@@ -13,6 +13,10 @@ export interface UserAccess {
   menuAccess?: Record<string, string[]>;
   deleted?: boolean;
   deletedAt?: string;
+  deletedTimestamp?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  padCode?: string;
 }
 
 export interface CurrentUser {

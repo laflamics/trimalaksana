@@ -27,7 +27,19 @@ const Realtime = () => {
   }, []);
 
   const loadVehicles = async () => {
-    const orders = await storageService.get<any[]>('trucking_delivery_orders') || [];
+    let orders = await storageService.get<any[]>('trucking_delivery_orders') || [];
+    
+    // CRITICAL: Extract array from storage wrapper if needed
+    if (orders && typeof orders === 'object' && 'value' in orders && Array.isArray(orders.value)) {
+      orders = orders.value;
+    }
+    
+    // Safety check: ensure orders is an array
+    if (!Array.isArray(orders)) {
+      console.warn('[Realtime] orders is not an array:', orders);
+      orders = [];
+    }
+    
     const vehiclesData: VehicleLocation[] = orders
       .filter(o => o.status === 'In Transit' && o.vehicleId)
       .map(o => ({

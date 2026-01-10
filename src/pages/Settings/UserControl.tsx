@@ -4,7 +4,8 @@ import Button from '../../components/Button';
 import Input from '../../components/Input';
 import Table from '../../components/Table';
 import { storageService, BusinessType } from '../../services/storage';
-import { safeDeleteMultipleItems, filterActiveItems } from '../../utils/data-persistence-helper';
+import { filterActiveItems, safeDeleteMultipleItems } from '../../utils/data-persistence-helper';
+import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import { getCurrentUser, isDefaultAdmin } from '../../utils/access-control-helper';
 import './UserControl.css';
 
@@ -418,8 +419,29 @@ const UserControl = () => {
     
     // Migration: Merge data from old business-specific keys if they exist
     const oldPackagingKey = 'packaging_userAccessControl';
-    const oldPackagingData = (await storageService.get<UserAccess[]>(oldPackagingKey)) || [];
-    const currentData = (await storageService.get<UserAccess[]>(storageKey)) || [];
+    const rawOldPackagingData = (await storageService.get<UserAccess[]>(oldPackagingKey)) || [];
+    const rawCurrentData = (await storageService.get<UserAccess[]>(storageKey)) || [];
+    
+    console.log(`[Packaging UserControl] Debug data loading:`);
+    console.log(`- rawCurrentData (${storageKey}):`, rawCurrentData);
+    console.log(`- rawOldPackagingData (${oldPackagingKey}):`, rawOldPackagingData);
+    
+    // CRITICAL: Extract arrays from storage wrapper if needed
+    const extractArray = (data: any): UserAccess[] => {
+      if (!data) return [];
+      if (Array.isArray(data)) return data;
+      if (data && typeof data === 'object' && 'value' in data && Array.isArray(data.value)) {
+        return data.value;
+      }
+      return [];
+    };
+    
+    const currentData = extractArray(rawCurrentData);
+    const oldPackagingData = extractArray(rawOldPackagingData);
+    
+    console.log(`[Packaging UserControl] Extracted arrays:`);
+    console.log(`- currentData: ${currentData.length} users`);
+    console.log(`- oldPackagingData: ${oldPackagingData.length} users`);
     
     // CRITICAL: Combine all data sources first
     const allDataSources = [...currentData, ...oldPackagingData];
@@ -447,21 +469,27 @@ const UserControl = () => {
     
     const stored = Array.from(mergedUsers.values());
     
-    // CRITICAL: Always save deduplicated data back to ensure consistency
-    // This prevents duplicates from accumulating
-    if (stored.length !== allDataSources.length) {
-      await storageService.set(storageKey, stored);
-      console.log(`[UserControl] Deduplicated: ${allDataSources.length} -> ${stored.length} users (removed ${allDataSources.length - stored.length} duplicates)`);
+    console.log(`[Packaging UserControl] Merged ${stored.length} users total`);
+    
+    // Safety check: ensure stored is an array
+    if (!Array.isArray(stored)) {
+      console.error('[Packaging UserControl] stored is not an array:', stored);
+      setUsers([]);
+      setSelectedUser(null);
+      return;
     }
     
-    // If we merged data from old key, save it back to unified key
-    if (oldPackagingData.length > 0 && stored.length > currentData.length) {
+    // If duplicates were found and removed, save cleaned data back
+    const totalBeforeDedup = currentData.length + oldPackagingData.length;
+    if (stored.length < totalBeforeDedup) {
       await storageService.set(storageKey, stored);
-      console.log(`[UserControl] Migrated ${oldPackagingData.length} users from ${oldPackagingKey} to ${storageKey}`);
+      console.log(`[Packaging UserControl] Removed ${totalBeforeDedup - stored.length} duplicate users (by ID)`);
     }
     
     // Filter out deleted users for display using filterActiveItems helper
     const activeUsers = filterActiveItems(stored);
+    console.log(`[Packaging UserControl] Active users: ${activeUsers.length}`);
+    
     setUsers(activeUsers);
     setSelectedUser((prev) => {
       if (!prev) {
@@ -481,7 +509,8 @@ const UserControl = () => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ key?: string }>).detail;
       const storageKey = detail?.key?.split('/').pop();
-      if (storageKey === 'userAccessControl' || storageKey === 'packaging_userAccessControl') {
+      // Listen for userAccessControl changes
+      if (storageKey === 'userAccessControl') {
         loadUsers();
       }
     };
@@ -517,6 +546,12 @@ const UserControl = () => {
   }, [users]); // Reload when users change
 
   const filteredUsers = useMemo(() => {
+    // Safety check: ensure users is an array
+    if (!Array.isArray(users)) {
+      console.warn('[UserControl] users is not an array:', users);
+      return [];
+    }
+    
     // Filter by business unit first (if not super admin)
     const currentUser = getCurrentUser();
     const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
@@ -731,22 +766,17 @@ const UserControl = () => {
     showConfirm(
       `Hapus akses untuk ${user.fullName}?`,
       async () => {
-        // FIXED: Use unified storage key 'userAccessControl' (without business prefix)
+        // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
         const storageKey = 'userAccessControl';
+        const deleteResult = await deletePackagingItem(storageKey, user.id, 'id');
         
-        // Use safe deletion pattern to prevent resurrection
-        const allUsers = (await storageService.get<UserAccess[]>(storageKey)) || [];
-        const updated = allUsers.map(u => 
-          u.id === user.id 
-            ? { ...u, deleted: true, deletedAt: new Date().toISOString(), deletedTimestamp: Date.now() }
-            : u
-        );
-        
-        await storageService.set(storageKey, updated);
-        
-        // Filter active users for display
-        const activeUsers = filterActiveItems(updated);
-        setUsers(activeUsers);
+        if (deleteResult.success) {
+          // Reload data dengan helper (handle race condition)
+          await reloadPackagingData(storageKey, setUsers);
+        } else {
+          showAlert(`Error deleting user: ${deleteResult.error || 'Unknown error'}`, 'Error');
+          return;
+        }
         
         // Remove from selected if was selected
         setSelectedUserIds(prev => {
@@ -757,7 +787,7 @@ const UserControl = () => {
         
         setSelectedUser((prev) => {
           if (!prev || prev.id === user.id) {
-            return activeUsers[0] || null;
+            return users[0] || null;
           }
           return prev;
         });

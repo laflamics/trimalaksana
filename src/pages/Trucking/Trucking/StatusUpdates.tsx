@@ -87,7 +87,19 @@ const StatusUpdates = () => {
   }, []);
 
   const loadData = async () => {
-    const ordersData = await storageService.get<any[]>('trucking_delivery_orders') || [];
+    let ordersData = await storageService.get<any[]>('trucking_delivery_orders') || [];
+    
+    // CRITICAL: Extract array from storage wrapper if needed
+    if (ordersData && typeof ordersData === 'object' && 'value' in ordersData && Array.isArray(ordersData.value)) {
+      ordersData = ordersData.value;
+    }
+    
+    // Safety check: ensure ordersData is an array
+    if (!Array.isArray(ordersData)) {
+      console.warn('[StatusUpdates] ordersData is not an array:', ordersData);
+      ordersData = [];
+    }
+    
     setOrders(ordersData);
     
     // Generate status updates dari history orders

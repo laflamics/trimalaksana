@@ -11,7 +11,8 @@
       "details": {
         "reason": "No local data found, fetching from server"
       },
-      "timestamp": 1765521356519
+      "timestamp": 1765521356519,
+      "padCode": ""
     },
     {
       "id": "1765521356447",
@@ -25,7 +26,8 @@
         "dataSize": 1,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_invoices"
       },
-      "timestamp": 1765521356447
+      "timestamp": 1765521356447,
+      "padCode": ""
     }
   ],
   "timestamp": 1765871078114,

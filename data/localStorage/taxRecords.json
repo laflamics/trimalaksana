@@ -15,7 +15,11 @@
       "customer": "CV. AGUNG MANDIRI METAL WORK",
       "description": "PPN Keluaran dari Invoice INV-1766232080736 - CV. AGUNG MANDIRI METAL WORK",
       "status": "Open",
-      "created": "2025-12-20T12:01:20.736Z"
+      "created": "2025-12-20T12:01:20.736Z",
+      "deleted": true,
+      "deletedAt": "2026-01-07T18:17:50.587Z",
+      "deletedTimestamp": 1767809870587,
+      "padCode": ""
     },
     {
       "id": "tax-inv-1766394767197",
@@ -32,9 +36,13 @@
       "customer": "CV. AGUNG MANDIRI METAL WORK",
       "description": "PPN Keluaran dari Invoice INV-1766394767196 - CV. AGUNG MANDIRI METAL WORK",
       "status": "Open",
-      "created": "2025-12-22T09:12:47.197Z"
+      "created": "2025-12-22T09:12:47.197Z",
+      "deleted": true,
+      "deletedAt": "2026-01-07T18:17:48.211Z",
+      "deletedTimestamp": 1767809868211,
+      "padCode": ""
     }
   ],
-  "timestamp": 1766981087811,
-  "_timestamp": 1766981087811
+  "timestamp": 1767809870587,
+  "_timestamp": 1767809870587
 }

@@ -3,6 +3,8 @@ import { useState } from 'react';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
+import { Browser } from '@capacitor/browser';
 
 // Platform detection utility
 export const isElectron = (): boolean => {
@@ -335,6 +337,279 @@ export const handleUpdateStatus = async (
 };
 
 // Helper function untuk save/share PDF di mobile
+// Helper untuk check mobile update dari server
+export const checkMobileUpdate = async (
+  currentVersion: string,
+  storageService: any
+): Promise<{ available: boolean; version: string | null; message: string }> => {
+  try {
+    const config = storageService.getConfig();
+    const serverUrl = config.serverUrl || 'vercel-proxy-blond-nine.vercel.app';
+    // Use https for Tailscale funnel and Vercel, http for others
+    const isTailscaleFunnel = serverUrl.includes('.ts.net') || serverUrl.includes('tailscale') || serverUrl.includes('tail');
+    const isVercel = serverUrl.includes('vercel.app');
+    const protocol = (isTailscaleFunnel || isVercel) ? 'https' : 'http';
+    const baseUrl = serverUrl.startsWith('http') ? serverUrl : `${protocol}://${serverUrl}`;
+    const baseUrlClean = baseUrl.replace(/:\d+$/, '');
+    
+    const updateUrl = `${baseUrlClean}/api/updates/latest.yml`;
+    const response = await fetch(updateUrl);
+    
+    if (!response.ok) {
+      throw new Error(`Server responded with ${response.status}`);
+    }
+    
+    const ymlContent = await response.text();
+    const versionMatch = ymlContent.match(/version:\s*(.+)/);
+    const serverVersion = versionMatch ? versionMatch[1].trim() : null;
+    
+    if (!serverVersion) {
+      throw new Error('Version not found in update info');
+    }
+    
+    // Compare versions (simple string comparison)
+    if (serverVersion !== currentVersion) {
+      return {
+        available: true,
+        version: serverVersion,
+        message: `Update available: v${serverVersion}`
+      };
+    }
+    
+    return {
+      available: false,
+      version: serverVersion,
+      message: 'You are using the latest version'
+    };
+  } catch (error: any) {
+    return {
+      available: false,
+      version: null,
+      message: `Failed to check for updates: ${error.message}`
+    };
+  }
+};
+
+// Helper untuk download mobile APK dengan progress tracking dan save ke Downloads folder
+export const downloadMobileAPK = async (
+  serverUrl: string,
+  apkFile: string,
+  onProgress?: (percent: number, message: string) => void
+): Promise<{ filePath: string; fileUri: string }> => {
+  try {
+    onProgress?.(5, 'Connecting to server...');
+    
+    const apkUrl = `${serverUrl}/api/updates/${apkFile}`;
+    const response = await fetch(apkUrl);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to download APK: ${response.status} ${response.statusText}`);
+    }
+    
+    const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+    onProgress?.(10, `Downloading ${apkFile} (${(contentLength / 1024 / 1024).toFixed(2)} MB)...`);
+    
+    // Mobile: Save langsung ke Downloads folder menggunakan Capacitor Filesystem
+    if (isCapacitor()) {
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Failed to read response stream');
+      }
+      
+      // Stream langsung ke file (tidak load semua ke memory)
+      const chunks: Uint8Array[] = [];
+      let receivedLength = 0;
+      const chunkSize = 1024 * 64; // 64KB chunks untuk optimasi
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        chunks.push(value);
+        receivedLength += value.length;
+        
+        // Update progress (10% to 85% for download)
+        if (contentLength > 0) {
+          const downloadPercent = Math.round((receivedLength / contentLength) * 75); // 75% of total (10% to 85%)
+          const totalPercent = 10 + downloadPercent;
+          onProgress?.(totalPercent, `Downloading... ${totalPercent}% (${(receivedLength / 1024 / 1024).toFixed(2)} MB / ${(contentLength / 1024 / 1024).toFixed(2)} MB)`);
+        } else {
+          onProgress?.(50, `Downloading... ${(receivedLength / 1024 / 1024).toFixed(2)} MB`);
+        }
+      }
+      
+      onProgress?.(85, 'Saving APK to Downloads folder...');
+      
+      // Convert chunks ke base64 untuk Filesystem API
+      const allChunks = new Uint8Array(receivedLength);
+      let offset = 0;
+      for (const chunk of chunks) {
+        allChunks.set(chunk, offset);
+        offset += chunk.length;
+      }
+      
+      // Convert to base64
+      const base64Data = btoa(String.fromCharCode(...allChunks));
+      
+      // Save ke Downloads folder
+      const downloadsPath = `Download/${apkFile}`;
+      const result = await Filesystem.writeFile({
+        path: downloadsPath,
+        data: base64Data,
+        directory: Directory.ExternalStorage,
+        recursive: true
+      });
+      
+      onProgress?.(95, 'APK saved successfully');
+      
+      // Get file URI untuk trigger install
+      const fileUri = result.uri;
+      
+      onProgress?.(98, 'Opening install dialog...');
+      
+      // Trigger install intent untuk Android
+      try {
+        // Method 1: Try Share plugin untuk trigger install (akan muncul dialog install)
+        await Share.share({
+          title: 'Install APK',
+          text: `Install ${apkFile}`,
+          url: fileUri,
+          dialogTitle: 'Install APK'
+        });
+      } catch (shareError) {
+        // Method 2: Fallback - Try Browser.open dengan file:// URI
+        try {
+          await Browser.open({ url: fileUri });
+        } catch (browserError) {
+          // Method 3: Fallback - Open Downloads folder di file manager
+          try {
+            // Try to open Downloads folder
+            const downloadsUri = 'content://com.android.externalstorage.documents/document/primary%3ADownload';
+            await Browser.open({ url: downloadsUri });
+          } catch (fmError) {
+            // If all fail, user can manually open Downloads folder
+          }
+        }
+      }
+      
+      onProgress?.(100, 'Download complete');
+      
+      return {
+        filePath: downloadsPath,
+        fileUri: fileUri
+      };
+    }
+    
+    // Desktop/Web: Fallback ke method lama
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('Failed to read response stream');
+    }
+    
+    const chunks: Uint8Array[] = [];
+    let receivedLength = 0;
+    
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      chunks.push(value);
+      receivedLength += value.length;
+      
+      if (contentLength > 0) {
+        const downloadPercent = Math.round((receivedLength / contentLength) * 75);
+        const totalPercent = 10 + downloadPercent;
+        onProgress?.(totalPercent, `Downloading... ${totalPercent}% (${(receivedLength / 1024 / 1024).toFixed(2)} MB / ${(contentLength / 1024 / 1024).toFixed(2)} MB)`);
+      } else {
+        onProgress?.(50, `Downloading... ${(receivedLength / 1024 / 1024).toFixed(2)} MB`);
+      }
+    }
+    
+    onProgress?.(95, 'Preparing APK file...');
+    
+    const blob = new Blob(chunks as BlobPart[], { type: 'application/vnd.android.package-archive' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = apkFile;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    
+    onProgress?.(100, 'Download complete');
+    
+    return {
+      filePath: apkFile,
+      fileUri: url
+    };
+  } catch (error: any) {
+    throw error;
+  }
+};
+
+// Helper untuk get APK filename dari latest-android.yml atau latest.yml
+export const getAPKFileName = async (serverUrl: string): Promise<string> => {
+  // Cek latest-android.yml dulu (untuk mobile)
+  try {
+    const androidUpdateUrl = `${serverUrl}/api/updates/latest-android.yml`;
+    const androidResponse = await fetch(androidUpdateUrl);
+    
+    if (androidResponse.ok) {
+      const ymlContent = await androidResponse.text();
+      
+      // Parse APK filename from YAML
+      const apkMatch = ymlContent.match(/url:\s*([^\n]+\.apk)/);
+      if (apkMatch) {
+        return apkMatch[1].trim();
+      }
+      
+      // Fallback: try to find any .apk file
+      const filesMatch = ymlContent.match(/- url:\s*([^\n]+)/g);
+      if (filesMatch) {
+        for (const match of filesMatch) {
+          if (match.includes('.apk')) {
+            return match.replace(/- url:\s*/, '').trim();
+          }
+        }
+      }
+    }
+  } catch (error) {
+    // Fallback ke latest.yml jika latest-android.yml tidak ada
+  }
+  
+  // Fallback: cek latest.yml (untuk kompatibilitas)
+  const updateUrl = `${serverUrl}/api/updates/latest.yml`;
+  const response = await fetch(updateUrl);
+  
+  if (!response.ok) {
+    throw new Error(`Failed to fetch update info: ${response.status}`);
+  }
+  
+  const ymlContent = await response.text();
+  
+  // Parse APK filename from YAML
+  const apkMatch = ymlContent.match(/url:\s*([^\n]+\.apk)/);
+  if (apkMatch) {
+    return apkMatch[1].trim();
+  }
+  
+  // Fallback: try to find any .apk file
+  const filesMatch = ymlContent.match(/- url:\s*([^\n]+)/g);
+  if (filesMatch) {
+    for (const match of filesMatch) {
+      if (match.includes('.apk')) {
+        return match.replace(/- url:\s*/, '').trim();
+      }
+    }
+  }
+  
+  throw new Error('APK file not found in update info');
+};
+
 export const savePdfForMobile = async (
   htmlContent: string,
   fileName: string,

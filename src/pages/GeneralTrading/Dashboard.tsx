@@ -18,7 +18,7 @@ const GeneralTradingDashboard = () => {
   }, []);
 
   const loadData = async () => {
-    const [so, po, inv, pay, prod, quot, cust, supp] = await Promise.all([
+    const [soRaw, poRaw, invRaw, payRaw, prodRaw, quotRaw, custRaw, suppRaw] = await Promise.all([
       storageService.get<any[]>('gt_salesOrders') || [],
       storageService.get<any[]>('gt_purchaseOrders') || [],
       storageService.get<any[]>('gt_invoices') || [],
@@ -29,14 +29,24 @@ const GeneralTradingDashboard = () => {
       storageService.get<any[]>('gt_suppliers') || [],
     ]);
     
-    setSalesOrders(so || []);
-    setPurchaseOrders(po || []);
-    setInvoices(inv || []);
-    setPayments(pay || []);
-    setProducts(prod || []);
-    setQuotations(quot || []);
-    setCustomers(cust || []);
-    setSuppliers(supp || []);
+    // CRITICAL: Extract array from storage wrapper if needed
+    const extractArray = (data: any) => {
+      if (!data) return [];
+      if (Array.isArray(data)) return data;
+      if (typeof data === 'object' && 'value' in data && Array.isArray(data.value)) {
+        return data.value;
+      }
+      return [];
+    };
+    
+    setSalesOrders(extractArray(soRaw));
+    setPurchaseOrders(extractArray(poRaw));
+    setInvoices(extractArray(invRaw));
+    setPayments(extractArray(payRaw));
+    setProducts(extractArray(prodRaw));
+    setQuotations(extractArray(quotRaw));
+    setCustomers(extractArray(custRaw));
+    setSuppliers(extractArray(suppRaw));
   };
 
   // KPI Calculations

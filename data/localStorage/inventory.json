@@ -1,51 +1,156 @@
 {
   "value": [
     {
-      "id": "1767602971153mp71grnfz",
-      "supplierName": "PT. TOP ONE PLASTINDO",
-      "codeItem": "IMP-00001",
-      "description": "SHEET IMPRA T5 UK 2000X3000 MM",
-      "kategori": "MATERIAL",
-      "satuan": "LEMBAR",
-      "price": 0,
+      "id": "1767152375851p6y49yhhv",
+      "supplierName": "PT. KATI KARTIKA MURNI",
+      "codeItem": "MTRL-00828",
+      "description": "TEST 1",
+      "kategori": "Material",
+      "satuan": "PCS",
+      "price": 5000,
       "stockPremonth": 0,
-      "receive": 28,
-      "outgoing": 28,
+      "receive": 50,
+      "outgoing": 0,
       "return": 0,
-      "nextStock": 0,
+      "nextStock": 50,
       "processedPOs": [
-        "PO-260105-CO960"
+        "PO-251231-66N0K"
       ],
       "allocatedSPKs": [
-        "SPK/260105/E648O"
+        "SPK/251231/T26DZ"
       ],
-      "lastUpdate": "2026-01-05T08:51:08.595Z",
+      "lastUpdate": "2026-01-08T23:13:20.354Z",
       "processedProductions": [
-        "PROD-260105-0I0LC-IMP-00001-1767603068595"
+        "PROD-251231-USR72-MTRL-00828-1767152928234"
+      ],
+      "padCode": "",
+      "processedSPKs": [],
+      "processedGRNs": [],
+      "deleted": true,
+      "deletedAt": "2026-01-09T08:03:34.101Z",
+      "deletedTimestamp": 1767945814101
+    },
+    {
+      "id": "1767152928235m0213ht1q",
+      "supplierName": "PT. GUNA BAKTI UNGGUL",
+      "codeItem": "FG-GBU-00124",
+      "description": "DUS KAPSTOK FIORI UK 47 X 42 X 46 CM",
+      "kategori": "FINISH GOOD",
+      "satuan": "PCS",
+      "price": 22600,
+      "stockPremonth": 0,
+      "receive": 50,
+      "outgoing": 0,
+      "return": 0,
+      "nextStock": 50,
+      "processedProductions": [
+        "PROD-251231-USR72-SPK/251231/T26DZ-PRODUCT"
+      ],
+      "lastUpdate": "2026-01-08T23:13:20.354Z",
+      "processedSPKs": [
+        "SPK/251231/T26DZ"
+      ],
+      "onGoing": 0,
+      "on_going": 0,
+      "productionStock": 0,
+      "padCode": "",
+      "processedPOs": [],
+      "processedGRNs": []
+    },
+    {
+      "id": "1767157269188f2f6opwry",
+      "supplierName": "PT. PARAMITRA GUNAKARYA CEMERLANG",
+      "codeItem": "MTRL-00005",
+      "description": "SHEET 165 X 120 CM K150/M125/K125 B/F BRUTO",
+      "kategori": "Material",
+      "satuan": "Pcs",
+      "price": 2000,
+      "stockPremonth": 0,
+      "receive": 100,
+      "outgoing": 0,
+      "return": 0,
+      "nextStock": 100,
+      "processedPOs": [
+        "PO-251231-YXC1D"
+      ],
+      "allocatedSPKs": [
+        "SPK/251231/947I2"
+      ],
+      "lastUpdate": "2026-01-08T23:13:20.354Z",
+      "padCode": "",
+      "processedSPKs": [],
+      "processedGRNs": [],
+      "processedProductions": [
+        "PROD-260101-VW345-MTRL-00005-1767238633796"
       ]
     },
     {
-      "id": "17676030685966h7qku2gf",
+      "id": "17672370719452op33y69z",
+      "supplierName": "PT. EVERPRO  INDONESIA TECHNOLOGIES",
+      "codeItem": "FG-AMM-00001",
+      "description": "DUS RANJANG MIB UK 160",
+      "kategori": "Produk",
+      "satuan": "PCS",
+      "price": 13135,
+      "stockPremonth": 0,
+      "receive": 0,
+      "outgoing": 0,
+      "return": 0,
+      "nextStock": 0,
+      "processedProductions": [
+        "PROD-260101-AO73P-SPK/251231/947I2-PRODUCT",
+        "PROD-260101-VW345-FG-AMM-00001-1767238687913"
+      ],
+      "lastUpdate": "2026-01-08T23:13:20.354Z",
+      "processedPOs": [],
+      "padCode": "",
+      "processedSPKs": [],
+      "processedGRNs": []
+    },
+    {
+      "id": "1767238633797y2s4rymls",
+      "supplierName": "PT. DAE HWA INDONESIA",
+      "codeItem": "FG-EHW-00011",
+      "description": "OUTBOX HUSQVARNA 14 INCH 10PK 465X425X85 MM (PM2162)",
+      "kategori": "Produk",
+      "satuan": "PCS",
+      "price": 11640,
+      "stockPremonth": 0,
+      "receive": 0,
+      "outgoing": 0,
+      "return": 0,
+      "nextStock": 0,
+      "processedProductions": [
+        "PROD-260101-VW345-SPK/260101/6FS6F-PRODUCT"
+      ],
+      "lastUpdate": "2026-01-08T23:13:20.354Z",
+      "padCode": "",
+      "processedPOs": [],
+      "processedSPKs": [],
+      "processedGRNs": []
+    },
+    {
+      "id": "1767914000353fg-ctm-00002",
       "supplierName": "PT. INDONESIA KOITO",
       "codeItem": "FG-CTM-00002",
       "description": "BOX X + COVER LIPAT MAGNET UK 780X470X385 mm",
-      "kategori": "PRODUCT",
+      "kategori": "Produk",
       "satuan": "PCS",
-      "price": 2819.6428571428573,
+      "price": 157900,
+      "padCode": "",
       "stockPremonth": 0,
-      "receive": 112,
+      "receive": 56,
       "outgoing": 0,
       "return": 0,
-      "nextStock": 112,
-      "processedProductions": [
-        "PROD-260105-0I0LC-SPK/260105/E648O-PRODUCT"
-      ],
-      "lastUpdate": "2026-01-05T08:52:42.475Z",
+      "nextStock": 56,
+      "processedPOs": [],
       "processedSPKs": [
         "SPK/260105/E648O"
-      ]
+      ],
+      "processedGRNs": [],
+      "lastUpdate": "2026-01-08T23:13:20.354Z"
     }
   ],
-  "timestamp": 1767603162476,
-  "_timestamp": 1767603162476
+  "timestamp": 1767945814101,
+  "_timestamp": 1767945814101
 }

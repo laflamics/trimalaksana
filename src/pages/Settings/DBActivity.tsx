@@ -3,6 +3,8 @@ import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import { storageService, extractStorageValue } from '../../services/storage';
+import { filterActiveItems } from '../../utils/data-persistence-helper';
+import { deletePackagingItem, deletePackagingItems } from '../../utils/packaging-delete-helper';
 import axios from 'axios';
 import '../../styles/common.css';
 import '../../styles/compact.css';
@@ -86,6 +88,8 @@ const DBActivity = () => {
   const [clearingCategory, setClearingCategory] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(50);
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const [deleteLoading, setDeleteLoading] = useState(false);
   
   // Custom dialog state
   const [dialogState, setDialogState] = useState<{
@@ -130,6 +134,15 @@ const DBActivity = () => {
     { id: 'journal-entries', label: 'Journal Entries' },
     { id: 'notifications', label: 'Notifications' },
     { id: 'expenses', label: 'Expenses' },
+    { id: 'invoices', label: 'Invoices' },
+    { id: 'accounting', label: 'Accounting' },
+    { id: 'general-ledger', label: 'General Ledger' },
+    { id: 'financial-reports', label: 'Financial Reports' },
+    { id: 'accounts-receivable', label: 'Accounts Receivable' },
+    { id: 'accounts-payable', label: 'Accounts Payable' },
+    { id: 'tax-management', label: 'Tax Management' },
+    { id: 'all-business-reports', label: 'All Business Reports' },
+    { id: 'coa', label: 'Chart of Accounts (COA)' },
     { id: 'audit', label: 'Audit Logs' },
     { id: 'outbox', label: 'Outbox Events (Undelivered)' },
     { id: 'settings', label: 'Company Settings' },
@@ -337,120 +350,264 @@ const DBActivity = () => {
     { key: 'created', header: 'Created' },
   ];
 
+  // Helper untuk get storage key dan id field berdasarkan section
+  const getStorageConfig = (section: string): { key: string; idField: string } => {
+    const configs: { [key: string]: { key: string; idField: string } } = {
+      'products': { key: 'products', idField: 'id' },
+      'materials': { key: 'materials', idField: 'id' },
+      'customers': { key: 'customers', idField: 'id' },
+      'suppliers': { key: 'suppliers', idField: 'id' },
+      'sales-orders': { key: 'salesOrders', idField: 'id' },
+      'purchase-requests': { key: 'purchaseRequests', idField: 'id' },
+      'purchase-orders': { key: 'purchaseOrders', idField: 'id' },
+      'invoices': { key: 'invoices', idField: 'id' },
+      'spk': { key: 'spk', idField: 'id' },
+      'grn': { key: 'grnPackaging', idField: 'id' },
+      'production': { key: 'production', idField: 'id' },
+      'qc': { key: 'qc', idField: 'id' },
+      'delivery': { key: 'delivery', idField: 'id' },
+      'inventory': { key: 'inventory', idField: 'id' },
+      'ptp': { key: 'ptp', idField: 'id' },
+      'payments': { key: 'payments', idField: 'id' },
+      'journal-entries': { key: 'journalEntries', idField: 'id' },
+      'expenses': { key: 'expenses', idField: 'id' },
+      'invoices': { key: 'invoices', idField: 'id' },
+      'accounting': { key: 'journalEntries', idField: 'id' }, // Accounting uses journalEntries
+      'general-ledger': { key: 'journalEntries', idField: 'id' }, // General Ledger uses journalEntries
+      'financial-reports': { key: 'journalEntries', idField: 'id' }, // Financial Reports uses journalEntries
+      'accounts-receivable': { key: 'invoices', idField: 'id' }, // AR uses invoices
+      'accounts-payable': { key: 'purchaseOrders', idField: 'id' }, // AP uses purchaseOrders
+      'tax-management': { key: 'taxRecords', idField: 'id' },
+      'all-business-reports': { key: 'journalEntries', idField: 'id' }, // Reports use journalEntries
+      'coa': { key: 'accounts', idField: 'code' }, // COA uses 'code' as ID field
+      'notifications': { key: 'productionNotifications', idField: 'id' }, // Note: notifications combine multiple types, delete will handle each type separately
+      'audit': { key: 'audit', idField: 'id' },
+      'outbox': { key: 'outbox', idField: 'id' },
+    };
+    return configs[section] || { key: section, idField: 'id' };
+  };
+
   const getColumns = () => {
-    switch (activeSection) {
-      case 'products': return productColumns;
-      case 'customers': return customerColumns;
-      case 'suppliers': return supplierColumns;
-      case 'sales-orders': return soColumns;
-      case 'purchase-requests': return prColumns;
-      case 'purchase-orders': return poColumns;
-      case 'invoices': return invoiceColumns;
-      case 'spk': return spkColumns;
-      case 'grn': return grnColumns;
-      case 'production': return productionColumns;
-      case 'qc': return qcColumns;
-      case 'delivery': return deliveryColumns;
-      case 'inventory': return inventoryColumns;
-      case 'ptp': return ptpColumns;
-      case 'payments': return paymentColumns;
-      case 'journal-entries': return journalEntryColumns;
-      case 'notifications': return notificationColumns;
-      case 'expenses': return expenseColumns;
-      case 'audit': return auditColumns;
-      case 'outbox': return outboxColumns;
-      case 'materials': return [
-        { key: 'id', header: 'ID' },
-        { key: 'material_id', header: 'Material ID' },
-        { key: 'kode', header: 'Code' },
-        { key: 'nama', header: 'Name' },
-        { key: 'created', header: 'Created' },
-      ];
-      default: return productColumns;
+    const baseColumns = (() => {
+      switch (activeSection) {
+        case 'products': return productColumns;
+        case 'customers': return customerColumns;
+        case 'suppliers': return supplierColumns;
+        case 'sales-orders': return soColumns;
+        case 'purchase-requests': return prColumns;
+        case 'purchase-orders': return poColumns;
+        case 'invoices': return invoiceColumns;
+        case 'spk': return spkColumns;
+        case 'grn': return grnColumns;
+        case 'production': return productionColumns;
+        case 'qc': return qcColumns;
+        case 'delivery': return deliveryColumns;
+        case 'inventory': return inventoryColumns;
+        case 'ptp': return ptpColumns;
+        case 'payments': return paymentColumns;
+        case 'journal-entries': return journalEntryColumns;
+        case 'notifications': return notificationColumns;
+        case 'expenses': return expenseColumns;
+        case 'invoices': return invoiceColumns;
+        case 'accounting': return journalEntryColumns; // Accounting uses journal entries
+        case 'general-ledger': return journalEntryColumns; // General Ledger uses journal entries
+        case 'financial-reports': return journalEntryColumns; // Financial Reports uses journal entries
+        case 'accounts-receivable': return invoiceColumns; // AR uses invoices
+        case 'accounts-payable': return poColumns; // AP uses purchase orders
+        case 'tax-management': return [
+          { key: 'id', header: 'ID' },
+          { key: 'taxDate', header: 'Tax Date' },
+          { key: 'reference', header: 'Reference' },
+          { key: 'referenceType', header: 'Reference Type' },
+          { key: 'taxType', header: 'Tax Type' },
+          { key: 'baseAmount', header: 'Base Amount' },
+          { key: 'taxAmount', header: 'Tax Amount' },
+          { key: 'totalAmount', header: 'Total Amount' },
+          { key: 'status', header: 'Status' },
+          { key: 'created', header: 'Created' },
+        ];
+        case 'all-business-reports': return journalEntryColumns; // Reports use journal entries
+        case 'coa': return [
+          { key: 'code', header: 'Code' },
+          { key: 'name', header: 'Name' },
+          { key: 'type', header: 'Type' },
+          { key: 'balance', header: 'Balance' },
+        ];
+        case 'audit': return auditColumns;
+        case 'outbox': return outboxColumns;
+        case 'materials': return [
+          { key: 'id', header: 'ID' },
+          { key: 'material_id', header: 'Material ID' },
+          { key: 'kode', header: 'Code' },
+          { key: 'nama', header: 'Name' },
+          { key: 'created', header: 'Created' },
+        ];
+        default: return productColumns;
+      }
+    })();
+
+    // Skip checkbox dan actions untuk section 'settings' (bukan data yang bisa di-delete)
+    if (activeSection === 'settings') {
+      return baseColumns;
     }
+
+    // Tambahkan checkbox column di awal
+    const checkboxColumn = {
+      key: '_checkbox',
+      header: (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <input
+            type="checkbox"
+            checked={selectedItemIds.size > 0 && selectedItemIds.size === getCurrentData().length && getCurrentData().length > 0}
+            onChange={(e) => {
+              if (e.target.checked) {
+                const currentData = getCurrentData();
+                const allIds = new Set(currentData.map((item: any) => {
+                  const config = getStorageConfig(activeSection);
+                  return String(item[config.idField] || item.id || '');
+                }).filter((id: string) => id));
+                setSelectedItemIds(allIds);
+              } else {
+                setSelectedItemIds(new Set());
+              }
+            }}
+            style={{ cursor: 'pointer' }}
+          />
+          <span style={{ fontSize: '12px' }}>Select All</span>
+        </div>
+      ),
+      render: (item: any) => {
+        const config = getStorageConfig(activeSection);
+        const itemId = String(item[config.idField] || item.id || '');
+        return (
+          <input
+            type="checkbox"
+            checked={selectedItemIds.has(itemId)}
+            onChange={(e) => {
+              const newSet = new Set(selectedItemIds);
+              if (e.target.checked) {
+                newSet.add(itemId);
+              } else {
+                newSet.delete(itemId);
+              }
+              setSelectedItemIds(newSet);
+            }}
+            style={{ cursor: 'pointer' }}
+          />
+        );
+      }
+    };
+
+    // Tambahkan actions column di akhir (untuk delete single)
+    const actionsColumn = {
+      key: '_actions',
+      header: 'Actions',
+      render: (item: any) => {
+        const config = getStorageConfig(activeSection);
+        const itemId = String(item[config.idField] || item.id || '');
+        return (
+          <Button
+            variant="danger"
+            onClick={() => handleDeleteSingleItem(itemId, item)}
+            disabled={deleteLoading}
+            style={{ fontSize: '11px', padding: '4px 8px' }}
+          >
+            Delete
+          </Button>
+        );
+      }
+    };
+
+    return [checkboxColumn, ...baseColumns, actionsColumn];
   };
 
   const getAllData = (): any[] => {
     try {
+      // 🚀 FIX: Data sudah di-filter di loadData(), jadi tidak perlu filter lagi
+      // Tapi tetap filter sebagai double check untuk safety
       switch (activeSection) {
       case 'products': {
         const products = extractStorageValue(data.products);
-        return Array.isArray(products) ? products.map((item: any) => ({
+        // Data sudah di-filter di loadData(), tapi filter lagi sebagai double check
+        const activeProducts = filterActiveItems(Array.isArray(products) ? products : []);
+        return activeProducts.map((item: any) => ({
           id: item.id,
           kode: item.kode,
           nama: item.nama,
           created: item.created,
-        })) : [];
+        }));
       }
       case 'customers': {
         const customers = extractStorageValue(data.customers);
-        return Array.isArray(customers) ? customers.map((item: any) => ({
+        const activeCustomers = filterActiveItems(Array.isArray(customers) ? customers : []);
+        return activeCustomers.map((item: any) => ({
           id: item.id,
           kontak: item.kontak,
           nama: item.nama,
           telepon: item.telepon,
           created: item.created,
-        })) : [];
+        }));
       }
       case 'suppliers': {
         const suppliers = extractStorageValue(data.suppliers);
-        return Array.isArray(suppliers) ? suppliers.map((item: any) => ({
+        const activeSuppliers = filterActiveItems(Array.isArray(suppliers) ? suppliers : []);
+        return activeSuppliers.map((item: any) => ({
           id: item.id,
           kontak: item.kontak,
           nama: item.nama,
           telepon: item.telepon,
           created: item.created,
-        })) : [];
+        }));
       }
       case 'sales-orders': {
         const so = extractStorageValue(data.salesOrders);
-        return Array.isArray(so) ? so : [];
+        return filterActiveItems(Array.isArray(so) ? so : []);
       }
       case 'purchase-requests': {
         const pr = extractStorageValue(data.purchaseRequests);
-        return Array.isArray(pr) ? pr : [];
+        return filterActiveItems(Array.isArray(pr) ? pr : []);
       }
       case 'purchase-orders': {
         const po = extractStorageValue(data.purchaseOrders);
-        return Array.isArray(po) ? po : [];
+        return filterActiveItems(Array.isArray(po) ? po : []);
       }
       case 'invoices': {
         const inv = extractStorageValue(data.invoices);
-        return Array.isArray(inv) ? inv : [];
+        return filterActiveItems(Array.isArray(inv) ? inv : []);
       }
       case 'spk': {
         const spk = extractStorageValue(data.spk);
-        return Array.isArray(spk) ? spk : [];
+        return filterActiveItems(Array.isArray(spk) ? spk : []);
       }
       case 'grn': {
         // Try both grn and grnPackaging
         const grn = extractStorageValue(data.grn || data.grnPackaging);
-        return Array.isArray(grn) ? grn : [];
+        return filterActiveItems(Array.isArray(grn) ? grn : []);
       }
       case 'production': {
         const prod = extractStorageValue(data.production);
-        return Array.isArray(prod) ? prod : [];
+        return filterActiveItems(Array.isArray(prod) ? prod : []);
       }
       case 'qc': {
         const qc = extractStorageValue(data.qc);
-        return Array.isArray(qc) ? qc : [];
+        return filterActiveItems(Array.isArray(qc) ? qc : []);
       }
       case 'delivery': {
         // Try both delivery and deliveryNotes
         const del = extractStorageValue(data.delivery || data.deliveryNotes);
-        return Array.isArray(del) ? del : [];
+        return filterActiveItems(Array.isArray(del) ? del : []);
       }
       case 'inventory': {
         const inv = extractStorageValue(data.inventory);
-        return Array.isArray(inv) ? inv : [];
+        return filterActiveItems(Array.isArray(inv) ? inv : []);
       }
       case 'payments': {
         const pay = extractStorageValue(data.payments);
-        return Array.isArray(pay) ? pay : [];
+        return filterActiveItems(Array.isArray(pay) ? pay : []);
       }
       case 'journal-entries': {
         const je = extractStorageValue(data.journalEntries);
-        return Array.isArray(je) ? je : [];
+        return filterActiveItems(Array.isArray(je) ? je : []);
       }
       case 'notifications': {
         // Combine all notification types
@@ -459,16 +616,58 @@ const DBActivity = () => {
         const invNotifs = extractStorageValue(data.invoiceNotifications);
         const finNotifs = extractStorageValue(data.financeNotifications);
         const allNotifs = [
-          ...(Array.isArray(prodNotifs) ? prodNotifs : []).map((n: any) => ({ ...n, type: n.type || 'PRODUCTION_SCHEDULE' })),
-          ...(Array.isArray(delNotifs) ? delNotifs : []).map((n: any) => ({ ...n, type: n.type || 'DELIVERY_SCHEDULE' })),
-          ...(Array.isArray(invNotifs) ? invNotifs : []).map((n: any) => ({ ...n, type: n.type || 'CUSTOMER_INVOICE' })),
-          ...(Array.isArray(finNotifs) ? finNotifs : []).map((n: any) => ({ ...n, type: n.type || 'SUPPLIER_PAYMENT' })),
+          ...filterActiveItems(Array.isArray(prodNotifs) ? prodNotifs : []).map((n: any) => ({ ...n, type: n.type || 'PRODUCTION_SCHEDULE' })),
+          ...filterActiveItems(Array.isArray(delNotifs) ? delNotifs : []).map((n: any) => ({ ...n, type: n.type || 'DELIVERY_SCHEDULE' })),
+          ...filterActiveItems(Array.isArray(invNotifs) ? invNotifs : []).map((n: any) => ({ ...n, type: n.type || 'CUSTOMER_INVOICE' })),
+          ...filterActiveItems(Array.isArray(finNotifs) ? finNotifs : []).map((n: any) => ({ ...n, type: n.type || 'SUPPLIER_PAYMENT' })),
         ];
         return allNotifs;
       }
       case 'expenses': {
         const exp = extractStorageValue(data.expenses);
-        return Array.isArray(exp) ? exp : [];
+        return filterActiveItems(Array.isArray(exp) ? exp : []);
+      }
+      case 'invoices': {
+        const inv = extractStorageValue(data.invoices);
+        return filterActiveItems(Array.isArray(inv) ? inv : []);
+      }
+      case 'accounting': {
+        // Accounting uses journalEntries
+        const je = extractStorageValue(data.journalEntries);
+        return filterActiveItems(Array.isArray(je) ? je : []);
+      }
+      case 'general-ledger': {
+        // General Ledger uses journalEntries
+        const je = extractStorageValue(data.journalEntries);
+        return filterActiveItems(Array.isArray(je) ? je : []);
+      }
+      case 'financial-reports': {
+        // Financial Reports uses journalEntries
+        const je = extractStorageValue(data.journalEntries);
+        return filterActiveItems(Array.isArray(je) ? je : []);
+      }
+      case 'accounts-receivable': {
+        // AR uses invoices
+        const inv = extractStorageValue(data.invoices);
+        return filterActiveItems(Array.isArray(inv) ? inv : []);
+      }
+      case 'accounts-payable': {
+        // AP uses purchaseOrders
+        const po = extractStorageValue(data.purchaseOrders);
+        return filterActiveItems(Array.isArray(po) ? po : []);
+      }
+      case 'tax-management': {
+        const tax = extractStorageValue(data.taxRecords);
+        return filterActiveItems(Array.isArray(tax) ? tax : []);
+      }
+      case 'all-business-reports': {
+        // Reports use journalEntries
+        const je = extractStorageValue(data.journalEntries);
+        return filterActiveItems(Array.isArray(je) ? je : []);
+      }
+      case 'coa': {
+        const accounts = extractStorageValue(data.accounts);
+        return filterActiveItems(Array.isArray(accounts) ? accounts : []);
       }
       case 'audit': {
         // Audit logs are already aggregated in loadData() from all dates
@@ -489,17 +688,18 @@ const DBActivity = () => {
       }
       case 'materials': {
         const materials = extractStorageValue(data.materials);
-        return Array.isArray(materials) ? materials.map((item: any) => ({
+        const activeMaterials = filterActiveItems(Array.isArray(materials) ? materials : []);
+        return activeMaterials.map((item: any) => ({
           id: item.id,
           material_id: item.material_id || item.kode,
           kode: item.kode,
           nama: item.nama,
           created: item.created,
-        })) : [];
+        }));
       }
       case 'ptp': {
         const ptp = extractStorageValue(data.ptp);
-        return Array.isArray(ptp) ? ptp : [];
+        return filterActiveItems(Array.isArray(ptp) ? ptp : []);
       }
       default: return [];
       }
@@ -595,6 +795,121 @@ const DBActivity = () => {
   const handleSectionChange = (sectionId: string) => {
     setActiveSection(sectionId);
     setCurrentPage(1); // Reset to first page when changing section
+    setSelectedItemIds(new Set()); // Reset selected items when changing section
+  };
+
+  const handleDeleteSingleItem = async (itemId: string, item: any) => {
+    const config = getStorageConfig(activeSection);
+    const itemName = item.nama || item.kode || item.soNo || item.poNo || item.prNo || item.spkNo || item.sjNo || item.invoiceNo || item.expenseNo || item.paymentNo || item.id || itemId;
+    
+    showConfirm(
+      `Delete this item?\n\n${itemName}\n\nThis action cannot be undone.`,
+      async () => {
+        setDeleteLoading(true);
+        try {
+          // Special handling for notifications (can be from multiple storage keys)
+          let deleteResult;
+          if (activeSection === 'notifications') {
+            // Try to delete from all notification storage keys
+            const notificationKeys = ['productionNotifications', 'deliveryNotifications', 'invoiceNotifications', 'financeNotifications'];
+            let deleted = false;
+            for (const key of notificationKeys) {
+              const result = await deletePackagingItem(key, itemId, config.idField);
+              if (result.success) {
+                deleted = true;
+                break;
+              }
+            }
+            deleteResult = deleted ? { success: true, itemFound: true } : { success: false, error: 'Notification not found in any storage key' };
+          } else {
+            deleteResult = await deletePackagingItem(config.key, itemId, config.idField);
+          }
+          
+          if (deleteResult.success) {
+            showAlert(`Item deleted successfully`, 'Success');
+            // 🚀 FIX: Reload data langsung (tidak perlu delay karena delete sudah instant di local)
+            // Filter akan otomatis hide deleted items
+            loadData();
+            setSelectedItemIds(new Set());
+          } else {
+            showAlert(`Error deleting item: ${deleteResult.error || 'Unknown error'}`, 'Error');
+          }
+        } catch (error: any) {
+          showAlert(`Error deleting item: ${error.message}`, 'Error');
+        } finally {
+          setDeleteLoading(false);
+        }
+      },
+      undefined,
+      'Confirm Delete'
+    );
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedItemIds.size === 0) {
+      showAlert('Please select at least one item to delete.', 'No Selection');
+      return;
+    }
+
+    const config = getStorageConfig(activeSection);
+    const itemCount = selectedItemIds.size;
+    
+    showConfirm(
+      `Delete ${itemCount} selected item(s)?\n\nThis action cannot be undone.`,
+      async () => {
+        setDeleteLoading(true);
+        try {
+          const itemIdsArray = Array.from(selectedItemIds);
+          
+          // Special handling for notifications (can be from multiple storage keys)
+          let deleteResult;
+          if (activeSection === 'notifications') {
+            // Try to delete from all notification storage keys
+            const notificationKeys = ['productionNotifications', 'deliveryNotifications', 'invoiceNotifications', 'financeNotifications'];
+            let totalSuccess = 0;
+            let totalFailed = 0;
+            const allErrors: string[] = [];
+            
+            for (const key of notificationKeys) {
+              const result = await deletePackagingItems(key, itemIdsArray, config.idField);
+              totalSuccess += result.success;
+              totalFailed += result.failed;
+              allErrors.push(...result.errors);
+            }
+            
+            deleteResult = {
+              success: totalSuccess,
+              failed: totalFailed,
+              errors: allErrors
+            };
+          } else {
+            deleteResult = await deletePackagingItems(config.key, itemIdsArray, config.idField);
+          }
+          
+          if (deleteResult.success > 0) {
+            showAlert(
+              `Successfully deleted ${deleteResult.success} item(s)${deleteResult.failed > 0 ? `\n${deleteResult.failed} item(s) failed to delete` : ''}`,
+              deleteResult.failed > 0 ? 'Partial Success' : 'Success'
+            );
+            // 🚀 FIX: Reload data langsung (tidak perlu delay karena delete sudah instant di local)
+            // Filter akan otomatis hide deleted items
+            loadData();
+            setSelectedItemIds(new Set());
+          } else {
+            showAlert(
+              `Failed to delete items. Errors:\n${deleteResult.errors.slice(0, 5).join('\n')}${deleteResult.errors.length > 5 ? `\n... and ${deleteResult.errors.length - 5} more` : ''}`,
+              'Error'
+            );
+          }
+        } catch (error: any) {
+          showAlert(`Error deleting items: ${error.message}`, 'Error');
+        } finally {
+          setDeleteLoading(false);
+        }
+      },
+      undefined,
+      'Confirm Delete Selected'
+    );
   };
 
   const loadData = async () => {
@@ -616,7 +931,7 @@ const DBActivity = () => {
         // Notifications
         'productionNotifications', 'deliveryNotifications', 'invoiceNotifications', 'financeNotifications',
         // Finance
-        'payments', 'journalEntries', 'accounts', 'invoices', 'expenses',
+        'payments', 'journalEntries', 'accounts', 'invoices', 'expenses', 'taxRecords',
         // Other
         'audit', 'outbox', 'companySettings',
       ];
@@ -673,17 +988,20 @@ const DBActivity = () => {
             console.log(`[DBActivity] ✅ ${key} loaded dari localStorage (${dataArray.length} items) - skip storageService.get()`);
           }
           
-          const deletedCount = dataArray.filter((i: any) => i?.deleted === true || i?.deleted === 'true' || i?.deletedAt).length;
-          console.log(`[DBActivity] Final ${key}: ${dataArray.length} items (including ${deletedCount} deleted items)`);
-          allData[key] = dataArray;
+          // 🚀 FIX: Filter deleted items langsung saat load (bukan nanti di getAllData)
+          // Ini memastikan deleted items tidak muncul meskipun refresh cepat
+          const activeDataArray = filterActiveItems(dataArray);
+          const deletedCount = dataArray.length - activeDataArray.length;
+          console.log(`[DBActivity] Final ${key}: ${dataArray.length} items (${deletedCount} deleted, ${activeDataArray.length} active)`);
+          allData[key] = activeDataArray; // Simpan hanya active items
           
           // IMPORTANT: Set data ke mapped keys juga untuk konsistensi count
           // Contoh: jika key='grn' dan mapping=['grnPackaging', 'grn'], set data ke kedua key
           if (keyMapping[key]) {
             for (const mappedKey of keyMapping[key]) {
               if (mappedKey !== key) {
-                allData[mappedKey] = dataArray;
-                console.log(`[DBActivity] Also set ${mappedKey} = ${key} (${dataArray.length} items) for count consistency`);
+                allData[mappedKey] = activeDataArray; // Juga filter untuk mapped keys
+                console.log(`[DBActivity] Also set ${mappedKey} = ${key} (${activeDataArray.length} active items) for count consistency`);
               }
             }
           }
@@ -752,8 +1070,10 @@ const DBActivity = () => {
                         !allData[normalizedKey] && 
                         !normalizedKey.startsWith('storage_config') && 
                         !normalizedKey.startsWith('selectedBusiness')) {
-                      allData[normalizedKey] = extracted;
-                      console.log(`[DBActivity] Found additional Packaging key in localStorage: ${key} -> ${normalizedKey} (${extracted.length} items)`);
+                      // 🚀 FIX: Filter deleted items juga untuk additional keys
+                      const activeExtracted = filterActiveItems(extracted);
+                      allData[normalizedKey] = activeExtracted;
+                      console.log(`[DBActivity] Found additional Packaging key in localStorage: ${key} -> ${normalizedKey} (${activeExtracted.length} active items from ${extracted.length} total)`);
                     }
                   }
                 }
@@ -770,12 +1090,14 @@ const DBActivity = () => {
       // IMPORTANT: Jangan scan audit logs dari GT atau Trucking untuk Packaging DB Activity
       // Hanya aggregate audit logs Packaging saja
       
-      // Save aggregated audit logs
+      // Save aggregated audit logs (audit logs tidak perlu filter karena bukan data yang bisa di-delete)
       if (auditLogs.length > 0) {
         allData.audit = auditLogs;
         console.log(`[DBActivity] ✅ Aggregated ${auditLogs.length} audit logs from all dates`);
       }
       
+      // 🚀 FIX: Set data dengan filter sudah diterapkan di loadData
+      // Ini memastikan deleted items tidak muncul meskipun refresh cepat
       setData(allData);
       console.log('[DBActivity] Loaded data from localStorage:', Object.keys(allData).map(k => `${k}: ${allData[k]?.length || 0}`).join(', '));
     } catch (error) {
@@ -1505,6 +1827,42 @@ const DBActivity = () => {
             </div>
           ) : (
             <>
+              {/* Selection and Delete Controls */}
+              {selectedItemIds.size > 0 && (
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center', 
+                  marginBottom: '12px',
+                  padding: '12px',
+                  backgroundColor: 'var(--bg-secondary)',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)'
+                }}>
+                  <span style={{ fontSize: '14px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                    {selectedItemIds.size} item(s) selected
+                  </span>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <Button
+                      variant="secondary"
+                      onClick={() => setSelectedItemIds(new Set())}
+                      disabled={deleteLoading}
+                      style={{ fontSize: '12px', padding: '6px 12px' }}
+                    >
+                      Clear Selection
+                    </Button>
+                    <Button
+                      variant="danger"
+                      onClick={handleDeleteSelected}
+                      disabled={deleteLoading}
+                      style={{ fontSize: '12px', padding: '6px 12px' }}
+                    >
+                      {deleteLoading ? 'Deleting...' : `Delete Selected (${selectedItemIds.size})`}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Pagination Controls */}
               <div style={{ 
                 display: 'flex', 

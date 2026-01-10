@@ -1,0 +1,75 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "health.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/storage/all",
+      "dest": "/api/storage/all.js"
+    },
+    {
+      "src": "/api/storage/sync",
+      "dest": "/api/storage/sync.js"
+    },
+    {
+      "src": "/api/storage/upload-file",
+      "dest": "/api/storage/upload-file.js"
+    },
+    {
+      "src": "/api/storage/list-files",
+      "dest": "/api/storage/list-files.js"
+    },
+    {
+      "src": "/api/storage/file/(.*)",
+      "dest": "/api/storage/file/$1"
+    },
+    {
+      "src": "/api/storage/(.*)",
+      "dest": "/api/storage/[key].js?key=$1"
+    },
+    {
+      "src": "/api/updates/latest.yml",
+      "dest": "/api/updates/latest.yml.js"
+    },
+    {
+      "src": "/api/updates/latest",
+      "dest": "/api/updates/latest.js"
+    },
+    {
+      "src": "/api/updates/upload-binary",
+      "dest": "/api/updates/upload-binary.js"
+    },
+    {
+      "src": "/api/updates/upload",
+      "dest": "/api/updates/upload.js"
+    },
+    {
+      "src": "/api/updates/(.*)",
+      "dest": "/api/updates/[...path].js?path=$1"
+    },
+    {
+      "src": "/api/seed",
+      "dest": "/api/seed.js"
+    },
+    {
+      "src": "/api/seedgt",
+      "dest": "/api/seed.js?type=gt"
+    },
+    {
+      "src": "/api/seedtrucking",
+      "dest": "/api/seed.js?type=trucking"
+    },
+    {
+      "src": "/health",
+      "dest": "/health.js"
+    }
+  ]
+}

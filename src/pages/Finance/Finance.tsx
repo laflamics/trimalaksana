@@ -4,6 +4,7 @@ import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import { storageService } from '../../services/storage';
+import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import '../../styles/common.css';
 
 const Finance = () => {
@@ -284,9 +285,15 @@ const Finance = () => {
       `Delete expense: ${item.expenseNo}?`,
       async () => {
         try {
-          const updated = expenses.filter(e => e.id !== item.id);
-          await storageService.set('expenses', updated);
-          setExpenses(updated);
+          // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
+          const deleteResult = await deletePackagingItem('expenses', item.id, 'id');
+          if (deleteResult.success) {
+            // Reload data dengan helper (handle race condition)
+            await reloadPackagingData('expenses', setExpenses);
+            showAlert(`Expense ${item.expenseNo} deleted successfully`, 'Success');
+          } else {
+            showAlert(`Error deleting expense: ${deleteResult.error || 'Unknown error'}`, 'Error');
+          }
         } catch (error: any) {
           showAlert(`Error deleting expense: ${error.message}`, 'Error');
         }

@@ -1,0 +1,41 @@
+{
+  "value": [
+    {
+      "id": "1764547435675trm3511",
+      "supplierName": "PT. SEMANGAT YAN INDONESIA",
+      "codeItem": "TRM3511",
+      "description": "90 DEGREE ELBOW HOT GALVANIZED DRAT BESI",
+      "kategori": "Product",
+      "satuan": "PCS",
+      "price": 29000,
+      "stockPremonth": 0,
+      "receive": 0,
+      "outgoing": 0,
+      "return": 0,
+      "nextStock": 0,
+      "processedGRNs": [],
+      "processedDeliveries": [],
+      "lastUpdate": "2026-01-07T07:57:45.222Z",
+      "hargaBeli": 0
+    },
+    {
+      "id": "1764549695830k0wgh7v0r",
+      "supplierName": "PT. TRIASA MEGATAMA PUTRA",
+      "codeItem": "TRM2996",
+      "description": "90º REDUCING ELBOW 50AX40A(2\"X1 1/2\") (FcMB/Galvanized) (CH111)",
+      "kategori": "Product",
+      "satuan": "PCS",
+      "price": 160,
+      "stockPremonth": 0,
+      "receive": 0,
+      "outgoing": 0,
+      "return": 0,
+      "nextStock": 0,
+      "processedGRNs": [],
+      "lastUpdate": "2026-01-07T07:57:45.222Z",
+      "hargaBeli": 75000
+    }
+  ],
+  "timestamp": 1767772665222,
+  "_timestamp": 1767772665222
+}

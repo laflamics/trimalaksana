@@ -5,6 +5,8 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
+import { filterActiveItems } from '../../../utils/packaging-delete-helper';
+import { deletePackagingItem, reloadPackagingData } from '../../../utils/packaging-delete-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -144,28 +146,34 @@ const TaxManagement = () => {
   const loadData = async () => {
     // Load accounts
     const accs = await storageService.get<Account[]>('accounts') || [];
-    setAccounts(accs);
+    // 🚀 FIX: Filter deleted items
+    const activeAccounts = filterActiveItems(Array.isArray(accs) ? accs : []);
+    setAccounts(activeAccounts);
 
     // Load invoices, purchase orders, payments
     const invs = await storageService.get<any[]>('invoices') || [];
     const pos = await storageService.get<any[]>('purchaseOrders') || [];
     const pays = await storageService.get<any[]>('payments') || [];
-    setInvoices(invs);
-    setPurchaseOrders(pos);
-    setPayments(pays);
+    // 🚀 FIX: Filter deleted items
+    const activeInvoices = filterActiveItems(Array.isArray(invs) ? invs : []);
+    const activePOs = filterActiveItems(Array.isArray(pos) ? pos : []);
+    const activePayments = filterActiveItems(Array.isArray(pays) ? pays : []);
+    setInvoices(activeInvoices);
+    setPurchaseOrders(activePOs);
+    setPayments(activePayments);
 
     // Load tax records
     let recordsRaw = await storageService.get<TaxRecord[]>('taxRecords') || [];
     // Ensure records is always an array
-    let records = Array.isArray(recordsRaw) ? recordsRaw : [];
+    // 🚀 FIX: Filter deleted items
+    let records = filterActiveItems(Array.isArray(recordsRaw) ? recordsRaw : []);
 
     // Generate tax records dari invoices, purchase orders jika belum ada
     const generatedRecords: TaxRecord[] = [];
 
-    // Ensure invs is always an array
-    const invsArray = Array.isArray(invs) ? invs : [];
+    // 🚀 FIX: Pakai activeInvoices yang sudah di-filter (tidak perlu invsArray lagi)
     // Generate dari Invoices (PPN Keluaran)
-    invsArray.forEach((inv: any) => {
+    activeInvoices.forEach((inv: any) => {
       const taxAmount = inv.tax || 0;
       const taxPercent = inv.taxPercent || 11;
       if (taxAmount > 0) {
@@ -193,10 +201,9 @@ const TaxManagement = () => {
       }
     });
 
-    // Ensure pos is always an array
-    const posArray = Array.isArray(pos) ? pos : [];
+    // 🚀 FIX: Pakai activePOs yang sudah di-filter (tidak perlu posArray lagi)
     // Generate dari Purchase Orders (PPN Masukan)
-    posArray.forEach((po: any) => {
+    activePOs.forEach((po: any) => {
       const includeTax = po.includeTax || po.includeTaxFlag || false;
       if (includeTax && po.total > 0) {
         const existing = records.find(r => r.reference === po.poNo && r.referenceType === 'Purchase Order');
@@ -394,13 +401,17 @@ const TaxManagement = () => {
       'Delete this tax record?',
       async () => {
         try {
-          // Ensure taxRecords is always an array
-          const taxRecordsArray = Array.isArray(taxRecords) ? taxRecords : [];
-          const updated = taxRecordsArray.filter(r => r.id !== record.id);
-          await storageService.set('taxRecords', updated);
-          setTaxRecords(updated);
-          closeDialog();
-          showAlert('Tax record deleted successfully', 'Success');
+          // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
+          const deleteResult = await deletePackagingItem('taxRecords', record.id, 'id');
+          if (deleteResult.success) {
+            // Reload data dengan helper (handle race condition)
+            await reloadPackagingData('taxRecords', setTaxRecords);
+            closeDialog();
+            showAlert('Tax record deleted successfully', 'Success');
+          } else {
+            closeDialog();
+            showAlert(`Error deleting tax record: ${deleteResult.error || 'Unknown error'}`, 'Error');
+          }
         } catch (error: any) {
           closeDialog();
           showAlert(`Error deleting tax record: ${error.message}`, 'Error');

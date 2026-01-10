@@ -4,7 +4,7 @@ import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import { storageService } from '../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
+import { deleteGTItem, reloadGTData, filterActiveItems } from '../../utils/gt-delete-helper';
 import { openPrintWindow, focusAppWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
@@ -70,6 +70,10 @@ interface Product {
   satuan: string;
   hargaFg?: number;
   hargaSales?: number;
+  kategori?: string;
+  customer?: string;
+  supplier?: string;
+  stockAman?: number;
 }
 
 // ActionMenu component untuk dropdown 3 titik
@@ -582,6 +586,33 @@ const SalesOrders = () => {
     loadQuotations();
     loadCustomers();
     loadProducts();
+
+    // Listen for storage changes (including server sync)
+    const handleStorageChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ key?: string; action?: string }>).detail;
+      if (detail?.key === 'general-trading/gt_salesOrders') {
+        console.log('[GT SalesOrders] Storage changed, reloading orders...');
+        loadOrders();
+      }
+      if (detail?.key === 'general-trading/gt_quotations') {
+        console.log('[GT SalesOrders] Quotations changed, reloading...');
+        loadQuotations();
+      }
+      if (detail?.key === 'general-trading/gt_customers' || detail?.key?.endsWith('/gt_customers')) {
+        console.log('[GT SalesOrders] Customers changed, reloading...');
+        loadCustomers();
+      }
+      if (detail?.key === 'general-trading/gt_products' || detail?.key?.endsWith('/gt_products')) {
+        console.log('[GT SalesOrders] Products changed, reloading...');
+        loadProducts();
+      }
+    };
+
+    window.addEventListener('app-storage-changed', handleStorageChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('app-storage-changed', handleStorageChange as EventListener);
+    };
   }, []);
 
   // Helper functions untuk save/load signature dari localStorage
@@ -881,17 +912,44 @@ const SalesOrders = () => {
   }, [showHiddenPopup]);
 
   const loadOrders = async () => {
-    const data = await storageService.get<SalesOrder[]>('gt_salesOrders') || [];
+    console.log('[GT SalesOrders] Loading orders...');
+    let data = await storageService.get<SalesOrder[]>('gt_salesOrders') || [];
+    console.log(`[GT SalesOrders] Raw data from storage: ${data.length} items`);
+    
+    // If we have very few orders, try force reload from file
+    if (data.length <= 1) {
+      console.log('[GT SalesOrders] Few orders detected, trying force reload from file...');
+      const fileData = await storageService.forceReloadFromFile<SalesOrder[]>('gt_salesOrders');
+      if (fileData && Array.isArray(fileData) && fileData.length > data.length) {
+        console.log(`[GT SalesOrders] Force reload successful: ${fileData.length} orders from file`);
+        data = fileData;
+      }
+    }
+    
     // Filter out deleted items menggunakan helper function
     const activeOrders = filterActiveItems(data);
+    console.log(`[GT SalesOrders] Active orders after filtering: ${activeOrders.length} items`);
+    
     // Filter hanya SO (bukan quotation - quotation punya soNo yang link ke SO atau null)
     // Quotation disimpan terpisah di gt_quotations
     setOrders(activeOrders);
+    console.log(`[GT SalesOrders] Orders set to state: ${activeOrders.length} items`);
+    
+    if (activeOrders.length > 0) {
+      console.log('[GT SalesOrders] Sample orders:');
+      activeOrders.slice(0, 3).forEach((order, index) => {
+        const dateValue = order.created || order.timestamp || Date.now();
+        const date = new Date(dateValue).toLocaleDateString();
+        console.log(`   ${index + 1}. ${order.soNo} - ${order.customer} (${date})`);
+      });
+    }
   };
 
   const loadQuotations = async () => {
     const data = await storageService.get<SalesOrder[]>('gt_quotations') || [];
-    setQuotations(data);
+    // CRITICAL: Filter deleted items using helper function
+    const activeQuotations = filterActiveItems(data);
+    setQuotations(activeQuotations);
   };
 
   // Generate nomor Quotation dengan format: 00001/QUO/TLJP/XII/2025 (nomor random)
@@ -961,14 +1019,44 @@ const SalesOrders = () => {
   };
 
   const loadCustomers = async () => {
-    const data = await storageService.get<Customer[]>('gt_customers') || [];
-    setCustomers(data);
+    console.log('[GT SalesOrders] Loading customers...');
+    let data = await storageService.get<Customer[]>('gt_customers') || [];
+    console.log(`[GT SalesOrders] Raw customers from storage: ${data.length} items`);
+    
+    // If we have very few customers, try force reload from file
+    if (data.length <= 1) {
+      console.log('[GT SalesOrders] Few customers detected, trying force reload from file...');
+      const fileData = await storageService.forceReloadFromFile<Customer[]>('gt_customers');
+      if (fileData && Array.isArray(fileData) && fileData.length > data.length) {
+        console.log(`[GT SalesOrders] Force reload successful: ${fileData.length} customers from file`);
+        data = fileData;
+      }
+    }
+    
+    // CRITICAL: Filter deleted items using helper function
+    const activeCustomers = filterActiveItems(data);
+    console.log(`[GT SalesOrders] Active customers after filtering: ${activeCustomers.length} items`);
+    setCustomers(activeCustomers);
   };
 
   const loadProducts = async () => {
-    const dataRaw = await storageService.get<Product[]>('gt_products') || [];
+    console.log('[GT SalesOrders] Loading products...');
+    let dataRaw = await storageService.get<Product[]>('gt_products') || [];
+    console.log(`[GT SalesOrders] Raw products from storage: ${dataRaw.length} items`);
+    
+    // If we have very few products, try force reload from file
+    if (dataRaw.length <= 1) {
+      console.log('[GT SalesOrders] Few products detected, trying force reload from file...');
+      const fileData = await storageService.forceReloadFromFile<Product[]>('gt_products');
+      if (fileData && Array.isArray(fileData) && fileData.length > dataRaw.length) {
+        console.log(`[GT SalesOrders] Force reload successful: ${fileData.length} products from file`);
+        dataRaw = fileData;
+      }
+    }
+    
     // Filter out deleted items menggunakan helper function
     const data = filterActiveItems(dataRaw);
+    console.log(`[GT SalesOrders] Active products after filtering: ${data.length} items`);
     setProducts(data);
   };
 
@@ -2366,14 +2454,12 @@ const SalesOrders = () => {
       `Hapus SO: ${item.soNo}?\n\nTindakan ini tidak bisa dibatalkan.`,
       async () => {
         try {
-          // Pakai helper function untuk safe delete (tombstone pattern)
-          const success = await safeDeleteItem('gt_salesOrders', item.id, 'id');
+          // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
+          const deleteResult = await deleteGTItem('gt_salesOrders', item.id, 'id');
           
-          if (success) {
-            // Reload data dengan filter active items
-            const updatedOrders = await storageService.get<SalesOrder[]>('gt_salesOrders') || [];
-            const activeOrders = filterActiveItems(updatedOrders);
-            setOrders(activeOrders);
+          if (deleteResult.success) {
+            // Reload data dengan helper (handle race condition)
+            await reloadGTData('gt_salesOrders', setOrders);
             
             // Log activity
             try {
@@ -2385,12 +2471,13 @@ const SalesOrders = () => {
               // Silent fail
             }
             closeDialog();
-            showAlert(`SO ${item.soNo} berhasil dihapus.`, 'Success');
+            showAlert(`✅ SO ${item.soNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
           } else {
-            showAlert(`Error deleting SO. Silakan coba lagi.`, 'Error');
+            showAlert(`❌ Error deleting SO ${item.soNo}: ${deleteResult.error || 'Unknown error'}`, 'Error');
           }
         } catch (error: any) {
-          showAlert(`Error deleting SO: ${error.message}`, 'Error');
+          console.error('[SalesOrders] Error in safe delete:', error);
+          showAlert(`❌ Error deleting SO: ${error.message}`, 'Error');
         }
       },
       () => closeDialog(),

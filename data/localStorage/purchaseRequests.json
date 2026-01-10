@@ -1,31 +1,87 @@
 {
   "value": [
     {
-      "id": "1767602626100kpmqjsf01",
-      "prNo": "PR-260105-7L40O",
-      "spkNo": "SPK/260105/E648O",
-      "soNo": "PO0000010938",
-      "customer": "PT. INDONESIA KOITO",
-      "product": "BOX X + COVER LIPAT MAGNET UK 780X470X385 mm",
+      "id": "17671523242560y20a39bo",
+      "prNo": "PR-251231-5N7LA",
+      "spkNo": "SPK/251231/T26DZ",
+      "soNo": "GBU/PO/C/12/2025/00103",
+      "customer": "PT. GUNA BAKTI UNGGUL",
+      "product": "DUS KAPSTOK FIORI UK 47 X 42 X 46 CM",
       "items": [
         {
-          "materialId": "IMP-00001",
-          "materialName": "SHEET IMPRA T5 UK 2000X3000 MM",
-          "materialKode": "IMP-00001",
-          "supplier": "PT. TOP ONE PLASTINDO",
-          "unit": "LEMBAR",
-          "price": 0,
-          "requiredQty": 28,
+          "materialId": "MTRL-00828",
+          "materialName": "TEST 1",
+          "materialKode": "MTRL-00828",
+          "supplier": "PT. KATI KARTIKA MURNI",
+          "unit": "PCS",
+          "price": 5000,
+          "requiredQty": 50,
           "availableStock": 0,
-          "shortageQty": 28
+          "shortageQty": 50
         }
       ],
       "status": "PO_CREATED",
-      "created": "2026-01-05T08:43:46.100Z",
+      "created": "2025-12-31T03:38:44.256Z",
+      "createdBy": "PPIC",
+      "padCode": "",
+      "deleted": true,
+      "deletedAt": "2026-01-09T08:00:33.250Z",
+      "deletedTimestamp": 1767945633250
+    },
+    {
+      "id": "1767157154856yu6yxrlio",
+      "prNo": "PR-251231-3PCRP",
+      "spkNo": "SPK/251231/947I2",
+      "soNo": "TEST-000",
+      "customer": "PT. EVERPRO  INDONESIA TECHNOLOGIES",
+      "product": "DUS RANJANG MIB UK 160",
+      "items": [
+        {
+          "materialId": "MTRL-00005",
+          "materialName": "SHEET 165 X 120 CM K150/M125/K125 B/F BRUTO",
+          "materialKode": "MTRL-00005",
+          "supplier": "",
+          "unit": "Pcs",
+          "price": 0,
+          "requiredQty": 100,
+          "availableStock": 0,
+          "shortageQty": 100
+        }
+      ],
+      "status": "PO_CREATED",
+      "created": "2025-12-31T04:59:14.856Z",
+      "createdBy": "PPIC",
+      "padCode": "",
+      "deleted": true,
+      "deletedAt": "2026-01-09T08:00:35.531Z",
+      "deletedTimestamp": 1767945635531
+    },
+    {
+      "id": "1767237010716uoxoqozni",
+      "prNo": "PR-260101-GHH6L",
+      "spkNo": "SPK/260101/8X9U9",
+      "soNo": "test-00009",
+      "customer": "PT. EVERPRO  INDONESIA TECHNOLOGIES",
+      "product": "DUS RANJANG MIB UK 160",
+      "items": [
+        {
+          "materialId": "MTRL-00005",
+          "materialName": "SHEET 165 X 120 CM K150/M125/K125 B/F BRUTO",
+          "materialKode": "MTRL-00005",
+          "supplier": "",
+          "unit": "Pcs",
+          "price": 0,
+          "requiredQty": 200,
+          "availableStock": 0,
+          "shortageQty": 200
+        }
+      ],
+      "status": "PENDING",
+      "created": "2026-01-01T03:10:10.716Z",
       "createdBy": "PPIC",
       "padCode": ""
     }
   ],
-  "timestamp": 1767602857675,
-  "_timestamp": 1767602857675
+  "timestamp": 1767945635531,
+  "_timestamp": 1767945635531
 }

@@ -4,6 +4,7 @@ import Card from '../../../components/Card';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
+import { deletePackagingItem, reloadPackagingData, filterActiveItems } from '../../../utils/packaging-delete-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -102,45 +103,102 @@ const Accounting = () => {
   useEffect(() => {
     loadEntries();
     loadAccounts();
+    
+    // 🚀 FIX: Listen untuk storage changes (sync dari server atau device lain)
+    // Auto-reload entries saat ada perubahan dari sync
+    // 🚀 FIX: Debounce untuk prevent excessive reloads
+    let reloadTimeout: NodeJS.Timeout | null = null;
+    const handleStorageChange = (event: CustomEvent) => {
+      const { key } = event.detail || {};
+      // Cek apakah perubahan untuk journalEntries
+      const storageKey = (storageService as any).getStorageKey('journalEntries');
+      if (key === storageKey || key === 'journalEntries') {
+        // Debounce reload untuk prevent excessive reloads saat sync
+        if (reloadTimeout) {
+          clearTimeout(reloadTimeout);
+        }
+        reloadTimeout = setTimeout(() => {
+          // Reload entries dengan filter deleted items
+          loadEntries();
+        }, 300); // Debounce 300ms
+      }
+    };
+    
+    window.addEventListener('app-storage-changed', handleStorageChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('app-storage-changed', handleStorageChange as EventListener);
+      if (reloadTimeout) {
+        clearTimeout(reloadTimeout);
+      }
+    };
   }, []);
 
   const loadEntries = async () => {
     let data = await storageService.get<JournalEntry[]>('journalEntries') || [];
     
-    // Ensure data is always an array before checking length
+    // 🚀 FIX: Filter deleted items langsung saat load
     const dataArray = Array.isArray(data) ? data : [];
+    const activeDataArray = filterActiveItems(dataArray);
     
-    // Jika journal entries kosong, generate dari transaksi yang sudah ada
-    if (dataArray.length === 0) {
+    // Jika journal entries kosong (setelah filter), generate dari transaksi yang sudah ada
+    if (activeDataArray.length === 0) {
       await generateJournalEntriesFromTransactions();
       data = await storageService.get<JournalEntry[]>('journalEntries') || [];
-      // Ensure data is still an array after reload
+      // Filter lagi setelah generate
       const reloadedDataArray = Array.isArray(data) ? data : [];
-      setEntries(reloadedDataArray.map((e, idx) => ({ ...e, no: idx + 1 })));
+      const reloadedActiveData = filterActiveItems(reloadedDataArray);
+      setEntries(reloadedActiveData.map((e, idx) => ({ ...e, no: idx + 1 })));
     } else {
-      setEntries(dataArray.map((e, idx) => ({ ...e, no: idx + 1 })));
+      setEntries(activeDataArray.map((e, idx) => ({ ...e, no: idx + 1 })));
     }
   };
 
   // Generate journal entries dari transaksi yang sudah ada
   const generateJournalEntriesFromTransactions = async () => {
     try {
+      // 🚀 FIX: Load existing entries dulu untuk prevent duplicate
+      const existingEntriesRaw = await storageService.get<JournalEntry[]>('journalEntries') || [];
+      const existingEntries = filterActiveItems(Array.isArray(existingEntriesRaw) ? existingEntriesRaw : []);
+      
+      // Jika sudah ada entries, skip generate (prevent duplicate)
+      if (existingEntries.length > 0) {
+        console.log(`✅ Journal entries sudah ada (${existingEntries.length} entries), skip generate`);
+        return;
+      }
+      
       const [invoices, payments, purchaseOrders] = await Promise.all([
         storageService.get<any[]>('invoices') || [],
         storageService.get<any[]>('payments') || [],
         storageService.get<any[]>('purchaseOrders') || [],
       ]);
 
+      // 🚀 FIX: Filter deleted items dari transaksi
+      const invoicesArray = filterActiveItems(Array.isArray(invoices) ? invoices : []);
+      const paymentsArray = filterActiveItems(Array.isArray(payments) ? payments : []);
+      const purchaseOrdersArray = filterActiveItems(Array.isArray(purchaseOrders) ? purchaseOrders : []);
+
       const newEntries: JournalEntry[] = [];
       let entryNo = 1;
+      
+      // 🚀 FIX: Track existing references untuk prevent duplicate
+      const existingReferences = new Set<string>();
+      existingEntries.forEach(e => {
+        if (e.reference) existingReferences.add(e.reference);
+      });
 
       // Generate dari Invoices (AR + Revenue)
-      // Ensure invoices is always an array
-      const invoicesArray = Array.isArray(invoices) ? invoices : [];
       invoicesArray.forEach((inv: any) => {
+        const invoiceNo = inv.invoiceNo || inv.id;
+        // 🚀 FIX: Skip jika sudah ada entry untuk invoice ini
+        if (existingReferences.has(invoiceNo)) {
+          return;
+        }
+        
         const invoiceTotal = inv.bom?.total || inv.total || 0;
         if (invoiceTotal > 0) {
           const entryDate = inv.created ? new Date(inv.created).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+          existingReferences.add(invoiceNo); // Mark as processed
           newEntries.push(
             {
               id: `inv-${inv.id}-1`,
@@ -167,13 +225,17 @@ const Accounting = () => {
       });
 
       // Generate dari Payments (Receipt: Cash + AR, Payment: AP + Cash)
-      // Ensure payments is always an array
-      const paymentsArray = Array.isArray(payments) ? payments : [];
       paymentsArray.forEach((pay: any) => {
+        const reference = pay.paymentNo || pay.invoiceNo || pay.poNo || pay.id;
+        // 🚀 FIX: Skip jika sudah ada entry untuk payment ini
+        if (existingReferences.has(reference)) {
+          return;
+        }
+        
         const amount = pay.amount || pay.total || 0;
         if (amount > 0) {
           const entryDate = pay.paymentDate || pay.created ? new Date(pay.paymentDate || pay.created).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
-          const reference = pay.paymentNo || pay.invoiceNo || pay.poNo || pay.id;
+          existingReferences.add(reference); // Mark as processed
           
           if (pay.type === 'Receipt' || pay.invoiceNo) {
             // Customer Payment: Debit Cash, Credit AR
@@ -228,14 +290,19 @@ const Accounting = () => {
       });
 
       // Generate dari Invoice Payments (jika invoice status CLOSE tapi tidak ada payment record)
-      // invoicesArray already declared above
       invoicesArray.forEach((inv: any) => {
+        const invoiceNo = inv.invoiceNo || inv.id;
+        // 🚀 FIX: Skip jika sudah ada entry untuk invoice payment ini
+        if (existingReferences.has(`inv-pay-${invoiceNo}`)) {
+          return;
+        }
+        
         if (inv.status === 'CLOSE' && inv.paymentProof) {
           const invoiceTotal = inv.bom?.total || inv.total || 0;
           if (invoiceTotal > 0) {
-            // paymentsArray already declared above
-            const hasPayment = paymentsArray.some((p: any) => p.invoiceNo === inv.invoiceNo);
+            const hasPayment = paymentsArray.some((p: any) => p.invoiceNo === invoiceNo);
             if (!hasPayment) {
+              existingReferences.add(`inv-pay-${invoiceNo}`); // Mark as processed
               const entryDate = inv.paidAt ? new Date(inv.paidAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
               newEntries.push(
                 {
@@ -265,13 +332,15 @@ const Accounting = () => {
       });
 
       // Generate dari Purchase Orders yang sudah CLOSE/RECEIVED (Inventory + AP)
-      // Ensure purchaseOrders is always an array
-      const purchaseOrdersArray = Array.isArray(purchaseOrders) ? purchaseOrders : [];
       purchaseOrdersArray.forEach((po: any) => {
+        const poNo = po.poNo || po.id;
+        // 🚀 FIX: Skip jika sudah ada entry untuk PO ini
+        if (existingReferences.has(poNo)) {
+          return;
+        }
+        
         if ((po.status === 'CLOSE' || po.status === 'RECEIVED') && po.total > 0) {
-          // Cek apakah sudah ada journal entry untuk PO ini
-          const hasJournalEntry = newEntries.some((e: any) => e.reference === po.poNo && e.account === '2000');
-          if (!hasJournalEntry) {
+          existingReferences.add(poNo); // Mark as processed
             const entryDate = po.poDate || po.orderDate || po.created ? new Date(po.poDate || po.orderDate || po.created).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
             const poTotal = po.total || 0;
             
@@ -298,7 +367,6 @@ const Accounting = () => {
                 description: `PO ${po.poNo || po.id} - ${po.supplier || 'Supplier'}`,
               }
             );
-          }
         }
       });
 
@@ -404,8 +472,14 @@ const Accounting = () => {
         return;
       }
 
+      // 🚀 FIX: Load current data dari storage (termasuk deleted items untuk merge)
+      const currentData = await storageService.get<JournalEntry[]>('journalEntries') || [];
+      const currentDataArray = Array.isArray(currentData) ? currentData : [];
+      // Filter active entries untuk logic comparison
+      const activeCurrentData = filterActiveItems(currentDataArray);
+      
       if (editingEntry) {
-        const updated = entries.map(e =>
+        const updated = currentDataArray.map((e: any) =>
           e.id === editingEntry.id
             ? { 
                 ...formData, 
@@ -418,11 +492,14 @@ const Accounting = () => {
             : e
         );
         await storageService.set('journalEntries', updated);
-        setEntries(updated.map((e, idx) => ({ ...e, no: idx + 1 })));
+        // Filter deleted items setelah save
+        const activeUpdated = filterActiveItems(updated);
+        setEntries(activeUpdated.map((e, idx) => ({ ...e, no: idx + 1 })));
       } else {
+        // 🚀 FIX: Pakai activeCurrentData untuk logic comparison (tidak termasuk deleted)
         // Jika ada reference yang sama, adjust entry yang sudah ada agar tetap balanced
-        const relatedEntries = entries.filter(e => e.reference === formData.reference);
-        let updated = [...entries];
+        const relatedEntries = activeCurrentData.filter((e: any) => e.reference === formData.reference);
+        let updated = [...currentDataArray];
         
         // Cari index entry pertama dengan reference yang sama untuk insert entry baru di sela-sela
         let insertIndex = updated.length; // Default: append di akhir
@@ -434,8 +511,8 @@ const Accounting = () => {
           }
           
           // Hitung total debit dan credit untuk reference yang sama
-          const totalDebit = relatedEntries.reduce((sum, e) => sum + (e.debit || 0), 0);
-          const totalCredit = relatedEntries.reduce((sum, e) => sum + (e.credit || 0), 0);
+          const totalDebit = relatedEntries.reduce((sum: number, e: any) => sum + (e.debit || 0), 0);
+          const totalCredit = relatedEntries.reduce((sum: number, e: any) => sum + (e.credit || 0), 0);
           
           // Hitung entry baru
           const newDebit = formData.debit || 0;
@@ -448,10 +525,10 @@ const Accounting = () => {
           if (totalAfterNew !== 0) {
             // Jika entry baru adalah debit, kurangi debit dari entry pertama yang punya debit
             if (newDebit > 0) {
-              const firstDebitEntry = relatedEntries.find(e => e.debit && e.debit > 0);
+              const firstDebitEntry = relatedEntries.find((e: any) => e.debit && e.debit > 0);
               if (firstDebitEntry) {
                 // Kurangi debit entry pertama dengan selisih yang ada
-                updated = updated.map(e => {
+                updated = updated.map((e: any) => {
                   if (e.id === firstDebitEntry.id) {
                     const adjustedDebit = Math.max(0, (firstDebitEntry.debit || 0) - totalAfterNew);
                     return { ...e, debit: adjustedDebit } as JournalEntry;
@@ -462,10 +539,10 @@ const Accounting = () => {
             } 
             // Jika entry baru adalah kredit, kurangi kredit dari entry pertama yang punya kredit
             else if (newCredit > 0) {
-              const firstCreditEntry = relatedEntries.find(e => e.credit && e.credit > 0);
+              const firstCreditEntry = relatedEntries.find((e: any) => e.credit && e.credit > 0);
               if (firstCreditEntry) {
                 // Kurangi kredit entry pertama dengan selisih yang ada
-                updated = updated.map(e => {
+                updated = updated.map((e: any) => {
                   if (e.id === firstCreditEntry.id) {
                     const adjustedCredit = Math.max(0, (firstCreditEntry.credit || 0) - Math.abs(totalAfterNew));
                     return { ...e, credit: adjustedCredit } as JournalEntry;
@@ -625,9 +702,15 @@ const Accounting = () => {
         });
 
             if (newEntries.length > 0) {
-              const updated = [...entries, ...newEntries];
+              // 🚀 FIX: Load current data dari storage (termasuk deleted items untuk merge)
+              const currentData = await storageService.get<JournalEntry[]>('journalEntries') || [];
+              const currentDataArray = Array.isArray(currentData) ? currentData : [];
+              const activeCurrentData = filterActiveItems(currentDataArray);
+              const updated = [...activeCurrentData, ...newEntries];
               await storageService.set('journalEntries', updated);
-              setEntries(updated.map((e, idx) => ({ ...e, no: idx + 1 })));
+              // Filter deleted items setelah save
+              const activeUpdated = filterActiveItems(updated);
+              setEntries(activeUpdated.map((e, idx) => ({ ...e, no: idx + 1 })));
               showAlert(`✅ Imported ${newEntries.length} entries${errors.length > 0 ? `\n⚠️ ${errors.length} errors` : ''}`, 'Success');
               if (errors.length > 0) {
                 console.error('Import errors:', errors);
@@ -675,10 +758,18 @@ const Accounting = () => {
             'Delete this entry?',
             async () => {
               try {
-                // Hapus entry yang dipilih
-                // Ensure entries is always an array
-                const entriesArray = Array.isArray(entries) ? entries : [];
-                let updated = entriesArray.filter(e => e.id !== item.id);
+                // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
+                const deleteResult = await deletePackagingItem('journalEntries', item.id, 'id');
+                if (!deleteResult.success) {
+                  closeDialog();
+                  showAlert(`Error deleting entry: ${deleteResult.error || 'Unknown error'}`, 'Error');
+                  return;
+                }
+                
+                // 🚀 FIX: Reload data dengan helper dan filter deleted items dengan benar
+                // Pakai reloadPackagingData untuk handle race condition dan filter otomatis
+                const reloadedData = await reloadPackagingData('journalEntries', setEntries);
+                let updated = reloadedData;
                 
                 // Jika entry yang di-delete punya reference yang sama dengan entry lain, restore balance
                 const relatedEntries = updated.filter(e => e.reference === item.reference);
@@ -711,14 +802,16 @@ const Accounting = () => {
                         }
                         return e;
                       });
+                      
+                      // Save updated balance
+                      await storageService.set('journalEntries', updated);
+                      setEntries(updated.map((e, idx) => ({ ...e, no: idx + 1 })));
                     }
                   }
                   // Jika balanceDiff === 0, berarti entry yang di-delete adalah entry yang balanced
                   // atau entry debit/kredit utama yang dihapus, jadi tidak perlu restore
                 }
                 
-                await storageService.set('journalEntries', updated);
-                setEntries(updated.map((e, idx) => ({ ...e, no: idx + 1 })));
                 closeDialog();
                 showAlert('Entry deleted successfully', 'Success');
               } catch (error: any) {

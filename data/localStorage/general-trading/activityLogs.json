@@ -1,0 +1,316 @@
+{
+  "value": [
+    {
+      "id": "log-1768039051186-l747ha",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-10T09:57:31.186Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.54 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1768034184281-f0fbj5",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-10T08:36:24.281Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.54 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1768032637698-2j5rv2",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-10T08:10:37.698Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.54 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1768030716271-e2v4gq",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-10T07:38:36.271Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.54 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1768029820200-qaf7sr",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-10T07:23:40.200Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.54 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1768029725752-960oo5",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-10T07:22:05.752Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.54 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767960908845-y6nv97",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-09T12:15:08.845Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.52 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767953746742-yhd91w",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-09T10:15:46.742Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.52 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767953708072-4ljtkt",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-09T10:15:08.072Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.52 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767953705060-gnkis1",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-09T10:15:05.061Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.52 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767953700102-0gr5bm",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-09T10:15:00.102Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.52 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767932148701-b29of4",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-09T04:15:48.701Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.51 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767931984217-ejncyl",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-09T04:13:04.217Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.51 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767931917385-6ejqr7",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-09T04:11:57.385Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.51 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767931746718-cxqmqv",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-09T04:09:06.718Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.51 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767931486027-p77hud",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-09T04:04:46.027Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.51 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767931372425-kcuy1n",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-09T04:02:52.425Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.51 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767930691651-56n52z",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-09T03:51:31.651Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.51 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767930010405-8769dw",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-09T03:40:10.405Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.51 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767800409048-6rscvo",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-07T15:40:09.048Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.23 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767782502097-n9ax44",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-07T10:41:42.097Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.19 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767779939169-e7w1g7",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-07T09:58:59.169Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.19 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767778735473-qrm7g2",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-07T09:38:55.473Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.19 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767778586392-oqweoa",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-07T09:36:26.392Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.19 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767778537655-1esscu",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-07T09:35:37.655Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.19 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767772785438-tn707r",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-07T07:59:45.438Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.19 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767772430952-wnyalp",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-07T07:53:50.953Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767771925262-ojydi3",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-07T07:45:25.262Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767756374528-uh4343",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-07T03:26:14.528Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767748409363-8qve3y",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-07T01:13:29.363Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1767742819981-qlfo54",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/general-trading/finance/reports",
+      "timestamp": "2026-01-06T23:40:19.981Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    }
+  ],
+  "timestamp": 1768039051186,
+  "_timestamp": 1768039051186
+}

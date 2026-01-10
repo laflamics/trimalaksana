@@ -5,7 +5,8 @@ import type { Column } from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import { storageService } from '../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
+import { filterActiveItems } from '../../utils/data-persistence-helper';
+import { deletePackagingItem } from '../../utils/packaging-delete-helper';
 import * as XLSX from 'xlsx';
 import '../../styles/common.css';
 import './Master.css';
@@ -98,10 +99,42 @@ const Customers = () => {
   }, []);
 
   const loadCustomers = async () => {
+    console.log('[Customers] Loading customers...');
     const dataRaw = await storageService.get<Customer[]>('customers') || [];
+    console.log('[Customers] Raw data length:', dataRaw.length);
+    
     // Filter out deleted items menggunakan helper function
     const data = filterActiveItems(dataRaw);
-    setCustomers(data.map((c, idx) => ({ ...c, no: idx + 1 })));
+    console.log('[Customers] Filtered data length:', data.length);
+    
+    // CRITICAL: Remove duplicates by kode before setting state
+    const seen = new Set<string>();
+    const uniqueData: Customer[] = [];
+    
+    data.forEach(customer => {
+      if (customer && customer.kode) {
+        const key = customer.kode.toLowerCase().trim();
+        if (!seen.has(key)) {
+          seen.add(key);
+          uniqueData.push(customer);
+        } else {
+          console.log('[Customers] Removed duplicate:', customer.kode, '-', customer.nama);
+        }
+      }
+    });
+    
+    console.log('[Customers] Unique data length:', uniqueData.length);
+    
+    const numberedData = uniqueData.map((c, idx) => ({ ...c, no: idx + 1 }));
+    console.log('[Customers] Final data length:', numberedData.length);
+    
+    setCustomers(numberedData);
+    
+    // Save cleaned data back to storage if duplicates were removed
+    if (uniqueData.length < data.length) {
+      console.log('[Customers] Saving cleaned data to storage...');
+      await storageService.set('customers', numberedData);
+    }
   };
 
   const handleSave = async () => {
@@ -162,17 +195,17 @@ const Customers = () => {
       `Are you sure you want to delete customer "${item.nama}"? This action cannot be undone.`,
       async () => {
         try {
-          // Pakai helper function untuk safe delete (tombstone pattern)
-          const success = await safeDeleteItem('customers', item.id, 'id');
+          // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
+          const deleteResult = await deletePackagingItem('customers', item.id, 'id');
           
-          if (success) {
+          if (deleteResult.success) {
             // Reload data dengan filter active items
             const dataRaw = await storageService.get<Customer[]>('customers') || [];
             const data = filterActiveItems(dataRaw);
             setCustomers(data.map((c, idx) => ({ ...c, no: idx + 1 })));
             showAlert(`Customer "${item.nama}" deleted successfully`, 'Success');
           } else {
-            showAlert(`Error deleting customer. Silakan coba lagi.`, 'Error');
+            showAlert(`Error deleting customer: ${deleteResult.error || 'Unknown error'}`, 'Error');
           }
         } catch (error: any) {
           showAlert(`Error deleting customer: ${error.message}`, 'Error');
@@ -373,7 +406,7 @@ const Customers = () => {
   const filteredCustomers = useMemo(() => {
     // Ensure customers is always an array
     const customersArray = Array.isArray(customers) ? customers : [];
-    return customersArray.filter(customer => {
+    let filtered = customersArray.filter(customer => {
       if (!customer) return false;
       if (!searchQuery) return true;
       const query = searchQuery.toLowerCase();
@@ -387,6 +420,41 @@ const Customers = () => {
         (customer.kategori || '').toLowerCase().includes(query)
       );
     });
+    
+    // Sort berdasarkan kode ID secara natural (SPL-0001, SPL-0002, CTM-068, dst)
+    const sorted = filtered.sort((a, b) => {
+      const kodeA = a.kode || '';
+      const kodeB = b.kode || '';
+      
+      // Natural sort untuk kode dengan format PREFIX-NUMBER
+      // Contoh: SPL-0001, SPL-0002, CTM-068, dll
+      const parseKode = (kode: string) => {
+        const match = kode.match(/^([A-Z]+)-?(\d+)$/i);
+        if (match) {
+          return {
+            prefix: match[1].toUpperCase(),
+            number: parseInt(match[2], 10)
+          };
+        }
+        return { prefix: kode.toUpperCase(), number: 0 };
+      };
+      
+      const parsedA = parseKode(kodeA);
+      const parsedB = parseKode(kodeB);
+      
+      // Sort by prefix first, then by number
+      if (parsedA.prefix !== parsedB.prefix) {
+        return parsedA.prefix.localeCompare(parsedB.prefix);
+      }
+      
+      return parsedA.number - parsedB.number;
+    });
+    
+    // CRITICAL: Re-number after sorting untuk memastikan No urut 1, 2, 3, dst
+    return sorted.map((customer, index) => ({
+      ...customer,
+      no: index + 1
+    }));
   }, [customers, searchQuery]);
 
   // Dynamic columns based on filled data (memoized to recalculate when customers change)

@@ -6,7 +6,7 @@ import Input from '../../components/Input';
 import DeliveryScheduleDialog from '../../components/DeliveryScheduleDialog';
 import NotificationBell from '../../components/NotificationBell';
 import { storageService, extractStorageValue } from '../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
+import { deleteGTItem, reloadGTData, filterActiveItems } from '../../utils/gt-delete-helper';
 import { useDialog } from '../../hooks/useDialog';
 // import { openPrintWindow } from '../../utils/actions'; // Not used yet
 import '../../styles/common.css';
@@ -302,13 +302,41 @@ const PPIC = () => {
     
     const spkRaw = extractStorageValue(await storageService.get<any[]>('gt_spk')) || [];
     const scheduleRaw = extractStorageValue(await storageService.get<any[]>('gt_schedule')) || [];
-    const customersDataRaw = extractStorageValue(await storageService.get<any[]>('gt_customers')) || [];
-    const productsDataRaw = extractStorageValue(await storageService.get<any[]>('gt_products')) || [];
-    const salesOrdersDataRaw = extractStorageValue(await storageService.get<any[]>('gt_salesOrders')) || [];
+    let customersDataRaw = extractStorageValue(await storageService.get<any[]>('gt_customers')) || [];
+    let productsDataRaw = extractStorageValue(await storageService.get<any[]>('gt_products')) || [];
+    let salesOrdersDataRaw = extractStorageValue(await storageService.get<any[]>('gt_salesOrders')) || [];
     const inventoryDataRaw = extractStorageValue(await storageService.get<any[]>('gt_inventory')) || [];
     const purchaseOrdersDataRaw = extractStorageValue(await storageService.get<any[]>('gt_purchaseOrders')) || [];
     const deliveryNotesDataRaw = extractStorageValue(await storageService.get<any[]>('gt_delivery')) || [];
     const purchaseRequestsDataRaw = extractStorageValue(await storageService.get<any[]>('gt_purchaseRequests')) || [];
+    
+    // Force reload key data if very few items detected
+    if (customersDataRaw.length <= 1) {
+      console.log('[GT PPIC] Few customers detected, trying force reload from file...');
+      const fileData = await storageService.forceReloadFromFile<any[]>('gt_customers');
+      if (fileData && Array.isArray(fileData) && fileData.length > customersDataRaw.length) {
+        console.log(`[GT PPIC] Force reload successful: ${fileData.length} customers from file`);
+        customersDataRaw = fileData;
+      }
+    }
+    
+    if (productsDataRaw.length <= 1) {
+      console.log('[GT PPIC] Few products detected, trying force reload from file...');
+      const fileData = await storageService.forceReloadFromFile<any[]>('gt_products');
+      if (fileData && Array.isArray(fileData) && fileData.length > productsDataRaw.length) {
+        console.log(`[GT PPIC] Force reload successful: ${fileData.length} products from file`);
+        productsDataRaw = fileData;
+      }
+    }
+    
+    if (salesOrdersDataRaw.length <= 1) {
+      console.log('[GT PPIC] Few sales orders detected, trying force reload from file...');
+      const fileData = await storageService.forceReloadFromFile<any[]>('gt_salesOrders');
+      if (fileData && Array.isArray(fileData) && fileData.length > salesOrdersDataRaw.length) {
+        console.log(`[GT PPIC] Force reload successful: ${fileData.length} sales orders from file`);
+        salesOrdersDataRaw = fileData;
+      }
+    }
     
     // Filter out deleted items menggunakan helper function
     let spk = filterActiveItems(spkRaw);
@@ -1456,19 +1484,20 @@ const PPIC = () => {
         `Hapus SPK ${spkNo}?\n\nTindakan ini akan:\n• Menghapus SPK dari daftar\n• Menghapus notifikasi terkait\n\nPastikan tidak ada proses lanjutan untuk SPK ini.`,
         async () => {
           try {
-            // Use tombstone pattern untuk prevent data resurrection dari sync
-            const success = await safeDeleteItem('gt_spk', spk.id, 'id');
-            if (!success) {
-              showAlert('Gagal menghapus SPK. Silakan coba lagi.', 'Error');
+            // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deleteGTItem('gt_spk', spk.id, 'id');
+            if (!deleteResult.success) {
+              showAlert(`❌ Error deleting SPK ${spkNo}: ${deleteResult.error || 'Unknown error'}`, 'Error');
               return;
             }
             
-            // Reload SPK data dengan filter active items (after tombstone deletion)
+            // Reload SPK data dengan helper (handle race condition)
             await loadData();
             
-            showAlert(`SPK ${spkNo} berhasil dihapus.`, 'Success');
+            showAlert(`✅ SPK ${spkNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
           } catch (error: any) {
-            showAlert(`Error deleting SPK: ${error.message}`, 'Error');
+            console.error('[PPIC] Error in safe delete:', error);
+            showAlert(`❌ Error deleting SPK: ${error.message}`, 'Error');
           }
         },
       );

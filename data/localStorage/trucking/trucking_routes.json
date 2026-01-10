@@ -7951,10 +7951,10 @@
       "notes": "Customer: UNIFOODS\nTruck Type: Standard\nPrice: Rp 950",
       "_customer": "UNIFOODS",
       "_truckType": "Standard",
-      "_price": 950,
+      "_price": 950000,
       "padCode": ""
     }
   ],
-  "timestamp": 1767501078219,
-  "_timestamp": 1767501078219
+  "timestamp": 1767769057423,
+  "_timestamp": 1767769057423
 }

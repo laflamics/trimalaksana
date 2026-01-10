@@ -418,12 +418,34 @@ const UserControl = () => {
     const storageKey = 'userAccessControl';
     
     // Migration: Merge data from old business-specific keys if they exist
-    const oldTruckingKey = 'trucking_userAccessControl';
-    const oldTruckingData = (await storageService.get<UserAccess[]>(oldTruckingKey)) || [];
-    const currentData = (await storageService.get<UserAccess[]>(storageKey)) || [];
+    const oldTruckingKey = 'trucking/trucking_userAccessControl';
+    let currentData = (await storageService.get<UserAccess[]>(storageKey)) || [];
+    let oldTruckingData = (await storageService.get<UserAccess[]>(oldTruckingKey)) || [];
     
-    // CRITICAL: Combine all data sources first
-    const allDataSources = [...currentData, ...oldTruckingData];
+    // CRITICAL: Extract array from storage wrapper if needed
+    if (currentData && typeof currentData === 'object' && 'value' in currentData) {
+      currentData = (currentData as any).value || [];
+    }
+    if (oldTruckingData && typeof oldTruckingData === 'object' && 'value' in oldTruckingData) {
+      oldTruckingData = (oldTruckingData as any).value || [];
+    }
+    
+    console.log(`[Trucking UserControl] Debug data loading:`);
+    console.log(`- currentData (${storageKey}):`, currentData.length, 'users');
+    console.log(`- oldTruckingData (${oldTruckingKey}):`, Array.isArray(oldTruckingData) ? oldTruckingData.length : 'not array', 'users');
+    
+    // Safety checks
+    if (!Array.isArray(currentData)) {
+      console.error('[Trucking UserControl] currentData is not an array:', currentData);
+    }
+    if (!Array.isArray(oldTruckingData)) {
+      console.error('[Trucking UserControl] oldTruckingData is not an array:', oldTruckingData);
+    }
+    
+    // CRITICAL: Combine all data sources first - ensure both are arrays
+    const safeCurrentData = Array.isArray(currentData) ? currentData : [];
+    const safeOldTruckingData = Array.isArray(oldTruckingData) ? oldTruckingData : [];
+    const allDataSources = [...safeCurrentData, ...safeOldTruckingData];
     
     // Merge: Combine data from old key and current key, deduplicate by ID
     // CRITICAL: Use Map to ensure ID uniqueness - last one wins if duplicate
@@ -559,6 +581,12 @@ const UserControl = () => {
   }, [users]); // Reload when users change
 
   const filteredUsers = useMemo(() => {
+    // Safety check: ensure users is an array
+    if (!Array.isArray(users)) {
+      console.warn('[Trucking UserControl] users is not an array:', users);
+      return [];
+    }
+    
     // Filter by business unit first (if not super admin)
     const currentUser = getCurrentUser();
     const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
@@ -621,6 +649,13 @@ const UserControl = () => {
     // Then filter by search query
     if (!searchQuery) return businessFilteredUsers;
     const query = searchQuery.toLowerCase();
+    
+    // Safety check: ensure businessFilteredUsers is an array
+    if (!Array.isArray(businessFilteredUsers)) {
+      console.warn('[Trucking UserControl] businessFilteredUsers is not an array:', businessFilteredUsers);
+      return [];
+    }
+    
     return businessFilteredUsers.filter((user) => {
       return (
         user.fullName.toLowerCase().includes(query) ||
@@ -1263,6 +1298,12 @@ const UserControl = () => {
   const stats = useMemo(() => {
     const currentUser = getCurrentUser();
     const isSuperAdmin = currentUser && isDefaultAdmin(currentUser);
+    
+    // Safety check: ensure users is an array
+    if (!Array.isArray(users)) {
+      console.warn('[Trucking UserControl] users is not an array in stats:', users);
+      return { total: 0, active: 0, businessUsage: [] };
+    }
     
     // For Trucking UserControl: Calculate stats based on filtered users, not all users
     const filteredForStats = isSuperAdmin 

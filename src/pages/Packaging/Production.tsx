@@ -76,6 +76,7 @@ const normalize = (value: any): string => (value ?? '').toString().trim().toUppe
 const Production = () => {
   const [productions, setProductions] = useState<Production[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'production' | 'schedule' | 'outstanding'>('production');
   const [scheduleData, setScheduleData] = useState<any[]>([]);
   const [spkData, setSpkData] = useState<any[]>([]);
@@ -147,9 +148,25 @@ const Production = () => {
     });
   };
 
+  // Simple product loading - SAME AS MASTER PRODUCTS
+  const loadProducts = async () => {
+    const dataRaw = extractStorageValue(await storageService.get<any[]>('products'));
+    const data = filterActiveItems(dataRaw);
+    
+    // Ensure padCode is always present (even if empty string) for all products
+    const productsWithPadCode = data.map((p, idx) => ({ 
+      ...p, 
+      no: idx + 1,
+      padCode: p.padCode !== undefined ? p.padCode : '' // Ensure padCode always exists
+    }));
+    
+    setProducts(productsWithPadCode);
+  };
+
   useEffect(() => {
     loadProductions();
     loadScheduleData();
+    loadProducts(); // Add simple product loading
     // Refresh setiap 2 detik untuk cek notifikasi baru dan update material status
     const interval = setInterval(() => {
       loadProductions();
@@ -158,11 +175,39 @@ const Production = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Listen for storage changes to auto-reload products (SAME AS MASTER PRODUCTS)
+  useEffect(() => {
+    const handleStorageChange = (event: CustomEvent) => {
+      const { key } = event.detail || {};
+      const storageKey = (storageService as any).getStorageKey('products');
+      
+      // Reload products if products data changed
+      if (key === storageKey || key === 'products') {
+        console.log('🔄 [Production] Products data changed, reloading...');
+        loadProducts();
+      }
+    };
+
+    // Listen for storage change events
+    window.addEventListener('app-storage-changed', handleStorageChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('app-storage-changed', handleStorageChange as EventListener);
+    };
+  }, []);
+
   const loadScheduleData = async () => {
-    const schedule = await storageService.get<any[]>('schedule') || [];
-    const spk = await storageService.get<any[]>('spk') || [];
-    const bom = await storageService.get<any[]>('bom') || [];
-    const mats = await storageService.get<any[]>('materials') || [];
+    const scheduleRaw = await storageService.get<any[]>('schedule') || [];
+    const spkRaw = await storageService.get<any[]>('spk') || [];
+    const bomRaw = await storageService.get<any[]>('bom') || [];
+    const matsRaw = await storageService.get<any[]>('materials') || [];
+    
+    // CRITICAL: Extract arrays and filter deleted items
+    const schedule = filterActiveItems(Array.isArray(scheduleRaw) ? scheduleRaw : []);
+    const spk = filterActiveItems(Array.isArray(spkRaw) ? spkRaw : []);
+    const bom = filterActiveItems(Array.isArray(bomRaw) ? bomRaw : []);
+    const mats = filterActiveItems(Array.isArray(matsRaw) ? matsRaw : []);
+    
     setScheduleData(schedule);
     setSpkData(spk);
     setBomData(bom);
@@ -171,9 +216,18 @@ const Production = () => {
 
   const loadProductions = async () => {
     // Load production data
-    let data = await storageService.get<Production[]>('production') || [];
+    let dataRaw = await storageService.get<Production[]>('production') || [];
+    
+    // CRITICAL: Extract array from storage wrapper if needed
+    if (dataRaw && typeof dataRaw === 'object' && 'value' in dataRaw && Array.isArray(dataRaw.value)) {
+      dataRaw = dataRaw.value;
+    }
+    
     // Ensure data is always an array
-    data = Array.isArray(data) ? data : [];
+    dataRaw = Array.isArray(dataRaw) ? dataRaw : [];
+    
+    // IMPORTANT: Filter deleted items using helper function
+    let data = filterActiveItems(dataRaw);
     
     // Auto-close production yang sudah mencapai target tapi masih OPEN
     let hasUpdates = false;
@@ -202,9 +256,14 @@ const Production = () => {
     }
     
     // Load schedule data untuk enrich production dengan batch info
-    let scheduleData = await storageService.get<any[]>('schedule') || [];
-    // Ensure scheduleData is always an array
-    scheduleData = Array.isArray(scheduleData) ? scheduleData : [];
+    let scheduleDataRaw = await storageService.get<any[]>('schedule') || [];
+    
+    // CRITICAL: Extract array and filter deleted items
+    if (scheduleDataRaw && typeof scheduleDataRaw === 'object' && 'value' in scheduleDataRaw && Array.isArray(scheduleDataRaw.value)) {
+      scheduleDataRaw = scheduleDataRaw.value;
+    }
+    scheduleDataRaw = Array.isArray(scheduleDataRaw) ? scheduleDataRaw : [];
+    const scheduleData = filterActiveItems(scheduleDataRaw);
     
     // Enrich production dengan schedule data (batches, dates)
     const enrichedProductions = data.map((prod: Production) => {
@@ -1395,7 +1454,7 @@ const Production = () => {
     // Load data yang diperlukan untuk generate SPK PDF
     const spkList = await storageService.get<any[]>('spk') || [];
     const salesOrders = await storageService.get<any[]>('salesOrders') || [];
-    const productsList = await storageService.get<any[]>('products') || [];
+    const productsList = products; // Use products state instead of loading from storage
     const materialsList = await storageService.get<any[]>('materials') || [];
     const bomList = await storageService.get<any[]>('bom') || [];
     const scheduleList = await storageService.get<any[]>('schedule') || [];
@@ -4208,6 +4267,11 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
   const [isPartial, setIsPartial] = useState<boolean>(true);
   const [sitePlan, setSitePlan] = useState<string>('Site Plan 1');
   const [loading, setLoading] = useState<boolean>(false);
+  
+  // Material search dialog state
+  const [showMaterialDialog, setShowMaterialDialog] = useState(false);
+  const [materialDialogSearch, setMaterialDialogSearch] = useState('');
+  const [selectedMaterialIndex, setSelectedMaterialIndex] = useState<number | null>(null);
 
   // Custom Dialog state untuk component ini
   const [dialogState, setDialogState] = useState<{
@@ -4338,6 +4402,26 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
       console.error('Error loading available materials:', error);
     }
   };
+
+  // Filtered materials for dialog with search functionality
+  const filteredMaterialsForDialog = useMemo(() => {
+    // CRITICAL: Ensure availableMaterials is always an array
+    const materialsArray = Array.isArray(availableMaterials) ? availableMaterials : [];
+    
+    let filtered = materialsArray;
+    if (materialDialogSearch) {
+      const query = materialDialogSearch.toLowerCase();
+      filtered = materialsArray.filter(m => {
+        if (!m) return false;
+        const id = (m.materialId || '').toLowerCase();
+        const name = (m.materialName || '').toLowerCase();
+        return id.includes(query) || name.includes(query);
+      });
+    }
+    
+    // Limit to 200 items for performance
+    return filtered.slice(0, 200);
+  }, [materialDialogSearch, availableMaterials]);
 
   const loadBOMData = async () => {
     try {
@@ -4742,28 +4826,49 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
       return;
     }
     
-    // Add first available material that's not already added
-    const alreadyAddedIds = actualMaterials.map((m: any) => 
-      (m.materialId || '').toString().trim().toLowerCase()
-    );
-    // Ensure availableMaterials is always an array
-    const availableMaterialsArray = Array.isArray(availableMaterials) ? availableMaterials : [];
-    const materialToAdd = availableMaterialsArray.find((m: any) => 
-      !alreadyAddedIds.includes((m.materialId || '').toString().trim().toLowerCase())
-    );
-    
-    if (!materialToAdd) {
-      showAlert('Semua material yang tersedia sudah ditambahkan', 'Information');
-      return;
+    // Open material search dialog
+    setMaterialDialogSearch('');
+    setSelectedMaterialIndex(null);
+    setShowMaterialDialog(true);
+  };
+
+  const handleSelectMaterialFromDialog = (material: any) => {
+    if (selectedMaterialIndex !== null) {
+      // Update existing material
+      const updated = [...actualMaterials];
+      updated[selectedMaterialIndex] = {
+        materialId: material.materialId,
+        materialName: material.materialName,
+        unit: material.unit,
+        qtyUsed: updated[selectedMaterialIndex].qtyUsed || '0',
+        availableStock: material.availableStock,
+      };
+      setActualMaterials(updated);
+    } else {
+      // Add new material
+      const alreadyAddedIds = actualMaterials.map((m: any) => 
+        (m.materialId || '').toString().trim().toLowerCase()
+      );
+      
+      if (alreadyAddedIds.includes((material.materialId || '').toString().trim().toLowerCase())) {
+        showAlert('Material ini sudah ditambahkan', 'Information');
+        setShowMaterialDialog(false);
+        setMaterialDialogSearch('');
+        return;
+      }
+      
+      setActualMaterials([...actualMaterials, {
+        materialId: material.materialId,
+        materialName: material.materialName,
+        unit: material.unit,
+        qtyUsed: '0',
+        availableStock: material.availableStock,
+      }]);
     }
     
-    setActualMaterials([...actualMaterials, {
-      materialId: materialToAdd.materialId,
-      materialName: materialToAdd.materialName,
-      unit: materialToAdd.unit,
-      qtyUsed: '0',
-      availableStock: materialToAdd.availableStock,
-    }]);
+    setShowMaterialDialog(false);
+    setMaterialDialogSearch('');
+    setSelectedMaterialIndex(null);
   };
 
   const handleRemoveActualMaterial = (index: number) => {
@@ -5252,25 +5357,39 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
                     {actualMaterials.map((mat: any, idx: number) => (
                       <tr key={idx} style={{ borderTop: '1px solid var(--border-color)' }}>
                         <td style={{ padding: '8px', fontSize: '12px' }}>
-                          <select
-                            value={mat.materialId}
-                            onChange={(e) => handleActualMaterialChange(idx, 'materialId', e.target.value)}
-                            style={{
-                              width: '100%',
-                              padding: '4px 8px',
-                              border: '1px solid var(--border-color)',
-                              borderRadius: '4px',
-                              backgroundColor: 'var(--bg-primary)',
-                              color: 'var(--text-primary)',
-                              fontSize: '12px',
-                            }}
-                          >
-                            {availableMaterials.map((m: any) => (
-                              <option key={m.materialId} value={m.materialId}>
-                                {m.materialName} ({m.materialId})
-                              </option>
-                            ))}
-                          </select>
+                          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                            <input
+                              type="text"
+                              value={`${mat.materialName} (${mat.materialId})`}
+                              readOnly
+                              onClick={() => {
+                                setSelectedMaterialIndex(idx);
+                                setMaterialDialogSearch('');
+                                setShowMaterialDialog(true);
+                              }}
+                              style={{
+                                flex: 1,
+                                padding: '4px 8px',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: '4px',
+                                backgroundColor: 'var(--bg-primary)',
+                                color: 'var(--text-primary)',
+                                fontSize: '12px',
+                                cursor: 'pointer',
+                              }}
+                            />
+                            <Button
+                              variant="secondary"
+                              onClick={() => {
+                                setSelectedMaterialIndex(idx);
+                                setMaterialDialogSearch('');
+                                setShowMaterialDialog(true);
+                              }}
+                              style={{ fontSize: '10px', padding: '2px 6px', minHeight: '20px' }}
+                            >
+                              🔍
+                            </Button>
+                          </div>
                         </td>
                         <td style={{ padding: '8px', textAlign: 'right', fontSize: '12px', color: 'var(--text-secondary)' }}>
                           {mat.availableStock || 0}

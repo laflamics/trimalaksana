@@ -6,6 +6,7 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import NotificationBell from '../../../components/NotificationBell';
 import { storageService } from '../../../services/storage';
+import { deletePackagingItem, reloadPackagingData } from '../../../utils/packaging-delete-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -845,12 +846,19 @@ const Payments = () => {
             showConfirm(
               'Delete this payment?',
               async () => {
-                // Ensure payments is always an array
-                const paymentsArray = Array.isArray(payments) ? payments : [];
-                const updated = paymentsArray.filter(p => p.id !== item.id);
-                await storageService.set('payments', updated);
-                setPayments(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
-                closeDialog();
+                // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
+                const deleteResult = await deletePackagingItem('payments', item.id, 'id');
+                if (deleteResult.success) {
+                  // Reload data dengan helper (handle race condition)
+                  const dataRaw = await storageService.get<any[]>('payments') || [];
+                  const data = dataRaw.filter((p: any) => !p.deleted && !p.deletedAt);
+                  setPayments(data.map((p, idx) => ({ ...p, no: idx + 1 })));
+                  closeDialog();
+                  showAlert('Payment deleted successfully', 'Success');
+                } else {
+                  closeDialog();
+                  showAlert(`Error deleting payment: ${deleteResult.error || 'Unknown error'}`, 'Error');
+                }
               },
               () => closeDialog(),
               'Delete Confirmation'

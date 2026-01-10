@@ -2,8 +2,8 @@
   "value": [
     {
       "id": "1764144593920-5p9bdd7nf",
-      "no": 48,
-      "kode": "CTM-068",
+      "no": 1,
+      "kode": "SPL-0068",
       "nama": "PT. BUANA TEKNIK SUKSESSEJAHTERA",
       "kontak": "",
       "npwp": "",
@@ -11,12 +11,13 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-4pmo98iv9",
-      "no": 50,
-      "kode": "CTM-071",
+      "no": 2,
+      "kode": "SPL-0071",
       "nama": "CV KAD PRINTING",
       "kontak": "",
       "npwp": "",
@@ -24,11 +25,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-m0yaebw9d",
-      "no": 76,
+      "no": 3,
       "kode": "SPL-0001",
       "nama": "PT. SURYA RENGO CONTAINERS",
       "kontak": "DIKI FIRMANSAH",
@@ -37,11 +39,12 @@
       "telepon": "081218940737",
       "alamat": "Jl. Maligi Raya Lot Q-5, karawang International Industry City (KIIC) Karawang Barat, Jawa Barat - 41361",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-v9a9qlwj8",
-      "no": 77,
+      "no": 4,
       "kode": "SPL-0002",
       "nama": "PT. KATI KARTIKA MURNI",
       "kontak": "",
@@ -50,11 +53,12 @@
       "telepon": "",
       "alamat": "Jl. Sadewa No.357, Wangunharja, Kec. Cikarang Utara, Kabupaten Bekasi, Jawa Barat 17530",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-zkbnu19ki",
-      "no": 78,
+      "no": 5,
       "kode": "SPL-0003",
       "nama": "PT. CAKRAWALA MEGA INDAH",
       "kontak": "",
@@ -63,11 +67,12 @@
       "telepon": "(0254)280088 - 281988",
       "alamat": "JL. RAYA SERANG KM.76 KRAGILAN (42184), SERANG, BANTEN",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-idw98jj9g",
-      "no": 79,
+      "no": 6,
       "kode": "SPL-0004",
       "nama": "PT. SINERGI GARUDA NUSANTARA",
       "kontak": "",
@@ -76,11 +81,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-uzjqjzh53",
-      "no": 80,
+      "no": 7,
       "kode": "SPL-0005",
       "nama": "PT. DWI JAYA MANDIRI",
       "kontak": "",
@@ -89,11 +95,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-uf6tdhg2m",
-      "no": 81,
+      "no": 8,
       "kode": "SPL-0006",
       "nama": "PT. PARAMITRA GUNAKARYA CEMERLANG",
       "kontak": "",
@@ -102,11 +109,12 @@
       "telepon": "",
       "alamat": "Kawasan Industri Sentul, JL Raya Olympic, Citeureup, Bogor, Jawa Barat, Indonesia",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-vvb4u1vkd",
-      "no": 82,
+      "no": 9,
       "kode": "SPL-0007",
       "nama": "PT. APP PURINUSA EKAPERSADA",
       "kontak": "",
@@ -115,11 +123,12 @@
       "telepon": "",
       "alamat": "KP. CIPARUNGSARI RT 004 RW 002 DESA CIPARUNGSARI KEC. CIBATU KAB. PURWAKARTA, JAWA BARAT",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-1z4it2tc4",
-      "no": 83,
+      "no": 10,
       "kode": "SPL-0008",
       "nama": "PT. INTIMAS WISESA",
       "kontak": "",
@@ -128,11 +137,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-rrztyc1iz",
-      "no": 84,
+      "no": 11,
       "kode": "SPL-0009",
       "nama": "PT. SEMANGAT YAN INDONESIA",
       "kontak": "",
@@ -141,11 +151,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Customer,Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-9ji5ezjdi",
-      "no": 85,
+      "no": 12,
       "kode": "SPL-0010",
       "nama": "PT. TRIASA MEGATAMA PUTRA",
       "kontak": "",
@@ -154,11 +165,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-1udaq0rc7",
-      "no": 86,
+      "no": 13,
       "kode": "SPL-0011",
       "nama": "PT. TRYUASDA MEGAH WARNA",
       "kontak": "",
@@ -167,11 +179,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-hunem8hvo",
-      "no": 87,
+      "no": 14,
       "kode": "SPL-0012",
       "nama": "PT. HEXA PRESISI PERSADA",
       "kontak": "",
@@ -180,11 +193,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-ftqu7rsjr",
-      "no": 88,
+      "no": 15,
       "kode": "SPL-0013",
       "nama": "PT. PAPERTECH INDONESIA",
       "kontak": "",
@@ -193,11 +207,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-wqwi0kkmu",
-      "no": 89,
+      "no": 16,
       "kode": "SPL-0014",
       "nama": "PT. PERSADA SILVER",
       "kontak": "",
@@ -206,11 +221,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-7gi57r5md",
-      "no": 90,
+      "no": 17,
       "kode": "SPL-0015",
       "nama": "PT. SETIA JAYA KEMASINDO",
       "kontak": "",
@@ -219,11 +235,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-7hcowh9o0",
-      "no": 91,
+      "no": 18,
       "kode": "SPL-0016",
       "nama": "PT. SINERGI ANDALAN SINARMADANI",
       "kontak": "",
@@ -232,11 +249,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-pc315ri4v",
-      "no": 92,
+      "no": 19,
       "kode": "SPL-0017",
       "nama": "PT. PANEN GEMILANG INDONESIA",
       "kontak": "",
@@ -245,11 +263,12 @@
       "telepon": "",
       "alamat": "Jl. Pegadungan RT 05 RW 10 Ds. Jayasampur Kec,Serang Baru-Beka Jawa Barat",
       "kategori": "Customer,Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-4q32cdf87",
-      "no": 93,
+      "no": 20,
       "kode": "SPL-0018",
       "nama": "PT. HAZAKA",
       "kontak": "",
@@ -258,11 +277,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-6670qjqaa",
-      "no": 94,
+      "no": 21,
       "kode": "SPL-0019",
       "nama": "PT. BERSAMA LEMINDO ABADI",
       "kontak": "",
@@ -271,11 +291,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-azu0us9ir",
-      "no": 95,
+      "no": 22,
       "kode": "SPL-0020",
       "nama": "CV. ALAM CITRA LESTARI",
       "kontak": "",
@@ -284,11 +305,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-rl37r4ef5",
-      "no": 96,
+      "no": 23,
       "kode": "SPL-0021",
       "nama": "PT. FINARTINDO KRIYA ABADI",
       "kontak": "",
@@ -297,11 +319,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-x2ui65yy7",
-      "no": 97,
+      "no": 24,
       "kode": "SPL-0022",
       "nama": "PT. SARIDONG",
       "kontak": "",
@@ -310,11 +333,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-0rfvy0n30",
-      "no": 98,
+      "no": 25,
       "kode": "SPL-0023",
       "nama": "PT. MUKTI LINTAS MEDIA",
       "kontak": "",
@@ -323,11 +347,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-l8h3qzoub",
-      "no": 99,
+      "no": 26,
       "kode": "SPL-0024",
       "nama": "CV. GLOBAL MANIFEST",
       "kontak": "LUTFI",
@@ -336,11 +361,12 @@
       "telepon": "081298763762 / 083815195890",
       "alamat": "Jl. A. Yani No.556 Dawuan Barat - Cikampek 41373 - Jawa Barat",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-dp91sf2ko",
-      "no": 100,
+      "no": 27,
       "kode": "SPL-0025",
       "nama": "PT. NATURA KEMASAN RAHARJA INDUSTRI NKRI",
       "kontak": "",
@@ -349,11 +375,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-yn3p4itee",
-      "no": 101,
+      "no": 28,
       "kode": "SPL-0026",
       "nama": "PT. SAHABAT JAYA BERSAMA",
       "kontak": "",
@@ -362,11 +389,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-j0wgjwrj4",
-      "no": 102,
+      "no": 29,
       "kode": "SPL-0027",
       "nama": "PT JAYA PRINT",
       "kontak": "",
@@ -375,11 +403,12 @@
       "telepon": "",
       "alamat": "MENTENG JAKARTA",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-udedaf6wm",
-      "no": 103,
+      "no": 30,
       "kode": "SPL-0028",
       "nama": "PT BENUA SEJAHTERA KERTAS",
       "kontak": "",
@@ -388,11 +417,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-nnysys2bk",
-      "no": 104,
+      "no": 31,
       "kode": "SPL-0029",
       "nama": "LATANSHA PRINT",
       "kontak": "",
@@ -401,11 +431,12 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     },
     {
       "id": "1764144593920-ym35qz67i",
-      "no": 105,
+      "no": 32,
       "kode": "SPL-0030",
       "nama": "PT. BAGAS JAYA LESTARI",
       "kontak": "",
@@ -414,9 +445,10 @@
       "telepon": "",
       "alamat": "",
       "kategori": "Supplier",
-      "created": "2025-11-26T08:09:53.920Z"
+      "created": "2025-11-26T08:09:53.920Z",
+      "padCode": ""
     }
   ],
-  "timestamp": 1767601639500,
-  "_timestamp": 1767601639500
+  "timestamp": 1768030494086,
+  "_timestamp": 1768030494086
 }

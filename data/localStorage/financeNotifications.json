@@ -1,17 +1,17 @@
 {
   "value": [
     {
-      "id": "1767602971155",
+      "id": "1767157269207",
       "type": "SUPPLIER_PAYMENT",
-      "poNo": "PO-260105-CO960",
-      "supplier": "PT. TOP ONE PLASTINDO",
-      "soNo": "PO0000010938",
-      "spkNo": "SPK/260105/E648O",
-      "grnNo": "GRN-260105-64O1T",
-      "materialItem": "SHEET IMPRA T5 UK 2000X3000 MM",
-      "qty": 28,
-      "total": 0,
-      "receivedDate": "2026-01-05",
+      "poNo": "PO-251231-YXC1D",
+      "supplier": "PT. PARAMITRA GUNAKARYA CEMERLANG",
+      "soNo": "TEST-000",
+      "spkNo": "SPK/251231/947I2",
+      "grnNo": "GRN-251231-XNC1Q",
+      "materialItem": "SHEET 165 X 120 CM K150/M125/K125 B/F BRUTO",
+      "qty": 100,
+      "total": 200000,
+      "receivedDate": "2025-12-31",
       "suratJalan": "",
       "suratJalanName": "",
       "invoiceNo": "",
@@ -19,9 +19,13 @@
       "invoiceFileName": "",
       "purchaseReason": "",
       "status": "PENDING",
-      "created": "2026-01-05T08:49:31.155Z"
+      "created": "2025-12-31T05:01:09.207Z",
+      "padCode": "",
+      "deleted": true,
+      "deletedAt": "2026-01-09T07:59:44.492Z",
+      "deletedTimestamp": 1767945584492
     }
   ],
-  "timestamp": 1767602971155,
-  "_timestamp": 1767602971155
+  "timestamp": 1767945584492,
+  "_timestamp": 1767945584492
 }

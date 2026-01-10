@@ -9,7 +9,8 @@
       "stock": 2,
       "image": null,
       "uom": "UNIT",
-      "category": "Software"
+      "category": "Software",
+      "padCode": ""
     },
     {
       "id": "1758853062604",
@@ -19,7 +20,8 @@
       "stock": 100,
       "image": "https://tvngl6lsfmmykptz.public.blob.vercel-storage.com/product-1759146851061-yh8Vxwv5ZWtBDQni6xZMBcxNvbogKd.jpeg",
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1759462139279",
@@ -29,7 +31,8 @@
       "stock": 0.5,
       "image": null,
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1759723833311",
@@ -39,7 +42,8 @@
       "stock": 0,
       "image": null,
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1760847151413",
@@ -49,7 +53,8 @@
       "stock": 107.9,
       "image": null,
       "uom": "kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1760958825158",
@@ -59,7 +64,8 @@
       "stock": 1000,
       "image": null,
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1758672369726",
@@ -69,7 +75,8 @@
       "stock": 0,
       "image": null,
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1758673179085",
@@ -79,7 +86,8 @@
       "stock": 0,
       "image": null,
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1758673237113",
@@ -89,7 +97,8 @@
       "stock": 0,
       "image": null,
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1759212062086",
@@ -99,7 +108,8 @@
       "stock": 800,
       "image": null,
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1759727650067",
@@ -109,7 +119,8 @@
       "stock": 0,
       "image": null,
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1760795247120",
@@ -119,7 +130,8 @@
       "stock": 76.36100000000002,
       "image": null,
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1758700591042",
@@ -129,7 +141,8 @@
       "stock": 299.75000000000017,
       "image": "https://tvngl6lsfmmykptz.public.blob.vercel-storage.com/product-1758700581828-WNvMfdZ9Zgh5QBMQBLKbhvb3DtruuE.jpg",
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1758853165570",
@@ -139,7 +152,8 @@
       "stock": 50,
       "image": null,
       "uom": "kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1759727679712",
@@ -149,7 +163,8 @@
       "stock": 0,
       "image": null,
       "uom": "kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1760878691720",
@@ -159,7 +174,8 @@
       "stock": 250,
       "image": null,
       "uom": "Cup",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1761787098458",
@@ -169,7 +185,8 @@
       "stock": 1,
       "image": null,
       "uom": "PACKAGE",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1762347919464",
@@ -179,7 +196,8 @@
       "stock": 1,
       "image": null,
       "uom": "prod",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1758673208361",
@@ -189,7 +207,8 @@
       "stock": 0,
       "image": null,
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1759462192373",
@@ -199,7 +218,8 @@
       "stock": 471.3079999999964,
       "image": null,
       "uom": "kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1758601026095",
@@ -209,7 +229,8 @@
       "stock": 20.539999999999992,
       "image": "https://tvngl6lsfmmykptz.public.blob.vercel-storage.com/product-1759147122693-30S1a00tY44U8KVKOePzK28ao83WT0.jpeg",
       "uom": "kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1758853137775",
@@ -219,7 +240,8 @@
       "stock": 0,
       "image": "https://tvngl6lsfmmykptz.public.blob.vercel-storage.com/product-1759147122671-WO0obhv3VxXoLtYtjXChdJgbPynd61.jpg",
       "uom": "kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1759990842287",
@@ -229,7 +251,8 @@
       "stock": 811.36,
       "image": null,
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1762347848340",
@@ -239,7 +262,8 @@
       "stock": 1,
       "image": null,
       "uom": "Prod",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1758673152388",
@@ -249,7 +273,8 @@
       "stock": 0,
       "image": "https://tvngl6lsfmmykptz.public.blob.vercel-storage.com/product-1759147122680-aY5Sewa58E8ZQ4QV0qrFB9bwJSaUYI.png",
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1758673161414",
@@ -259,7 +284,8 @@
       "stock": 0,
       "image": null,
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1758700673176",
@@ -269,7 +295,8 @@
       "stock": 300,
       "image": null,
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1758797805229",
@@ -279,7 +306,8 @@
       "stock": 0,
       "image": "https://tvngl6lsfmmykptz.public.blob.vercel-storage.com/product-1759147122690-Kg8ArXsZSGpdltRudpbisc1KLCAeAy.png",
       "uom": "kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1760079816079",
@@ -289,7 +317,8 @@
       "stock": 0,
       "image": null,
       "uom": "kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1760442278946",
@@ -299,7 +328,8 @@
       "stock": 690,
       "image": null,
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1758853106397",
@@ -309,7 +339,8 @@
       "stock": 99.5899999999999,
       "image": null,
       "uom": "kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1758878694809",
@@ -319,7 +350,8 @@
       "stock": 0,
       "image": null,
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1761394343359",
@@ -329,7 +361,8 @@
       "stock": 81.52370000000008,
       "image": null,
       "uom": "83.5",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1760079798678",
@@ -339,7 +372,8 @@
       "stock": 0,
       "image": null,
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1760083359981",
@@ -349,7 +383,8 @@
       "stock": 1013.26,
       "image": null,
       "uom": "kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1758585222618",
@@ -359,7 +394,8 @@
       "stock": 0.20709999999999917,
       "image": "https://tvngl6lsfmmykptz.public.blob.vercel-storage.com/product-1758593471568-Ofvd4skjVTMnrkc1VC3YcHh0FSVUAG.png",
       "uom": "kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1758601072159",
@@ -369,7 +405,8 @@
       "stock": 56,
       "image": "https://tvngl6lsfmmykptz.public.blob.vercel-storage.com/product-1759147122684-oCKFi6FH98Lv0j60TKy2k8xGM23ot0.jpeg",
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1758626627873",
@@ -379,7 +416,8 @@
       "stock": 0,
       "image": "https://tvngl6lsfmmykptz.public.blob.vercel-storage.com/product-1758626625528-zYSwsv1x7Gy1PKaMR0l3IlOygv0PbU.png",
       "uom": "kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1758797785924",
@@ -389,7 +427,8 @@
       "stock": 0,
       "image": "https://tvngl6lsfmmykptz.public.blob.vercel-storage.com/product-1759147122663-1vLz5gz59kwRSIKNiDn8gBWhCJLBWt.jpg",
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1759305685491",
@@ -399,7 +438,8 @@
       "stock": 0,
       "image": null,
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1760955128926",
@@ -409,7 +449,8 @@
       "stock": 10000,
       "image": null,
       "uom": "Kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": "1760958849839",
@@ -419,7 +460,8 @@
       "stock": 1000,
       "image": null,
       "uom": "kg",
-      "category": "Purchased"
+      "category": "Purchased",
+      "padCode": ""
     },
     {
       "id": 1765528575597,
@@ -430,7 +472,8 @@
       "stock": 4,
       "image": null,
       "uom": "kg",
-      "category": "Retail"
+      "category": "Retail",
+      "padCode": ""
     }
   ],
   "timestamp": 1766499443000,

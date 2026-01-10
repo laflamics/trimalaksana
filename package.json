@@ -1,6 +1,6 @@
 {
   "name": "trima-laksana-erp",
-  "version": "1.0.6-build.21",
+  "version": "1.0.6-build.56",
   "description": "PT.Trima Laksana Jaya Pratama - Enterprise Resource Planning System",
   "main": "dist/main.js",
   "scripts": {
@@ -12,6 +12,7 @@
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "vite build",
     "build:app": "node scripts/update-build-version.js && node scripts/pre-build-cleanup.js && node scripts/ensure-previous-version.js && npm run build:all && CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_NOTARIZATION=true electron-builder --win --x64 && node scripts/generate-latest-yml.js && node scripts/upload-updates-to-server.js",
+    "build:app:fast": "node scripts/update-build-version.js && npm run build:all && CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_NOTARIZATION=true electron-builder --win --x64 && node scripts/generate-latest-yml.js",
     "build:app:linux": "node scripts/update-build-version.js && node scripts/pre-build-cleanup.js && node scripts/ensure-previous-version.js && npm run build:all && CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_NOTARIZATION=true electron-builder --linux --x64 && node scripts/generate-latest-linux-yml.js && node scripts/upload-updates-to-server.js",
     "uninstall": "node scripts/find-uninstaller.js",
     "watch:main": "tsc -p tsconfig.main.json --watch",
@@ -61,6 +62,7 @@
   },
   "dependencies": {
     "@capacitor/android": "^6.2.1",
+    "@capacitor/browser": "^6.0.6",
     "@capacitor/core": "^6.2.1",
     "@capacitor/filesystem": "^6.0.4",
     "@capacitor/share": "^6.0.4",
@@ -80,43 +82,66 @@
     "productName": "PT.Trima Laksana Jaya Pratama",
     "icon": "public/noxtiz.ico",
     "directories": {
-      "output": "release-build"
+      "output": "release-build",
+      "buildResources": "build"
     },
     "files": [
       "dist/**/*",
-      "package.json"
+      "package.json",
+      "!**/*.map",
+      "!**/*.d.ts",
+      "!**/test/**",
+      "!**/tests/**",
+      "!**/*.test.*",
+      "!**/*.spec.*",
+      "!**/node_modules/@capacitor/android/**",
+      "!**/node_modules/@capacitor/ios/**",
+      "!**/android/**",
+      "!**/ios/**"
     ],
     "extraResources": [
       {
         "from": "data",
         "to": "data",
         "filter": [
-          "**/*",
-          "!localStorage/**"
+          "**/*.json",
+          "!localStorage/**",
+          "!*.xlsx",
+          "!*.xls",
+          "!*.csv",
+          "!uploads/**",
+          "!trimafolder/**",
+          "!**/*.xlsx",
+          "!**/*.xls",
+          "!**/*.csv",
+          "!**/*.jpeg",
+          "!**/*.jpg",
+          "!**/*.png"
         ]
       },
       {
         "from": "docker",
         "to": "docker",
         "filter": [
-          "**/*"
+          "**/*",
+          "!node_modules/**",
+          "!*.log",
+          "!package-lock.json"
         ]
+      },
+      {
+        "from": "public/noxtiz.ico",
+        "to": "public/noxtiz.ico"
       }
     ],
     "win": {
-      "target": [
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
+      "target": "nsis",
       "icon": "public/noxtiz.ico",
       "sign": false,
       "signDlls": false,
       "signAndEditExecutable": false,
-      "signingHashAlgorithms": []
+      "signingHashAlgorithms": [],
+      "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {
       "oneClick": false,
@@ -130,8 +155,11 @@
       "warningsAsErrors": false,
       "include": "build/installer.nsh",
       "perMachine": false,
-      "differentialPackage": true
+      "differentialPackage": false,
+      "artifactName": "${productName} Setup ${version}.${ext}",
+      "packElevateHelper": false
     },
-    "buildVersion": "21"
+    "publish": null,
+    "buildVersion": "56"
   }
 }

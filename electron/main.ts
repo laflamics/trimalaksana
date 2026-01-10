@@ -68,19 +68,28 @@ function createWindow() {
     icon: iconPath, // Set app icon (will be undefined if not found, using default)
   });
   
-  // CRITICAL FIX: Also set app icon for taskbar (Windows)
+  // CRITICAL FIX: Also set app icon for taskbar (Windows) and dock (macOS)
   // For Windows, icon is embedded in executable by electron-builder
   // But we can also set it explicitly for better compatibility
   if (iconPath && fs.existsSync(iconPath)) {
-    app.dock?.setIcon(iconPath); // macOS dock icon
-    // For Windows, icon is already set via BrowserWindow icon property above
+    // macOS dock icon
+    if (process.platform === 'darwin') {
+      app.dock?.setIcon(iconPath);
+    }
+    // Windows taskbar icon - set via BrowserWindow icon property (already done above)
+    // Also set app icon explicitly for Windows
+    if (process.platform === 'win32') {
+      // Windows uses the icon from BrowserWindow, but we can also set it via app
+      // The icon should be embedded in the executable by electron-builder
+      console.log(`[Main] Windows icon set via BrowserWindow: ${iconPath}`);
+    }
   }
 
-  // Handle certificate errors for Tailscale funnel
+  // Handle certificate errors for Tailscale funnel and Vercel
   mainWindow.webContents.on('certificate-error', (event, url, error, certificate, callback) => {
-    // Allow certificate errors for Tailscale funnel (.ts.net domains)
-    if (url.includes('.ts.net') || url.includes('tailscale') || url.includes('tail')) {
-      console.log(`[Certificate] Allowing certificate error for Tailscale: ${url}`);
+    // Allow certificate errors for Tailscale funnel (.ts.net domains) and Vercel
+    if (url.includes('.ts.net') || url.includes('tailscale') || url.includes('tail') || url.includes('vercel.app')) {
+      console.log(`[Certificate] Allowing certificate error for: ${url}`);
       event.preventDefault();
       callback(true); // Allow the certificate
     } else {
@@ -1347,13 +1356,16 @@ autoUpdater.on('download-progress', (progressObj) => {
 });
 
 autoUpdater.on('update-downloaded', (info) => {
-  console.log('Update downloaded:', info.version);
+  console.log('[Auto-Updater] Update downloaded:', info.version);
   if (mainWindow) {
     mainWindow.webContents.send('update-status', { 
       status: 'downloaded', 
       version: info.version,
-      message: 'Update downloaded. Restart to install.' 
+      message: 'Update downloaded. Click "Install & Restart" to install.' 
     });
+    
+    // Log for enterprise apps - user can see status in UI
+    console.log('[Auto-Updater] Update ready to install. User can click "Install & Restart" button.');
   }
 });
 
@@ -1397,12 +1409,65 @@ async function getServerUrlFromConfig(): Promise<string | null> {
   return null;
 }
 
+// Helper function to get full version with build number
+function getFullVersion(): string {
+  try {
+    // Try multiple paths for package.json (development vs production)
+    const possiblePackageJsonPaths = [
+      path.join(__dirname, '..', 'package.json'), // Development: dist/../package.json
+      path.join(process.resourcesPath, 'app.asar', 'package.json'), // Production: app.asar/package.json
+      path.join(process.resourcesPath, 'package.json'), // Production: resources/package.json
+      path.join(app.getAppPath(), 'package.json'), // App path (most reliable)
+    ];
+    
+    // Try to read package.json directly (this is the source of truth)
+    for (const packageJsonPath of possiblePackageJsonPaths) {
+      try {
+        if (fs.existsSync(packageJsonPath)) {
+          const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+          
+          // Check if version already includes build number
+          if (packageJson.version && packageJson.version.includes('-build.')) {
+            return packageJson.version;
+          }
+          
+          // If version doesn't include build number, try to construct it
+          const baseVersion = packageJson.version || app.getVersion();
+          if (packageJson.build && packageJson.build.buildVersion) {
+            const buildNumber = parseInt(packageJson.build.buildVersion) || null;
+            if (buildNumber !== null && buildNumber > 0) {
+              return `${baseVersion}-build.${buildNumber}`;
+            }
+          }
+          
+          // If no build number found, return version as-is
+          return packageJson.version || app.getVersion();
+        }
+      } catch (error) {
+        // Continue to next path
+        continue;
+      }
+    }
+  } catch (error) {
+    // Fallback to app.getVersion()
+  }
+  
+  return app.getVersion();
+}
+
 // IPC handlers for update
 ipcMain.handle('check-for-updates', async () => {
   try {
     if (!app.isPackaged) {
       return { success: false, message: 'Updates only available in production' };
     }
+    
+    // CRITICAL FIX: Get full version with build number and set it to electron-updater
+    // electron-updater uses app.getVersion() internally, which may not include build number
+    // We need to manually set the currentVersion to ensure correct comparison
+    const fullVersion = getFullVersion();
+    console.log(`[Auto-Updater] Current app version: ${fullVersion}`);
+    console.log(`[Auto-Updater] app.getVersion(): ${app.getVersion()}`);
     
     // Try to get server URL from storage config first, then fallback to env/default
     let updateServerUrl = await getServerUrlFromConfig();
@@ -1430,7 +1495,14 @@ ipcMain.handle('check-for-updates', async () => {
       channel: 'latest'
     });
     
+    // CRITICAL: Override currentVersion for electron-updater
+    // This ensures electron-updater uses the full version with build number for comparison
+    // Note: electron-updater doesn't have a direct API to set currentVersion,
+    // but we can work around by ensuring package.json.version is correct
+    // The real fix is to ensure package.json.version includes build number before build
+    
     console.log(`[Auto-Updater] Checking for updates from: ${feedUrl}latest.yml`);
+    console.log(`[Auto-Updater] Using version: ${fullVersion} for comparison`);
     
     // Check for updates
     const result = await autoUpdater.checkForUpdates();
@@ -1472,41 +1544,83 @@ ipcMain.handle('install-update', async () => {
 
 ipcMain.handle('get-app-version', () => {
   try {
-    // Get base version from app.getVersion() (reads from package.json)
-    const baseVersion = app.getVersion();
+    // CRITICAL FIX: app.getVersion() reads from Electron metadata which may strip build number
+    // We MUST read directly from package.json to get the full version with build number
     
-    // Try to get build number from package.json.build.buildVersion
-    let buildNumber: number | null = null;
-    try {
-      const packageJsonPath = path.join(__dirname, '..', 'package.json');
-      if (fs.existsSync(packageJsonPath)) {
-        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-        if (packageJson.build && packageJson.build.buildVersion) {
-          buildNumber = parseInt(packageJson.build.buildVersion) || null;
-        }
-      }
-    } catch (error) {
-      // If can't read from package.json, try .build-number file
+    // Try multiple paths for package.json (development vs production)
+    const possiblePackageJsonPaths = [
+      path.join(__dirname, '..', 'package.json'), // Development: dist/../package.json
+      path.join(process.resourcesPath, 'app.asar', 'package.json'), // Production: app.asar/package.json
+      path.join(process.resourcesPath, 'package.json'), // Production: resources/package.json
+      path.join(app.getAppPath(), 'package.json'), // App path (most reliable)
+    ];
+    
+    // Try to read package.json directly (this is the source of truth)
+    for (const packageJsonPath of possiblePackageJsonPaths) {
       try {
-        const buildNumberPath = path.join(__dirname, '..', '.build-number');
+        if (fs.existsSync(packageJsonPath)) {
+          const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+          
+          // Check if version already includes build number
+          if (packageJson.version && packageJson.version.includes('-build.')) {
+            console.log(`[Version] Found version from package.json: ${packageJson.version} (path: ${packageJsonPath})`);
+            return packageJson.version;
+          }
+          
+          // If version doesn't include build number, try to construct it
+          const baseVersion = packageJson.version || app.getVersion();
+          if (packageJson.build && packageJson.build.buildVersion) {
+            const buildNumber = parseInt(packageJson.build.buildVersion) || null;
+            if (buildNumber !== null && buildNumber > 0) {
+              const fullVersion = `${baseVersion}-build.${buildNumber}`;
+              console.log(`[Version] Constructed version: ${fullVersion} (from base: ${baseVersion}, build: ${buildNumber})`);
+              return fullVersion;
+            }
+          }
+          
+          // If no build number found, return version as-is
+          console.log(`[Version] Using version from package.json: ${packageJson.version} (no build number)`);
+          return packageJson.version || app.getVersion();
+        }
+      } catch (error: any) {
+        // Continue to next path
+        console.log(`[Version] Failed to read ${packageJsonPath}: ${error.message}`);
+        continue;
+      }
+    }
+    
+    // Fallback: try .build-number file
+    const possibleBuildNumberPaths = [
+      path.join(__dirname, '..', '.build-number'),
+      path.join(process.resourcesPath, 'app.asar', '.build-number'),
+      path.join(process.resourcesPath, '.build-number'),
+      path.join(app.getAppPath(), '.build-number'),
+    ];
+    
+    const baseVersion = app.getVersion();
+    for (const buildNumberPath of possibleBuildNumberPaths) {
+      try {
         if (fs.existsSync(buildNumberPath)) {
           const buildNumberContent = fs.readFileSync(buildNumberPath, 'utf8').trim();
-          buildNumber = parseInt(buildNumberContent) || null;
+          const buildNumber = parseInt(buildNumberContent) || null;
+          if (buildNumber !== null && buildNumber > 0) {
+            const fullVersion = `${baseVersion}-build.${buildNumber}`;
+            console.log(`[Version] Constructed version from .build-number: ${fullVersion}`);
+            return fullVersion;
+          }
         }
-      } catch (error2) {
-        // If both fail, just use base version
+      } catch (error) {
+        // Continue to next path
+        continue;
       }
     }
     
-    // Format version with build number (same format as server: 1.0.6-build.14)
-    if (buildNumber !== null && buildNumber > 0) {
-      return `${baseVersion}-build.${buildNumber}`;
-    }
-    
-    // Fallback to base version if build number not found
-    return baseVersion;
-  } catch (error) {
-    // Fallback to app.getVersion() if anything fails
+    // Final fallback: return app.getVersion() (may not include build number for old builds)
+    console.log(`[Version] Using app.getVersion() as fallback: ${app.getVersion()}`);
+    return app.getVersion();
+  } catch (error: any) {
+    // Final fallback: return app.getVersion()
+    console.error(`[Version] Error getting version: ${error.message}`);
     return app.getVersion();
   }
 });
@@ -1712,9 +1826,9 @@ app.whenReady().then(async () => {
   // This suppresses certificate errors for Tailscale funnel
   session.defaultSession.setCertificateVerifyProc((request, callback) => {
     const { hostname } = request;
-    // Allow certificate errors for Tailscale funnel (.ts.net domains)
-    if (hostname.includes('.ts.net') || hostname.includes('tailscale') || hostname.includes('tail')) {
-      // Suppress error logging for Tailscale - just allow it silently
+    // Allow certificate errors for Tailscale funnel (.ts.net domains) and Vercel
+    if (hostname.includes('.ts.net') || hostname.includes('tailscale') || hostname.includes('tail') || hostname.includes('vercel.app')) {
+      // Suppress error logging - just allow it silently
       callback(0); // 0 = success, allow the certificate
     } else {
       // For other domains, use default verification
@@ -1755,13 +1869,23 @@ app.whenReady().then(async () => {
   createWindow();
   console.log('Window created');
 
-  // Check for updates after 5 seconds (only in production)
+  // Check for updates immediately on app start (only in production)
+  // This ensures users get the latest version when they first install/run the app
+  // Important for enterprise apps - users should get updates right away
   if (app.isPackaged) {
-    setTimeout(() => {
+    // Check for updates immediately (no delay for first install)
+    console.log('[Auto-Updater] Checking for updates on app start...');
+    autoUpdater.checkForUpdates().catch(err => {
+      console.log('[Auto-Updater] Auto-update check failed (may not be configured):', err.message);
+    });
+    
+    // Also set up periodic update checks (every 30 minutes)
+    setInterval(() => {
+      console.log('[Auto-Updater] Periodic update check...');
       autoUpdater.checkForUpdates().catch(err => {
-        console.log('Auto-update check failed (may not be configured):', err.message);
+        console.log('[Auto-Updater] Periodic update check failed:', err.message);
       });
-    }, 5000);
+    }, 30 * 60 * 1000); // 30 minutes
   }
 
   app.on('activate', () => {

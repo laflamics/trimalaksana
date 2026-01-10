@@ -11,7 +11,12 @@ import BOMDialog from '../../components/BOMDialog';
 import NotificationBell from '../../components/NotificationBell';
 import { storageService, extractStorageValue } from '../../services/storage';
 import { materialAllocator } from '../../services/material-allocator';
-import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
+import { filterActiveItems } from '../../utils/data-persistence-helper';
+import { 
+  deletePackagingItem, 
+  deletePackagingItems, 
+  reloadPackagingData
+} from '../../utils/packaging-delete-helper';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
 import { generatePRHtml } from '../../pdf/pr-pdf-template';
@@ -526,8 +531,6 @@ const PPIC = () => {
   };
   
   const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
-    console.log('[PPIC] 🎯 showConfirm called with title:', title);
-    console.log('[PPIC] 🎯 showConfirm message:', message.substring(0, 50) + '...');
     // Set dialog open untuk disable global event listener
     if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
       (window as any).setDialogOpen(true);
@@ -540,7 +543,6 @@ const PPIC = () => {
       onConfirm,
       onCancel,
     });
-    console.log('[PPIC] 🎯 showConfirm dialog state set');
   };
   
   const closeDialog = () => {
@@ -582,7 +584,6 @@ const PPIC = () => {
           clearTimeout(debounceTimer);
         }
         debounceTimer = setTimeout(() => {
-          console.log(`[PPIC] 🔄 app-storage-changed for ${key}, reload PPIC data...`);
           loadData();
           debounceTimer = null;
         }, 300);
@@ -604,8 +605,6 @@ const PPIC = () => {
     if (typeof window === 'undefined') return;
 
     const handleBOMUpdate = (event: Event) => {
-      const customEvent = event as CustomEvent<{ productId: string; bomItems: any[]; source: string }>;
-      console.log(`[PPIC] BOM updated from ${customEvent.detail?.source || 'unknown'}:`, customEvent.detail);
       // Reload data to sync BOM changes
       loadData();
     };
@@ -6441,40 +6440,38 @@ const PPIC = () => {
               }
             }
 
+            // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
             // Remove SPK record using tombstone pattern (soft delete)
-            // IMPORTANT: Use safeDeleteItem to prevent data resurrection from sync
-            const success = await safeDeleteItem('spk', spk.id, 'id');
-            if (!success) {
-              showAlert('Gagal menghapus SPK. Silakan coba lagi.', 'Error');
+            const deleteResult = await deletePackagingItem('spk', spk.id, 'id');
+            if (!deleteResult.success) {
+              showAlert(`Gagal menghapus SPK: ${deleteResult.error || 'Unknown error'}`, 'Error');
               return;
             }
             
-            // Reload SPK data dengan filter active items (after tombstone deletion)
-            const spkListAfterDelete = await storageService.get<any[]>('spk') || [];
-            const activeSPKs = filterActiveItems(spkListAfterDelete);
-            setSpkData(activeSPKs);
+            // Reload SPK data dengan helper (handle race condition)
+            await reloadPackagingData('spk', setSpkData);
             setPendingSPKs(prev => prev.filter((pending: any) => pending.spkNo !== spkNo));
 
             // Remove schedule using tombstone pattern (soft delete)
             const scheduleToDelete = scheduleListSafe.find((schedule: any) => schedule.spkNo === spkNo);
             if (scheduleToDelete) {
-              await safeDeleteItem('schedule', scheduleToDelete.id, 'id');
-              // Reload schedule data dengan filter active items
-              const scheduleListAfterDelete = await storageService.get<any[]>('schedule') || [];
-              const activeSchedules = filterActiveItems(scheduleListAfterDelete);
-              setScheduleData(activeSchedules);
+              await deletePackagingItem('schedule', scheduleToDelete.id, 'id');
+              // Reload schedule data dengan helper
+              await reloadPackagingData('schedule', setScheduleData);
             }
 
-            // Remove notifications using tombstone pattern (soft delete)
+            // 🚀 FIX: Batch delete notifications (parallel, lebih cepat)
             const productionNotifToDelete = productionNotifSafe.filter((notif: any) => notif.spkNo === spkNo);
-            for (const notif of productionNotifToDelete) {
-              await safeDeleteItem('productionNotifications', notif.id, 'id');
-            }
-
             const deliveryNotifToDelete = deliveryNotifSafe.filter((notif: any) => notif.spkNo === spkNo);
-            for (const notif of deliveryNotifToDelete) {
-              await safeDeleteItem('deliveryNotifications', notif.id, 'id');
-            }
+            
+            const productionNotifIds = productionNotifToDelete.map((notif: any) => notif.id);
+            const deliveryNotifIds = deliveryNotifToDelete.map((notif: any) => notif.id);
+            
+            // Delete semua notifications secara parallel
+            await Promise.all([
+              productionNotifIds.length > 0 ? deletePackagingItems('productionNotifications', productionNotifIds, 'id') : Promise.resolve({ success: 0, failed: 0, errors: [] }),
+              deliveryNotifIds.length > 0 ? deletePackagingItems('deliveryNotifications', deliveryNotifIds, 'id') : Promise.resolve({ success: 0, failed: 0, errors: [] })
+            ]);
 
             closeDialog();
             showAlert(`SPK ${spkNo} berhasil dihapus dan stok yang dialokasikan sudah dilepas.`, 'Success');
@@ -7011,17 +7008,15 @@ const PPIC = () => {
       `Hapus PTP ${item.requestNo}?\n\nTindakan ini akan menghapus PTP dari daftar.`,
       async () => {
         try {
-          // Use tombstone pattern untuk prevent data resurrection dari sync
-          const success = await safeDeleteItem('ptp', item.id, 'id');
-          if (!success) {
-            showAlert('Gagal menghapus PTP. Silakan coba lagi.', 'Error');
+          // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
+          const deleteResult = await deletePackagingItem('ptp', item.id, 'id');
+          if (!deleteResult.success) {
+            showAlert(`Gagal menghapus PTP: ${deleteResult.error || 'Unknown error'}`, 'Error');
             return;
           }
           
-          // Reload PTP data dengan filter active items
-          const ptpDataRaw = await storageService.get<any[]>('ptp') || [];
-          const activePTP = filterActiveItems(ptpDataRaw);
-          setPtpData(activePTP);
+          // Reload PTP data dengan helper (handle race condition)
+          await reloadPackagingData('ptp', setPtpData);
           
           showAlert(`PTP ${item.requestNo} berhasil dihapus.`, 'Success');
           loadData();
@@ -9593,6 +9588,16 @@ const CreatePTPDialog = ({ customers, products, onClose, onSave }: any) => {
     requestDate: new Date().toISOString().split('T')[0],
   });
   
+  // Product search dialog state
+  const [showProductDialog, setShowProductDialog] = useState<number | null>(null);
+  const [productDialogSearch, setProductDialogSearch] = useState('');
+  const [productInputValue, setProductInputValue] = useState<{ [key: number]: string }>({});
+  
+  // Customer search dialog state
+  const [showCustomerDialog, setShowCustomerDialog] = useState(false);
+  const [customerDialogSearch, setCustomerDialogSearch] = useState('');
+  const [customerInputValue, setCustomerInputValue] = useState('');
+  
   // Custom Dialog state
   const [dialogState, setDialogState] = useState<{
     show: boolean;
@@ -9644,6 +9649,86 @@ const CreatePTPDialog = ({ customers, products, onClose, onSave }: any) => {
       reason: '',
     };
     setFormData({ ...formData, items: [...formData.items, newItem] });
+  };
+
+  // Filtered products for dialog with limit for performance
+  const filteredProductsForDialog = useMemo(() => {
+    // CRITICAL: Ensure products is always an array
+    const productsArray = Array.isArray(products) ? products : [];
+    
+    let filtered = productsArray;
+    if (productDialogSearch) {
+      const query = productDialogSearch.toLowerCase();
+      
+      filtered = productsArray.filter(p => {
+        if (!p) return false;
+        const code = (p.kode || p.product_id || '').toLowerCase();
+        const name = (p.nama || '').toLowerCase();
+        const customer = (p.customer || '').toLowerCase();
+        const label = `${code}${code ? ' - ' : ''}${name}`.toLowerCase();
+        
+        const codeMatch = code.includes(query);
+        const nameMatch = name.includes(query);
+        const customerMatch = customer.includes(query);
+        const labelMatch = label.includes(query);
+        const matches = codeMatch || nameMatch || customerMatch || labelMatch;
+        
+        return matches;
+      });
+    }
+    
+    // Limit to 200 items for performance (user can search to narrow down)
+    const limited = filtered.slice(0, 200);
+    
+    return limited;
+  }, [productDialogSearch, products]);
+
+  // Filtered customers for dialog with limit for performance
+  const filteredCustomersForDialog = useMemo(() => {
+    // CRITICAL: Ensure customers is always an array
+    const customersArray = Array.isArray(customers) ? customers : [];
+    
+    let filtered = customersArray;
+    if (customerDialogSearch) {
+      const query = customerDialogSearch.toLowerCase();
+      filtered = customersArray.filter(c => {
+        if (!c) return false;
+        const code = (c.kode || '').toLowerCase();
+        const name = (c.nama || '').toLowerCase();
+        return code.includes(query) || name.includes(query);
+      });
+    }
+    
+    // Limit to 200 items for performance
+    return filtered.slice(0, 200);
+  }, [customerDialogSearch, customers]);
+
+  const getCustomerInputDisplayValue = () => {
+    if (customerInputValue) {
+      return customerInputValue;
+    }
+    if (formData.customer) {
+      const customer = customers.find((c: any) => c.nama === formData.customer);
+      if (customer) {
+        return `${customer.kode || ''} - ${customer.nama}`;
+      }
+      return formData.customer;
+    }
+    return '';
+  };
+
+  const getProductInputDisplayValue = (index: number, item?: PTPItem) => {
+    if (productInputValue[index] !== undefined) {
+      return productInputValue[index];
+    }
+    if (item?.productItem) {
+      const product = products.find((p: any) => p.nama === item.productItem || p.kode === item.productItem);
+      if (product) {
+        return `${product.kode || product.product_id} - ${product.nama}`;
+      }
+      return item.productItem;
+    }
+    return '';
   };
 
   // Handle qty input change - auto-replace 0 when user types
@@ -9741,17 +9826,32 @@ const CreatePTPDialog = ({ customers, products, onClose, onSave }: any) => {
             />
             <div>
               <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 500 }}>Customer *</label>
-              <select
-                value={formData.customer}
-                onChange={(e) => setFormData({ ...formData, customer: e.target.value })}
-                style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border-color)', borderRadius: '6px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
-                required
-              >
-                <option value="">-- Pilih Customer --</option>
-                {customers.map((c: any) => (
-                  <option key={c.id || c.kode} value={c.nama}>{c.nama}</option>
-                ))}
-              </select>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  value={getCustomerInputDisplayValue()}
+                  placeholder="Click to select customer..."
+                  readOnly
+                  onClick={() => setShowCustomerDialog(true)}
+                  style={{
+                    flex: 1,
+                    padding: '10px 14px',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '6px',
+                    backgroundColor: 'var(--bg-tertiary)',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer'
+                  }}
+                  required
+                />
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowCustomerDialog(true)}
+                  style={{ fontSize: '12px', padding: '8px 16px' }}
+                >
+                  Select
+                </Button>
+              </div>
             </div>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -9795,19 +9895,38 @@ const CreatePTPDialog = ({ customers, products, onClose, onSave }: any) => {
                       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 100px', gap: '8px', marginBottom: '8px' }}>
                         <div>
                           <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 500 }}>Product *</label>
-                          <select
-                            value={item.productItem}
-                            onChange={(e) => handleUpdateItem(item.id, 'productItem', e.target.value)}
-                            style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border-color)', borderRadius: '4px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '13px' }}
-                            required
-                          >
-                            <option value="">-- Pilih Product --</option>
-                            {products.map((p: any) => (
-                              <option key={p.id || p.kode} value={p.nama || p.kode}>
-                                {p.nama || '-'} {p.kode ? `(${p.kode})` : ''} {p.satuan ? `- ${p.satuan}` : ''}
-                              </option>
-                            ))}
-                          </select>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <input
+                              type="text"
+                              value={getProductInputDisplayValue(index, item)}
+                              placeholder="-- Pilih Product --"
+                              readOnly
+                              onClick={() => {
+                                setProductDialogSearch('');
+                                setShowProductDialog(index);
+                              }}
+                              style={{
+                                flex: 1,
+                                padding: '8px 10px',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: '4px',
+                                backgroundColor: 'var(--bg-tertiary)',
+                                color: 'var(--text-primary)',
+                                fontSize: '13px',
+                                cursor: 'pointer',
+                              }}
+                            />
+                            <Button
+                              variant="secondary"
+                              onClick={() => {
+                                setProductDialogSearch('');
+                                setShowProductDialog(index);
+                              }}
+                              style={{ fontSize: '12px', padding: '8px 16px' }}
+                            >
+                              🔍
+                            </Button>
+                          </div>
                         </div>
                         <div>
                           <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: 500 }}>Qty *</label>
@@ -9969,6 +10088,264 @@ const CreatePTPDialog = ({ customers, products, onClose, onSave }: any) => {
         </form>
         </Card>
       </div>
+      
+      {/* Product Selection Dialog */}
+      {showProductDialog !== null && (
+        <div className="dialog-overlay" onClick={() => {
+          setShowProductDialog(null);
+          setProductDialogSearch('');
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <Card
+              title="Select Product"
+              className="dialog-card"
+            >
+              <div style={{ marginBottom: '16px' }}>
+                <input
+                  type="text"
+                  value={productDialogSearch}
+                  onChange={(e) => setProductDialogSearch(e.target.value)}
+                  placeholder="Search by product code or name..."
+                  autoFocus
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+              <div style={{ 
+                maxHeight: '60vh', 
+                overflowY: 'auto',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+              }}>
+                {filteredProductsForDialog.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    No products found
+                  </div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-tertiary)', zIndex: 10 }}>
+                      <tr>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Code</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Name</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Unit</th>
+                        <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid var(--border)' }}>Price</th>
+                        <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid var(--border)' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredProductsForDialog.map(prod => {
+                        const price = prod.hargaSales || prod.hargaFg || (prod as any).harga || 0;
+                        const productId = (prod.kode || prod.product_id || '').toString().trim();
+                        const handleSelect = () => {
+                          if (showProductDialog !== null) {
+                            const index = showProductDialog;
+                            const itemId = formData.items[index]?.id;
+                            if (itemId) {
+                              // Update product selection
+                              handleUpdateItem(itemId, 'productItem', prod.nama || prod.kode);
+                              // Update price from master product
+                              const hargaFromMaster = prod.hargaSales || prod.hargaFg || (prod as any).harga || 0;
+                              handleUpdateItem(itemId, 'price', Number(hargaFromMaster) || 0);
+                              // Update unit
+                              handleUpdateItem(itemId, 'unit', prod.satuan || 'PCS');
+                              // Update input display value
+                              setProductInputValue(prev => ({
+                                ...prev,
+                                [index]: `${prod.kode || prod.product_id} - ${prod.nama}`
+                              }));
+                            }
+                            setShowProductDialog(null);
+                            setProductDialogSearch('');
+                          }
+                        };
+                        return (
+                          <tr
+                            key={prod.id || productId}
+                            style={{
+                              borderBottom: '1px solid var(--border)',
+                              cursor: 'pointer',
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--hover-bg)'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                            onClick={handleSelect}
+                          >
+                            <td style={{ padding: '12px' }}>{prod.kode || prod.product_id || '-'}</td>
+                            <td style={{ padding: '12px' }}>{prod.nama || '-'}</td>
+                            <td style={{ padding: '12px' }}>{prod.satuan || 'PCS'}</td>
+                            <td style={{ padding: '12px', textAlign: 'right' }}>
+                              {price > 0 ? new Intl.NumberFormat('id-ID', { 
+                                style: 'currency', 
+                                currency: 'IDR',
+                                minimumFractionDigits: 0 
+                              }).format(price) : '-'}
+                            </td>
+                            <td style={{ padding: '12px', textAlign: 'center' }}>
+                              <Button
+                                variant="primary"
+                                onClick={() => handleSelect()}
+                                style={{ fontSize: '12px', padding: '4px 12px' }}
+                              >
+                                Select
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+                  Showing {filteredProductsForDialog.length} of {productDialogSearch ? products.filter((p: any) => {
+                    const query = productDialogSearch.toLowerCase();
+                    const code = (p.kode || p.product_id || '').toLowerCase();
+                    const name = (p.nama || '').toLowerCase();
+                    return code.includes(query) || name.includes(query);
+                  }).length : products.length} product{filteredProductsForDialog.length !== 1 ? 's' : ''}
+                  {filteredProductsForDialog.length >= 200 && (
+                    <span style={{ color: '#ff9800', marginLeft: '8px' }}>
+                      (Limited to 200. Use search to narrow down)
+                    </span>
+                  )}
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowProductDialog(null);
+                    setProductDialogSearch('');
+                  }}
+                >
+                  Close
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+      
+      {/* Customer Selection Dialog */}
+      {showCustomerDialog && (
+        <div className="dialog-overlay" onClick={() => {
+          setShowCustomerDialog(false);
+          setCustomerDialogSearch('');
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <Card>
+              <div style={{ marginBottom: '16px' }}>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)' }}>
+                  Select Customer
+                </h3>
+              </div>
+              <div style={{ marginBottom: '16px' }}>
+                <input
+                  type="text"
+                  value={customerDialogSearch}
+                  onChange={(e) => setCustomerDialogSearch(e.target.value)}
+                  placeholder="Search by customer code or name..."
+                  autoFocus
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '6px',
+                    backgroundColor: 'var(--bg-tertiary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+              <div style={{
+                maxHeight: '400px',
+                overflowY: 'auto',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+              }}>
+                {filteredCustomersForDialog.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    No customers found
+                  </div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: 'var(--bg-secondary)' }}>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>Code</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>Name</th>
+                        <th style={{ padding: '12px', textAlign: 'center', borderBottom: '1px solid var(--border-color)' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredCustomersForDialog.map(c => {
+                        const handleSelect = () => {
+                          setFormData({ ...formData, customer: c.nama });
+                          setCustomerInputValue(`${c.kode || ''} - ${c.nama}`);
+                          setShowCustomerDialog(false);
+                          setCustomerDialogSearch('');
+                        };
+                        return (
+                          <tr 
+                            key={c.id || c.kode} 
+                            style={{ 
+                              borderBottom: '1px solid var(--border-color)',
+                              cursor: 'pointer'
+                            }}
+                            onClick={handleSelect}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                          >
+                            <td style={{ padding: '12px' }}>{c.kode || '-'}</td>
+                            <td style={{ padding: '12px' }}>{c.nama || '-'}</td>
+                            <td style={{ padding: '12px', textAlign: 'center' }}>
+                              <Button
+                                variant="primary"
+                                onClick={handleSelect}
+                                style={{ fontSize: '12px', padding: '4px 12px' }}
+                              >
+                                Select
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+                  Showing {filteredCustomersForDialog.length} of {customerDialogSearch ? customers.filter((c: any) => {
+                    const query = customerDialogSearch.toLowerCase();
+                    const code = (c.kode || '').toLowerCase();
+                    const name = (c.nama || '').toLowerCase();
+                    return code.includes(query) || name.includes(query);
+                  }).length : customers.length} customer{filteredCustomersForDialog.length !== 1 ? 's' : ''}
+                  {filteredCustomersForDialog.length >= 200 && (
+                    <span style={{ color: '#ff9800', marginLeft: '8px' }}>
+                      (Limited to 200. Use search to narrow down)
+                    </span>
+                  )}
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowCustomerDialog(false);
+                    setCustomerDialogSearch('');
+                  }}
+                >
+                  Close
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
       
       {/* Custom Dialog */}
       {dialogState.show && (

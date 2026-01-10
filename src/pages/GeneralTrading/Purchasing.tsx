@@ -5,7 +5,7 @@ import Button from '../../components/Button';
 import Input from '../../components/Input';
 import NotificationBell from '../../components/NotificationBell';
 import { storageService, extractStorageValue } from '../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
+import { deleteGTItem, reloadGTData, filterActiveItems } from '../../utils/gt-delete-helper';
 import { generatePOHtml } from '../../pdf/po-pdf-template';
 import { generatePOSheetHtml } from '../../pdf/po-sheet-template';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
@@ -481,17 +481,44 @@ const Purchasing = () => {
   };
 
   const loadproducts = async () => {
-    const data = await storageService.get<product[]>('gt_products') || [];
-    setproducts(data);
+    console.log('[GT Purchasing] Loading products...');
+    let data = await storageService.get<product[]>('gt_products') || [];
+    console.log(`[GT Purchasing] Raw products from storage: ${data.length} items`);
+    
+    // If we have very few products, try force reload from file
+    if (data.length <= 1) {
+      console.log('[GT Purchasing] Few products detected, trying force reload from file...');
+      const fileData = await storageService.forceReloadFromFile<product[]>('gt_products');
+      if (fileData && Array.isArray(fileData) && fileData.length > data.length) {
+        console.log(`[GT Purchasing] Force reload successful: ${fileData.length} products from file`);
+        data = fileData;
+      }
+    }
+    
+    // Filter out deleted items menggunakan helper function
+    const activeProducts = filterActiveItems(data);
+    console.log(`[GT Purchasing] Active products after filtering: ${activeProducts.length} items`);
+    setproducts(activeProducts);
   };
 
   const loadOrders = async () => {
     try {
-      const [poDataRaw, financeNotifDataRaw, salesOrdersRaw] = await Promise.all([
+      let [poDataRaw, financeNotifDataRaw, salesOrdersRaw] = await Promise.all([
         storageService.get<PurchaseOrder[]>('gt_purchaseOrders'),
         storageService.get<any[]>('gt_financeNotifications'),
         storageService.get<any[]>('gt_salesOrders'),
       ]);
+      
+      // Force reload sales orders if very few detected
+      if (Array.isArray(salesOrdersRaw) && salesOrdersRaw.length <= 1) {
+        console.log('[GT Purchasing] Few sales orders detected, trying force reload from file...');
+        const fileData = await storageService.forceReloadFromFile<any[]>('gt_salesOrders');
+        if (fileData && Array.isArray(fileData) && fileData.length > salesOrdersRaw.length) {
+          console.log(`[GT Purchasing] Force reload successful: ${fileData.length} sales orders from file`);
+          salesOrdersRaw = fileData;
+        }
+      }
+      
       // Filter out deleted items menggunakan helper function
       let poData = filterActiveItems(Array.isArray(poDataRaw) ? poDataRaw : []);
       const financeNotifData = filterActiveItems(Array.isArray(financeNotifDataRaw) ? financeNotifDataRaw : []);
@@ -2578,26 +2605,23 @@ const Purchasing = () => {
       `Hapus PO ${poNo}?\n\nTindakan ini akan:\n• Menghapus PO dari daftar\n• Menghapus notifikasi Finance terkait\n• Mengembalikan PR ke status APPROVED (jika ada)\n\nPastikan tidak ada proses lanjutan untuk PO ini.`,
       async () => {
         try {
-          // Pakai helper function untuk safe delete (tombstone pattern)
-          const success = await safeDeleteItem('gt_purchaseOrders', item.id, 'id');
+          // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
+          const deleteResult = await deleteGTItem('gt_purchaseOrders', item.id, 'id');
           
-          if (!success) {
-            showAlert(`Error deleting PO. Silakan coba lagi.`, 'Error');
+          if (!deleteResult.success) {
+            showAlert(`❌ Error deleting PO ${item.poNo}: ${deleteResult.error || 'Unknown error'}`, 'Error');
             return;
           }
           
-          // Reload data dengan filter active items
-          const updatedOrdersRaw = await storageService.get<PurchaseOrder[]>('gt_purchaseOrders') || [];
-          const updatedOrders = filterActiveItems(updatedOrdersRaw);
-          setOrders(updatedOrders);
+          // Reload data dengan helper (handle race condition)
+          const updatedOrders = await reloadGTData('gt_purchaseOrders', setOrders);
 
           let updatedPRs = purchaseRequests;
           let prChanged = false;
           const normalizeId = (value: any) => (value || '').toString().trim();
 
           const revertPRStatus = (targetId: string) => {
-            const updatedOrdersArray = Array.isArray(updatedOrders) ? updatedOrders : [];
-            const stillHasPO = updatedOrdersArray.some(po => po && normalizeId(po.sourcePRId) === targetId);
+            const stillHasPO = updatedOrders.some((po: any) => po && normalizeId(po.sourcePRId) === targetId);
             if (stillHasPO) return;
             updatedPRs = purchaseRequests.map(pr => {
               if (pr.id === targetId && pr.status === 'PO_CREATED') {
@@ -2614,8 +2638,7 @@ const Purchasing = () => {
             const candidate = purchaseRequests.find(pr => pr.spkNo === item.spkNo && pr.status === 'PO_CREATED');
             if (candidate) {
               const candidateId = candidate.id;
-              const updatedOrdersArray = Array.isArray(updatedOrders) ? updatedOrders : [];
-              const stillHasPO = updatedOrdersArray.some(po => {
+              const stillHasPO = updatedOrders.some((po: any) => {
                 if (!po) return false;
                 if (normalizeId(po.sourcePRId) === candidateId) return true;
                 return (po.spkNo || '').toString().trim() === (item.spkNo || '').toString().trim();

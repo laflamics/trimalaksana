@@ -5,7 +5,7 @@ import type { Column } from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
+import { deleteGTItem, reloadGTData, filterActiveItems } from '../../../utils/gt-delete-helper';
 import { useDialog } from '../../../hooks/useDialog';
 import * as XLSX from 'xlsx';
 import '../../../styles/common.css';
@@ -52,10 +52,52 @@ const Customers = () => {
   }, []);
 
   const loadCustomers = async () => {
-    const data = await storageService.get<Customer[]>('gt_customers') || [];
+    console.log('[GT Customers] Loading customers...');
+    let dataRaw = await storageService.get<Customer[]>('gt_customers') || [];
+    console.log('[GT Customers] Raw data length:', dataRaw.length);
+    
+    // If we have very few customers, try force reload from file
+    if (dataRaw.length <= 1) {
+      console.log('[GT Customers] Few customers detected, trying force reload from file...');
+      const fileData = await storageService.forceReloadFromFile<Customer[]>('gt_customers');
+      if (fileData && Array.isArray(fileData) && fileData.length > dataRaw.length) {
+        console.log(`[GT Customers] Force reload successful: ${fileData.length} customers from file`);
+        dataRaw = fileData;
+      }
+    }
+    
     // Filter out deleted items menggunakan helper function
-    const activeCustomers = filterActiveItems(data);
-    setCustomers(activeCustomers.map((c, idx) => ({ ...c, no: idx + 1 })));
+    const data = filterActiveItems(dataRaw);
+    console.log('[GT Customers] Filtered data length:', data.length);
+    
+    // CRITICAL: Remove duplicates by kode before setting state
+    const seen = new Set<string>();
+    const uniqueData: Customer[] = [];
+    
+    data.forEach(customer => {
+      if (customer && customer.kode) {
+        const key = customer.kode.toLowerCase().trim();
+        if (!seen.has(key)) {
+          seen.add(key);
+          uniqueData.push(customer);
+        } else {
+          console.log('[GT Customers] Removed duplicate:', customer.kode, '-', customer.nama);
+        }
+      }
+    });
+    
+    console.log('[GT Customers] Unique data length:', uniqueData.length);
+    
+    const numberedData = uniqueData.map((c, idx) => ({ ...c, no: idx + 1 }));
+    console.log('[GT Customers] Final data length:', numberedData.length);
+    
+    setCustomers(numberedData);
+    
+    // Save cleaned data back to storage if duplicates were removed
+    if (uniqueData.length < data.length) {
+      console.log('[GT Customers] Saving cleaned data to storage...');
+      await storageService.set('gt_customers', numberedData);
+    }
   };
 
   // Auto generate kode customer: CUST-001, CUST-002, dst
@@ -129,20 +171,21 @@ const Customers = () => {
       `Are you sure you want to delete customer "${item.nama}"? This action cannot be undone.`,
       async () => {
         try {
-          // Pakai helper function untuk safe delete (tombstone pattern)
-          const success = await safeDeleteItem('gt_customers', item.id, 'id');
+          // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
+          const deleteResult = await deleteGTItem('gt_customers', item.id, 'id');
           
-          if (success) {
-            // Reload data dengan filter active items
-            const updatedCustomers = await storageService.get<Customer[]>('gt_customers') || [];
-            const activeCustomers = filterActiveItems(updatedCustomers);
+          if (deleteResult.success) {
+            // Reload data dengan helper (handle race condition)
+            const activeCustomers = await reloadGTData('gt_customers', setCustomers);
+            // Re-number customers
             setCustomers(activeCustomers.map((c, idx) => ({ ...c, no: idx + 1 })));
-            showAlert(`Customer "${item.nama}" deleted successfully`, 'Success');
+            showAlert(`✅ Customer "${item.nama}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
           } else {
-            showAlert(`Error deleting customer. Silakan coba lagi.`, 'Error');
+            showAlert(`❌ Error deleting customer "${item.nama}": ${deleteResult.error || 'Unknown error'}`, 'Error');
           }
         } catch (error: any) {
-          showAlert(`Error deleting customer: ${error.message}`, 'Error');
+          console.error('[Customers] Error in safe delete:', error);
+          showAlert(`❌ Error deleting customer: ${error.message}`, 'Error');
         }
       },
       undefined,
@@ -367,25 +410,40 @@ const Customers = () => {
       );
     });
     
-    // Sort by completeness (most complete first)
-    // Count filled fields: kode, nama, kontak, picTitle, npwp, email, telepon, alamat
-    filtered.sort((a, b) => {
-      const countFields = (c: Customer) => {
-        let count = 0;
-        if (c.kode && c.kode.trim()) count++;
-        if (c.nama && c.nama.trim()) count++;
-        if (c.kontak && c.kontak.trim()) count++;
-        if (c.picTitle && c.picTitle.trim()) count++;
-        if (c.npwp && c.npwp.trim()) count++;
-        if (c.email && c.email.trim()) count++;
-        if (c.telepon && c.telepon.trim()) count++;
-        if (c.alamat && c.alamat.trim()) count++;
-        return count;
+    // Sort berdasarkan kode ID secara natural (SPL-0001, SPL-0002, CTM-068, dst)
+    const sorted = filtered.sort((a, b) => {
+      const kodeA = a.kode || '';
+      const kodeB = b.kode || '';
+      
+      // Natural sort untuk kode dengan format PREFIX-NUMBER
+      // Contoh: SPL-0001, SPL-0002, CTM-068, dll
+      const parseKode = (kode: string) => {
+        const match = kode.match(/^([A-Z]+)-?(\d+)$/i);
+        if (match) {
+          return {
+            prefix: match[1].toUpperCase(),
+            number: parseInt(match[2], 10)
+          };
+        }
+        return { prefix: kode.toUpperCase(), number: 0 };
       };
-      return countFields(b) - countFields(a);
+      
+      const parsedA = parseKode(kodeA);
+      const parsedB = parseKode(kodeB);
+      
+      // Sort by prefix first, then by number
+      if (parsedA.prefix !== parsedB.prefix) {
+        return parsedA.prefix.localeCompare(parsedB.prefix);
+      }
+      
+      return parsedA.number - parsedB.number;
     });
     
-    return filtered;
+    // CRITICAL: Re-number after sorting untuk memastikan No urut 1, 2, 3, dst
+    return sorted.map((customer, index) => ({
+      ...customer,
+      no: index + 1
+    }));
   }, [customers, searchQuery]);
 
   // Pagination

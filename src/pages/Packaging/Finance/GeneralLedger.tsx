@@ -5,6 +5,7 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
+import { deletePackagingItem, reloadPackagingData } from '../../../utils/packaging-delete-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -108,18 +109,24 @@ const GeneralLedger = () => {
   const loadEntries = async () => {
     let data = await storageService.get<JournalEntry[]>('journalEntries') || [];
     
-    // Jika journal entries kosong, generate dari transaksi yang sudah ada
-    if (data.length === 0) {
+    // 🚀 FIX: Filter deleted items langsung saat load
+    const dataArray = Array.isArray(data) ? data : [];
+    const activeDataArray = filterActiveItems(dataArray);
+    
+    // Jika journal entries kosong (setelah filter), generate dari transaksi yang sudah ada
+    if (activeDataArray.length === 0) {
       console.log('📝 Journal entries kosong, mulai generate dari transaksi...');
       await generateJournalEntriesFromTransactions();
       // Reload setelah generate
       data = await storageService.get<JournalEntry[]>('journalEntries') || [];
-      console.log(`✅ Generated ${data.length} journal entries`);
+      // Filter lagi setelah generate
+      const reloadedDataArray = Array.isArray(data) ? data : [];
+      const reloadedActiveData = filterActiveItems(reloadedDataArray);
+      console.log(`✅ Generated ${reloadedActiveData.length} journal entries`);
+      setEntries(reloadedActiveData.map((e, idx) => ({ ...e, no: idx + 1 })));
+    } else {
+      setEntries(activeDataArray.map((e, idx) => ({ ...e, no: idx + 1 })));
     }
-    
-    // Ensure data is always an array
-    const dataArray = Array.isArray(data) ? data : [];
-    setEntries(dataArray.map((e, idx) => ({ ...e, no: idx + 1 })));
   };
 
   // Generate journal entries dari transaksi yang sudah ada
@@ -132,11 +139,11 @@ const GeneralLedger = () => {
         storageService.get<any[]>('journalEntries') || [],
       ]);
 
-      // Pastikan semua data adalah array, bukan null
-      const invoicesData = (invoices || []);
-      const paymentsData = (payments || []);
-      const purchaseOrdersData = (purchaseOrders || []);
-      const existingEntriesData = (existingEntries || []);
+      // 🚀 FIX: Filter deleted items dari transaksi
+      const invoicesData = filterActiveItems(Array.isArray(invoices) ? invoices : []);
+      const paymentsData = filterActiveItems(Array.isArray(payments) ? payments : []);
+      const purchaseOrdersData = filterActiveItems(Array.isArray(purchaseOrders) ? purchaseOrders : []);
+      const existingEntriesData = filterActiveItems(Array.isArray(existingEntries) ? existingEntries : []);
 
       console.log(`📊 Data ditemukan: ${invoicesData.length} invoices, ${paymentsData.length} payments, ${purchaseOrdersData.length} POs`);
 
@@ -648,12 +655,19 @@ const GeneralLedger = () => {
           showConfirm(
             'Delete this entry?',
             async () => {
-              // Ensure entries is always an array
-              const entriesArray = Array.isArray(entries) ? entries : [];
-              const updated = entriesArray.filter(e => e.id !== item.id);
-              await storageService.set('journalEntries', updated);
-              setEntries(updated.map((e, idx) => ({ ...e, no: idx + 1 })));
-              closeDialog();
+              // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
+              const deleteResult = await deletePackagingItem('journalEntries', item.id, 'id');
+              if (deleteResult.success) {
+                // Reload data dengan helper (handle race condition)
+                const dataRaw = await storageService.get<any[]>('journalEntries') || [];
+                const data = dataRaw.filter((e: any) => !e.deleted && !e.deletedAt);
+                setEntries(data.map((e, idx) => ({ ...e, no: idx + 1 })));
+                closeDialog();
+                showAlert('Journal entry deleted successfully', 'Success');
+              } else {
+                closeDialog();
+                showAlert(`Error deleting entry: ${deleteResult.error || 'Unknown error'}`, 'Error');
+              }
             },
             () => closeDialog(),
             'Delete Confirmation'

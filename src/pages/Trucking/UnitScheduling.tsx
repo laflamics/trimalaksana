@@ -339,8 +339,8 @@ const UnitScheduling = () => {
 
   useEffect(() => {
     loadData();
-    // Auto-refresh setiap 5 detik
-    const interval = setInterval(loadData, 5000);
+    // Auto-refresh setiap 30 detik (reduced frequency untuk mengurangi re-render)
+    const interval = setInterval(loadData, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -356,15 +356,23 @@ const UnitScheduling = () => {
         storageService.get<any[]>('trucking_routes'),
       ]);
       
-      // Ensure arrays (handle null/undefined)
-      const scheduleData = scheduleDataRaw || [];
-      const doData = doDataRaw || [];
-      const notifData = notifDataRaw || [];
-      const vehiclesData = vehiclesDataRaw || [];
-      const driversData = driversDataRaw || [];
-      const routesData = routesDataRaw || [];
-
-      console.log(`📊 [UnitScheduling] Loaded data: ${scheduleData.length} schedules, ${notifData.length} notifications, ${doData.length} DOs`);
+      // CRITICAL: Extract array from storage wrapper if needed
+      const extractArray = (data: any) => {
+        if (!data) return [];
+        if (Array.isArray(data)) return data;
+        if (typeof data === 'object' && 'value' in data && Array.isArray(data.value)) {
+          return data.value;
+        }
+        return [];
+      };
+      
+      // Ensure arrays (handle null/undefined and wrapper objects)
+      const scheduleData = extractArray(scheduleDataRaw);
+      const doData = extractArray(doDataRaw);
+      const notifData = extractArray(notifDataRaw);
+      const vehiclesData = extractArray(vehiclesDataRaw);
+      const driversData = extractArray(driversDataRaw);
+      const routesData = extractArray(routesDataRaw);
 
       // Filter out deleted items menggunakan helper function
       const activeDoData = filterActiveItems(doData);
@@ -376,12 +384,10 @@ const UnitScheduling = () => {
         // CRITICAL FIX: Jika DO data kosong (belum ada file), jangan filter notification
         // Ini untuk handle case dimana DO belum pernah di-save ke file storage
         if (activeDONos.size === 0) {
-          console.log(`⚠️ [UnitScheduling] No DO data found, keeping notification ${n.id} for DO ${n.doNo}`);
           return true; // Keep notification jika DO data kosong
         }
         // Filter jika DO yang di-reference sudah di-delete
         if (n.doNo && !activeDONos.has(n.doNo)) {
-          console.log(`[UnitScheduling] Filtering out notification for deleted DO: ${n.doNo}`);
           return false;
         }
         return true;
@@ -392,7 +398,6 @@ const UnitScheduling = () => {
         // Filter jika schedule sendiri sudah di-delete (sudah di-filter oleh filterActiveItems)
         // Filter jika DO yang di-reference sudah di-delete
         if (s.doNo && !activeDONos.has(s.doNo)) {
-          console.log(`[UnitScheduling] Filtering out schedule for deleted DO: ${s.doNo}`);
           return false;
         }
         return true;
@@ -428,7 +433,6 @@ const UnitScheduling = () => {
             !(n.type === 'DO_CONFIRMED' && n.doNo && scheduledDONos.has(n.doNo))
           );
           await storageService.set('trucking_unitNotifications', updatedNotifications);
-          console.log(`[UnitScheduling] Removed ${notificationsToRemove.length} notifications for scheduled DOs`);
         }
       }
       
@@ -458,7 +462,7 @@ const UnitScheduling = () => {
       setRoutes(activeRoutesData);
       setDeliveryOrders(activeDoData);
     } catch (error: any) {
-      console.error('[UnitScheduling] Error loading data:', error);
+      // Error loading data - silent fail
     }
   };
 
@@ -601,10 +605,9 @@ const UnitScheduling = () => {
             created: new Date().toISOString(),
           };
           await storageService.set('trucking_pettyCashNotifications', [...pettyCashNotifications, newPettyCashNotification]);
-          console.log(`✅ [UnitScheduling] Created petty cash notification for schedule ${newSchedule.id} (DO ${newSchedule.doNo})`);
         }
       } catch (error: any) {
-        console.error('Error creating petty cash notification:', error);
+        // Error creating petty cash notification - silent fail
       }
 
       showAlert(`Schedule berhasil dibuat untuk DO ${formData.doNo}!\n\n📧 Notification sent to Petty Cash for uang jalan setup.`, 'Success');

@@ -4,8 +4,9 @@ import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
-import { storageService } from '../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
+import { storageService, extractStorageValue } from '../../services/storage';
+import { filterActiveItems } from '../../utils/data-persistence-helper';
+import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import { openPrintWindow, focusAppWindow } from '../../utils/actions';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
@@ -76,6 +77,7 @@ interface Product {
   hargaSales?: number;
   padCode?: string; // PAD Code untuk product
   kategori?: string; // Kategori product
+  customer?: string; // Customer untuk product
   lastUpdate?: string; // Last update timestamp
   userUpdate?: string; // User yang update
   ipAddress?: string; // IP address
@@ -379,6 +381,21 @@ const SalesOrders = () => {
 
   // Permissions (simplified - bisa di-extend dengan user management)
 
+  // Simple product loading - SAME AS PRODUCTION.TSX
+  const loadProducts = async () => {
+    const dataRaw = extractStorageValue(await storageService.get<Product[]>('products'));
+    const data = filterActiveItems(dataRaw);
+    
+    // Ensure padCode is always present (even if empty string) for all products
+    const productsWithPadCode = data.map((p, idx) => ({ 
+      ...p, 
+      no: idx + 1,
+      padCode: p.padCode !== undefined ? p.padCode : '' // Ensure padCode always exists
+    }));
+    
+    setProducts(productsWithPadCode);
+  };
+
   useEffect(() => {
     loadOrders();
     loadQuotations();
@@ -386,6 +403,27 @@ const SalesOrders = () => {
     loadProducts();
     loadMaterials();
     loadBOM();
+  }, []);
+
+  // Listen for storage changes to auto-reload products (SAME AS MASTER PRODUCTS)
+  useEffect(() => {
+    const handleStorageChange = (event: CustomEvent) => {
+      const { key } = event.detail || {};
+      const storageKey = (storageService as any).getStorageKey('products');
+      
+      // Reload products if products data changed
+      if (key === storageKey || key === 'products') {
+        console.log('🔄 [SalesOrders] Products data changed, reloading...');
+        loadProducts();
+      }
+    };
+
+    // Listen for storage change events
+    window.addEventListener('app-storage-changed', handleStorageChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('app-storage-changed', handleStorageChange as EventListener);
+    };
   }, []);
 
   // Auto-generate quotation no saat dialog dibuka
@@ -594,8 +632,28 @@ const SalesOrders = () => {
   };
 
   const loadQuotations = async () => {
-    const data = await storageService.get<SalesOrder[]>('quotations') || [];
-    setQuotations(data);
+    console.log('[SalesOrders] Loading quotations...');
+    const dataRaw = await storageService.get<SalesOrder[]>('quotations') || [];
+    console.log('[SalesOrders] Raw quotations data:', dataRaw);
+    
+    // CRITICAL: Extract arrays from storage wrapper if needed
+    const extractArray = (data: any): SalesOrder[] => {
+      if (!data) return [];
+      if (Array.isArray(data)) return data;
+      if (data && typeof data === 'object' && 'value' in data && Array.isArray(data.value)) {
+        return data.value;
+      }
+      return [];
+    };
+    
+    const data = extractArray(dataRaw);
+    console.log('[SalesOrders] Extracted quotations array length:', data.length);
+    
+    // CRITICAL: Filter deleted items using helper function
+    const activeQuotations = filterActiveItems(data);
+    console.log('[SalesOrders] Active quotations:', activeQuotations.length);
+    
+    setQuotations(activeQuotations);
   };
 
   const getProductInputDisplayValue = (index: number, item?: SOItem) => {
@@ -609,25 +667,64 @@ const SalesOrders = () => {
   };
 
   const loadCustomers = async () => {
-    const data = await storageService.get<Customer[]>('customers') || [];
-    setCustomers(data);
-  };
-
-  const loadProducts = async () => {
-    const dataRaw = await storageService.get<Product[]>('products') || [];
-    // Filter out deleted items menggunakan helper function
-    const data = filterActiveItems(dataRaw);
-    setProducts(data);
+    console.log('[SalesOrders] Loading customers...');
+    const dataRaw = await storageService.get<Customer[]>('customers') || [];
+    
+    // CRITICAL: Extract arrays from storage wrapper if needed
+    const extractArray = (data: any): Customer[] => {
+      if (!data) return [];
+      if (Array.isArray(data)) return data;
+      if (data && typeof data === 'object' && 'value' in data && Array.isArray(data.value)) {
+        return data.value;
+      }
+      return [];
+    };
+    
+    const data = extractArray(dataRaw);
+    
+    // CRITICAL: Filter deleted items using helper function
+    const activeCustomers = filterActiveItems(data);
+    setCustomers(activeCustomers);
   };
 
   const loadMaterials = async () => {
-    const data = await storageService.get<Material[]>('materials') || [];
-    setMaterials(data);
+    const dataRaw = await storageService.get<Material[]>('materials') || [];
+    
+    // CRITICAL: Extract arrays from storage wrapper if needed
+    const extractArray = (data: any): Material[] => {
+      if (!data) return [];
+      if (Array.isArray(data)) return data;
+      if (data && typeof data === 'object' && 'value' in data && Array.isArray(data.value)) {
+        return data.value;
+      }
+      return [];
+    };
+    
+    const data = extractArray(dataRaw);
+    
+    // CRITICAL: Filter deleted items using helper function
+    const activeMaterials = filterActiveItems(data);
+    setMaterials(activeMaterials);
   };
 
   const loadBOM = async () => {
-    const data = await storageService.get<any[]>('bom') || [];
-    setBomData(data);
+    const dataRaw = await storageService.get<any[]>('bom') || [];
+    
+    // CRITICAL: Extract arrays from storage wrapper if needed
+    const extractArray = (data: any): any[] => {
+      if (!data) return [];
+      if (Array.isArray(data)) return data;
+      if (data && typeof data === 'object' && 'value' in data && Array.isArray(data.value)) {
+        return data.value;
+      }
+      return [];
+    };
+    
+    const data = extractArray(dataRaw);
+    
+    // CRITICAL: Filter deleted items using helper function
+    const activeBOM = filterActiveItems(data);
+    setBomData(activeBOM);
   };
 
 
@@ -644,10 +741,14 @@ const SalesOrders = () => {
 
   // Filtered customers for dialog
   const filteredCustomersForDialog = useMemo(() => {
-    let filtered = customers;
+    // CRITICAL: Ensure customers is always an array
+    const customersArray = Array.isArray(customers) ? customers : [];
+    
+    let filtered = customersArray;
     if (customerDialogSearch) {
       const query = customerDialogSearch.toLowerCase();
-      filtered = customers.filter(c => {
+      filtered = customersArray.filter(c => {
+        if (!c) return false;
         const code = (c.kode || '').toLowerCase();
         const name = (c.nama || '').toLowerCase();
         return code.includes(query) || name.includes(query);
@@ -659,18 +760,34 @@ const SalesOrders = () => {
 
   // Filtered products for dialog with limit for performance
   const filteredProductsForDialog = useMemo(() => {
-    let filtered = products;
+    // CRITICAL: Ensure products is always an array
+    const productsArray = Array.isArray(products) ? products : [];
+    
+    let filtered = productsArray;
     if (productDialogSearch) {
       const query = productDialogSearch.toLowerCase();
-      filtered = products.filter(p => {
-        const code = (p.product_id || p.kode || '').toLowerCase();
+      
+      filtered = productsArray.filter(p => {
+        if (!p) return false;
+        const code = (p.kode || p.product_id || '').toLowerCase();
         const name = (p.nama || '').toLowerCase();
+        const customer = (p.customer || '').toLowerCase();
         const label = `${code}${code ? ' - ' : ''}${name}`.toLowerCase();
-        return code.includes(query) || name.includes(query) || label.includes(query);
+        
+        const codeMatch = code.includes(query);
+        const nameMatch = name.includes(query);
+        const customerMatch = customer.includes(query);
+        const labelMatch = label.includes(query);
+        const matches = codeMatch || nameMatch || customerMatch || labelMatch;
+        
+        return matches;
       });
     }
+    
     // Limit to 200 items for performance (user can search to narrow down)
-    return filtered.slice(0, 200);
+    const limited = filtered.slice(0, 200);
+    
+    return limited;
   }, [productDialogSearch, products]);
 
   // Optimized BOM lookup - create Set for O(1) lookup
@@ -692,13 +809,17 @@ const SalesOrders = () => {
 
   // Filtered customers for quotation autocomplete
   const filteredQuotationCustomers = useMemo(() => {
-    if (!quotationCustomerSearch) return customers;
+    // CRITICAL: Ensure customers is always an array
+    const customersArray = Array.isArray(customers) ? customers : [];
+    
+    if (!quotationCustomerSearch) return customersArray;
     const query = quotationCustomerSearch.toLowerCase();
-    return customers
-      .filter(c => 
-        c.nama.toLowerCase().includes(query) || 
-        c.kode.toLowerCase().includes(query)
-      );
+    return customersArray
+      .filter(c => {
+        if (!c) return false;
+        return c.nama.toLowerCase().includes(query) || 
+               c.kode.toLowerCase().includes(query);
+      });
   }, [quotationCustomerSearch, customers]);
 
   // Filtered products for quotation autocomplete
@@ -719,7 +840,7 @@ const SalesOrders = () => {
     if (quotationProductDialogSearch) {
       const query = quotationProductDialogSearch.toLowerCase();
       filtered = products.filter(p => {
-        const code = (p.product_id || p.kode || '').toLowerCase();
+        const code = (p.kode || p.product_id || '').toLowerCase();
         const name = (p.nama || '').toLowerCase();
         const label = `${code}${code ? ' - ' : ''}${name}`.toLowerCase();
         return code.includes(query) || name.includes(query) || label.includes(query);
@@ -732,15 +853,20 @@ const SalesOrders = () => {
 
   const getFilteredQuotationProducts = useMemo(() => {
     return (lineIndex: number) => {
+      // CRITICAL: Ensure products is always an array
+      const productsArray = Array.isArray(products) ? products : [];
+      
       const search = (quotationProductSearch && quotationProductSearch[lineIndex]) || '';
-      if (!search) return products;
+      if (!search) return productsArray;
       const query = search.toLowerCase();
-      return products
-        .filter(p => 
-          p.nama.toLowerCase().includes(query) ||
-          p.kode.toLowerCase().includes(query) ||
-          (p.product_id || '').toLowerCase().includes(query)
-        );
+      return productsArray
+        .filter(p => {
+          if (!p) return false;
+          return p.nama.toLowerCase().includes(query) ||
+                 p.kode.toLowerCase().includes(query) ||
+                 (p.product_id || '').toLowerCase().includes(query) ||
+                 (p.customer || '').toLowerCase().includes(query);
+        });
     };
   }, [quotationProductSearch, products]);
 
@@ -871,12 +997,15 @@ const SalesOrders = () => {
 
           // Load BOM dengan matching yang konsisten
           // Pastikan selalu set BOM, meskipun kosong
-          const productBOM = bomData.filter(b => {
+          const bomDataArray = Array.isArray(bomData) ? bomData : [];
+          const productBOM = bomDataArray.filter(b => {
+            if (!b) return false;
             const bomProductId = String(b.product_id || b.kode || '').trim();
             return bomProductId === productIdValue && bomProductId !== '';
           }).map(bom => {
             const bomMaterialId = String(bom.material_id || '').trim();
-            const material = materials.find(m => {
+            const materialsArray = Array.isArray(materials) ? materials : [];
+            const material = materialsArray.find(m => {
               const mId = String(m.material_id || m.kode || '').trim();
               return mId === bomMaterialId && mId !== '';
             });
@@ -1741,10 +1870,10 @@ const SalesOrders = () => {
       `Hapus SO: ${item.soNo}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
       async () => {
         try {
-          // ENHANCED: Use safe deletion with tombstone pattern
-          const success = await safeDeleteItem('salesOrders', item.id, 'id');
+          // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
+          const deleteResult = await deletePackagingItem('salesOrders', item.id, 'id');
           
-          if (success) {
+          if (deleteResult.success) {
             // Log activity
             try {
               await logDelete('SALES_ORDER', item.id, '/packaging/sales-orders', {
@@ -1755,17 +1884,13 @@ const SalesOrders = () => {
               // Silent fail
             }
             
-            // Refresh data to show updated list (without deleted items)
-            const updatedOrders = await storageService.get<SalesOrder[]>('salesOrders') || [];
-            const activeOrders = filterActiveItems(updatedOrders);
-            setOrders(activeOrders);
+            // Reload data dengan helper (handle race condition)
+            await reloadPackagingData('salesOrders', setOrders);
             
             closeDialog();
             showAlert(`✅ SO ${item.soNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
-            
-            console.log(`[SalesOrders] Safely deleted SO ${item.soNo} (ID: ${item.id}) using tombstone pattern`);
           } else {
-            showAlert(`❌ Error deleting SO ${item.soNo}. Please try again.`, 'Error');
+            showAlert(`❌ Error deleting SO ${item.soNo}: ${deleteResult.error || 'Unknown error'}`, 'Error');
           }
         } catch (error: any) {
           console.error('[SalesOrders] Error in safe delete:', error);
@@ -1819,6 +1944,50 @@ const SalesOrders = () => {
     setQuotationItemDiscountInputValue({});
     setQuotationDiscountInputValue(quotation.discountPercent ? String(quotation.discountPercent) : '');
     setShowQuotationFormDialog(true);
+  };
+
+  // Handle Delete Quotation
+  const handleDeleteQuotation = async (quotation: SalesOrder) => {
+    // Cek apakah quotation sudah di-convert ke SO
+    if (quotation.matchedSoNo) {
+      showAlert(
+        `Tidak bisa menghapus Quotation ${quotation.soNo}!\n\nQuotation ini sudah di-convert ke Sales Order: ${quotation.matchedSoNo}\n\nJika ingin membatalkan, hapus Sales Order terkait terlebih dahulu.`,
+        'Cannot Delete'
+      );
+      return;
+    }
+
+    showConfirm(
+      `Hapus Quotation: ${quotation.soNo}?\n\nCustomer: ${quotation.customer}\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+      async () => {
+        try {
+          // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
+          const deleteResult = await deletePackagingItem('quotations', quotation.id, 'id');
+          
+          if (deleteResult.success) {
+            // Log activity
+            try {
+              await logDelete('QUOTATION', quotation.id, '/packaging/sales-orders', {
+                soNo: quotation.soNo,
+                customer: quotation.customer,
+              });
+            } catch (logError) {
+              // Silent fail
+            }
+            
+            // Reload quotations dengan helper (handle race condition)
+            await reloadPackagingData('quotations', setQuotations);
+            
+            showAlert(`✅ Quotation ${quotation.soNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+          } else {
+            showAlert(`❌ Error deleting Quotation ${quotation.soNo}: ${deleteResult.error || 'Unknown error'}`, 'Error');
+          }
+        } catch (error: any) {
+          console.error('[SalesOrders] Error in quotation delete:', error);
+          showAlert(`❌ Error deleting Quotation: ${error.message}`, 'Error');
+        }
+      }
+    );
   };
 
   // Print Quotation
@@ -2927,6 +3096,9 @@ const SalesOrders = () => {
           <Button variant="secondary" onClick={() => handleEditQuotation(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>
             Edit
           </Button>
+          <Button variant="danger" onClick={() => handleDeleteQuotation(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>
+            Delete
+          </Button>
         </div>
       ),
     },
@@ -3678,13 +3850,14 @@ const SalesOrders = () => {
                     <tbody>
                       {filteredProductsForDialog.map(prod => {
                         const price = prod.hargaSales || prod.hargaFg || (prod as any).harga || 0;
-                        const productId = (prod.product_id || prod.kode || '').toString().trim();
+                        const productId = (prod.kode || prod.product_id || '').toString().trim();
                         const prodHasBOM = bomProductIds.has(productId);
                         const handleSelect = () => {
                           if (showProductDialog !== null) {
                             const index = showProductDialog;
+                            
                             // Pastikan productId tidak undefined/null - convert ke string untuk konsistensi
-                            const productIdToSet = String(prod.product_id || prod.kode || '').trim();
+                            const productIdToSet = String(prod.kode || prod.product_id || '').trim();
                             if (productIdToSet) {
                               handleUpdateItem(index, 'productId', productIdToSet);
                             }
@@ -3727,7 +3900,7 @@ const SalesOrders = () => {
                             </td>
                             <td style={{ padding: '12px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span>{prod.product_id || prod.kode || '-'}</span>
+                                <span>{prod.kode || prod.product_id || '-'}</span>
                                 {hasBOM(prod) && (
                                   <span style={{
                                     backgroundColor: 'var(--primary-color)',
@@ -3771,7 +3944,7 @@ const SalesOrders = () => {
                 <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
                   Showing {filteredProductsForDialog.length} of {productDialogSearch ? products.filter(p => {
                     const query = productDialogSearch.toLowerCase();
-                    const code = (p.product_id || p.kode || '').toLowerCase();
+                    const code = (p.kode || p.product_id || '').toLowerCase();
                     const name = (p.nama || '').toLowerCase();
                     return code.includes(query) || name.includes(query);
                   }).length : products.length} product{filteredProductsForDialog.length !== 1 ? 's' : ''}
@@ -3873,7 +4046,7 @@ const SalesOrders = () => {
                               <Button
                                 variant="primary"
                                 onClick={(e) => {
-                                  e.stopPropagation();
+                                  e?.stopPropagation?.();
                                   handleSelect();
                                 }}
                                 style={{ fontSize: '12px', padding: '4px 12px' }}
@@ -4976,7 +5149,7 @@ const SalesOrders = () => {
               <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
                 <Table
                   columns={[
-                    { key: 'kode', header: 'Code', render: (p: Product) => p.product_id || p.kode },
+                    { key: 'kode', header: 'Code', render: (p: Product) => p.kode || p.product_id },
                     { key: 'nama', header: 'Name', render: (p: Product) => p.nama },
                     { key: 'satuan', header: 'Unit', render: (p: Product) => p.satuan || 'PCS' },
                     { key: 'hargaFg', header: 'Price', render: (p: Product) => `Rp ${(p.hargaFg || 0).toLocaleString('id-ID')}` },
@@ -4988,7 +5161,7 @@ const SalesOrders = () => {
                           variant="primary"
                           onClick={() => {
                             if (showQuotationProductDialog !== null) {
-                              handleQuotationUpdateItem(showQuotationProductDialog, 'productId', prod.product_id || prod.kode);
+                              handleQuotationUpdateItem(showQuotationProductDialog, 'productId', prod.kode || prod.product_id);
                             }
                             setShowQuotationProductDialog(null);
                             setQuotationProductDialogSearch('');
@@ -5014,5 +5187,21 @@ const SalesOrders = () => {
     </div>
   );
 };
+
+// CSS Animation for spinner
+const spinnerStyle = `
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+`;
+
+// Inject CSS if not already present
+if (typeof document !== 'undefined' && !document.getElementById('product-sync-spinner-style')) {
+  const style = document.createElement('style');
+  style.id = 'product-sync-spinner-style';
+  style.textContent = spinnerStyle;
+  document.head.appendChild(style);
+}
 
 export default SalesOrders;

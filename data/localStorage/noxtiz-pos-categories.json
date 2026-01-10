@@ -3,22 +3,26 @@
     {
       "id": "cat-1",
       "name": "Makanan",
-      "color": "#FF6B6B"
+      "color": "#FF6B6B",
+      "padCode": ""
     },
     {
       "id": "cat-2",
       "name": "Minuman",
-      "color": "#4ECDC4"
+      "color": "#4ECDC4",
+      "padCode": ""
     },
     {
       "id": "cat-3",
       "name": "Dessert",
-      "color": "#FFE66D"
+      "color": "#FFE66D",
+      "padCode": ""
     },
     {
       "id": "cat-4",
       "name": "Snack",
-      "color": "#95E1D3"
+      "color": "#95E1D3",
+      "padCode": ""
     }
   ],
   "timestamp": 1765320458184,

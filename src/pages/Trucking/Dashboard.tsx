@@ -52,36 +52,54 @@ const TrackingDashboard = () => {
   }, []);
 
   const loadData = async () => {
-    const [vehiclesData, driversData, ordersData, billsData, paymentsData] = await Promise.all([
+    const [vehiclesDataRaw, driversDataRaw, ordersDataRaw, billsDataRaw, paymentsDataRaw] = await Promise.all([
       storageService.get<any[]>('trucking_vehicles') || [],
       storageService.get<any[]>('trucking_drivers') || [],
       storageService.get<any[]>('trucking_delivery_orders') || [],
       storageService.get<any[]>('trucking_bills') || [],
       storageService.get<any[]>('trucking_payments') || [],
     ]);
-    setVehicles(vehiclesData || []);
-    setDrivers(driversData || []);
-    setOrders(ordersData || []);
-    setBills(billsData || []);
-    setPayments(paymentsData || []);
+    
+    // CRITICAL: Extract array from storage wrapper if needed
+    const extractArray = (data: any) => {
+      if (!data) return [];
+      if (Array.isArray(data)) return data;
+      if (typeof data === 'object' && 'value' in data && Array.isArray(data.value)) {
+        return data.value;
+      }
+      return [];
+    };
+    
+    setVehicles(extractArray(vehiclesDataRaw));
+    setDrivers(extractArray(driversDataRaw));
+    setOrders(extractArray(ordersDataRaw));
+    setBills(extractArray(billsDataRaw));
+    setPayments(extractArray(paymentsDataRaw));
   };
 
   const kpis = useMemo(() => {
-    const totalVehicles = (vehicles || []).length;
-    const activeVehicles = (vehicles || []).filter(v => v && v.status === 'Active').length;
-    const totalDrivers = (drivers || []).length;
-    const activeDrivers = (drivers || []).filter(d => d && d.status === 'Active').length;
+    // Safety checks: ensure all data are arrays
+    const safeVehicles = Array.isArray(vehicles) ? vehicles : [];
+    const safeDrivers = Array.isArray(drivers) ? drivers : [];
+    const safeOrders = Array.isArray(orders) ? orders : [];
+    const safeBills = Array.isArray(bills) ? bills : [];
+    const safePayments = Array.isArray(payments) ? payments : [];
     
-    const totalOrders = (orders || []).length;
-    const openOrders = (orders || []).filter(o => o && o.status === 'Open').length;
-    const closeOrders = (orders || []).filter(o => o && o.status === 'Close').length;
+    const totalVehicles = safeVehicles.length;
+    const activeVehicles = safeVehicles.filter(v => v && v.status === 'Active').length;
+    const totalDrivers = safeDrivers.length;
+    const activeDrivers = safeDrivers.filter(d => d && d.status === 'Active').length;
     
-    const totalBills = (bills || []).length;
-    const unpaidBills = (bills || []).filter(b => b && (b.status === 'Sent' || b.status === 'Overdue')).length;
-    const paidBills = (bills || []).filter(b => b && b.status === 'Paid').length;
+    const totalOrders = safeOrders.length;
+    const openOrders = safeOrders.filter(o => o && o.status === 'Open').length;
+    const closeOrders = safeOrders.filter(o => o && o.status === 'Close').length;
     
-    const totalRevenue = (payments || []).reduce((sum, p) => sum + (p && p.amount ? p.amount : 0), 0);
-    const pendingRevenue = (bills || []).filter(b => b && (b.status === 'Sent' || b.status === 'Overdue')).reduce((sum, b) => sum + (b.total || 0), 0);
+    const totalBills = safeBills.length;
+    const unpaidBills = safeBills.filter(b => b && (b.status === 'Sent' || b.status === 'Overdue')).length;
+    const paidBills = safeBills.filter(b => b && b.status === 'Paid').length;
+    
+    const totalRevenue = safePayments.reduce((sum, p) => sum + (p && p.amount ? p.amount : 0), 0);
+    const pendingRevenue = safeBills.filter(b => b && (b.status === 'Sent' || b.status === 'Overdue')).reduce((sum, b) => sum + (b.total || 0), 0);
 
     return {
       totalVehicles,

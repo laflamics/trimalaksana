@@ -12,7 +12,8 @@
         "dataSize": 73,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_customers"
       },
-      "timestamp": 1765428258707
+      "timestamp": 1765428258707,
+      "padCode": ""
     },
     {
       "id": "1765427935008",
@@ -26,7 +27,8 @@
         "dataSize": 92,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_accounts"
       },
-      "timestamp": 1765427935008
+      "timestamp": 1765427935008,
+      "padCode": ""
     },
     {
       "id": "1765427628825",
@@ -40,7 +42,8 @@
         "dataSize": 92,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_accounts"
       },
-      "timestamp": 1765427628825
+      "timestamp": 1765427628825,
+      "padCode": ""
     },
     {
       "id": "1765427626435",
@@ -54,7 +57,8 @@
         "dataSize": 92,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_accounts"
       },
-      "timestamp": 1765427626435
+      "timestamp": 1765427626435,
+      "padCode": ""
     },
     {
       "id": "1765427621089",
@@ -68,7 +72,8 @@
         "dataSize": 10,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_journalEntries"
       },
-      "timestamp": 1765427621089
+      "timestamp": 1765427621089,
+      "padCode": ""
     },
     {
       "id": "1765427614741",
@@ -82,7 +87,8 @@
         "reason": "Using fallback value",
         "error": "Network error: Failed to fetch"
       },
-      "timestamp": 1765427614741
+      "timestamp": 1765427614741,
+      "padCode": ""
     },
     {
       "id": "1765427613979",
@@ -97,7 +103,8 @@
         "stack": "Error: Network error: Failed to fetch\n    at aS (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:49408)\n    at async e8 (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:53151)\n    at async yt (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:55760)\n    at async Promise.all (index 5)\n    at async m (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:58751)",
         "timestamp": 1765427613979
       },
-      "timestamp": 1765427613979
+      "timestamp": 1765427613979,
+      "padCode": ""
     },
     {
       "id": "1765427611657",
@@ -110,7 +117,8 @@
       "details": {
         "reason": "No local data found, fetching from server"
       },
-      "timestamp": 1765427611657
+      "timestamp": 1765427611657,
+      "padCode": ""
     },
     {
       "id": "1765427609954",
@@ -124,7 +132,8 @@
         "dataSize": 73,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_customers"
       },
-      "timestamp": 1765427609954
+      "timestamp": 1765427609954,
+      "padCode": ""
     },
     {
       "id": "1765427374399",
@@ -138,7 +147,8 @@
         "dataSize": 181,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/accounts"
       },
-      "timestamp": 1765427374399
+      "timestamp": 1765427374399,
+      "padCode": ""
     },
     {
       "id": "1765427371463",
@@ -152,7 +162,8 @@
         "dataSize": 92,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_accounts"
       },
-      "timestamp": 1765427371463
+      "timestamp": 1765427371463,
+      "padCode": ""
     },
     {
       "id": "1765427366841",
@@ -166,7 +177,8 @@
         "dataSize": 92,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_accounts"
       },
-      "timestamp": 1765427366841
+      "timestamp": 1765427366841,
+      "padCode": ""
     },
     {
       "id": "1765427349612",
@@ -180,7 +192,8 @@
         "dataSize": 92,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_accounts"
       },
-      "timestamp": 1765427349612
+      "timestamp": 1765427349612,
+      "padCode": ""
     },
     {
       "id": "1765427055507",
@@ -194,7 +207,8 @@
         "dataSize": 14,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_accounts"
       },
-      "timestamp": 1765427055507
+      "timestamp": 1765427055507,
+      "padCode": ""
     },
     {
       "id": "1765411740125",
@@ -216,7 +230,8 @@
           "module": "Packaging"
         }
       },
-      "timestamp": 1765411740125
+      "timestamp": 1765411740125,
+      "padCode": ""
     },
     {
       "id": "1765411324375",
@@ -238,7 +253,8 @@
           "module": "Packaging"
         }
       },
-      "timestamp": 1765411324375
+      "timestamp": 1765411324375,
+      "padCode": ""
     },
     {
       "id": "1765427349611",
@@ -252,7 +268,8 @@
         "dataSize": 10,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_journalEntries"
       },
-      "timestamp": 1765427349611
+      "timestamp": 1765427349611,
+      "padCode": ""
     },
     {
       "id": "1765427371458",
@@ -266,7 +283,8 @@
         "dataSize": 10,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_journalEntries"
       },
-      "timestamp": 1765427371458
+      "timestamp": 1765427371458,
+      "padCode": ""
     },
     {
       "id": "1765427262002",
@@ -280,7 +298,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427262002
+      "timestamp": 1765427262002,
+      "padCode": ""
     },
     {
       "id": "1765427261690",
@@ -294,7 +313,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427261690
+      "timestamp": 1765427261690,
+      "padCode": ""
     },
     {
       "id": "1765427261224",
@@ -308,7 +328,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427261224
+      "timestamp": 1765427261224,
+      "padCode": ""
     },
     {
       "id": "1765427260899",
@@ -322,7 +343,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427260899
+      "timestamp": 1765427260899,
+      "padCode": ""
     },
     {
       "id": "1765427260559",
@@ -336,7 +358,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427260559
+      "timestamp": 1765427260559,
+      "padCode": ""
     },
     {
       "id": "1765427260239",
@@ -350,7 +373,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427260239
+      "timestamp": 1765427260239,
+      "padCode": ""
     },
     {
       "id": "1765427259931",
@@ -364,7 +388,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427259931
+      "timestamp": 1765427259931,
+      "padCode": ""
     },
     {
       "id": "1765427259617",
@@ -378,7 +403,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427259617
+      "timestamp": 1765427259617,
+      "padCode": ""
     },
     {
       "id": "1765427259279",
@@ -392,7 +418,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427259279
+      "timestamp": 1765427259279,
+      "padCode": ""
     },
     {
       "id": "1765427258958",
@@ -406,7 +433,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427258958
+      "timestamp": 1765427258958,
+      "padCode": ""
     },
     {
       "id": "1765427258631",
@@ -420,7 +448,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427258631
+      "timestamp": 1765427258631,
+      "padCode": ""
     },
     {
       "id": "1765427258310",
@@ -434,7 +463,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427258310
+      "timestamp": 1765427258310,
+      "padCode": ""
     },
     {
       "id": "1765427257968",
@@ -448,7 +478,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427257968
+      "timestamp": 1765427257968,
+      "padCode": ""
     },
     {
       "id": "1765427257650",
@@ -462,7 +493,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427257650
+      "timestamp": 1765427257650,
+      "padCode": ""
     },
     {
       "id": "1765427257206",
@@ -476,7 +508,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427257206
+      "timestamp": 1765427257206,
+      "padCode": ""
     },
     {
       "id": "1765427256884",
@@ -490,7 +523,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427256884
+      "timestamp": 1765427256884,
+      "padCode": ""
     },
     {
       "id": "1765427256533",
@@ -504,7 +538,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427256532
+      "timestamp": 1765427256532,
+      "padCode": ""
     },
     {
       "id": "1765427256204",
@@ -518,7 +553,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427256204
+      "timestamp": 1765427256204,
+      "padCode": ""
     },
     {
       "id": "1765427255823",
@@ -532,7 +568,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427255823
+      "timestamp": 1765427255823,
+      "padCode": ""
     },
     {
       "id": "1765427255489",
@@ -546,7 +583,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427255489
+      "timestamp": 1765427255489,
+      "padCode": ""
     },
     {
       "id": "1765427255106",
@@ -560,7 +598,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427255106
+      "timestamp": 1765427255106,
+      "padCode": ""
     },
     {
       "id": "1765427254788",
@@ -574,7 +613,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427254788
+      "timestamp": 1765427254788,
+      "padCode": ""
     },
     {
       "id": "1765427254458",
@@ -588,7 +628,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427254458
+      "timestamp": 1765427254458,
+      "padCode": ""
     },
     {
       "id": "1765427254130",
@@ -602,7 +643,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427254129
+      "timestamp": 1765427254129,
+      "padCode": ""
     },
     {
       "id": "1765427253798",
@@ -616,7 +658,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427253798
+      "timestamp": 1765427253798,
+      "padCode": ""
     },
     {
       "id": "1765427253458",
@@ -630,7 +673,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427253458
+      "timestamp": 1765427253458,
+      "padCode": ""
     },
     {
       "id": "1765427253060",
@@ -644,7 +688,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427253060
+      "timestamp": 1765427253060,
+      "padCode": ""
     },
     {
       "id": "1765427252741",
@@ -658,7 +703,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427252740
+      "timestamp": 1765427252740,
+      "padCode": ""
     },
     {
       "id": "1765427252416",
@@ -672,7 +718,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427252416
+      "timestamp": 1765427252416,
+      "padCode": ""
     },
     {
       "id": "1765427252007",
@@ -686,7 +733,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427252007
+      "timestamp": 1765427252007,
+      "padCode": ""
     },
     {
       "id": "1765427251683",
@@ -700,7 +748,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427251683
+      "timestamp": 1765427251683,
+      "padCode": ""
     },
     {
       "id": "1765427251313",
@@ -714,7 +763,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427251313
+      "timestamp": 1765427251313,
+      "padCode": ""
     },
     {
       "id": "1765427250978",
@@ -728,7 +778,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427250978
+      "timestamp": 1765427250978,
+      "padCode": ""
     },
     {
       "id": "1765427250652",
@@ -742,7 +793,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427250651
+      "timestamp": 1765427250651,
+      "padCode": ""
     },
     {
       "id": "1765427250280",
@@ -756,7 +808,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427250280
+      "timestamp": 1765427250280,
+      "padCode": ""
     },
     {
       "id": "1765427242037",
@@ -770,7 +823,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427242037
+      "timestamp": 1765427242037,
+      "padCode": ""
     },
     {
       "id": "1765427233920",
@@ -784,7 +838,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427233920
+      "timestamp": 1765427233920,
+      "padCode": ""
     },
     {
       "id": "1765427249870",
@@ -798,7 +853,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427249870
+      "timestamp": 1765427249870,
+      "padCode": ""
     },
     {
       "id": "1765427233582",
@@ -812,7 +868,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427233582
+      "timestamp": 1765427233582,
+      "padCode": ""
     },
     {
       "id": "1765427241656",
@@ -826,7 +883,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427241656
+      "timestamp": 1765427241656,
+      "padCode": ""
     },
     {
       "id": "1765427249548",
@@ -840,7 +898,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427249548
+      "timestamp": 1765427249548,
+      "padCode": ""
     },
     {
       "id": "1765427241322",
@@ -854,7 +913,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427241322
+      "timestamp": 1765427241322,
+      "padCode": ""
     },
     {
       "id": "1765427233242",
@@ -868,7 +928,8 @@
         "dataSize": 73,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_customers"
       },
-      "timestamp": 1765427233242
+      "timestamp": 1765427233242,
+      "padCode": ""
     },
     {
       "id": "1765427249067",
@@ -882,7 +943,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427249067
+      "timestamp": 1765427249067,
+      "padCode": ""
     },
     {
       "id": "1765427240669",
@@ -896,7 +958,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427240669
+      "timestamp": 1765427240669,
+      "padCode": ""
     },
     {
       "id": "1765427248365",
@@ -910,7 +973,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427248365
+      "timestamp": 1765427248365,
+      "padCode": ""
     },
     {
       "id": "1765427239993",
@@ -924,7 +988,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427239993
+      "timestamp": 1765427239993,
+      "padCode": ""
     },
     {
       "id": "1765427247799",
@@ -938,7 +1003,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427247799
+      "timestamp": 1765427247799,
+      "padCode": ""
     },
     {
       "id": "1765427239668",
@@ -952,7 +1018,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427239668
+      "timestamp": 1765427239668,
+      "padCode": ""
     },
     {
       "id": "1765427247440",
@@ -966,7 +1033,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427247440
+      "timestamp": 1765427247440,
+      "padCode": ""
     },
     {
       "id": "1765427239296",
@@ -980,7 +1048,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427239296
+      "timestamp": 1765427239296,
+      "padCode": ""
     },
     {
       "id": "1765427247111",
@@ -994,7 +1063,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427247111
+      "timestamp": 1765427247111,
+      "padCode": ""
     },
     {
       "id": "1765427238969",
@@ -1008,7 +1078,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427238969
+      "timestamp": 1765427238969,
+      "padCode": ""
     },
     {
       "id": "1765427233240",
@@ -1022,7 +1093,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427233240
+      "timestamp": 1765427233240,
+      "padCode": ""
     },
     {
       "id": "1765427098848",
@@ -1035,7 +1107,8 @@
       "details": {
         "timestamp": 1765427098848
       },
-      "timestamp": 1765427098848
+      "timestamp": 1765427098848,
+      "padCode": ""
     },
     {
       "id": "1765427098696",
@@ -1048,7 +1121,8 @@
       "details": {
         "timestamp": 1765427098696
       },
-      "timestamp": 1765427098696
+      "timestamp": 1765427098696,
+      "padCode": ""
     },
     {
       "id": "1765427098646",
@@ -1061,7 +1135,8 @@
       "details": {
         "reason": "No local data found, fetching from server"
       },
-      "timestamp": 1765427098646
+      "timestamp": 1765427098646,
+      "padCode": ""
     },
     {
       "id": "1765427098550",
@@ -1074,7 +1149,8 @@
       "details": {
         "timestamp": 1765427098550
       },
-      "timestamp": 1765427098550
+      "timestamp": 1765427098550,
+      "padCode": ""
     },
     {
       "id": "1765427098437",
@@ -1087,7 +1163,8 @@
       "details": {
         "timestamp": 1765427098437
       },
-      "timestamp": 1765427098437
+      "timestamp": 1765427098437,
+      "padCode": ""
     },
     {
       "id": "1765427097627",
@@ -1100,7 +1177,8 @@
       "details": {
         "reason": "No local data found, fetching from server"
       },
-      "timestamp": 1765427097627
+      "timestamp": 1765427097627,
+      "padCode": ""
     },
     {
       "id": "1765427097518",
@@ -1113,7 +1191,8 @@
       "details": {
         "timestamp": 1765427097518
       },
-      "timestamp": 1765427097518
+      "timestamp": 1765427097518,
+      "padCode": ""
     },
     {
       "id": "1765427097237",
@@ -1127,7 +1206,8 @@
         "reason": "Using fallback value",
         "error": "HTTP 404: "
       },
-      "timestamp": 1765427097237
+      "timestamp": 1765427097237,
+      "padCode": ""
     },
     {
       "id": "1765427096729",
@@ -1140,7 +1220,8 @@
       "details": {
         "reason": "No local data found, fetching from server"
       },
-      "timestamp": 1765427096729
+      "timestamp": 1765427096729,
+      "padCode": ""
     },
     {
       "id": "1765427095887",
@@ -1153,7 +1234,8 @@
       "details": {
         "timestamp": 1765427095887
       },
-      "timestamp": 1765427095887
+      "timestamp": 1765427095887,
+      "padCode": ""
     },
     {
       "id": "1765427095127",
@@ -1166,7 +1248,8 @@
       "details": {
         "reason": "No local data found, fetching from server"
       },
-      "timestamp": 1765427095127
+      "timestamp": 1765427095127,
+      "padCode": ""
     },
     {
       "id": "1765427094713",
@@ -1180,7 +1263,8 @@
         "dataSize": "object",
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: currentUser"
       },
-      "timestamp": 1765427094713
+      "timestamp": 1765427094713,
+      "padCode": ""
     },
     {
       "id": "1765427093879",
@@ -1193,7 +1277,8 @@
       "details": {
         "reason": "No local data found, fetching from server"
       },
-      "timestamp": 1765427093878
+      "timestamp": 1765427093878,
+      "padCode": ""
     },
     {
       "id": "1765427093659",
@@ -1207,7 +1292,8 @@
         "reason": "Using fallback value",
         "error": "Request timeout: https://server-tljp.tail75a421.ts.net/api/storage/userAccessControl (5000ms)"
       },
-      "timestamp": 1765427093659
+      "timestamp": 1765427093659,
+      "padCode": ""
     },
     {
       "id": "1765427093564",
@@ -1222,7 +1308,8 @@
         "stack": "Error: Request timeout: https://server-tljp.tail75a421.ts.net/api/storage/userAccessControl (5000ms)\n    at aS (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:49152)\n    at async e8 (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:53151)\n    at async yt (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:55760)\n    at async file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:2337:31055\n    at async Promise.all (index 20)\n    at async z (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:2337:31167)",
         "timestamp": 1765427093563
       },
-      "timestamp": 1765427093563
+      "timestamp": 1765427093563,
+      "padCode": ""
     },
     {
       "id": "1765427093482",
@@ -1237,7 +1324,8 @@
         "stack": "Error: Request timeout: https://server-tljp.tail75a421.ts.net/api/storage/outbox (5000ms)\n    at aS (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:49152)\n    at async e8 (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:53151)\n    at async yt (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:55760)\n    at async file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:2337:31055\n    at async Promise.all (index 12)\n    at async z (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:2337:31167)",
         "timestamp": 1765427093482
       },
-      "timestamp": 1765427093482
+      "timestamp": 1765427093482,
+      "padCode": ""
     },
     {
       "id": "1765427091259",
@@ -1250,7 +1338,8 @@
       "details": {
         "timestamp": 1765427091259
       },
-      "timestamp": 1765427091259
+      "timestamp": 1765427091259,
+      "padCode": ""
     },
     {
       "id": "1765427091091",
@@ -1263,7 +1352,8 @@
       "details": {
         "timestamp": 1765427091091
       },
-      "timestamp": 1765427091091
+      "timestamp": 1765427091091,
+      "padCode": ""
     },
     {
       "id": "1765427088510",
@@ -1276,7 +1366,8 @@
       "details": {
         "reason": "No local data found, fetching from server"
       },
-      "timestamp": 1765427088510
+      "timestamp": 1765427088510,
+      "padCode": ""
     },
     {
       "id": "1765427088008",
@@ -1290,7 +1381,8 @@
         "dataSize": "object",
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: currentUser"
       },
-      "timestamp": 1765427088007
+      "timestamp": 1765427088007,
+      "padCode": ""
     },
     {
       "id": "1765427087641",
@@ -1304,7 +1396,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427087641
+      "timestamp": 1765427087641,
+      "padCode": ""
     },
     {
       "id": "1765427087319",
@@ -1318,7 +1411,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427087319
+      "timestamp": 1765427087319,
+      "padCode": ""
     },
     {
       "id": "1765427086994",
@@ -1332,7 +1426,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427086994
+      "timestamp": 1765427086994,
+      "padCode": ""
     },
     {
       "id": "1765427086669",
@@ -1346,7 +1441,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427086669
+      "timestamp": 1765427086669,
+      "padCode": ""
     },
     {
       "id": "1765427086341",
@@ -1360,7 +1456,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427086341
+      "timestamp": 1765427086341,
+      "padCode": ""
     },
     {
       "id": "1765427086031",
@@ -1374,7 +1471,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427086031
+      "timestamp": 1765427086031,
+      "padCode": ""
     },
     {
       "id": "1765427085708",
@@ -1388,7 +1486,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427085708
+      "timestamp": 1765427085708,
+      "padCode": ""
     },
     {
       "id": "1765427085376",
@@ -1402,7 +1501,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427085376
+      "timestamp": 1765427085376,
+      "padCode": ""
     },
     {
       "id": "1765427085047",
@@ -1416,7 +1516,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427085047
+      "timestamp": 1765427085047,
+      "padCode": ""
     },
     {
       "id": "1765427084693",
@@ -1430,7 +1531,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427084693
+      "timestamp": 1765427084693,
+      "padCode": ""
     },
     {
       "id": "1765427084377",
@@ -1444,7 +1546,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427084377
+      "timestamp": 1765427084377,
+      "padCode": ""
     },
     {
       "id": "1765427084005",
@@ -1458,7 +1561,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427084005
+      "timestamp": 1765427084005,
+      "padCode": ""
     },
     {
       "id": "1765427083684",
@@ -1472,7 +1576,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427083684
+      "timestamp": 1765427083684,
+      "padCode": ""
     },
     {
       "id": "1765427083337",
@@ -1486,7 +1591,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427083337
+      "timestamp": 1765427083337,
+      "padCode": ""
     },
     {
       "id": "1765427083019",
@@ -1500,7 +1606,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427083019
+      "timestamp": 1765427083019,
+      "padCode": ""
     },
     {
       "id": "1765427082515",
@@ -1514,7 +1621,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427082515
+      "timestamp": 1765427082515,
+      "padCode": ""
     },
     {
       "id": "1765427082183",
@@ -1528,7 +1636,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427082183
+      "timestamp": 1765427082183,
+      "padCode": ""
     },
     {
       "id": "1765427081851",
@@ -1542,7 +1651,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427081851
+      "timestamp": 1765427081851,
+      "padCode": ""
     },
     {
       "id": "1765427081529",
@@ -1556,7 +1666,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427081529
+      "timestamp": 1765427081529,
+      "padCode": ""
     },
     {
       "id": "1765427081191",
@@ -1570,7 +1681,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427081191
+      "timestamp": 1765427081191,
+      "padCode": ""
     },
     {
       "id": "1765427080848",
@@ -1584,7 +1696,8 @@
         "dataSize": 3027,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_products"
       },
-      "timestamp": 1765427080848
+      "timestamp": 1765427080848,
+      "padCode": ""
     },
     {
       "id": "1765427080576",
@@ -1598,7 +1711,8 @@
         "reason": "Using fallback value",
         "error": "Request timeout: https://server-tljp.tail75a421.ts.net/api/storage/gt_products (5000ms)"
       },
-      "timestamp": 1765427080576
+      "timestamp": 1765427080576,
+      "padCode": ""
     },
     {
       "id": "1765427080550",
@@ -1613,7 +1727,8 @@
         "stack": "Error: Request timeout: https://server-tljp.tail75a421.ts.net/api/storage/gt_products (5000ms)\n    at aS (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:49152)\n    at async e8 (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:53151)\n    at async yt (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:55760)\n    at async file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:170:4839",
         "timestamp": 1765427080550
       },
-      "timestamp": 1765427080550
+      "timestamp": 1765427080550,
+      "padCode": ""
     },
     {
       "id": "1765427079926",
@@ -1626,7 +1741,8 @@
       "details": {
         "timestamp": 1765427079926
       },
-      "timestamp": 1765427079926
+      "timestamp": 1765427079926,
+      "padCode": ""
     },
     {
       "id": "1765427076196",
@@ -1640,7 +1756,8 @@
         "reason": "Using fallback value",
         "error": "Request timeout: https://server-tljp.tail75a421.ts.net/api/storage/accounts (5000ms)"
       },
-      "timestamp": 1765427076196
+      "timestamp": 1765427076196,
+      "padCode": ""
     },
     {
       "id": "1765427076172",
@@ -1655,7 +1772,8 @@
         "stack": "Error: Request timeout: https://server-tljp.tail75a421.ts.net/api/storage/accounts (5000ms)\n    at aS (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:49152)\n    at async e8 (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:53151)\n    at async yt (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:55760)\n    at async ve (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:2201:19287)",
         "timestamp": 1765427076172
       },
-      "timestamp": 1765427076172
+      "timestamp": 1765427076172,
+      "padCode": ""
     },
     {
       "id": "1765427075542",
@@ -1668,7 +1786,8 @@
       "details": {
         "reason": "No local data found, fetching from server"
       },
-      "timestamp": 1765427075542
+      "timestamp": 1765427075542,
+      "padCode": ""
     },
     {
       "id": "1765427075503",
@@ -1682,7 +1801,8 @@
         "dataSize": 73,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_customers"
       },
-      "timestamp": 1765427075503
+      "timestamp": 1765427075503,
+      "padCode": ""
     },
     {
       "id": "1765427071170",
@@ -1695,7 +1815,8 @@
       "details": {
         "reason": "No local data found, fetching from server"
       },
-      "timestamp": 1765427071170
+      "timestamp": 1765427071170,
+      "padCode": ""
     },
     {
       "id": "1765427071142",
@@ -1709,7 +1830,8 @@
         "reason": "Using fallback value",
         "error": "Request timeout: https://server-tljp.tail75a421.ts.net/api/storage/journalEntries (5000ms)"
       },
-      "timestamp": 1765427071142
+      "timestamp": 1765427071142,
+      "padCode": ""
     },
     {
       "id": "1765427071119",
@@ -1724,7 +1846,8 @@
         "stack": "Error: Request timeout: https://server-tljp.tail75a421.ts.net/api/storage/journalEntries (5000ms)\n    at aS (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:49152)\n    at async e8 (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:53151)\n    at async yt (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:55760)\n    at async ve (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:2201:19254)",
         "timestamp": 1765427071119
       },
-      "timestamp": 1765427071119
+      "timestamp": 1765427071119,
+      "padCode": ""
     },
     {
       "id": "1765427062184",
@@ -1737,7 +1860,8 @@
       "details": {
         "timestamp": 1765427062184
       },
-      "timestamp": 1765427062184
+      "timestamp": 1765427062184,
+      "padCode": ""
     },
     {
       "id": "1765427055510",
@@ -1751,7 +1875,8 @@
         "dataSize": "object",
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: currentUser"
       },
-      "timestamp": 1765427055510
+      "timestamp": 1765427055510,
+      "padCode": ""
     },
     {
       "id": "1765427060636",
@@ -1765,7 +1890,8 @@
         "reason": "Using fallback value",
         "error": "Request timeout: https://server-tljp.tail75a421.ts.net/api/storage/userAccessControl (5000ms)"
       },
-      "timestamp": 1765427060636
+      "timestamp": 1765427060636,
+      "padCode": ""
     },
     {
       "id": "1765427060600",
@@ -1780,7 +1906,8 @@
         "stack": "Error: Request timeout: https://server-tljp.tail75a421.ts.net/api/storage/gt_purchaseRequests (5000ms)\n    at aS (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:49152)\n    at async e8 (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:53151)\n    at async yt (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:55760)\n    at async file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:2337:31055\n    at async Promise.all (index 5)\n    at async z (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:2337:31167)",
         "timestamp": 1765427060600
       },
-      "timestamp": 1765427060600
+      "timestamp": 1765427060600,
+      "padCode": ""
     },
     {
       "id": "1765427059246",
@@ -1793,7 +1920,8 @@
       "details": {
         "timestamp": 1765427059246
       },
-      "timestamp": 1765427059246
+      "timestamp": 1765427059246,
+      "padCode": ""
     },
     {
       "id": "1765427058860",
@@ -1806,7 +1934,8 @@
       "details": {
         "timestamp": 1765427058860
       },
-      "timestamp": 1765427058860
+      "timestamp": 1765427058860,
+      "padCode": ""
     },
     {
       "id": "1765427058777",
@@ -1819,7 +1948,8 @@
       "details": {
         "timestamp": 1765427058777
       },
-      "timestamp": 1765427058777
+      "timestamp": 1765427058777,
+      "padCode": ""
     },
     {
       "id": "1765427066114",
@@ -1832,7 +1962,8 @@
       "details": {
         "reason": "No local data found, fetching from server"
       },
-      "timestamp": 1765427066114
+      "timestamp": 1765427066114,
+      "padCode": ""
     },
     {
       "id": "1765427055509",
@@ -1846,7 +1977,8 @@
         "dataSize": "object",
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/companySettings"
       },
-      "timestamp": 1765427055509
+      "timestamp": 1765427055509,
+      "padCode": ""
     },
     {
       "id": "1765427001123",
@@ -1860,7 +1992,8 @@
         "reason": "Using fallback value",
         "error": "Network error: Failed to fetch"
       },
-      "timestamp": 1765427001123
+      "timestamp": 1765427001123,
+      "padCode": ""
     },
     {
       "id": "1765427000400",
@@ -1875,7 +2008,8 @@
         "stack": "Error: Network error: Failed to fetch\n    at aS (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:49408)\n    at async e8 (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:53151)\n    at async yt (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:55760)\n    at async D (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:1506:39939)",
         "timestamp": 1765427000400
       },
-      "timestamp": 1765427000400
+      "timestamp": 1765427000400,
+      "padCode": ""
     },
     {
       "id": "1765426999639",
@@ -1890,7 +2024,8 @@
         "stack": "Error: Network error: Failed to fetch\n    at aS (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:49408)\n    at async e8 (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:53151)\n    at async yt (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:55760)\n    at async Promise.all (index 1)\n    at async d (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:1582:19789)",
         "timestamp": 1765426999639
       },
-      "timestamp": 1765426999639
+      "timestamp": 1765426999639,
+      "padCode": ""
     },
     {
       "id": "1765426998650",
@@ -1904,7 +2039,8 @@
         "dataSize": 14,
         "reason": "Loaded from localStorage (instant, synchronous) - business: general-trading, key: general-trading/gt_accounts"
       },
-      "timestamp": 1765426998650
+      "timestamp": 1765426998650,
+      "padCode": ""
     },
     {
       "id": "1765426998296",
@@ -1918,7 +2054,8 @@
         "reason": "Using fallback value",
         "error": "Network error: Failed to fetch"
       },
-      "timestamp": 1765426998296
+      "timestamp": 1765426998296,
+      "padCode": ""
     },
     {
       "id": "1765426998079",
@@ -1931,7 +2068,8 @@
       "details": {
         "reason": "No local data found, fetching from server"
       },
-      "timestamp": 1765426998079
+      "timestamp": 1765426998079,
+      "padCode": ""
     },
     {
       "id": "1765426997579",
@@ -1946,7 +2084,8 @@
         "stack": "Error: Network error: Failed to fetch\n    at aS (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:49408)\n    at async e8 (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:53151)\n    at async yt (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:55760)\n    at async Promise.all (index 0)\n    at async d (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:1582:19789)",
         "timestamp": 1765426997579
       },
-      "timestamp": 1765426997579
+      "timestamp": 1765426997579,
+      "padCode": ""
     },
     {
       "id": "1765426997326",
@@ -1961,7 +2100,8 @@
         "stack": "Error: Network error: Failed to fetch\n    at aS (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:49408)\n    at async e8 (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:53151)\n    at async yt (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:55760)\n    at async D (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:1506:39854)",
         "timestamp": 1765426997325
       },
-      "timestamp": 1765426997325
+      "timestamp": 1765426997325,
+      "padCode": ""
     },
     {
       "id": "1765426996418",
@@ -1974,7 +2114,8 @@
       "details": {
         "reason": "No local data found, fetching from server"
       },
-      "timestamp": 1765426996418
+      "timestamp": 1765426996418,
+      "padCode": ""
     },
     {
       "id": "1765426994996",
@@ -1987,7 +2128,8 @@
       "details": {
         "reason": "No local data found, fetching from server"
       },
-      "timestamp": 1765426994995
+      "timestamp": 1765426994995,
+      "padCode": ""
     },
     {
       "id": "1765426993971",
@@ -2001,7 +2143,8 @@
         "reason": "Using fallback value",
         "error": "Network error: Failed to fetch"
       },
-      "timestamp": 1765426993971
+      "timestamp": 1765426993971,
+      "padCode": ""
     },
     {
       "id": "1765426993219",
@@ -2016,7 +2159,8 @@
         "stack": "Error: Network error: Failed to fetch\n    at aS (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:49408)\n    at async e8 (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:53151)\n    at async yt (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:55760)\n    at async Promise.all (index 7)\n    at async m (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:58751)",
         "timestamp": 1765426993219
       },
-      "timestamp": 1765426993219
+      "timestamp": 1765426993219,
+      "padCode": ""
     },
     {
       "id": "1765426991608",
@@ -2030,7 +2174,8 @@
         "reason": "Using fallback value",
         "error": "Network error: Failed to fetch"
       },
-      "timestamp": 1765426991608
+      "timestamp": 1765426991608,
+      "padCode": ""
     },
     {
       "id": "1765426991606",
@@ -2044,7 +2189,8 @@
         "reason": "Using fallback value",
         "error": "Network error: Failed to fetch"
       },
-      "timestamp": 1765426991606
+      "timestamp": 1765426991606,
+      "padCode": ""
     },
     {
       "id": "1765426990873",
@@ -2059,7 +2205,8 @@
         "stack": "Error: Network error: Failed to fetch\n    at aS (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:49408)\n    at async e8 (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:53151)\n    at async yt (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:55760)\n    at async Promise.all (index 4)\n    at async m (file:///C:/Users/user/AppData/Local/Programs/PT.Trima%20Laksana%20Jaya%20Pratama/resources/app.asar/dist/renderer/assets/index.DBosqolE.js:67:58751)",
         "timestamp": 1765426990873
       },
-      "timestamp": 1765426990873
+      "timestamp": 1765426990873,
+      "padCode": ""
     },
     {
       "id": "1765426988500",
@@ -2072,7 +2219,8 @@
       "details": {
         "reason": "No local data found, fetching from server"
       },
-      "timestamp": 1765426988499
+      "timestamp": 1765426988499,
+      "padCode": ""
     },
     {
       "id": "1765426988498",
@@ -2085,7 +2233,8 @@
       "details": {
         "reason": "No local data found, fetching from server"
       },
-      "timestamp": 1765426988498
+      "timestamp": 1765426988498,
+      "padCode": ""
     }
   ],
   "timestamp": 1765871099340,

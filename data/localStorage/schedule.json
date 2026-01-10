@@ -1,52 +1,101 @@
 {
   "value": [
     {
-      "id": "1767602552832r5du1ovdd0",
-      "spkNo": "SPK/260105/E648O",
-      "soNo": "PO0000010938",
-      "scheduleStartDate": "2026-01-08T00:00:00.000Z",
-      "scheduleEndDate": "2026-01-11T00:00:00.000Z",
+      "id": "17672355366488wkcxgzwr0",
+      "spkNo": "SPK/260101/8X9U9",
+      "soNo": "test-00009",
+      "scheduleStartDate": "2026-01-01T00:00:00.000Z",
+      "scheduleEndDate": "2026-01-08T00:00:00.000Z",
       "batches": [],
-      "progress": 56,
-      "created": "2026-01-05T08:42:32.832Z",
-      "updated": "2026-01-05T08:55:06.931Z",
-      "padCode": "",
+      "progress": 0,
+      "created": "2026-01-01T02:45:36.648Z",
+      "updated": "2026-01-01T02:45:36.648Z",
+      "padCode": ""
+    },
+    {
+      "id": "17671520787674mehqatum0",
+      "spkNo": "SPK/251231/T26DZ",
+      "soNo": "GBU/PO/C/12/2025/00103",
+      "scheduleStartDate": "2025-12-31T00:00:00.000Z",
+      "scheduleEndDate": "2026-01-07T00:00:00.000Z",
+      "batches": [],
+      "progress": 50,
+      "created": "2025-12-31T03:34:38.767Z",
+      "updated": "2025-12-31T03:52:48.612Z",
       "deliveryBatches": [
         {
-          "id": "1767603210537ezojsbtkl",
+          "id": "1767152214843shadmavcz",
           "batchNo": "A",
-          "qty": 56,
-          "deliveryDate": "2026-01-12T00:00:00.000Z",
-          "productId": "FG-CTM-00002",
+          "qty": 20,
+          "deliveryDate": "2026-01-03T00:00:00.000Z",
+          "productId": "FG-GBU-00124",
+          "createSJ": true,
+          "sjGroupId": "sj-group-1"
+        },
+        {
+          "id": "1767153157654fyz0qir6f",
+          "batchNo": "B",
+          "qty": 30,
+          "deliveryDate": "2025-01-04T00:00:00.000Z",
+          "productId": "FG-GBU-00124",
+          "createSJ": true,
+          "sjGroupId": "sj-group-2"
+        }
+      ],
+      "remaining": 0,
+      "padCode": ""
+    },
+    {
+      "id": "1767141492894irhveisgc0",
+      "spkNo": "SPK/251231/W4UPK",
+      "soNo": "Testing_0001",
+      "scheduleStartDate": "2025-12-31T00:00:00.000Z",
+      "scheduleEndDate": "2026-01-07T00:00:00.000Z",
+      "batches": [],
+      "progress": 200,
+      "created": "2025-12-31T00:38:12.894Z",
+      "updated": "2025-12-31T01:59:39.774Z",
+      "remaining": 0,
+      "deliveryBatches": [
+        {
+          "id": "1767146378059iowy86toq",
+          "batchNo": "A",
+          "qty": 200,
+          "deliveryDate": "2026-01-05T00:00:00.000Z",
+          "productId": "FG-EIT-00002",
           "createSJ": true,
           "sjGroupId": "sj-group-1"
         }
       ],
-      "remaining": 0
+      "padCode": ""
     },
     {
-      "id": "1767601182194eapvhvx1u0",
-      "spkNo": "SPK/260105/EUW5N",
-      "soNo": "001/PO/CAC/I/2026",
-      "scheduleStartDate": "2026-06-01T00:00:00.000Z",
-      "scheduleEndDate": "2026-07-01T00:00:00.000Z",
+      "id": "17671571507834wkxsv0jz0",
+      "spkNo": "SPK/251231/947I2",
+      "soNo": "TEST-000",
+      "scheduleStartDate": "2025-12-31T00:00:00.000Z",
+      "scheduleEndDate": "2026-01-07T00:00:00.000Z",
       "batches": [],
-      "progress": 0,
-      "created": "2026-01-05T08:19:42.194Z",
-      "updated": "2026-01-05T08:20:37.516Z",
-      "deliveryBatches": [
-        {
-          "id": "17676011984468307vjxvk",
-          "batchNo": "A",
-          "qty": 1500,
-          "deliveryDate": "2026-07-01T00:00:00.000Z",
-          "productId": "FG-CAC-00002",
-          "createSJ": true,
-          "sjGroupId": "sj-group-1"
-        }
-      ]
+      "progress": 100,
+      "created": "2025-12-31T04:59:10.783Z",
+      "updated": "2025-12-31T04:59:10.783Z",
+      "remaining": 0,
+      "padCode": ""
+    },
+    {
+      "id": "1767238497464sag10o4fr0",
+      "spkNo": "SPK/260101/6FS6F",
+      "soNo": "test-10",
+      "scheduleStartDate": "2026-01-01T00:00:00.000Z",
+      "scheduleEndDate": "2026-01-08T00:00:00.000Z",
+      "batches": [],
+      "progress": 50,
+      "created": "2026-01-01T03:34:57.464Z",
+      "updated": "2026-01-01T03:34:57.464Z",
+      "remaining": 717,
+      "padCode": ""
     }
   ],
-  "timestamp": 1767603306933,
-  "_timestamp": 1767603306933
+  "timestamp": 1767919828133,
+  "_timestamp": 1767919828133
 }

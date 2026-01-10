@@ -5,7 +5,8 @@ import Button from '../../components/Button';
 import NotificationBell from '../../components/NotificationBell';
 import { storageService } from '../../services/storage';
 import { openPrintWindow } from '../../utils/actions';
-import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
+import { filterActiveItems } from '../../utils/data-persistence-helper';
+import { deletePackagingItem } from '../../utils/packaging-delete-helper';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
 import '../../styles/common.css';
@@ -749,14 +750,14 @@ const QAQC = () => {
         message: `Hapus QC ${qcNo}?\n\nTindakan ini akan:\n• Menghapus QC dari daftar\n• Menghapus notifikasi terkait\n\nPastikan tidak ada proses lanjutan untuk QC ini.`,
         onConfirm: async () => {
           try {
-            // Use tombstone pattern untuk prevent data resurrection dari sync
-            const success = await safeDeleteItem('qc', item.id, 'id');
-            if (!success) {
-              showAlert('Gagal menghapus QC. Silakan coba lagi.', 'Error');
+            // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deletePackagingItem('qc', item.id, 'id');
+            if (!deleteResult.success) {
+              showAlert(`Gagal menghapus QC: ${deleteResult.error || 'Unknown error'}`, 'Error');
               return;
             }
             
-            // Reload QC data dengan filter active items (after tombstone deletion)
+            // Reload QC data (loadQCResults sudah pakai filterActiveItems)
             await loadQCResults();
             
             showAlert(`QC ${qcNo} berhasil dihapus.`, 'Success');

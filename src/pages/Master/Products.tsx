@@ -6,7 +6,8 @@ import Button from '../../components/Button';
 import Input from '../../components/Input';
 import BOMDialog from '../../components/BOMDialog';
 import { storageService, extractStorageValue } from '../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
+import { filterActiveItems } from '../../utils/data-persistence-helper';
+import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import { useDialog } from '../../hooks/useDialog';
 import * as XLSX from 'xlsx';
 import '../../styles/common.css';
@@ -112,7 +113,9 @@ const Products = () => {
 
   const loadCustomers = useCallback(async () => {
     const data = await storageService.get<Customer[]>('customers') || [];
-    setCustomers(data);
+    // CRITICAL: Filter deleted items using helper function
+    const activeCustomers = filterActiveItems(data);
+    setCustomers(activeCustomers);
   }, []);
 
   useEffect(() => {
@@ -459,17 +462,17 @@ const Products = () => {
       `Are you sure you want to delete product "${item.nama}"? This action cannot be undone.`,
       async () => {
         try {
-          // Pakai helper function untuk safe delete (tombstone pattern)
-          const success = await safeDeleteItem('products', item.id, 'id');
+          // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
+          const deleteResult = await deletePackagingItem('products', item.id, 'id');
           
-          if (success) {
-            // Reload data dengan filter active items
+          if (deleteResult.success) {
+            // Reload data dengan helper (handle race condition)
             const dataRaw = extractStorageValue(await storageService.get<Product[]>('products'));
             const data = filterActiveItems(dataRaw);
             setProducts(data.map((p, idx) => ({ ...p, no: idx + 1 })));
             showAlert(`Product "${item.nama}" deleted successfully`, 'Success');
           } else {
-            showAlert(`Error deleting product. Silakan coba lagi.`, 'Error');
+            showAlert(`Error deleting product: ${deleteResult.error || 'Unknown error'}`, 'Error');
           }
         } catch (error: any) {
           showAlert(`Error deleting product: ${error.message}`, 'Error');

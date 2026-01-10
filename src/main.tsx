@@ -14,35 +14,23 @@ import { storageService } from './services/storage';
 
 console.log('🚀 Starting React app...');
 
-// Initialize auto-sync jika mode server
-const initAutoSync = () => {
+// 🚀 NEW ARCHITECTURE: Tidak perlu auto-sync
+// Server adalah single source of truth, client langsung fetch dari server saat get()
+// Tidak perlu sync complex, langsung POST saat set()
+const initStorage = () => {
   const config = storageService.getConfig();
   if (config.type === 'server' && config.serverUrl) {
-    console.log('🔄 Initializing auto-sync with server:', config.serverUrl);
-    
-    // Check if running on mobile/Capacitor
-    const isMobile = typeof window !== 'undefined' && 
-      (!!(window as any).Capacitor || 
-       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
-    
-    if (isMobile) {
-      console.log('📱 Mobile device detected - using extended timeout for sync');
-      // Di mobile, delay sedikit untuk memastikan Capacitor sudah ready
-      // dan network sudah tersedia
-      setTimeout(() => {
-        storageService.startAutoSync();
-      }, 1000); // Delay 1 detik untuk mobile
-    } else {
-      // Desktop - start immediately
-      storageService.startAutoSync();
-    }
+    console.log('✅ Server mode: Server is single source of truth');
+    console.log(`✅ Server URL: ${config.serverUrl}`);
+    console.log('✅ Data will be fetched directly from server on get()');
+    console.log('✅ Data will be posted directly to server on set()');
   } else {
     console.log('📦 Using local storage mode');
   }
 };
 
-// Start auto-sync saat app load
-initAutoSync();
+// Initialize storage (no auto-sync needed)
+initStorage();
 
 const rootElement = document.getElementById('root');
 

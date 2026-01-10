@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { storageService, type SyncStatus } from '../../services/storage';
+import { gtSync, type SyncStatus } from '../../services/gt-sync';
 import { getTheme, applyTheme, type Theme } from '../../utils/theme';
 import { loadIconAsBase64 } from '../../utils/icon-loader';
 import { 
@@ -37,13 +37,13 @@ const GeneralTradingLayout = ({ children }: LayoutProps) => {
     const currentTheme = getTheme();
     setTheme(currentTheme);
     
-    // Subscribe to sync status changes
-    const unsubscribe = storageService.onSyncStatusChange((status) => {
+    // Subscribe to sync status changes dari gtSync
+    const unsubscribe = gtSync.onSyncStatusChange((status) => {
       setSyncStatus(status);
     });
     
     // Set initial sync status
-    setSyncStatus(storageService.getSyncStatus());
+    setSyncStatus(gtSync.getSyncStatus());
     
     return () => {
       unsubscribe();

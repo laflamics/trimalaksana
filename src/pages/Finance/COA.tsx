@@ -5,6 +5,7 @@ import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import { storageService } from '../../services/storage';
+import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import '../../styles/common.css';
 
 interface Account {
@@ -411,12 +412,17 @@ const COA = () => {
       `Delete Account: ${item.code} - ${item.name}?`,
       async () => {
         try {
-          // Ensure accounts is always an array
-          const accountsArray = Array.isArray(accounts) ? accounts : [];
-          const updated = accountsArray.filter(a => a.code !== item.code);
-          await storageService.set('accounts', updated);
-          setAccounts(updated);
-          await loadData(); // Reload untuk update balances
+          // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
+          // Note: COA pakai 'code' sebagai ID field, bukan 'id'
+          const deleteResult = await deletePackagingItem('accounts', item.code, 'code');
+          if (deleteResult.success) {
+            // Reload data dengan helper (handle race condition)
+            await reloadPackagingData('accounts', setAccounts);
+            await loadData(); // Reload untuk update balances
+            showAlert(`Account ${item.code} - ${item.name} deleted successfully`, 'Success');
+          } else {
+            showAlert(`Error deleting account: ${deleteResult.error || 'Unknown error'}`, 'Error');
+          }
         } catch (error: any) {
           showAlert('Error', `Error deleting account: ${error.message}`);
         }

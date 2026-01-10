@@ -90,50 +90,8 @@
       "kategori": "",
       "npwp": "",
       "notes": ""
-    },
-    {
-      "id": "1",
-      "no": 1,
-      "kode": "CUST001",
-      "nama": "PT. Dummy Customer 1",
-      "kontak": "John Doe",
-      "npwp": "12.345.678.9-000.000",
-      "email": "customer1@dummy.com",
-      "telepon": "021-12345678",
-      "alamat": "Jl. Dummy No. 1, Jakarta",
-      "deliveryAddress": "Jl. Dummy No. 1, Jakarta",
-      "kategori": "Regular",
-      "notes": "Dummy customer for testing"
-    },
-    {
-      "id": "2",
-      "no": 2,
-      "kode": "CUST002",
-      "nama": "PT. Dummy Customer 2",
-      "kontak": "Jane Smith",
-      "npwp": "12.345.678.9-000.001",
-      "email": "customer2@dummy.com",
-      "telepon": "022-12345678",
-      "alamat": "Jl. Dummy No. 2, Bandung",
-      "deliveryAddress": "Jl. Dummy No. 2, Bandung",
-      "kategori": "Regular",
-      "notes": "Dummy customer for testing"
-    },
-    {
-      "id": "3",
-      "no": 3,
-      "kode": "CUST003",
-      "nama": "PT. Dummy Customer 3",
-      "kontak": "Bob Johnson",
-      "npwp": "12.345.678.9-000.002",
-      "email": "customer3@dummy.com",
-      "telepon": "031-12345678",
-      "alamat": "Jl. Dummy No. 3, Surabaya",
-      "deliveryAddress": "Jl. Dummy No. 3, Surabaya",
-      "kategori": "Regular",
-      "notes": "Dummy customer for testing"
     }
   ],
-  "timestamp": 1767501078214,
-  "_timestamp": 1767501078214
+  "timestamp": 1767749770027,
+  "_timestamp": 1767749770027
 }
