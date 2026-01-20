@@ -6,6 +6,7 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
 import { filterActiveItems } from '../../../utils/data-persistence-helper';
+import { useDialog } from '../../../hooks/useDialog';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -30,33 +31,8 @@ const AccountsReceivable = () => {
   const [agingFilter, setAgingFilter] = useState<string>('all');
   const [loading, setLoading] = useState(false);
 
-  // Custom Dialog state
-  const [, setDialogState] = useState<{
-    show: boolean;
-    type: 'alert' | 'confirm';
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-  }>({
-    show: false,
-    type: 'alert',
-    title: '',
-    message: '',
-  });
-
-  // Helper functions untuk dialog
-  const showAlert = (message: string, title: string = 'Information') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'alert',
-      title,
-      message,
-    });
-  };
+  // Custom Dialog - menggunakan hook terpusat
+  const { showAlert, DialogComponent } = useDialog();
 
 
   useEffect(() => {
@@ -410,6 +386,9 @@ const AccountsReceivable = () => {
           <Table columns={columns} data={filteredAR} />
         )}
       </Card>
+      
+      {/* Custom Dialog - menggunakan hook terpusat */}
+      <DialogComponent />
     </div>
   );
 };

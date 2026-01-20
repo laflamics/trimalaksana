@@ -4,7 +4,8 @@ import Card from '../../../components/Card';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
+import { deleteTruckingItem, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { useDialog } from '../../../hooks/useDialog';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -46,58 +47,16 @@ const Accounting = () => {
     description: '',
   });
 
-  // Custom Dialog state
-  const [dialogState, setDialogState] = useState<{
-    show: boolean;
-    type: 'alert' | 'confirm';
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-  }>({
-    show: false,
-    type: 'alert',
-    title: '',
-    message: '',
-  });
-
-  // Helper functions untuk dialog
+  // Custom Dialog - menggunakan hook terpusat
+  const { showAlert: showAlertBase, showConfirm: showConfirmBase, DialogComponent } = useDialog();
+  
+  // Wrapper untuk kompatibilitas dengan urutan parameter yang berbeda
   const showAlert = (message: string, title: string = 'Information') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'alert',
-      title,
-      message,
-    });
+    showAlertBase(message, title);
   };
-
+  
   const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'confirm',
-      title,
-      message,
-      onConfirm,
-      onCancel,
-    });
-  };
-
-  const closeDialog = () => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(false);
-    }
-    setDialogState({
-      show: false,
-      type: 'alert',
-      title: '',
-      message: '',
-    });
+    showConfirmBase(message, onConfirm, onCancel, title);
   };
 
   useEffect(() => {
@@ -612,7 +571,6 @@ const Accounting = () => {
       showConfirm(
         `📋 Format Excel untuk Import Journal Entries\n\nPastikan file Excel Anda memiliki header berikut:\n\n${exampleHeaders.join(' | ')}\n\nContoh data:\n${exampleData.map((row, idx) => `${idx + 1}. ${exampleHeaders.map(h => String(row[h as keyof typeof row] || '')).join(' | ')}`).join('\n')}\n\n⚠️ Catatan:\n- Header harus ada di baris pertama\n- Date format: YYYY-MM-DD\n- Account harus ada di COA\n- Debit atau Credit harus diisi (tidak boleh keduanya 0)\n\nKlik "Download Template" untuk mendapatkan file Excel template, atau "Lanjutkan" untuk memilih file Excel yang sudah Anda siapkan.`,
         () => {
-          closeDialog();
           const input = document.createElement('input');
           input.type = 'file';
           input.accept = '.xlsx,.xls,.csv';
@@ -684,9 +642,8 @@ const Accounting = () => {
                   } else {
                     showAlert('⚠️ No valid entries to import', 'Warning');
                   }
-                  closeDialog();
                 },
-                () => closeDialog(),
+                undefined,
                 'Import Confirmation'
               );
             } catch (error: any) {
@@ -695,7 +652,7 @@ const Accounting = () => {
           };
           input.click();
         },
-        () => closeDialog(),
+        undefined,
         'Format Excel Preview'
       );
     };
@@ -726,79 +683,90 @@ const Accounting = () => {
           setFormData(item); 
           setShowForm(true); 
         }} style={{ fontSize: '12px', padding: '4px 8px' }}>Edit</Button>
-        <Button variant="danger" onClick={() => {
-          showConfirm(
-            'Delete this entry?',
-            async () => {
-              try {
-                // Pakai helper function untuk safe delete (tombstone pattern)
-                const success = await safeDeleteItem('trucking_journalEntries', item.id, 'id');
-                
-                if (!success) {
-                  closeDialog();
-                  showAlert('Error deleting entry. Please try again.', 'Error');
-                  return;
-                }
-                
-                // Load updated data untuk logic restore balance
-                let updated = await storageService.get<any[]>('trucking_journalEntries') || [];
-                
-                // Filter untuk logic restore balance (hanya active entries)
-                const activeEntries = filterActiveItems(updated);
-                
-                // Jika entry yang di-delete punya reference yang sama dengan entry lain, restore balance
-                const relatedEntries = activeEntries.filter(e => e.reference === item.reference);
-                if (relatedEntries.length > 0) {
-                  // Hitung total debit dan credit untuk reference yang sama setelah delete
-                  const totalDebit = relatedEntries.reduce((sum, e) => sum + (e.debit || 0), 0);
-                  const totalCredit = relatedEntries.reduce((sum, e) => sum + (e.credit || 0), 0);
+        <Button variant="danger" onClick={async () => {
+          try {
+            console.log('[Trucking Accounting] handleDelete called for:', item?.id, item?.reference);
+            
+            if (!item || !item.id) {
+              showAlert('Journal Entry tidak valid. Mohon coba lagi.', 'Error');
+              return;
+            }
+            
+            showConfirm(
+              `Hapus Journal Entry "${item.reference}"?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+              async () => {
+                try {
+                  // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
+                  const deleteResult = await deleteTruckingItem('trucking_journalEntries', item.id, 'id');
                   
-                  // Hitung selisih (harusnya 0 kalau balanced)
-                  const balanceDiff = totalDebit - totalCredit;
-                  
-                  // Jika ada selisih, restore balance dengan adjust entry pertama yang tersisa
-                  // Ini berarti entry yang di-delete adalah entry yang menyebabkan adjustment sebelumnya
-                  if (balanceDiff !== 0) {
-                    // Cari entry pertama dengan reference yang sama (biasanya entry utama)
-                    const firstRelatedEntry = relatedEntries[0];
-                    if (firstRelatedEntry) {
-                      // Restore entry pertama dengan menambahkan/mengurangi selisih
-                      updated = updated.map(e => {
-                        if (e.id === firstRelatedEntry.id) {
-                          if (firstRelatedEntry.debit && firstRelatedEntry.debit > 0) {
-                            // Restore debit dengan menambahkan kembali selisih yang dikurangi sebelumnya
-                            const restoredDebit = (firstRelatedEntry.debit || 0) + balanceDiff;
-                            return { ...e, debit: Math.max(0, restoredDebit) } as JournalEntry;
-                          } else if (firstRelatedEntry.credit && firstRelatedEntry.credit > 0) {
-                            // Restore credit dengan mengurangi selisih yang ditambahkan sebelumnya
-                            const restoredCredit = (firstRelatedEntry.credit || 0) - balanceDiff;
-                            return { ...e, credit: Math.max(0, restoredCredit) } as JournalEntry;
-                          }
-                        }
-                        return e;
-                      });
-                      
-                      // Simpan perubahan restore balance
-                      await storageService.set('trucking_journalEntries', updated);
-                    }
+                  if (!deleteResult.success) {
+                    console.error('[Trucking Accounting] Delete failed:', deleteResult.error);
+                    showAlert(`❌ Error deleting entry: ${deleteResult.error || 'Unknown error'}`, 'Error');
+                    return;
                   }
-                  // Jika balanceDiff === 0, berarti entry yang di-delete adalah entry yang balanced
-                  // atau entry debit/kredit utama yang dihapus, jadi tidak perlu restore
+                  
+                  // Load updated data untuk logic restore balance
+                  let updated = await storageService.get<any[]>('trucking_journalEntries') || [];
+                  
+                  // Filter untuk logic restore balance (hanya active entries)
+                  const activeEntries = filterActiveItems(updated);
+                  
+                  // Jika entry yang di-delete punya reference yang sama dengan entry lain, restore balance
+                  const relatedEntries = activeEntries.filter(e => e.reference === item.reference);
+                  if (relatedEntries.length > 0) {
+                    // Hitung total debit dan credit untuk reference yang sama setelah delete
+                    const totalDebit = relatedEntries.reduce((sum, e) => sum + (e.debit || 0), 0);
+                    const totalCredit = relatedEntries.reduce((sum, e) => sum + (e.credit || 0), 0);
+                    
+                    // Hitung selisih (harusnya 0 kalau balanced)
+                    const balanceDiff = totalDebit - totalCredit;
+                    
+                    // Jika ada selisih, restore balance dengan adjust entry pertama yang tersisa
+                    // Ini berarti entry yang di-delete adalah entry yang menyebabkan adjustment sebelumnya
+                    if (balanceDiff !== 0) {
+                      // Cari entry pertama dengan reference yang sama (biasanya entry utama)
+                      const firstRelatedEntry = relatedEntries[0];
+                      if (firstRelatedEntry) {
+                        // Restore entry pertama dengan menambahkan/mengurangi selisih
+                        updated = updated.map(e => {
+                          if (e.id === firstRelatedEntry.id) {
+                            if (firstRelatedEntry.debit && firstRelatedEntry.debit > 0) {
+                              // Restore debit dengan menambahkan kembali selisih yang dikurangi sebelumnya
+                              const restoredDebit = (firstRelatedEntry.debit || 0) + balanceDiff;
+                              return { ...e, debit: Math.max(0, restoredDebit) } as JournalEntry;
+                            } else if (firstRelatedEntry.credit && firstRelatedEntry.credit > 0) {
+                              // Restore credit dengan mengurangi selisih yang ditambahkan sebelumnya
+                              const restoredCredit = (firstRelatedEntry.credit || 0) - balanceDiff;
+                              return { ...e, credit: Math.max(0, restoredCredit) } as JournalEntry;
+                            }
+                          }
+                          return e;
+                        });
+                        
+                        // Simpan perubahan restore balance
+                        await storageService.set('trucking_journalEntries', updated);
+                      }
+                    }
+                    // Jika balanceDiff === 0, berarti entry yang di-delete adalah entry yang balanced
+                    // atau entry debit/kredit utama yang dihapus, jadi tidak perlu restore
+                  }
+                  
+                  // Reload data dengan helper (handle race condition)
+                  const finalActiveEntries = await reloadTruckingData('trucking_journalEntries', setEntries);
+                  setEntries(finalActiveEntries.map((e, idx) => ({ ...e, no: idx + 1 })));
+                  showAlert(`✅ Journal Entry "${item.reference}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+                } catch (error: any) {
+                  console.error('[Trucking Accounting] Error deleting entry:', error);
+                  showAlert(`❌ Error deleting entry: ${error.message}`, 'Error');
                 }
-                
-                // Filter out deleted items untuk display menggunakan helper function
-                const finalActiveEntries = filterActiveItems(updated);
-                setEntries(finalActiveEntries.map((e, idx) => ({ ...e, no: idx + 1 })));
-                closeDialog();
-                showAlert('Entry deleted successfully', 'Success');
-              } catch (error: any) {
-                closeDialog();
-                showAlert(`Error deleting entry: ${error.message}`, 'Error');
-              }
-            },
-            () => closeDialog(),
-            'Delete Confirmation'
-          );
+              },
+              undefined,
+              'Safe Delete Confirmation'
+            );
+          } catch (error: any) {
+            console.error('[Trucking Accounting] Error in handleDelete:', error);
+            showAlert(`Error: ${error.message}`, 'Error');
+          }
         }} style={{ fontSize: '12px', padding: '4px 8px' }}>Delete</Button>
       </div>
     ) },
@@ -1269,62 +1237,8 @@ const Accounting = () => {
         </div>
       )}
 
-      {/* Custom Dialog untuk Alert/Confirm */}
-      {dialogState.show && (() => {
-        const titleLower = dialogState.title.toLowerCase();
-        let iconType = 'info';
-        let iconChar = 'ℹ️';
-        if (titleLower.includes('success') || titleLower.includes('berhasil')) {
-          iconType = 'success';
-          iconChar = '✓';
-        } else if (titleLower.includes('error') || titleLower.includes('gagal') || titleLower.includes('cannot')) {
-          iconType = 'error';
-          iconChar = '✕';
-        } else if (titleLower.includes('warning') || titleLower.includes('peringatan') || titleLower.includes('validation')) {
-          iconType = 'warning';
-          iconChar = '⚠';
-        }
-        
-        return (
-          <div className="dialog-overlay" onClick={dialogState.type === 'alert' ? closeDialog : undefined}>
-            <div className="dialog-card" onClick={(e) => e.stopPropagation()}>
-              <div className={`dialog-icon ${iconType}`}>
-                {iconChar}
-              </div>
-              <h3 className="dialog-title">
-                {dialogState.title}
-              </h3>
-              <div className="dialog-message">
-                {dialogState.message}
-              </div>
-              <div className="dialog-actions" style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                {dialogState.type === 'confirm' && dialogState.title && dialogState.title.includes('Format Excel') && (
-                  <Button variant="secondary" onClick={() => {
-                    handleDownloadTemplate();
-                    closeDialog();
-                  }} style={{ marginRight: 'auto' }}>
-                    📥 Download Template
-                  </Button>
-                )}
-                {dialogState.type === 'confirm' && (
-                  <Button variant="secondary" onClick={() => {
-                    if (dialogState.onCancel) dialogState.onCancel();
-                    closeDialog();
-                  }}>
-                    Cancel
-                  </Button>
-                )}
-                <Button variant="primary" onClick={() => {
-                  if (dialogState.onConfirm) dialogState.onConfirm();
-                  if (dialogState.type === 'alert') closeDialog();
-                }}>
-                  {dialogState.type === 'alert' ? 'OK' : 'Confirm'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {/* Custom Dialog - menggunakan hook terpusat */}
+      <DialogComponent />
     </div>
   );
 };

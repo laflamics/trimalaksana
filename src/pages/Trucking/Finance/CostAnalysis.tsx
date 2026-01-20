@@ -6,6 +6,7 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
 import { filterActiveItems } from '../../../utils/data-persistence-helper';
+import { useDialog } from '../../../hooks/useDialog';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -64,44 +65,8 @@ const CostAnalysis = () => {
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
   // Custom Dialog state
-  const [dialogState, setDialogState] = useState<{
-    show: boolean;
-    type: 'alert' | 'confirm';
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-  }>({
-    show: false,
-    type: 'alert',
-    title: '',
-    message: '',
-  });
-
-  // Helper functions untuk dialog
-  const showAlert = (message: string, title: string = 'Information') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'alert',
-      title,
-      message,
-    });
-  };
-
-  const closeDialog = () => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(false);
-    }
-    setDialogState({
-      show: false,
-      type: 'alert',
-      title: '',
-      message: '',
-    });
-  };
+  // Custom Dialog - menggunakan hook terpusat
+  const { showAlert, DialogComponent } = useDialog();
 
   useEffect(() => {
     loadData();
@@ -532,27 +497,8 @@ const CostAnalysis = () => {
       </Card>
 
       {/* Custom Dialog untuk Alert/Confirm */}
-      {dialogState.show && (
-        <div className="dialog-overlay" onClick={closeDialog} style={{ zIndex: 10001 }}>
-          <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
-            <div style={{ marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)' }}>
-                {dialogState.title}
-              </h3>
-            </div>
-            
-            <div style={{ marginBottom: '24px', fontSize: '14px', color: 'var(--text-primary)', whiteSpace: 'pre-line' }}>
-              {dialogState.message}
-            </div>
-            
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <Button variant="primary" onClick={closeDialog}>
-                OK
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Custom Dialog - menggunakan hook terpusat */}
+      <DialogComponent />
     </div>
   );
 };

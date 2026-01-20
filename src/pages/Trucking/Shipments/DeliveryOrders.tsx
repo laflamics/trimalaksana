@@ -4,7 +4,8 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
+import { deleteTruckingItem, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { useDialog } from '../../../hooks/useDialog';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../../utils/excel-helper';
 import '../../../styles/common.css';
@@ -64,58 +65,16 @@ const DeliveryOrders = () => {
   const [viewMode, setViewMode] = useState<'card' | 'table'>('table');
   const [showRouteDialog, setShowRouteDialog] = useState(false);
   const [routeDialogSearch, setRouteDialogSearch] = useState('');
-  // Custom Dialog state
-  const [dialogState, setDialogState] = useState<{
-    show: boolean;
-    type: 'alert' | 'confirm' | null;
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-  }>({
-    show: false,
-    type: null,
-    title: '',
-    message: '',
-  });
-
-  // Helper functions untuk dialog
+  // Custom Dialog - menggunakan hook terpusat
+  const { showAlert: showAlertBase, showConfirm: showConfirmBase, DialogComponent } = useDialog();
+  
+  // Wrapper untuk kompatibilitas dengan urutan parameter yang berbeda
   const showAlert = (message: string, title: string = 'Information') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'alert',
-      title,
-      message,
-    });
+    showAlertBase(message, title);
   };
-
+  
   const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'confirm',
-      title,
-      message,
-      onConfirm,
-      onCancel,
-    });
-  };
-
-  const closeDialog = () => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(false);
-    }
-    setDialogState({
-      show: false,
-      type: null,
-      title: '',
-      message: '',
-    });
+    showConfirmBase(message, onConfirm, onCancel, title);
   };
 
   const [editingItem, setEditingItem] = useState<DeliveryOrder | null>(null);
@@ -276,7 +235,9 @@ const DeliveryOrders = () => {
 
   const handleSave = async () => {
     try {
-      if (!formData.customerCode || !formData.items || formData.items.length === 0) {
+      // Ensure items is always an array for validation
+      const items = Array.isArray(formData.items) ? formData.items : [];
+      if (!formData.customerCode || items.length === 0) {
         showAlert('Customer dan Items harus diisi', 'Information');
         return;
       }
@@ -399,55 +360,55 @@ const DeliveryOrders = () => {
   };
 
   const handleDelete = async (item: DeliveryOrder) => {
-    showConfirm(
-      `Are you sure you want to delete delivery order "${item.doNo}"?`,
-      async () => {
-        try {
-          // Simpan tombstone ke audit log sebelum menghapus
-          const timestamp = new Date().toISOString();
-          const itemId = item.id || item.doNo || 'unknown';
-          const auditLog = {
-            id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-            refType: 'trucking_delivery_orders',
-            refId: itemId,
-            actorId: 'user', // TODO: get from auth context
-            action: 'DELETE',
-            deleted: true,
-            deletedAt: timestamp,
-            data: item, // Simpan data lengkap untuk tombstone
-            createdAt: timestamp,
-          };
-          
-          // Simpan audit log menggunakan storageService
-          const auditLogs = await storageService.get<any[]>('trucking_auditLogs') || [];
-          await storageService.set('trucking_auditLogs', [...auditLogs, auditLog]);
-          
-          // Pakai helper function untuk safe delete (tombstone pattern)
-          const success = await safeDeleteItem('trucking_delivery_orders', item.id, 'id');
-          
-          if (success) {
-            // Reload data dengan filter active items
-            const updatedOrders = await storageService.get<DeliveryOrder[]>('trucking_delivery_orders') || [];
-            const activeOrders = filterActiveItems(updatedOrders);
+    try {
+      console.log('[Trucking DeliveryOrders] handleDelete called for:', item?.doNo, item?.id);
+      
+      if (!item || !item.doNo) {
+        showAlert('Delivery Order tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[Trucking DeliveryOrders] Delivery Order missing ID:', item);
+        showAlert(`❌ Error: Delivery Order "${item.doNo}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Delivery Order "${item.doNo}"?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deleteTruckingItem('trucking_delivery_orders', item.id, 'id');
             
-            // Sort by orderDate (newest first)
-            const sortedUpdated = activeOrders.sort((a, b) => {
-              const dateA = a.orderDate ? new Date(a.orderDate).getTime() : (a.created ? new Date(a.created).getTime() : 0);
-              const dateB = b.orderDate ? new Date(b.orderDate).getTime() : (b.created ? new Date(b.created).getTime() : 0);
-              return dateB - dateA; // Newest first
-            });
-            setOrders(sortedUpdated.map((o, idx) => ({ ...o, no: idx + 1 })));
-            showAlert(`Delivery order "${item.doNo}" deleted successfully`, 'Success');
-          } else {
-            showAlert(`Error deleting delivery order "${item.doNo}". Please try again.`, 'Error');
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              const activeOrders = await reloadTruckingData('trucking_delivery_orders', setOrders);
+              // Sort by orderDate descending (newest first)
+              const sortedUpdated = [...activeOrders].sort((a, b) => {
+                const dateA = a.orderDate ? new Date(a.orderDate).getTime() : (a.created ? new Date(a.created).getTime() : 0);
+                const dateB = b.orderDate ? new Date(b.orderDate).getTime() : (b.created ? new Date(b.created).getTime() : 0);
+                return dateB - dateA; // Newest first
+              });
+              setOrders(sortedUpdated.map((o, idx) => ({ ...o, no: idx + 1 })));
+              showAlert(`✅ Delivery Order "${item.doNo}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[Trucking DeliveryOrders] Delete failed:', deleteResult.error);
+              showAlert(`❌ Error deleting delivery order "${item.doNo}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[Trucking DeliveryOrders] Error deleting delivery order:', error);
+            showAlert(`❌ Error deleting delivery order: ${error.message}`, 'Error');
           }
-        } catch (error: any) {
-          showAlert(`Error deleting delivery order: ${error.message}`, 'Error');
-        }
-      },
-      undefined,
-      'Confirm Delete'
-    );
+        },
+        undefined,
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[Trucking DeliveryOrders] Error in handleDelete:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
   };
 
   const handleConfirmDO = async (item: DeliveryOrder) => {
@@ -475,43 +436,108 @@ const DeliveryOrders = () => {
       
       setOrders(activeOrders.map((o, idx) => ({ ...o, no: idx + 1 })));
 
-      // Kirim notifikasi ke Pengaturan Unit
-      const unitNotifications = await storageService.get<any[]>('trucking_unitNotifications') || [];
-      const existingNotif = unitNotifications.find((n: any) => n.doNo === item.doNo && n.type === 'DO_CONFIRMED');
+      // 🚀 AUTO-CREATE DELIVERY NOTE langsung saat DO di-confirm
+      const allDN = await storageService.get<any[]>('trucking_deliveryNote') || [];
+      const existingDN = allDN.find((dn: any) => dn.doNo === item.doNo && !dn.deleted);
       
-      if (!existingNotif) {
+      if (!existingDN) {
+        // Load drivers, vehicles, routes untuk mendapatkan data lengkap
+        const [driversData, vehiclesData, routesData] = await Promise.all([
+          storageService.get<any[]>('trucking_drivers') || [],
+          storageService.get<any[]>('trucking_vehicles') || [],
+          storageService.get<any[]>('trucking_routes') || [],
+        ]);
+        
+        const driver = driversData.find((d: any) => d.id === item.driverId);
+        const vehicle = vehiclesData.find((v: any) => v.id === item.vehicleId);
+        const route = routesData.find((r: any) => r.id === item.routeId);
+        
+        // Generate DN No
+        const date = new Date();
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const random = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+        const dnNo = `DN-${year}${month}${day}-${random}`;
+        
         const now = new Date();
-        const newNotification = {
-          id: `unit-${Date.now()}-${item.doNo}`,
-          type: 'DO_CONFIRMED',
-          doNo: item.doNo,
-          customerCode: item.customerCode,
-          customerName: item.customerName,
-          customerAddress: item.customerAddress,
-          items: item.items || [],
-          vehicleId: item.vehicleId || '',
-          vehicleNo: item.vehicleNo || '',
+        const items = Array.isArray(item.items) ? item.items : [];
+        const newDN = {
+          id: Date.now().toString(),
+          no: allDN.length + 1,
+          dnNo: dnNo,
+          doNo: item.doNo || '',
+          customerName: item.customerName || '',
+          customerAddress: item.customerAddress || '',
           driverId: item.driverId || '',
-          driverName: item.driverName || '',
+          driverName: driver?.name || item.driverName || '',
+          driverCode: driver?.driverCode || '',
+          vehicleId: item.vehicleId || '',
+          vehicleNo: vehicle?.vehicleNo || item.vehicleNo || '',
           routeId: item.routeId || '',
-          routeName: item.routeName || '',
-          scheduledDate: item.scheduledDate || '',
-          orderDate: item.orderDate,
-          totalWeight: item.totalWeight || 0,
-          totalVolume: item.totalVolume || 0,
-          notes: item.notes || '',
+          routeName: route?.routeName || item.routeName || '',
+          items: items,
+          scheduledDate: item.scheduledDate || new Date().toISOString().split('T')[0],
+          scheduledTime: item.scheduledTime || '08:00',
           status: 'Open',
+          notes: item.notes || '',
           created: now.toISOString(),
           lastUpdate: now.toISOString(),
           timestamp: now.getTime(),
           _timestamp: now.getTime(),
         };
-        await storageService.set('trucking_unitNotifications', [...unitNotifications, newNotification]);
-        console.log(`✅ [DeliveryOrder] Created unit scheduling notification for DO ${item.doNo}`);
-        showAlert(`Delivery Order ${item.doNo} confirmed!\n\n📧 Notification sent to Pengaturan Unit for scheduling.`, 'Success');
-      } else {
-        showAlert(`Notification for DO ${item.doNo} already exists in Pengaturan Unit.`, 'Information');
+        
+        await storageService.set('trucking_deliveryNote', [...allDN, newDN]);
+        console.log(`✅ [DeliveryOrder] Auto-created Delivery Note ${dnNo} for DO ${item.doNo}`);
       }
+      
+      // 🚀 AUTO-CREATE PETTY CASH REQUEST langsung saat DO di-confirm
+      if (item.driverId) {
+        const allPettyCash = await storageService.get<any[]>('trucking_pettycash_requests') || [];
+        const existingPettyCash = allPettyCash.find((pc: any) => 
+          pc.doNo === item.doNo && !pc.deleted
+        );
+        
+        if (!existingPettyCash) {
+          const driver = drivers.find((d: any) => d.id === item.driverId);
+          
+          if (driver) {
+            // Generate requestNo (format sama seperti di PettyCash.tsx)
+            const date = new Date();
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const random = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+            const requestNo = `PC-${year}${month}${day}-${random}`;
+            
+            const newPettyCash = {
+              id: Date.now().toString(),
+              no: allPettyCash.length + 1,
+              requestNo: requestNo,
+              driverId: driver.id,
+              driverName: driver.name,
+              driverCode: driver.driverCode,
+              amount: 0, // Default amount, bisa di-edit nanti
+              purpose: `Uang jalan untuk DO ${item.doNo}`,
+              description: `Petty cash untuk delivery order ${item.doNo} - ${item.customerName || ''}`,
+              requestDate: new Date().toISOString().split('T')[0],
+              status: 'Open',
+              doNo: item.doNo, // Reference ke DO
+              notes: item.notes || '',
+            };
+            
+            await storageService.set('trucking_pettycash_requests', [...allPettyCash, newPettyCash]);
+            console.log(`✅ [DeliveryOrder] Auto-created Petty Cash Request ${requestNo} for DO ${item.doNo}`);
+          }
+        }
+      }
+      
+      showAlert(
+        `✅ Delivery Order ${item.doNo} confirmed!\n\n` +
+        `📄 Delivery Note: Auto-created\n` +
+        `💰 Petty Cash Request: Auto-created`,
+        'Success'
+      );
     } catch (error: any) {
       showAlert(`Error confirming delivery order: ${error.message}`, 'Error');
     }
@@ -653,7 +679,9 @@ const DeliveryOrders = () => {
       
       // Sheet 1: All Delivery Orders - Summary
       const allOrdersData = orders.map(order => {
-        const totalQty = order.items.reduce((sum, item) => sum + (item.qty || 0), 0);
+        // Ensure items is always an array
+        const items = Array.isArray(order.items) ? order.items : [];
+        const totalQty = items.reduce((sum, item) => sum + (item.qty || 0), 0);
         return {
           doNo: order.doNo,
           orderDate: order.orderDate,
@@ -666,7 +694,7 @@ const DeliveryOrders = () => {
           status: order.status,
           scheduledDate: order.scheduledDate || '',
           actualDeliveryDate: order.actualDeliveryDate || '',
-          totalItems: order.items.length,
+          totalItems: items.length,
           totalQty: totalQty,
           totalWeight: order.totalWeight || 0,
           totalVolume: order.totalVolume || 0,
@@ -711,7 +739,9 @@ const DeliveryOrders = () => {
       // Sheet 2: Order Items Detail
       const itemsDetail: any[] = [];
       orders.forEach(order => {
-        order.items.forEach((item, idx) => {
+        // Ensure items is always an array
+        const items = Array.isArray(order.items) ? order.items : [];
+        items.forEach((item, idx) => {
           itemsDetail.push({
             doNo: order.doNo,
             customerName: order.customerName,
@@ -750,18 +780,22 @@ const DeliveryOrders = () => {
       // Sheet 3: Outstanding (Status Open)
       const outstandingOrders = orders.filter(o => o.status === 'Open');
       if (outstandingOrders.length > 0) {
-        const outstandingData = outstandingOrders.map(order => ({
-          doNo: order.doNo,
-          orderDate: order.orderDate,
-          customerName: order.customerName,
-          vehicleNo: order.vehicleNo || '',
-          driverName: order.driverName || '',
-          routeName: order.routeName || '',
-          status: order.status,
-          scheduledDate: order.scheduledDate || '',
-          totalItems: order.items.length,
-          totalQty: order.items.reduce((sum, item) => sum + (item.qty || 0), 0),
-        }));
+        const outstandingData = outstandingOrders.map(order => {
+          // Ensure items is always an array
+          const items = Array.isArray(order.items) ? order.items : [];
+          return {
+            doNo: order.doNo,
+            orderDate: order.orderDate,
+            customerName: order.customerName,
+            vehicleNo: order.vehicleNo || '',
+            driverName: order.driverName || '',
+            routeName: order.routeName || '',
+            status: order.status,
+            scheduledDate: order.scheduledDate || '',
+            totalItems: items.length,
+            totalQty: items.reduce((sum, item) => sum + (item.qty || 0), 0),
+          };
+        });
 
         const outstandingColumns: ExcelColumn[] = [
           { key: 'doNo', header: 'DO No', width: 20 },
@@ -1052,15 +1086,19 @@ const DeliveryOrders = () => {
                       <div>🚛 Vehicle: {item.vehicleNo || '-'}</div>
                       {item.scheduledDate && <div>📆 Scheduled: {item.scheduledDate}</div>}
                     </div>
-                    {item.items && item.items.length > 0 && (
-                      <div style={{ fontSize: '11px', background: 'var(--bg-secondary)', padding: '6px', borderRadius: '4px', marginBottom: '10px' }}>
-                        <div style={{ fontWeight: 600, marginBottom: '3px' }}>Items ({item.items.length})</div>
-                        {item.items.slice(0, 3).map((itm, idx) => (
-                          <div key={idx}>• {itm.product} ({itm.qty} {itm.unit || 'PCS'})</div>
-                        ))}
-                        {item.items.length > 3 && <div style={{ opacity: 0.7 }}>... and {item.items.length - 3} more</div>}
-                      </div>
-                    )}
+                    {(() => {
+                      // Ensure items is always an array
+                      const items = Array.isArray(item.items) ? item.items : [];
+                      return items.length > 0 && (
+                        <div style={{ fontSize: '11px', background: 'var(--bg-secondary)', padding: '6px', borderRadius: '4px', marginBottom: '10px' }}>
+                          <div style={{ fontWeight: 600, marginBottom: '3px' }}>Items ({items.length})</div>
+                          {items.slice(0, 3).map((itm, idx) => (
+                            <div key={idx}>• {itm.product} ({itm.qty} {itm.unit || 'PCS'})</div>
+                          ))}
+                          {items.length > 3 && <div style={{ opacity: 0.7 }}>... and {items.length - 3} more</div>}
+                        </div>
+                      );
+                    })()}
                     <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                       {item.status === 'Open' && (
                         <Button variant="success" onClick={() => handleStatusChange(item, 'Close')} style={{ fontSize: '10px', padding: '3px 6px', minHeight: '24px' }}>
@@ -1332,16 +1370,20 @@ const DeliveryOrders = () => {
               />
               <Button onClick={handleAddItem}>Add</Button>
             </div>
-            {formData.items && formData.items.length > 0 && (
-              <div style={{ border: '1px solid var(--border)', borderRadius: '4px', padding: '12px' }}>
-                {formData.items.map((item, idx) => (
-                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', borderBottom: idx < formData.items!.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                    <span>{item.product} - {item.qty} {item.unit} {item.description ? `(${item.description})` : ''}</span>
-                    <Button variant="danger" onClick={() => handleRemoveItem(idx)}>Remove</Button>
-                  </div>
-                ))}
-              </div>
-            )}
+            {(() => {
+              // Ensure formData.items is always an array
+              const items = Array.isArray(formData.items) ? formData.items : [];
+              return items.length > 0 && (
+                <div style={{ border: '1px solid var(--border)', borderRadius: '4px', padding: '12px' }}>
+                  {items.map((item, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', borderBottom: idx < items.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                      <span>{item.product} - {item.qty} {item.unit} {item.description ? `(${item.description})` : ''}</span>
+                      <Button variant="danger" onClick={() => handleRemoveItem(idx)}>Remove</Button>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
@@ -1689,34 +1731,8 @@ const DeliveryOrders = () => {
           </div>
         </div>
       )}
-      {/* Custom Dialog */}
-      {dialogState.show && (
-        <div className="dialog-overlay" onClick={closeDialog}>
-          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
-            <Card className="dialog-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h2>{dialogState.title}</h2>
-                <Button variant="secondary" onClick={closeDialog} style={{ padding: '6px 12px' }}>✕</Button>
-              </div>
-              <p style={{ marginBottom: '20px', whiteSpace: 'pre-wrap' }}>{dialogState.message}</p>
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                {dialogState.type === 'confirm' && (
-                  <Button variant="secondary" onClick={closeDialog}>Cancel</Button>
-                )}
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    if (dialogState.onConfirm) dialogState.onConfirm();
-                    closeDialog();
-                  }}
-                >
-                  {dialogState.type === 'confirm' ? 'Confirm' : 'OK'}
-                </Button>
-              </div>
-            </Card>
-          </div>
-        </div>
-      )}
+      {/* Custom Dialog - menggunakan DialogComponent dari useDialog hook */}
+      <DialogComponent />
 
       {/* Route Selection Dialog */}
       {showRouteDialog && (
@@ -1823,8 +1839,8 @@ const DeliveryOrders = () => {
                               <td style={{ padding: '12px', textAlign: 'center' }}>
                                 <Button
                                   variant="primary"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
+                                  onClick={(e?: React.MouseEvent<HTMLButtonElement>) => {
+                                    e?.stopPropagation();
                                     handleSelect();
                                   }}
                                   style={{ fontSize: '12px', padding: '4px 12px' }}

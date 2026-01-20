@@ -5,7 +5,8 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import NotificationBell from '../../../components/NotificationBell';
 import { storageService } from '../../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
+import { deleteTruckingItem, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { useDialog } from '../../../hooks/useDialog';
 import { generateInvoiceHtml } from '../../../pdf/invoice-pdf-template';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../../utils/actions';
 import { loadLogoAsBase64 } from '../../../utils/logo-loader';
@@ -29,7 +30,7 @@ const Accounting = () => {
     }));
   }, [invoiceNotifications]);
   const [viewingInvoice, setViewingInvoice] = useState<any | null>(null); // Store invoice being viewed
-  const [viewTemplateType, setViewTemplateType] = useState<'template1' | 'template2'>('template1'); // Template type for view
+  const [viewTemplateType, setViewTemplateType] = useState<'template1' | 'template2' | 'template3' | 'template4'>('template1'); // Template type for view
   const [toast, setToast] = useState<{ message: string; variant: 'success' | 'error' | 'info' } | null>(null);
   const [viewSJData, setViewSJData] = useState<{ signedDocument: string; signedDocumentName: string; sjNo: string } | null>(null);
   const [signatureViewer, setSignatureViewer] = useState<{ 
@@ -46,58 +47,16 @@ const Accounting = () => {
   const [salesOrders, setSalesOrders] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Custom Dialog state
-  const [dialogState, setDialogState] = useState<{
-    show: boolean;
-    type: 'alert' | 'confirm' | null;
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-  }>({
-    show: false,
-    type: null,
-    title: '',
-    message: '',
-  });
-
-  // Helper functions untuk dialog
+  // Custom Dialog - menggunakan hook terpusat
+  const { showAlert: showAlertBase, showConfirm: showConfirmBase, DialogComponent } = useDialog();
+  
+  // Wrapper untuk kompatibilitas dengan urutan parameter yang berbeda
   const showAlert = (message: string, title: string = 'Information') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'alert',
-      title,
-      message,
-    });
+    showAlertBase(message, title);
   };
-
+  
   const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'confirm',
-      title,
-      message,
-      onConfirm,
-      onCancel,
-    });
-  };
-
-  const closeDialog = () => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(false);
-    }
-    setDialogState({
-      show: false,
-      type: null,
-      title: '',
-      message: '',
-    });
+    showConfirmBase(message, onConfirm, onCancel, title);
   };
 
   useEffect(() => {
@@ -349,6 +308,8 @@ const Accounting = () => {
           itemSku: itemSku,
           qty: qty,
           price: pricePerUnit, // Harga per unit
+          unit: sjItem.unit || 'PCS', // Include unit
+          pot: 0, // Default POT untuk auto-generated dari SJ
         });
       }
     } 
@@ -367,6 +328,8 @@ const Accounting = () => {
           itemSku: product?.sku || product?.kode || product?.id || notifItem.product || '',
           qty: Number(notifItem.qty || 0),
           price: price,
+          unit: notifItem.unit || 'PCS', // Include unit
+          pot: 0, // Default POT untuk auto-generated dari notification
         });
       });
     }
@@ -698,6 +661,7 @@ const Accounting = () => {
         qty: Number(item.qty || 0),
         price: Number(item.price || 0),
         unit: item.unit || 'PCS', // Include unit
+        pot: Number(item.pot || 0), // Include POT (khusus trucking)
       }));
 
       // Use BOM from manualData if provided, otherwise calculate from items
@@ -747,7 +711,7 @@ const Accounting = () => {
           kDebet: bomData.kDebet || 0,
           kKredit: bomData.kKredit || 0,
           kembaliKeKasir: bomData.kembaliKeKasir || 0,
-          tandaTangan: manualData.templateType === 'template2' ? (manualData.tandaTangan || 'M Ali Audah') : '',
+          tandaTangan: (manualData.templateType === 'template2' || manualData.templateType === 'template3') ? (manualData.tandaTangan || 'M Ali Audah') : '',
         },
         status: 'OPEN' as const,
         paymentTerms: manualData.paymentTerms || 'TOP',
@@ -1146,6 +1110,7 @@ const Accounting = () => {
         qty: line.qty || 0,
         price: line.price || 0,
         unit: line.unit || 'PCS', // Include unit
+        pot: line.pot || 0, // Include POT (khusus trucking)
       })),
       bom: item.bom || {},
     };
@@ -1160,6 +1125,7 @@ const Accounting = () => {
       productMap,
       productCodeMap, // Pass product code map untuk kode item
       templateType: templateTypeOverride || item.templateType || 'template1', // Use override if provided, otherwise use item's templateType
+      hideSO: true, // Hide SO column khusus untuk trucking
     });
   };
 
@@ -1175,7 +1141,7 @@ const Accounting = () => {
     }
   };
 
-  const handleChangeViewTemplate = async (newTemplateType: 'template1' | 'template2') => {
+  const handleChangeViewTemplate = async (newTemplateType: 'template1' | 'template2' | 'template3' | 'template4') => {
     if (!viewingInvoice) return;
     try {
       setViewTemplateType(newTemplateType);
@@ -1407,30 +1373,48 @@ const Accounting = () => {
   };
 
   const handleDeleteInvoice = async (item: any) => {
-    showConfirm(
-      `Are you sure you want to delete invoice "${item.invoiceNo}"?`,
-      async () => {
-        try {
-          // Simpan tombstone ke audit log sebelum menghapus
-          await saveTombstoneToAuditLog(item, 'trucking_invoices');
-          
-          // Pakai helper function untuk safe delete (tombstone pattern)
-          const success = await safeDeleteItem('trucking_invoices', item.id, 'id');
-          
-          if (success) {
-            // Reload data
-            await loadData();
-            showAlert(`Invoice "${item.invoiceNo}" deleted successfully`, 'Success');
-          } else {
-            showAlert(`Error deleting invoice "${item.invoiceNo}". Please try again.`, 'Error');
+    try {
+      console.log('[Trucking Invoices] handleDeleteInvoice called for:', item?.invoiceNo, item?.id);
+      
+      if (!item || !item.invoiceNo) {
+        showAlert('Invoice tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[Trucking Invoices] Invoice missing ID:', item);
+        showAlert(`❌ Error: Invoice "${item.invoiceNo}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Invoice "${item.invoiceNo}"?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deleteTruckingItem('trucking_invoices', item.id, 'id');
+            
+            if (deleteResult.success) {
+              // Reload data
+              await loadData();
+              showAlert(`✅ Invoice "${item.invoiceNo}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[Trucking Invoices] Delete failed:', deleteResult.error);
+              showAlert(`❌ Error deleting invoice "${item.invoiceNo}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[Trucking Invoices] Error deleting invoice:', error);
+            showAlert(`❌ Error deleting invoice: ${error.message}`, 'Error');
           }
-        } catch (error: any) {
-          showAlert(`Error deleting invoice: ${error.message}`, 'Error');
-        }
-      },
-      undefined,
-      'Confirm Delete'
-    );
+        },
+        undefined,
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[Trucking Invoices] Error in handleDeleteInvoice:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
   };
 
   // Expense Actions
@@ -1440,30 +1424,50 @@ const Accounting = () => {
   };
 
   const handleDeleteExpense = async (item: any) => {
-    showConfirm(
-      `Delete expense: ${item.expenseNo}?`,
-      async () => {
-        try {
-          // Simpan tombstone ke audit log sebelum menghapus
-          await saveTombstoneToAuditLog(item, 'trucking_expenses');
-          
-          // Pakai helper function untuk safe delete (tombstone pattern)
-          const success = await safeDeleteItem('trucking_expenses', item.id, 'id');
-          
-          if (success) {
-            // Reload data dengan filter active items
-            await loadData();
-            showAlert(`Expense "${item.expenseNo}" deleted successfully`, 'Success');
-          } else {
-            showAlert(`Error deleting expense "${item.expenseNo}". Please try again.`, 'Error');
+    try {
+      console.log('[Trucking Invoices] handleDeleteExpense called for:', item?.expenseNo, item?.id);
+      
+      if (!item || !item.expenseNo) {
+        showAlert('Expense tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[Trucking Invoices] Expense missing ID:', item);
+        showAlert(`❌ Error: Expense "${item.expenseNo}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Expense "${item.expenseNo}"?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deleteTruckingItem('trucking_expenses', item.id, 'id');
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              const activeExpenses = await reloadTruckingData('trucking_expenses', setExpenses);
+              setExpenses(activeExpenses);
+              await loadData();
+              showAlert(`✅ Expense "${item.expenseNo}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[Trucking Invoices] Delete expense failed:', deleteResult.error);
+              showAlert(`❌ Error deleting expense "${item.expenseNo}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[Trucking Invoices] Error deleting expense:', error);
+            showAlert(`❌ Error deleting expense: ${error.message}`, 'Error');
           }
-        } catch (error: any) {
-          showAlert(`Error deleting expense: ${error.message}`, 'Error');
-        }
-      },
-      () => {},
-      'Delete Expense'
-    );
+        },
+        undefined,
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[Trucking Invoices] Error in handleDeleteExpense:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
   };
 
   const tabs = [
@@ -1866,6 +1870,40 @@ const Accounting = () => {
                     >
                       Template 2
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => handleChangeViewTemplate('template3')}
+                      style={{
+                        padding: '6px 12px',
+                        border: 'none',
+                        borderRadius: '4px',
+                        backgroundColor: viewTemplateType === 'template3' ? 'var(--primary-color)' : 'transparent',
+                        color: viewTemplateType === 'template3' ? '#fff' : 'var(--text-primary)',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: viewTemplateType === 'template3' ? '600' : '400',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      Template 3
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleChangeViewTemplate('template4')}
+                      style={{
+                        padding: '6px 12px',
+                        border: 'none',
+                        borderRadius: '4px',
+                        backgroundColor: viewTemplateType === 'template4' ? 'var(--primary-color)' : 'transparent',
+                        color: viewTemplateType === 'template4' ? '#fff' : 'var(--text-primary)',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: viewTemplateType === 'template4' ? '600' : '400',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      Template 4
+                    </button>
                   </div>
                   <Button variant="primary" onClick={handleSaveToPDF}>
                     💾 Save to PDF
@@ -2063,27 +2101,8 @@ const Accounting = () => {
 
       {/* Edit Invoice Dialog */}
       {/* Custom Dialog */}
-      {dialogState.show && (
-        <div className="dialog-overlay" onClick={closeDialog}>
-          <div className="dialog-card" onClick={(e) => e.stopPropagation()}>
-            <div className={`dialog-icon ${dialogState.type === 'alert' ? 'info' : 'warning'}`}>
-              {dialogState.type === 'alert' ? 'ℹ️' : '⚠️'}
-            </div>
-            <h3 className="dialog-title">{dialogState.title}</h3>
-            <p className="dialog-message">{dialogState.message}</p>
-            <div className="dialog-actions">
-              <Button variant="primary" onClick={dialogState.onConfirm || closeDialog}>
-                {dialogState.type === 'alert' ? 'OK' : 'Confirm'}
-              </Button>
-              {dialogState.type === 'confirm' && (
-                <Button variant="secondary" onClick={dialogState.onCancel || closeDialog}>
-                  Cancel
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Custom Dialog - menggunakan hook terpusat */}
+      <DialogComponent />
 
       {showCreateInvoiceDialog && (
         <CreateInvoiceDialog
@@ -2319,14 +2338,14 @@ const CreateInvoiceDialog = ({
   const [autoCustomer, setAutoCustomer] = useState('');
   const [autoCustomerAddress, setAutoCustomerAddress] = useState('');
   const [autoCustomerNpwp, setAutoCustomerNpwp] = useState('');
-  const [autoItems, setAutoItems] = useState<Array<{ sku: string; product: string; qty: number; price: number; unit?: string }>>([]);
+  const [autoItems, setAutoItems] = useState<Array<{ sku: string; product: string; qty: number; price: number; unit?: string; pot?: number }>>([]);
   const [autoNotes, setAutoNotes] = useState('');
   
   // Manual input fields
   const [manualCustomer, setManualCustomer] = useState('');
   const [manualCustomerAddress, setManualCustomerAddress] = useState('');
   const [manualCustomerNpwp, setManualCustomerNpwp] = useState('');
-  const [manualItems, setManualItems] = useState<Array<{ sku: string; product: string; qty: number; price: number; unit?: string }>>([{ sku: '', product: '', qty: 1, price: 0, unit: 'PCS' }]);
+  const [manualItems, setManualItems] = useState<Array<{ sku: string; product: string; qty: number; price: number; unit?: string; pot?: number }>>([{ sku: '', product: '', qty: 1, price: 0, unit: 'PCS', pot: 0 }]);
   const [manualNotes, setManualNotes] = useState('');
   const [tandaTangan, setTandaTangan] = useState('M Ali Audah'); // Default untuk Template 2
   
@@ -2412,7 +2431,7 @@ const CreateInvoiceDialog = ({
           setAutoCustomer(customers.join(', ') || '');
           
           // Gabungkan semua items dari semua DO yang dipilih
-          const allItems: Array<{ sku: string; product: string; qty: number; price: number; unit?: string }> = [];
+          const allItems: Array<{ sku: string; product: string; qty: number; price: number; unit?: string; pot?: number }> = [];
           let totalDeal = 0;
           
           selectedDOItems.forEach((doItem: any) => {
@@ -2431,6 +2450,7 @@ const CreateInvoiceDialog = ({
                 qty: qty,
                 price: pricePerUnit,
                 unit: item.unit || 'PCS',
+                pot: 0, // Default POT untuk auto-generated dari DO
               });
             });
           });
@@ -2490,7 +2510,7 @@ const CreateInvoiceDialog = ({
   };
 
   const handleAddManualItem = () => {
-    setManualItems([...manualItems, { sku: '', product: '', qty: 1, price: 0, unit: 'PCS' }]);
+    setManualItems([...manualItems, { sku: '', product: '', qty: 1, price: 0, unit: 'PCS', pot: 0 }]);
   };
 
   const handleRemoveManualItem = (index: number) => {
@@ -2504,7 +2524,7 @@ const CreateInvoiceDialog = ({
     recalculateCalculation(updated);
   };
   
-  const recalculateCalculation = (items: Array<{ sku: string; product: string; qty: number; price: number; unit?: string }>) => {
+  const recalculateCalculation = (items: Array<{ sku: string; product: string; qty: number; price: number; unit?: string; pot?: number }>) => {
     const subtotal = items.reduce((sum, item) => sum + (Number(item.qty || 0) * Number(item.price || 0)), 0);
     const discount = calculation.discount || 0;
     const tax = calculation.tax || 0;
@@ -2596,7 +2616,7 @@ const CreateInvoiceDialog = ({
           paymentTerms,
           topDays,
           templateType,
-          tandaTangan: templateType === 'template2' ? tandaTangan : '',
+          tandaTangan: (templateType === 'template2' || templateType === 'template3') ? tandaTangan : '',
         }
       });
     }
@@ -3332,6 +3352,13 @@ const CreateInvoiceDialog = ({
                       placeholder="Price"
                     />
                   </div>
+                  <div style={{ flex: 1 }}>
+                    <Input
+                      value={String(item.pot || 0)}
+                      onChange={(val) => handleManualItemChange(index, 'pot', Number(val) || 0)}
+                      placeholder="POT"
+                    />
+                  </div>
                   {manualItems.length > 1 && (
                     <Button 
                       variant="secondary" 
@@ -3590,6 +3617,42 @@ const CreateInvoiceDialog = ({
                 >
                   Template 2 (Baru) ✨
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setTemplateType('template3')}
+                  style={{
+                    flex: 1,
+                    padding: '12px 16px',
+                    border: `2px solid ${templateType === 'template3' ? 'var(--primary-color)' : 'var(--border-color)'}`,
+                    borderRadius: '6px',
+                    backgroundColor: templateType === 'template3' ? 'var(--primary-color)' : 'var(--bg-primary)',
+                    color: templateType === 'template3' ? '#fff' : 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: templateType === 'template3' ? '600' : '400',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  Template 3 (Tanpa Terbilang) ✨
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTemplateType('template4')}
+                  style={{
+                    flex: 1,
+                    padding: '12px 16px',
+                    border: `2px solid ${templateType === 'template4' ? 'var(--primary-color)' : 'var(--border-color)'}`,
+                    borderRadius: '6px',
+                    backgroundColor: templateType === 'template4' ? 'var(--primary-color)' : 'var(--bg-primary)',
+                    color: templateType === 'template4' ? '#fff' : 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: templateType === 'template4' ? '600' : '400',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  Template 4 (Terbilang Bawah) ✨
+                </button>
               </div>
             </div>
 
@@ -3716,8 +3779,8 @@ const CreateInvoiceDialog = ({
               </div>
             </div>
 
-            {/* Tanda Tangan Field - Hanya untuk Template 2 */}
-            {templateType === 'template2' && (
+            {/* Tanda Tangan Field - Hanya untuk Template 2 dan Template 3 */}
+            {(templateType === 'template2' || templateType === 'template3') && (
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
                   Tanda Tangan (Hormat Kami)
@@ -3801,14 +3864,18 @@ const EditInvoiceDialog = ({
   onClose: () => void; 
   onSave: (data: any) => Promise<void> 
 }) => {
-  const [lines, setLines] = useState<any[]>(invoice.lines || []);
+  // Initialize lines dengan memastikan semua punya POT
+  const invoiceLinesArray = Array.isArray(invoice.lines) ? invoice.lines : [];
+  const initialLines = invoiceLinesArray.map((line: any) => ({
+    ...line,
+    pot: line.pot !== undefined ? line.pot : 0, // Ensure POT exists, default to 0
+  }));
+  const [lines, setLines] = useState<any[]>(initialLines);
   const [qtyInputValues, setQtyInputValues] = useState<{ [key: number]: string }>({});
   const [priceInputValues, setPriceInputValues] = useState<{ [key: number]: string }>({});
   
   // Initialize BOM dengan menghitung discountPercent dan taxPercent dari nilai yang ada
   const initialBom = invoice.bom || {};
-  // Ensure invoice.lines is always an array
-  const invoiceLinesArray = Array.isArray(invoice.lines) ? invoice.lines : [];
   const initialSubtotal = invoiceLinesArray.reduce((sum: number, line: any) => 
     sum + (Number(line.qty || 0) * Number(line.price || 0)), 0
   );
@@ -3837,7 +3904,7 @@ const EditInvoiceDialog = ({
   const [topDays, setTopDays] = useState(invoice.topDays || 30);
   const [notes, setNotes] = useState(invoice.notes || '');
   const [templateType, setTemplateType] = useState(invoice.templateType || 'template1');
-  const [tandaTangan, setTandaTangan] = useState(invoice.bom?.tandaTangan || (invoice.templateType === 'template2' ? 'M Ali Audah' : ''));
+  const [tandaTangan, setTandaTangan] = useState(invoice.bom?.tandaTangan || ((invoice.templateType === 'template2' || invoice.templateType === 'template3') ? 'M Ali Audah' : ''));
 
   // Helper function to calculate due date based on payment terms
   const calculateDueDate = (terms: string, days: number): string => {
@@ -3900,7 +3967,7 @@ const EditInvoiceDialog = ({
   };
 
   const handleAddLine = () => {
-    setLines([...lines, { itemSku: '', qty: 0, price: 0, subtotal: 0, unit: 'PCS' }]);
+    setLines([...lines, { itemSku: '', qty: 0, price: 0, subtotal: 0, unit: 'PCS', pot: 0 }]);
   };
 
   const handleRemoveLine = (index: number) => {
@@ -3933,7 +4000,7 @@ const EditInvoiceDialog = ({
     // Pastikan tandaTangan disimpan ke bom jika template2
     const updatedBom = {
       ...bom,
-      ...(templateType === 'template2' ? { tandaTangan: tandaTangan || 'M Ali Audah' } : {}),
+      ...((templateType === 'template2' || templateType === 'template3') ? { tandaTangan: tandaTangan || 'M Ali Audah' } : {}),
     };
     
     onSave({
@@ -3965,6 +4032,7 @@ const EditInvoiceDialog = ({
                   <th style={{ padding: '8px', textAlign: 'right' }}>Qty</th>
                   <th style={{ padding: '8px', textAlign: 'right' }}>Unit</th>
                   <th style={{ padding: '8px', textAlign: 'right' }}>Price</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>POT</th>
                   <th style={{ padding: '8px', textAlign: 'right' }}>Subtotal</th>
                   <th style={{ padding: '8px', textAlign: 'center' }}>Action</th>
                 </tr>
@@ -4173,6 +4241,29 @@ const EditInvoiceDialog = ({
                               input.value = newVal;
                               handleLineChange(idx, 'price', Number(newVal));
                             }
+                          }}
+                          placeholder="0"
+                          style={{
+                            width: '100%',
+                            padding: '6px',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '4px',
+                            backgroundColor: 'var(--bg-primary)',
+                            color: 'var(--text-primary)',
+                            textAlign: 'right',
+                          }}
+                        />
+                      </td>
+                      <td style={{ padding: '8px' }}>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={line.pot !== undefined && line.pot !== null && line.pot !== 0 ? String(line.pot) : ''}
+                          onChange={(e) => {
+                            let val = e.target.value;
+                            val = val.replace(/[^\d.,]/g, '');
+                            const cleaned = removeLeadingZero(val);
+                            handleLineChange(idx, 'pot', cleaned === '' ? 0 : Number(cleaned) || 0);
                           }}
                           placeholder="0"
                           style={{
@@ -4572,29 +4663,47 @@ const EditInvoiceDialog = ({
               >
                 Template 1 (Default)
               </button>
-              <button
-                type="button"
-                onClick={() => setTemplateType('template2')}
-                style={{
-                  flex: 1,
-                  padding: '12px 16px',
-                  border: `2px solid ${templateType === 'template2' ? 'var(--primary-color)' : 'var(--border-color)'}`,
-                  borderRadius: '6px',
-                  backgroundColor: templateType === 'template2' ? 'var(--primary-color)' : 'var(--bg-primary)',
-                  color: templateType === 'template2' ? '#fff' : 'var(--text-primary)',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: templateType === 'template2' ? '600' : '400',
-                  transition: 'all 0.2s',
-                }}
-              >
-                Template 2 (Baru) ✨
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => setTemplateType('template2')}
+                  style={{
+                    flex: 1,
+                    padding: '12px 16px',
+                    border: `2px solid ${templateType === 'template2' ? 'var(--primary-color)' : 'var(--border-color)'}`,
+                    borderRadius: '6px',
+                    backgroundColor: templateType === 'template2' ? 'var(--primary-color)' : 'var(--bg-primary)',
+                    color: templateType === 'template2' ? '#fff' : 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: templateType === 'template2' ? '600' : '400',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  Template 2 (Baru) ✨
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTemplateType('template3')}
+                  style={{
+                    flex: 1,
+                    padding: '12px 16px',
+                    border: `2px solid ${templateType === 'template3' ? 'var(--primary-color)' : 'var(--border-color)'}`,
+                    borderRadius: '6px',
+                    backgroundColor: templateType === 'template3' ? 'var(--primary-color)' : 'var(--bg-primary)',
+                    color: templateType === 'template3' ? '#fff' : 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: templateType === 'template3' ? '600' : '400',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  Template 3 (Tanpa Terbilang) ✨
+                </button>
+              </div>
           </div>
 
-          {/* Tanda Tangan Field - Hanya untuk Template 2 */}
-          {templateType === 'template2' && (
+          {/* Tanda Tangan Field - Hanya untuk Template 2 dan Template 3 */}
+          {(templateType === 'template2' || templateType === 'template3') && (
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
                 Tanda Tangan (Hormat Kami)

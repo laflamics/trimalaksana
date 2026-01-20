@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import Card from '../../../components/Card';
 import Table from '../../../components/Table';
-import Button from '../../../components/Button';
-import { storageService } from '../../../services/storage';
+import { storageService, extractStorageValue } from '../../../services/storage';
+import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 
 interface DeliverySchedule {
@@ -24,18 +24,31 @@ const DeliverySchedules = () => {
 
   useEffect(() => {
     loadSchedules();
-    const interval = setInterval(loadSchedules, 10000); // Refresh setiap 10 detik
+    // Optimasi: Refresh setiap 30 detik untuk mengurangi bandwidth (sebelumnya 10 detik)
+    const interval = setInterval(loadSchedules, 30000); // 30 detik - cukup untuk schedule updates
     return () => clearInterval(interval);
   }, []);
 
   const loadSchedules = async () => {
-    const orders = await storageService.get<any[]>('trucking_delivery_orders') || [];
-    const plans = await storageService.get<any[]>('trucking_route_plans') || [];
-    
-    const schedulesData: DeliverySchedule[] = [];
-    
-    // Generate schedules dari delivery orders
-    orders.forEach(order => {
+    try {
+      // Load data menggunakan storageService untuk membaca dari file storage juga
+      const [ordersRaw, plansRaw] = await Promise.all([
+        storageService.get<any[]>('trucking_delivery_orders'),
+        storageService.get<any[]>('trucking_route_plans'),
+      ]);
+      
+      // CRITICAL: Extract array from storage wrapper if needed
+      const ordersData = extractStorageValue(ordersRaw);
+      const plansData = extractStorageValue(plansRaw);
+      
+      // Filter out deleted items menggunakan helper function
+      const orders = filterActiveItems(ordersData);
+      const plans = filterActiveItems(plansData);
+      
+      const schedulesData: DeliverySchedule[] = [];
+      
+      // Generate schedules dari delivery orders
+      orders.forEach(order => {
       if (order.scheduledDate) {
         schedulesData.push({
           id: order.id,
@@ -75,11 +88,14 @@ const DeliverySchedules = () => {
       }
     });
 
-    setSchedules(schedulesData.sort((a, b) => {
-      const dateA = new Date(`${a.scheduledDate} ${a.scheduledTime}`);
-      const dateB = new Date(`${b.scheduledDate} ${b.scheduledTime}`);
-      return dateA.getTime() - dateB.getTime();
-    }));
+      setSchedules(schedulesData.sort((a, b) => {
+        const dateA = new Date(`${a.scheduledDate} ${a.scheduledTime}`);
+        const dateB = new Date(`${b.scheduledDate} ${b.scheduledTime}`);
+        return dateA.getTime() - dateB.getTime();
+      }));
+    } catch (error: any) {
+      console.error('Error loading delivery schedules:', error);
+    }
   };
 
   const filteredSchedules = useMemo(() => {

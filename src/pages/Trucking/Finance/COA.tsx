@@ -5,7 +5,8 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
-import { filterActiveItems } from '../../../utils/data-persistence-helper';
+import { deleteTruckingItem, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { useDialog } from '../../../hooks/useDialog';
 import '../../../styles/common.css';
 
 interface Account {
@@ -26,60 +27,21 @@ const COA = () => {
     type: 'Asset',
     balance: 0,
   });
-  const [dialogState, setDialogState] = useState<{
-    show: boolean;
-    type: 'alert' | 'confirm' | null;
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-  }>({
-    show: false,
-    type: null,
-    title: '',
-    message: '',
-  });
+  // Custom Dialog - menggunakan hook terpusat
+  const { showAlert: showAlertBase, showConfirm: showConfirmBase, DialogComponent } = useDialog();
+  
+  // Wrapper untuk kompatibilitas dengan urutan parameter yang berbeda
+  const showAlert = (title: string, message: string) => {
+    showAlertBase(message, title);
+  };
+  
+  const showConfirm = (title: string, message: string, onConfirm: () => void, onCancel?: () => void) => {
+    showConfirmBase(message, onConfirm, onCancel, title);
+  };
 
   useEffect(() => {
     loadData();
   }, []);
-
-  const showAlert = (title: string, message: string) => {
-    setDialogState({
-      show: true,
-      type: 'alert',
-      title,
-      message,
-    });
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-  };
-
-  const showConfirm = (title: string, message: string, onConfirm: () => void) => {
-    setDialogState({
-      show: true,
-      type: 'confirm',
-      title,
-      message,
-      onConfirm,
-    });
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-  };
-
-  const closeDialog = () => {
-    setDialogState({
-      show: false,
-      type: null,
-      title: '',
-      message: '',
-    });
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(false);
-    }
-  };
 
   const loadData = async () => {
     // Load journal entries dulu
@@ -382,22 +344,44 @@ const COA = () => {
   };
 
   const handleDelete = async (item: Account) => {
-    showConfirm(
-      'Delete Account',
-      `Delete Account: ${item.code} - ${item.name}?`,
-      async () => {
-        try {
-          // Ensure accounts is always an array
-          const accountsArray = Array.isArray(accounts) ? accounts : [];
-          const updated = accountsArray.filter(a => a.code !== item.code);
-          await storageService.set('trucking_accounts', updated);
-          setAccounts(updated);
-          await loadData(); // Reload untuk update balances
-        } catch (error: any) {
-          showAlert('Error', `Error deleting account: ${error.message}`);
-        }
+    try {
+      console.log('[Trucking COA] handleDelete called for:', item?.code, item?.name);
+      
+      if (!item || !item.code) {
+        showAlert('Error', 'Account tidak valid. Mohon coba lagi.');
+        return;
       }
-    );
+      
+      showConfirm(
+        'Safe Delete Confirmation',
+        `Hapus Account "${item.code} - ${item.name}"?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
+            // COA menggunakan 'code' sebagai ID field, bukan 'id'
+            const deleteResult = await deleteTruckingItem('trucking_accounts', item.code, 'code');
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              const activeAccounts = await reloadTruckingData('trucking_accounts', setAccounts);
+              setAccounts(activeAccounts);
+              await loadData(); // Reload untuk update balances
+              showAlert('Success', `✅ Account "${item.code} - ${item.name}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`);
+            } else {
+              console.error('[Trucking COA] Delete failed:', deleteResult.error);
+              showAlert('Error', `❌ Error deleting account "${item.code} - ${item.name}": ${deleteResult.error || 'Unknown error'}`);
+            }
+          } catch (error: any) {
+            console.error('[Trucking COA] Error deleting account:', error);
+            showAlert('Error', `❌ Error deleting account: ${error.message}`);
+          }
+        },
+        undefined
+      );
+    } catch (error: any) {
+      console.error('[Trucking COA] Error in handleDelete:', error);
+      showAlert('Error', `Error: ${error.message}`);
+    }
   };
 
   // Calculate account balances from journal entries
@@ -588,13 +572,9 @@ const COA = () => {
     ];
     
     const showPreviewDialog = () => {
-      setDialogState({
-        show: true,
-        type: 'confirm',
-        title: '📋 Format Excel untuk Import COA',
-        message: `Pastikan file Excel Anda memiliki header berikut:\n\n${exampleHeaders.join(' | ')}\n\nContoh data:\n${exampleData.map((row, idx) => `${idx + 1}. ${exampleHeaders.map(h => String(row[h as keyof typeof row] || '')).join(' | ')}`).join('\n')}\n\n⚠️ Catatan:\n- Header harus ada di baris pertama\n- Account Code harus unik\n- Type: Asset, Liability, Equity, Revenue, atau Expense\n\nKlik "Download Template" untuk mendapatkan file Excel template, atau "Lanjutkan" untuk memilih file Excel yang sudah Anda siapkan.`,
-        onConfirm: () => {
-          closeDialog();
+      showConfirm(
+        `Pastikan file Excel Anda memiliki header berikut:\n\n${exampleHeaders.join(' | ')}\n\nContoh data:\n${exampleData.map((row, idx) => `${idx + 1}. ${exampleHeaders.map(h => String(row[h as keyof typeof row] || '')).join(' | ')}`).join('\n')}\n\n⚠️ Catatan:\n- Header harus ada di baris pertama\n- Account Code harus unik\n- Type: Asset, Liability, Equity, Revenue, atau Expense\n\nKlik "Download Template" untuk mendapatkan file Excel template, atau "Lanjutkan" untuk memilih file Excel yang sudah Anda siapkan.`,
+        () => {
           const input = document.createElement('input');
           input.type = 'file';
           input.accept = '.xlsx,.xls,.csv';
@@ -690,9 +670,10 @@ const COA = () => {
       }
     };
     input.click();
-          },
-        onCancel: () => closeDialog(),
-      });
+        },
+        () => {}, // onCancel
+        'Format Excel Preview'
+      );
     };
     
     showPreviewDialog();
@@ -842,39 +823,8 @@ const COA = () => {
         </div>
       )}
 
-      {/* Custom Dialog untuk Alert/Confirm */}
-      {dialogState.show && (
-        <div className="dialog-overlay" onClick={dialogState.type === 'alert' ? closeDialog : undefined} style={{ zIndex: 10000 }}>
-          <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
-            <div style={{ marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)' }}>
-                {dialogState.title}
-              </h3>
-            </div>
-            
-            <div style={{ marginBottom: '24px', fontSize: '14px', color: 'var(--text-primary)', whiteSpace: 'pre-line' }}>
-              {dialogState.message}
-            </div>
-            
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              {dialogState.type === 'confirm' && (
-                <Button variant="secondary" onClick={() => {
-                  if (dialogState.onCancel) dialogState.onCancel();
-                  closeDialog();
-                }}>
-                  Cancel
-                </Button>
-              )}
-              <Button variant="primary" onClick={() => {
-                if (dialogState.onConfirm) dialogState.onConfirm();
-                if (dialogState.type === 'alert') closeDialog();
-              }}>
-                {dialogState.type === 'alert' ? 'OK' : 'Confirm'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Custom Dialog - menggunakan hook terpusat */}
+      <DialogComponent />
     </div>
   );
 };

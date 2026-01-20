@@ -6,6 +6,8 @@
 export type SyncPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
 
+import { websocketClient } from './websocket-client';
+
 export interface SyncOperation {
   id: string;
   key: string;
@@ -43,6 +45,15 @@ class GTSync {
    */
   private async checkInitialSyncStatus() {
     try {
+      // FIX: Cek business context - hanya download jika business context adalah general-trading
+      const selectedBusiness = localStorage.getItem('selectedBusiness');
+      if (selectedBusiness !== 'general-trading') {
+        // Bukan GT business, skip download dan set status ke synced
+        this.syncStatus = 'synced';
+        this.emitStatusChange('synced');
+        return;
+      }
+      
       const storageConfig = JSON.parse(localStorage.getItem('storage_config') || '{"type":"local"}');
       
       if (storageConfig.type === 'server' && storageConfig.serverUrl) {
@@ -51,8 +62,9 @@ class GTSync {
         this.emitStatusChange('syncing');
         
         try {
-          // Download GT sales orders from server
+          // Download essential GT data from server
           await this.downloadServerData('gt_salesOrders', storageConfig.serverUrl);
+          await this.downloadServerData('userAccessControl', storageConfig.serverUrl);
           
           // Check if there are unsynced local changes
           const unsyncedCount = this.getUnsyncedCount();
@@ -63,14 +75,11 @@ class GTSync {
             // Has local data but server is empty - this is normal for first device
             this.syncStatus = 'synced';
             this.emitStatusChange('synced');
-            console.log('[GTSync] Local data exists, server empty - marking as synced (normal for first device)');
           }
         } catch (error) {
-          console.error('[GTSync] Server sync failed:', error);
           // If server sync fails but we have local data, still mark as synced for local use
           this.syncStatus = 'synced';
           this.emitStatusChange('synced');
-          console.log('[GTSync] Server sync failed but local data available - marking as synced for local use');
         }
       } else {
         // Local mode, set status to synced (no server sync needed)
@@ -78,32 +87,49 @@ class GTSync {
         this.emitStatusChange('synced');
       }
     } catch (error) {
-      console.error('[GTSync] Error checking initial sync status:', error);
       this.syncStatus = 'error';
       this.emitStatusChange('error');
     }
   }
 
   private initializeWebSocket() {
-    // WebSocket untuk real-time sync (optional)
+    // WebSocket untuk real-time sync (wajib untuk performa optimal)
     try {
-      const wsUrl = localStorage.getItem('websocket_url') || 'ws://localhost:3001/ws';
+      // Check if WebSocket is explicitly enabled
+      const wsEnabled = localStorage.getItem('websocket_enabled') === 'true';
+      if (!wsEnabled) {
+        // WebSocket disabled - use polling fallback silently
+        return;
+      }
+      
+      // Use fixed WebSocket URL
+      const wsUrl = 'ws://server-tljp.tail75a421.ts.net:8888/ws';
+      
       this.ws = new WebSocket(wsUrl);
       
       this.ws.onopen = () => {
-        console.log('[GTSync] WebSocket connected');
       };
       
       this.ws.onmessage = (event) => {
-        const message = JSON.parse(event.data);
-        this.handleWebSocketMessage(message);
+        try {
+          const message = JSON.parse(event.data);
+          this.handleWebSocketMessage(message);
+        } catch (e) {
+        }
       };
       
       this.ws.onerror = () => {
-        console.warn('[GTSync] WebSocket connection failed, using polling fallback');
+        // Silently handle WebSocket errors - polling will be used instead
+        this.ws = null;
+      };
+      
+      this.ws.onclose = () => {
+        // WebSocket closed - will use polling
+        this.ws = null;
       };
     } catch (error) {
-      console.warn('[GTSync] WebSocket not available, using polling fallback');
+      // Silently fail - polling will be used instead
+      this.ws = null;
     }
   }
 
@@ -160,7 +186,7 @@ class GTSync {
       if (this.syncQueue.length > 0 && this.syncStatus !== 'syncing') {
         await this.processQueue();
       }
-    }, 2000); // Process every 2 seconds
+    }, 10000); // OPTIMIZED: Process every 10 seconds (sebelumnya 2 detik) - kurangi bandwidth usage
   }
 
   private async processQueue() {
@@ -179,7 +205,6 @@ class GTSync {
         this.emitStatusChange('synced');
       }
     } catch (error) {
-      console.error('[GTSync] Queue processing error:', error);
       this.syncStatus = 'error';
       this.emitStatusChange('error');
     }
@@ -214,37 +239,26 @@ class GTSync {
         
         this.retryTimeouts.set(operation.id, timeoutId);
       } else {
-        console.error(`[GTSync] Max retries exceeded for operation ${operation.id}:`, error);
         throw error;
       }
     }
   }
 
-  private async syncToServer(key: string, data: any, serverUrl: string): Promise<void> {
-    // Upload local changes to server
-    const response = await fetch(`${serverUrl}/api/storage/${encodeURIComponent(key)}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        value: data,
-        timestamp: Date.now()
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Server sync failed: ${response.status} ${response.statusText}`);
+  private async syncToServer(key: string, data: any, _serverUrl: string): Promise<void> {
+    // Upload local changes to server via WebSocket (lebih cepat, tidak pakai HTTP/Vercel)
+    const ready = await websocketClient.waitUntilReady(10000);
+    if (!ready) {
+      throw new Error('WebSocket not available. Please enable WebSocket in settings.');
     }
+    
+    await websocketClient.post(key, data, Date.now());
   }
 
   /**
    * Download data from server and merge with local data
    */
-  private async downloadServerData(key: string, serverUrl: string): Promise<void> {
+  private async downloadServerData(key: string, _serverUrl: string): Promise<void> {
     try {
-      console.log(`[GTSync] Downloading ${key} from server...`);
-      
       // Both server and local use general-trading/ with dash
       const storageKey = `general-trading/${key}`;
       const currentData = localStorage.getItem(storageKey);
@@ -255,41 +269,21 @@ class GTSync {
           const parsed = JSON.parse(currentData);
           currentOrders = parsed.value || parsed || [];
         } catch (e) {
-          console.warn('[GTSync] Invalid local data format');
         }
       }
       
-      console.log(`[GTSync] Storage key: ${storageKey}`);
-      console.log(`[GTSync] Current local orders: ${currentOrders.length}`);
-      
-      // Download from server (server also uses general-trading/ with dash)
-      const encodedKey = encodeURIComponent(storageKey);
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-      
-      const response = await fetch(`${serverUrl}/api/storage/${encodedKey}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        console.error(`[GTSync] Server responded with ${response.status}: ${response.statusText}`);
-        throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+      // Download from server via WebSocket (lebih cepat)
+      const ready = await websocketClient.waitUntilReady(10000);
+      if (!ready) {
+        throw new Error('WebSocket not available. Please enable WebSocket in settings.');
       }
       
-      const serverData = await response.json();
-      console.log(`[GTSync] Server response received for ${key}:`);
-      console.log(`[GTSync] Response type: ${typeof serverData}`);
-      console.log(`[GTSync] Response is array: ${Array.isArray(serverData)}`);
+      const serverDataRaw = await websocketClient.get(storageKey);
       
-      if (serverData && typeof serverData === 'object' && !Array.isArray(serverData)) {
-        console.log(`[GTSync] Response object keys: ${Object.keys(serverData)}`);
+      // WebSocket returns {value: ..., timestamp: ...} format
+      let serverData = serverDataRaw;
+      if (serverDataRaw && typeof serverDataRaw === 'object' && 'value' in serverDataRaw) {
+        serverData = serverDataRaw.value;
       }
       
       // Process server data with multiple extraction methods
@@ -298,54 +292,25 @@ class GTSync {
       // Method 1: Wrapped format with .value property
       if (serverData && serverData.value && Array.isArray(serverData.value)) {
         serverOrders = serverData.value;
-        console.log(`[GTSync] Extracted ${serverOrders.length} orders from serverData.value (array)`);
       }
       // Method 2: Direct array format
       else if (Array.isArray(serverData)) {
         serverOrders = serverData;
-        console.log(`[GTSync] Extracted ${serverOrders.length} orders from direct array`);
       }
       // Method 3: Data property format
       else if (serverData && serverData.data && Array.isArray(serverData.data)) {
         serverOrders = serverData.data;
-        console.log(`[GTSync] Extracted ${serverOrders.length} orders from serverData.data`);
       }
       // Method 4: Check for other common property names
       else if (serverData && serverData.items && Array.isArray(serverData.items)) {
         serverOrders = serverData.items;
-        console.log(`[GTSync] Extracted ${serverOrders.length} orders from serverData.items`);
       }
       // Method 5: Check if .value is an empty object (server has no data)
       else if (serverData && serverData.value && typeof serverData.value === 'object' && Object.keys(serverData.value).length === 0) {
-        console.log(`[GTSync] Server has no GT data yet (empty object in value)`);
-        console.log(`[GTSync] This is normal if GT data hasn't been uploaded to server`);
         return;
-      }
-      else {
-        console.log(`[GTSync] Could not extract orders from server response`);
-        console.log(`[GTSync] Server response structure:`, serverData);
-        
-        // Check if server response indicates no data vs error
-        if (serverData && serverData.value !== undefined) {
-          console.log(`[GTSync] Server response indicates no GT data available`);
-          console.log(`[GTSync] Value type: ${typeof serverData.value}, Value: ${JSON.stringify(serverData.value)}`);
-        }
       }
       
       if (serverOrders.length === 0) {
-        console.log(`[GTSync] No orders found in server response for ${key}`);
-        
-        // Provide helpful information about why no data was found
-        if (serverData && serverData.value && typeof serverData.value === 'object' && !Array.isArray(serverData.value)) {
-          if (Object.keys(serverData.value).length === 0) {
-            console.log(`[GTSync] ℹ️  Server has empty object - GT data not uploaded yet`);
-            console.log(`[GTSync] 💡 This is normal if this is the first device or GT data hasn't synced to server`);
-          } else {
-            console.log(`[GTSync] ⚠️  Server has object but not array format`);
-            console.log(`[GTSync] 🔧 Server data format may need investigation`);
-          }
-        }
-        
         return;
       }
       
@@ -362,7 +327,6 @@ class GTSync {
         if (!exists) {
           mergedOrders.push(serverOrder);
           newCount++;
-          console.log(`[GTSync] Added: ${serverOrder.soNo} - ${serverOrder.customer}`);
         }
       });
       
@@ -389,10 +353,7 @@ class GTSync {
         }
       }));
       
-      console.log(`[GTSync] Successfully synced ${key}: ${newCount} new items added`);
-      
     } catch (error) {
-      console.error(`[GTSync] Failed to download ${key} from server:`, error);
       throw error;
     }
   }
@@ -412,21 +373,18 @@ class GTSync {
     
     try {
       // Download all GT data types
-      const dataTypes = ['gt_salesOrders', 'gt_quotations', 'gt_products', 'gt_customers', 'gt_suppliers'];
+      const dataTypes = ['gt_salesOrders', 'gt_quotations', 'gt_products', 'gt_customers', 'gt_suppliers', 'userAccessControl'];
       
       for (const dataType of dataTypes) {
         try {
           await this.downloadServerData(dataType, storageConfig.serverUrl);
         } catch (error) {
-          console.warn(`[GTSync] Failed to download ${dataType}:`, error);
           // Continue with other data types
         }
       }
       
       this.syncStatus = 'synced';
       this.emitStatusChange('synced');
-      
-      console.log('[GTSync] Force download completed successfully');
       
     } catch (error) {
       this.syncStatus = 'error';
@@ -540,7 +498,6 @@ class GTSync {
       try {
         callback(status);
       } catch (error) {
-        console.error('[GTSync] Error in status change callback:', error);
       }
     });
   }
@@ -551,7 +508,6 @@ class GTSync {
       try {
         callback(data);
       } catch (error) {
-        console.error('[GTSync] Error in storage change callback:', error);
       }
     });
   }

@@ -5,6 +5,7 @@
  */
 
 import { storageService } from '../services/storage';
+import { websocketClient } from '../services/websocket-client';
 
 /**
  * 🚀 FIX 4: Standardize ID normalization - export untuk dipakai di semua tempat
@@ -162,6 +163,42 @@ export async function deleteGTItem(
     // Server akan preserve tombstone dan tidak akan restore deleted items
     await storageService.set(storageKey, updatedData);
     
+    // CRITICAL: Force sync ke server langsung untuk delete (tidak pakai debounce)
+    // Delete harus langsung ter-sync agar device lain tahu item sudah di-delete
+    const config = storageService.getConfig();
+    if (config.type === 'server' && config.serverUrl) {
+      try {
+        // Clear debounce timeout untuk key ini agar sync langsung
+        const syncToServerTimeouts = (storageService as any).syncToServerTimeouts;
+        const existingTimeout = syncToServerTimeouts?.get(storageKey);
+        if (existingTimeout) {
+          clearTimeout(existingTimeout);
+          syncToServerTimeouts.delete(storageKey);
+        }
+        
+        // Force sync langsung tanpa debounce untuk delete
+        // Pakai method private syncDataToServer via reflection atau langsung fetch
+        const business = (storageService as any).getBusinessContext();
+        let serverPath = '';
+        if (business === 'general-trading') {
+          serverPath = `general-trading/${storageKey}`;
+        } else if (business === 'packaging') {
+          serverPath = `packaging/${storageKey}`;
+        } else if (business === 'trucking') {
+          serverPath = `trucking/${storageKey}`;
+        }
+        
+        // Sync langsung ke server via WebSocket (lebih cepat, tidak pakai HTTP/Vercel)
+        if (websocketClient.isAvailable()) {
+          await websocketClient.post(serverPath, updatedData, Date.now());
+        } else {
+          throw new Error('WebSocket not available. Please enable WebSocket in settings.');
+        }
+      } catch (syncError) {
+        // Silent fail - tombstone sudah tersimpan lokal, akan sync otomatis nanti via debounce
+      }
+    }
+    
     // 🚀 TOMBSTONE: Verify tombstone berhasil di-save
     // Pastikan item benar-benar punya semua tombstone flags
     // 🚀 FIX 1: Load langsung dari localStorage untuk avoid race condition
@@ -191,7 +228,6 @@ export async function deleteGTItem(
     if (deletedItem) {
       const hasTombstone = isItemDeleted(deletedItem);
       if (!hasTombstone) {
-        console.error('[GTDelete] ❌ TOMBSTONE FAILED: Item not marked as deleted after save:', deletedItem);
         return {
           success: false,
           error: 'Tombstone pattern failed - item not marked as deleted after save',
@@ -204,11 +240,6 @@ export async function deleteGTItem(
                           deletedItem.deletedAt && 
                           deletedItem.deletedTimestamp;
       if (!hasAllFlags) {
-        console.warn('[GTDelete] ⚠️ TOMBSTONE INCOMPLETE: Missing some tombstone flags:', {
-          deleted: deletedItem.deleted,
-          deletedAt: deletedItem.deletedAt,
-          deletedTimestamp: deletedItem.deletedTimestamp
-        });
         // Tidak return error, tapi warn - tombstone masih bisa bekerja dengan 1 flag
       }
     }

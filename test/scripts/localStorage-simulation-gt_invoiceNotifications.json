@@ -1,0 +1,32 @@
+{
+  "value": [
+    {
+      "id": "invoice-1768090858654-SJ-260111-KPC77",
+      "type": "CUSTOMER_INVOICE",
+      "sjNo": "SJ-260111-KPC77",
+      "soNo": "test-01001",
+      "poCustomerNo": "test-01001",
+      "spkNos": "SPK/260111/1J67O",
+      "customer": "tester",
+      "customerKode": "CUST-001",
+      "items": [
+        {
+          "spkNo": "SPK/260111/1J67O",
+          "product": "TEST1",
+          "qty": 111,
+          "unit": "PCS"
+        }
+      ],
+      "totalQty": 111,
+      "signedDocument": "uploads/1768090651677_MEMO-20260106-2003.pdf.pdf",
+      "signedDocumentName": "MEMO-20260106-2003.pdf",
+      "status": "PENDING",
+      "created": "2026-01-11T00:20:58.654Z"
+    }
+  ],
+  "timestamp": 1768092182341,
+  "_timestamp": 1768092182341,
+  "loadedFromFile": true,
+  "fileLoadedAt": "2026-01-11T00:43:02.341Z",
+  "forceSync": true
+}

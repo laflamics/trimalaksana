@@ -371,7 +371,6 @@ const DBActivity = () => {
       'payments': { key: 'payments', idField: 'id' },
       'journal-entries': { key: 'journalEntries', idField: 'id' },
       'expenses': { key: 'expenses', idField: 'id' },
-      'invoices': { key: 'invoices', idField: 'id' },
       'accounting': { key: 'journalEntries', idField: 'id' }, // Accounting uses journalEntries
       'general-ledger': { key: 'journalEntries', idField: 'id' }, // General Ledger uses journalEntries
       'financial-reports': { key: 'journalEntries', idField: 'id' }, // Financial Reports uses journalEntries
@@ -408,7 +407,6 @@ const DBActivity = () => {
         case 'journal-entries': return journalEntryColumns;
         case 'notifications': return notificationColumns;
         case 'expenses': return expenseColumns;
-        case 'invoices': return invoiceColumns;
         case 'accounting': return journalEntryColumns; // Accounting uses journal entries
         case 'general-ledger': return journalEntryColumns; // General Ledger uses journal entries
         case 'financial-reports': return journalEntryColumns; // Financial Reports uses journal entries
@@ -626,10 +624,6 @@ const DBActivity = () => {
       case 'expenses': {
         const exp = extractStorageValue(data.expenses);
         return filterActiveItems(Array.isArray(exp) ? exp : []);
-      }
-      case 'invoices': {
-        const inv = extractStorageValue(data.invoices);
-        return filterActiveItems(Array.isArray(inv) ? inv : []);
       }
       case 'accounting': {
         // Accounting uses journalEntries

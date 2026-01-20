@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { storageService, type SyncStatus } from '../../services/storage';
+import { truckingSync, type SyncStatus } from '../../services/trucking-sync';
 import { getTheme, applyTheme, type Theme } from '../../utils/theme';
 import { loadIconAsBase64 } from '../../utils/icon-loader';
 import { 
@@ -38,13 +38,13 @@ const TruckingLayout = ({ children }: LayoutProps) => {
     const currentTheme = getTheme();
     setTheme(currentTheme);
     
-    // Subscribe to sync status changes
-    const unsubscribe = storageService.onSyncStatusChange((status) => {
+    // Subscribe to sync status changes from truckingSync
+    const unsubscribe = truckingSync.onStatusChange((status) => {
       setSyncStatus(status);
     });
     
     // Set initial sync status
-    setSyncStatus(storageService.getSyncStatus());
+    setSyncStatus(truckingSync.getStatus());
     
     return () => {
       unsubscribe();
@@ -160,9 +160,8 @@ const TruckingLayout = ({ children }: LayoutProps) => {
       type: 'section',
       items: [
         { title: 'Delivery Orders', path: '/trucking/shipments/delivery-orders', icon: '📦' },
-        { title: 'Pengaturan Unit', path: '/trucking/unit-scheduling', icon: '🚚' },
         { title: 'Petty Cash', path: '/trucking/finance/pettycash', icon: '💵' },
-        { title: 'Surat Jalan', path: '/trucking/shipments/surat-jalan', icon: '📄' },
+        { title: 'Delivery Note', path: '/trucking/shipments/delivery-note', icon: '📋' },
       ],
     },
     {

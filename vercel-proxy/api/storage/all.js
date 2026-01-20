@@ -2,9 +2,9 @@ export default async function handler(req, res) {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] [Vercel Proxy] /api/storage/all - Method: ${req.method}, Since: ${req.query.since || 0}`);
   
-  // Set CORS headers
+  // Set CORS headers - support all common HTTP methods
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
   // Handle preflight

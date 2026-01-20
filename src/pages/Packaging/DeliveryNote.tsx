@@ -870,8 +870,32 @@ const DeliveryNote = () => {
     const matchedProduct = products.find(p => {
       const label = `${p.kode || ''}${p.kode ? ' - ' : ''}${p.nama || ''}`.toLowerCase();
       const code = (p.kode || '').toLowerCase();
+      const kodeIpos = (p.kodeIpos || '').toLowerCase();
+      const padCode = (p.padCode || '').toLowerCase();
       const name = (p.nama || '').toLowerCase();
-      return label === normalized || code === normalized || name === normalized;
+      
+      // Direct match
+      if (label === normalized || code === normalized || kodeIpos === normalized || padCode === normalized || name === normalized) {
+        return true;
+      }
+      
+      // Cross-reference: Jika kodeIpos produk ini sama dengan kode produk lain yang match dengan search
+      if (kodeIpos && products.some(otherP => {
+        const otherKode = (otherP.kode || '').toLowerCase();
+        return otherKode === normalized && otherKode === kodeIpos;
+      })) {
+        return true;
+      }
+      
+      // Cross-reference: Jika kode produk ini sama dengan kodeIpos produk lain yang match dengan search
+      if (code && products.some(otherP => {
+        const otherKodeIpos = (otherP.kodeIpos || '').toLowerCase();
+        return otherKodeIpos === normalized && otherKodeIpos === code;
+      })) {
+        return true;
+      }
+      
+      return false;
     });
     if (matchedProduct) {
       setFormData({ ...formData, product: matchedProduct.nama });

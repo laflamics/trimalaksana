@@ -85,7 +85,9 @@ export async function deletePackagingItem(
   storageKey: string,
   itemId: string | number,
   idField: string = 'id'
-): Promise<{ success: boolean; error?: string; itemFound?: boolean }> {
+): Promise<{
+  success: boolean; error?: string; itemFound?: boolean 
+}> {
   try {
     // 🚀 FIX 1: Load data langsung dari localStorage untuk avoid race condition
     // storageService.get() bisa trigger syncFromServerBackground yang bisa overwrite delete
@@ -183,7 +185,8 @@ export async function deletePackagingItem(
     // 
     // CRITICAL: Semua deleted items (tombstone) akan di-sync ke server
     // Server akan preserve tombstone dan tidak akan restore deleted items
-    await storageService.set(storageKey, updatedData);
+    // CRITICAL: Force immediate sync ke server untuk DELETE (POST tombstone)
+    await storageService.set(storageKey, updatedData, true);
     
     // 🚀 TOMBSTONE: Verify tombstone berhasil di-save
     // Pastikan item benar-benar punya semua tombstone flags
@@ -214,7 +217,6 @@ export async function deletePackagingItem(
     if (deletedItem) {
       const hasTombstone = isItemDeleted(deletedItem);
       if (!hasTombstone) {
-        console.error('[PackagingDelete] ❌ TOMBSTONE FAILED: Item not marked as deleted after save:', deletedItem);
         return {
           success: false,
           error: 'Tombstone pattern failed - item not marked as deleted after save',
@@ -226,14 +228,6 @@ export async function deletePackagingItem(
       const hasAllFlags = deletedItem.deleted === true && 
                           deletedItem.deletedAt && 
                           deletedItem.deletedTimestamp;
-      if (!hasAllFlags) {
-        console.warn('[PackagingDelete] ⚠️ TOMBSTONE INCOMPLETE: Missing some tombstone flags:', {
-          deleted: deletedItem.deleted,
-          deletedAt: deletedItem.deletedAt,
-          deletedTimestamp: deletedItem.deletedTimestamp
-        });
-        // Tidak return error, tapi warn - tombstone masih bisa bekerja dengan 1 flag
-      }
     }
     
     // 🚀 TOMBSTONE: Dispatch events untuk trigger UI update
@@ -330,7 +324,8 @@ export async function reloadPackagingData<T extends Record<string, any>>(
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
-        const data = parsed.value || parsed;
+        const data = parsed.value !== undefined ? parsed.value : parsed;
+        // Ensure data is array before filtering
         const dataArray = Array.isArray(data) ? data : [];
         // 🚀 FIX: Filter otomatis - deleted items tidak akan muncul
         const activeData = filterActiveItems(dataArray) as T[];
@@ -343,7 +338,9 @@ export async function reloadPackagingData<T extends Record<string, any>>(
     
     // Fallback: load dari storageService (akan trigger sync, tapi sudah di-filter)
     const data = await storageService.get<T[]>(storageKey) || [];
-    const activeData = filterActiveItems(data) as T[];
+    // Ensure data is array before filtering
+    const dataArray = Array.isArray(data) ? data : [];
+    const activeData = filterActiveItems(dataArray) as T[];
     setState(activeData);
     return activeData;
   } catch (error: any) {
@@ -370,9 +367,14 @@ export async function canDeleteItem(
   for (const dep of dependencies) {
     try {
       const depData = await storageService.get<any[]>(dep.storageKey) || [];
-      const activeDepData = filterActiveItems(depData);
+      // Ensure depData is array
+      const depDataArray = Array.isArray(depData) ? depData : [];
+      const activeDepData = filterActiveItems(depDataArray);
       
-      const hasDependency = activeDepData.some((item: any) => 
+      // Ensure activeDepData is array before using .some()
+      const activeDepDataArray = Array.isArray(activeDepData) ? activeDepData : [];
+      
+      const hasDependency = activeDepDataArray.some((item: any) => 
         dep.checkFn(item, itemId)
       );
       

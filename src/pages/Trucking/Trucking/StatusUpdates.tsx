@@ -82,7 +82,9 @@ const StatusUpdates = () => {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 5000);
+    // Optimasi: Refresh setiap 15 detik untuk status updates (sebelumnya 5 detik)
+    // Balance antara real-time dan bandwidth
+    const interval = setInterval(loadData, 15000); // 15 detik - cukup untuk status updates
     return () => clearInterval(interval);
   }, []);
 

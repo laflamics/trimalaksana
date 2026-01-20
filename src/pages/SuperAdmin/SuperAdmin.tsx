@@ -110,7 +110,7 @@ interface UserAccess {
 const SuperAdmin = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'users' | 'logs' | 'proxy' | 'usage'>('users');
-  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [activityLogs, setActivityLogs] = useState<(ActivityLog & { businessContext?: string })[]>([]);
   const [proxyLogs, setProxyLogs] = useState<ProxyLog[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState('');
@@ -219,13 +219,51 @@ const SuperAdmin = () => {
   useEffect(() => {
     const loadLogs = async () => {
       try {
-        const logs = await storageService.get<ActivityLog[]>('activityLogs') || [];
+        console.log('[SuperAdmin] Loading activity logs from all business contexts...');
+        
+        // Define all business contexts to read from
+        const contexts = [
+          { name: 'Packaging', key: 'activityLogs' },
+          { name: 'GT', key: 'general-trading/activityLogs' },
+          { name: 'Trucking', key: 'trucking/activityLogs' }
+        ];
+        
+        const allLogs: (ActivityLog & { businessContext?: string })[] = [];
+        
+        // Load logs from each business context
+        for (const context of contexts) {
+          console.log(`[SuperAdmin] Loading ${context.name} activity logs...`);
+          let logs = await storageService.get<ActivityLog[]>(context.key) || [];
+          console.log(`[SuperAdmin] Raw ${context.name} logs: ${logs.length} items`);
+          
+          // If we have very few logs, try force reload from file
+          if (logs.length <= 1) {
+            console.log(`[SuperAdmin] Few ${context.name} logs detected, trying force reload from file...`);
+            const fileData = await storageService.forceReloadFromFile<ActivityLog[]>(context.key);
+            if (fileData && Array.isArray(fileData) && fileData.length > logs.length) {
+              console.log(`[SuperAdmin] Force reload successful: ${fileData.length} ${context.name} logs from file`);
+              logs = fileData;
+            }
+          }
+          
+          // Add business context to each log
+          const logsWithContext = logs.map(log => ({
+            ...log,
+            businessContext: context.name
+          }));
+          
+          allLogs.push(...logsWithContext);
+          console.log(`[SuperAdmin] Added ${logsWithContext.length} ${context.name} logs to collection`);
+        }
+        
         // Sort by timestamp descending (newest first)
-        const sortedLogs = logs.sort((a, b) => {
+        const sortedLogs = allLogs.sort((a, b) => {
           const timeA = new Date(a.timestamp).getTime();
           const timeB = new Date(b.timestamp).getTime();
           return timeB - timeA;
         });
+        
+        console.log(`[SuperAdmin] Total activity logs loaded: ${sortedLogs.length} from all business contexts`);
         setActivityLogs(sortedLogs);
       } catch (error) {
         console.error('Error loading activity logs:', error);
@@ -238,8 +276,14 @@ const SuperAdmin = () => {
     // Listen for new logs
     const handleStorageChange = (event: Event) => {
       const detail = (event as CustomEvent<{ key?: string }>).detail;
-      const storageKey = detail?.key?.split('/').pop();
-      if (storageKey === 'activityLogs') {
+      const changedKey = detail?.key || '';
+      
+      // Check if any activity logs changed (from any business context)
+      if (changedKey === 'activityLogs' || 
+          changedKey === 'general-trading/activityLogs' || 
+          changedKey === 'trucking/activityLogs' ||
+          changedKey.endsWith('/activityLogs')) {
+        console.log(`[SuperAdmin] Activity logs changed: ${changedKey}, reloading...`);
         loadLogs();
       }
     };
@@ -452,9 +496,17 @@ const SuperAdmin = () => {
   };
 
   const clearLogs = async () => {
-    if (window.confirm('Hapus semua activity logs? Tindakan ini tidak dapat dibatalkan.')) {
-      await storageService.set('activityLogs', []);
-      setActivityLogs([]);
+    if (window.confirm('Hapus semua activity logs dari semua business context (Packaging, GT, Trucking)? Tindakan ini tidak dapat dibatalkan.')) {
+      try {
+        // Clear logs from all business contexts
+        await storageService.set('activityLogs', []);
+        await storageService.set('general-trading/activityLogs', []);
+        await storageService.set('trucking/activityLogs', []);
+        setActivityLogs([]);
+        console.log('[SuperAdmin] All activity logs cleared');
+      } catch (error) {
+        console.error('[SuperAdmin] Error clearing logs:', error);
+      }
     }
   };
 
@@ -498,7 +550,7 @@ const SuperAdmin = () => {
     {
       key: 'timestamp',
       header: 'Waktu',
-      render: (log: ActivityLog) => (
+      render: (log: ActivityLog & { businessContext?: string }) => (
         <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
           {formatDateTime(log.timestamp)}
         </span>
@@ -507,7 +559,7 @@ const SuperAdmin = () => {
     {
       key: 'user',
       header: 'User',
-      render: (log: ActivityLog) => (
+      render: (log: ActivityLog & { businessContext?: string }) => (
         <div>
           <div style={{ fontWeight: '600', fontSize: '14px', color: 'var(--text-primary)' }}>
             {log.fullName || 'N/A'}
@@ -524,9 +576,31 @@ const SuperAdmin = () => {
       ),
     },
     {
+      key: 'businessContext',
+      header: 'Business Unit',
+      render: (log: ActivityLog & { businessContext?: string }) => (
+        <span style={{ 
+          padding: '3px 8px', 
+          borderRadius: '12px',
+          backgroundColor: log.businessContext === 'Packaging' ? 'rgba(76, 175, 80, 0.1)' :
+                          log.businessContext === 'GT' ? 'rgba(33, 150, 243, 0.1)' :
+                          log.businessContext === 'Trucking' ? 'rgba(255, 152, 0, 0.1)' :
+                          'rgba(158, 158, 158, 0.1)',
+          color: log.businessContext === 'Packaging' ? '#4caf50' :
+                 log.businessContext === 'GT' ? '#2196F3' :
+                 log.businessContext === 'Trucking' ? '#ff9800' :
+                 '#9e9e9e',
+          fontSize: '11px',
+          fontWeight: '600'
+        }}>
+          {log.businessContext || 'Unknown'}
+        </span>
+      ),
+    },
+    {
       key: 'action',
       header: 'Aksi',
-      render: (log: ActivityLog) => (
+      render: (log: ActivityLog & { businessContext?: string }) => (
         <span style={{ 
           padding: '4px 8px', 
           borderRadius: '4px',
@@ -546,7 +620,7 @@ const SuperAdmin = () => {
     {
       key: 'path',
       header: 'Path / Route',
-      render: (log: ActivityLog) => (
+      render: (log: ActivityLog & { businessContext?: string }) => (
         <code style={{ 
           fontSize: '12px', 
           color: 'var(--text-primary)',
@@ -561,7 +635,7 @@ const SuperAdmin = () => {
     {
       key: 'ipAddress',
       header: 'IP Address',
-      render: (log: ActivityLog) => (
+      render: (log: ActivityLog & { businessContext?: string }) => (
         <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
           {log.ipAddress || '-'}
         </span>

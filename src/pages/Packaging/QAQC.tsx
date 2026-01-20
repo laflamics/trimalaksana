@@ -6,7 +6,7 @@ import NotificationBell from '../../components/NotificationBell';
 import { storageService } from '../../services/storage';
 import { openPrintWindow } from '../../utils/actions';
 import { filterActiveItems } from '../../utils/data-persistence-helper';
-import { deletePackagingItem } from '../../utils/packaging-delete-helper';
+import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
 import '../../styles/common.css';
@@ -253,8 +253,9 @@ const QAQC = () => {
 
   useEffect(() => {
     loadQCResults();
-    // Refresh setiap 2 detik untuk cek notifikasi baru
-    const interval = setInterval(loadQCResults, 2000);
+    // Optimasi: Refresh setiap 30 detik untuk mengurangi bandwidth (sebelumnya 2 detik)
+    // Gunakan event-based updates untuk real-time changes
+    const interval = setInterval(loadQCResults, 30000); // 30 detik - cukup untuk QC updates
     return () => clearInterval(interval);
   }, []);
 
@@ -305,7 +306,6 @@ const QAQC = () => {
       });
       
       if (hasClosedQC) {
-        console.log(`[QC Filter] Excluding QC ${q.qcNo || q.id} for SPK ${q.spkNo || q.soNo}: already has CLOSE QC record`);
         return false;
       }
       
@@ -384,7 +384,6 @@ const QAQC = () => {
         const updatedProduction = productionList.map((p: any) => {
           // Reset production status jika QC FAIL (bisa submit lagi)
           if ((p.soNo === selectedQCForCheck.soNo || p.spkNo === selectedQCForCheck.spkNo) && p.status === 'CLOSE') {
-            console.log(`🔄 [QC FAIL] Reset production ${p.productionNo || p.grnNo} status dari CLOSE ke OPEN`);
             return { ...p, status: 'OPEN' };
           }
           return p;
@@ -395,7 +394,6 @@ const QAQC = () => {
         const scheduleList = await storageService.get<any[]>('schedule') || [];
         const updatedSchedules = scheduleList.map((s: any) => {
           if (s.spkNo === selectedQCForCheck.spkNo && s.status === 'CLOSE') {
-            console.log(`🔄 [QC FAIL] Reset schedule ${s.spkNo} status dari CLOSE ke OPEN`);
             return { ...s, status: 'OPEN' };
           }
           return s;
@@ -427,7 +425,6 @@ const QAQC = () => {
           const productionList = await storageService.get<any[]>('production') || [];
           const updatedProduction = productionList.map((p: any) => {
             if ((p.soNo === selectedQCForCheck.soNo || p.spkNo === selectedQCForCheck.spkNo) && p.status === 'CLOSE') {
-              console.log(`🔄 [QC PARTIAL] Reset production ${p.productionNo || p.grnNo} status dari CLOSE ke OPEN untuk qty FAIL: ${qtyFailed}`);
               return { ...p, status: 'OPEN' };
             }
             return p;
@@ -438,7 +435,6 @@ const QAQC = () => {
           const scheduleList = await storageService.get<any[]>('schedule') || [];
           const updatedSchedules = scheduleList.map((s: any) => {
             if (s.spkNo === selectedQCForCheck.spkNo && s.status === 'CLOSE') {
-              console.log(`🔄 [QC PARTIAL] Reset schedule ${s.spkNo} status dari CLOSE ke OPEN untuk qty FAIL: ${qtyFailed}`);
               return { ...s, status: 'OPEN' };
             }
             return s;
@@ -519,7 +515,6 @@ const QAQC = () => {
               });
               
               if (!product) {
-                console.warn(`⚠️ [QC Inventory] Product not found: ${productId}`);
                 continue;
               }
               
@@ -532,7 +527,6 @@ const QAQC = () => {
               const productIdMatch = qcProductId && (productCode.toLowerCase() === qcProductId.toLowerCase() || productId.toLowerCase() === qcProductId.toLowerCase());
               
               if (!productNameMatch && !productIdMatch && (qcProductName || qcProductId)) {
-                console.log(`ℹ️ [QC Inventory] Skip product ${productName} (${productCode}) - tidak match dengan QC product: ${selectedQCForCheck.product} (SPK: ${spkNo})`);
                 continue; // Skip product yang tidak match
               }
               
@@ -567,7 +561,6 @@ const QAQC = () => {
               if (existingProductInventory && spkNo) {
                 const processedSPKs = existingProductInventory.processedSPKs || [];
                 if (processedSPKs.includes(spkNo)) {
-                  console.warn(`⚠️ [QC Inventory] SPK ${spkNo} sudah pernah diproses untuk product ${productCode}. Skip update.`);
                   continue; // Skip product ini, lanjut ke product berikutnya
                 }
               }
@@ -595,12 +588,6 @@ const QAQC = () => {
                   (existingProductInventory.outgoing || 0) + 
                   (existingProductInventory.return || 0);
                 existingProductInventory.lastUpdate = new Date().toISOString();
-                console.log(`✅ [QC Inventory] Product inventory updated (RECEIVE from QC PASS - SPK ${spkNo}):`);
-                console.log(`   Product: ${productName} (${productCode})`);
-                console.log(`   SPK: ${spkNo}`);
-                console.log(`   Receive: ${oldReceive} → ${newReceive} (+${qtyPassed})`);
-                console.log(`   Price: ${updatedPrice} (from SO)`);
-                console.log(`   Customer: ${selectedQCForCheck.customer}`);
               } else {
                 // Create new product inventory entry
                 // Price diambil dari SO, bukan dari master product
@@ -622,20 +609,12 @@ const QAQC = () => {
                   lastUpdate: new Date().toISOString(),
                 };
                 inventory.push(newInventoryEntry);
-                console.log(`✅ [QC Inventory] New product inventory created (RECEIVE from QC PASS - SPK ${spkNo}):`);
-                console.log(`   Product: ${productName} (${productCode})`);
-                console.log(`   SPK: ${spkNo}`);
-                console.log(`   Receive: ${qtyPassed}`);
-                console.log(`   Price: ${productPrice} (from SO)`);
-                console.log(`   Customer: ${selectedQCForCheck.customer}`);
               }
             }
           }
           
           await storageService.set('inventory', inventory);
-          console.log(`✅ [QC Inventory] Inventory updated for QC PASS`);
         } catch (error: any) {
-          console.error(`❌ [QC Inventory] Error updating inventory:`, error);
           // Jangan block QC process jika inventory update gagal
         }
         
@@ -707,28 +686,40 @@ const QAQC = () => {
   };
 
   const handleDeleteQC = async (item: QCResult) => {
-    if (!item || !item.id) {
-      showAlert('QC tidak valid. Mohon coba lagi.', 'Error');
-      return;
-    }
-
-    const qcNo = item.qcNo || item.id;
-    
-    // Check if QC has related data (production, delivery, etc.)
     try {
-      const [productionList, deliveryList] = await Promise.all([
+      if (!item || !item.id) {
+        showAlert('QC tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        showAlert(`❌ Error: QC tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+
+      const qcNo = item.qcNo || item.id;
+      
+      // Check if QC has related data (production, delivery, etc.)
+      const [productionData, deliveryData] = await Promise.all([
         storageService.get<any[]>('production') || [],
         storageService.get<any[]>('delivery') || [],
       ]);
+      
+      // Ensure all data are arrays before using .some()
+      const productionList = Array.isArray(productionData) ? productionData : [];
+      const deliveryList = Array.isArray(deliveryData) ? deliveryData : [];
 
       const hasProduction = productionList.some((p: any) => 
-        p.soNo === item.soNo || (item.spkNo && p.spkNo === item.spkNo)
+        p && (p.soNo === item.soNo || (item.spkNo && p.spkNo === item.spkNo))
       );
       
-      const hasDelivery = deliveryList.some((dn: any) => 
-        dn.soNo === item.soNo || (item.spkNo && dn.spkNo === item.spkNo) ||
-        (dn.items || []).some((itm: any) => itm.spkNo === item.spkNo)
-      );
+      const hasDelivery = deliveryList.some((dn: any) => {
+        if (!dn) return false;
+        const dnItems = Array.isArray(dn.items) ? dn.items : [];
+        return dn.soNo === item.soNo || (item.spkNo && dn.spkNo === item.spkNo) ||
+               dnItems.some((itm: any) => itm && itm.spkNo === item.spkNo);
+      });
 
       if (hasProduction || hasDelivery) {
         const reasons: string[] = [];
@@ -752,17 +743,21 @@ const QAQC = () => {
           try {
             // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
             const deleteResult = await deletePackagingItem('qc', item.id, 'id');
+            
             if (!deleteResult.success) {
-              showAlert(`Gagal menghapus QC: ${deleteResult.error || 'Unknown error'}`, 'Error');
+              showAlert(`❌ Error deleting QC ${qcNo}: ${deleteResult.error || 'Unknown error'}`, 'Error');
               return;
             }
             
-            // Reload QC data (loadQCResults sudah pakai filterActiveItems)
+            // Reload QC data dengan helper (handle race condition) - sama seperti SalesOrders
+            await reloadPackagingData('qc', setQcResults);
+            
+            // Also reload using loadQCResults for consistency
             await loadQCResults();
             
-            showAlert(`QC ${qcNo} berhasil dihapus.`, 'Success');
+            showAlert(`✅ QC ${qcNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
           } catch (error: any) {
-            showAlert(`Error deleting QC: ${error.message}`, 'Error');
+            showAlert(`❌ Error deleting QC: ${error.message}`, 'Error');
           }
         },
       });

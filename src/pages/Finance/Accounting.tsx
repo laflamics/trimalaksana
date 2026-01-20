@@ -1190,13 +1190,14 @@ const Accounting = () => {
         const productCodeDisplay = item.productCodeDisplay || 'padCode';
         
         // Helper function untuk mendapatkan product code berdasarkan preference
+        // Prioritas: Pad Code → KRT (kodeIpos) → Code/SKU
         const getProductCode = (prod: any, defaultCode: string): string => {
           if (productCodeDisplay === 'padCode') {
-            // Default: Pad Code, fallback ke Product ID jika tidak ada
-            return prod?.padCode || prod?.sku || prod?.kode || prod?.product_id || prod?.id || defaultCode;
+            // Default: Pad Code → KRT (kodeIpos) → Code/SKU
+            return prod?.padCode || prod?.kodeIpos || prod?.sku || prod?.kode || prod?.product_id || prod?.id || defaultCode;
           } else {
-            // Product ID / SKU ID
-            return prod?.sku || prod?.kode || prod?.product_id || prod?.id || defaultCode;
+            // Product ID / SKU ID (tetap dengan prioritas yang sama)
+            return prod?.padCode || prod?.kodeIpos || prod?.sku || prod?.kode || prod?.product_id || prod?.id || defaultCode;
           }
         };
         
@@ -1452,58 +1453,88 @@ const Accounting = () => {
   };
 
   const handleDeleteExpense = async (item: any) => {
-    showConfirm(
-      `Delete expense: ${item.expenseNo}?`,
-      async () => {
-        await proceedWithDeleteExpense();
-      },
-      () => {},
-      'Delete Expense'
-    );
-    return;
-    
-    async function proceedWithDeleteExpense() {
-      try {
-        // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
-        const deleteResult = await deletePackagingItem('expenses', item.id, 'id');
-        if (deleteResult.success) {
-          // Reload data dengan helper (handle race condition)
-          await reloadPackagingData('expenses', setExpenses);
-          showAlert(`Expense ${item.expenseNo} deleted successfully`, 'Success');
-        } else {
-          showAlert(`Error deleting expense: ${deleteResult.error || 'Unknown error'}`, 'Error');
-        }
-      } catch (error: any) {
-        showAlert(`Error deleting expense: ${error.message}`, 'Error');
+    try {
+      console.log('[Accounting] handleDeleteExpense called for:', item?.expenseNo, item?.id);
+      
+      if (!item || !item.expenseNo) {
+        showAlert('Expense tidak valid. Mohon coba lagi.', 'Error');
+        return;
       }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[Accounting] Expense missing ID:', item);
+        showAlert(`❌ Error: Expense ${item.expenseNo} tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Expense ${item.expenseNo}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
+            const deleteResult = await deletePackagingItem('expenses', item.id, 'id');
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              await reloadPackagingData('expenses', setExpenses);
+              showAlert(`Expense ${item.expenseNo} deleted successfully`, 'Success');
+            } else {
+              showAlert(`Error deleting expense: ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[Accounting] Error deleting expense:', error);
+            showAlert(`Error deleting expense: ${error.message}`, 'Error');
+          }
+        },
+        () => {},
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[Accounting] Error in handleDeleteExpense:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
     }
   };
 
   const handleDeleteInvoice = async (item: any) => {
-    showConfirm(
-      `Delete invoice: ${item.invoiceNo}?`,
-      async () => {
-        await proceedWithDeleteInvoice();
-      },
-      () => {},
-      'Delete Invoice'
-    );
-    return;
-    
-    async function proceedWithDeleteInvoice() {
-      try {
-        // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
-        const deleteResult = await deletePackagingItem('invoices', item.id, 'id');
-        if (deleteResult.success) {
-          // Reload data dengan helper (handle race condition)
-          await reloadPackagingData('invoices', setInvoices);
-          showAlert(`Invoice ${item.invoiceNo} deleted successfully`, 'Success');
-        } else {
-          showAlert(`Error deleting invoice: ${deleteResult.error || 'Unknown error'}`, 'Error');
-        }
-      } catch (error: any) {
-        showAlert(`Error deleting invoice: ${error.message}`, 'Error');
+    try {
+      console.log('[Accounting] handleDeleteInvoice called for:', item?.invoiceNo, item?.id);
+      
+      if (!item || !item.invoiceNo) {
+        showAlert('Invoice tidak valid. Mohon coba lagi.', 'Error');
+        return;
       }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[Accounting] Invoice missing ID:', item);
+        showAlert(`❌ Error: Invoice ${item.invoiceNo} tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Invoice ${item.invoiceNo}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
+            const deleteResult = await deletePackagingItem('invoices', item.id, 'id');
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              await reloadPackagingData('invoices', setInvoices);
+              showAlert(`Invoice ${item.invoiceNo} deleted successfully`, 'Success');
+            } else {
+              showAlert(`Error deleting invoice: ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[Accounting] Error deleting invoice:', error);
+            showAlert(`Error deleting invoice: ${error.message}`, 'Error');
+          }
+        },
+        () => {},
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[Accounting] Error in handleDeleteInvoice:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
     }
   };
 

@@ -1,0 +1,67 @@
+🧪 Test GT Invoice Notifications
+============================================================
+📋 Simulating GT Invoice loadData Function...
+--------------------------------------------------
+📊 Raw data loaded:
+   Invoices: EXISTS
+   Expenses: EXISTS
+   Invoice notifications: EXISTS
+
+📊 Extracted data:
+   Invoice records: 0
+   Expense records: 0
+   Invoice notifications: 1
+
+📋 Invoice Notifications Details:
+   1. ID: invoice-1768090858654-SJ-260111-KPC77
+      SJ: SJ-260111-KPC77
+      SO: test-01001
+      Customer: tester
+      Items: 1
+      Total Qty: 111
+      Status: PENDING
+      Created: 2026-01-11T00:20:58.654Z
+
+🧹 Cleanup results:
+   Original notifications: 1
+   After cleanup: 1
+   Removed: 0
+
+⏳ Pending notifications: 1
+
+📋 Pending Notifications Details:
+   1. SJ: SJ-260111-KPC77
+      SO: test-01001
+      Customer: tester
+      Items: 1
+      Status: PENDING
+
+🔔 NotificationBell Format:
+   Bell notifications: 1
+
+📋 NotificationBell Preview:
+   1. Title: Delivery SJ-260111-KPC77
+      Message: SO: test-01001 | Customer: tester
+      Timestamp: 2026-01-11T00:20:58.654Z
+
+🎯 Test Results:
+============================================================
+✅ Invoice records: 0
+✅ Expense records: 0
+✅ Total notifications: 1
+✅ Cleaned notifications: 1
+✅ Pending notifications: 1
+✅ Bell notifications: 1
+
+🎉 SUCCESS: GT Invoice should show notifications!
+
+📋 What user should see:
+1. Notification bell with red badge showing notification count
+2. Clicking bell shows dropdown with notifications
+3. Notifications for creating customer invoices from delivery notes
+4. Clicking notification should load invoice creation form
+
+📊 Summary:
+   Total notifications: 1
+   Bell format ready: 1
+   Ready for invoice creation: 1

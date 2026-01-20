@@ -54,8 +54,22 @@ export async function logActivity(
       details,
     };
 
-    // Load existing logs
-    const existingLogs = await storageService.get<ActivityLog[]>('activityLogs') || [];
+    // Load existing logs - ensure it's always an array
+    const existingLogsData = await storageService.get<any>('activityLogs');
+    let existingLogs: ActivityLog[] = [];
+    
+    if (Array.isArray(existingLogsData)) {
+      existingLogs = existingLogsData;
+    } else if (existingLogsData && typeof existingLogsData === 'object') {
+      // Handle case where data is wrapped in { value: [...] }
+      if (Array.isArray(existingLogsData.value)) {
+        existingLogs = existingLogsData.value;
+      } else {
+        // Invalid format - reset to empty array
+        console.warn('[ActivityLogger] Invalid activityLogs format, resetting to array');
+        existingLogs = [];
+      }
+    }
     
     // Add new log
     const updatedLogs = [log, ...existingLogs];
@@ -103,7 +117,23 @@ export async function logLogin(userId?: string, username?: string, fullName?: st
         userAgent,
       };
 
-      const existingLogs = await storageService.get<ActivityLog[]>('activityLogs') || [];
+      // Load existing logs - ensure it's always an array
+      const existingLogsData = await storageService.get<any>('activityLogs');
+      let existingLogs: ActivityLog[] = [];
+      
+      if (Array.isArray(existingLogsData)) {
+        existingLogs = existingLogsData;
+      } else if (existingLogsData && typeof existingLogsData === 'object') {
+        // Handle case where data is wrapped in { value: [...] }
+        if (Array.isArray(existingLogsData.value)) {
+          existingLogs = existingLogsData.value;
+        } else {
+          // Invalid format - reset to empty array
+          console.warn('[ActivityLogger] Invalid activityLogs format, resetting to array');
+          existingLogs = [];
+        }
+      }
+      
       const updatedLogs = [log, ...existingLogs];
       const maxLogs = 10000;
       const trimmedLogs = updatedLogs.slice(0, maxLogs);

@@ -1,0 +1,114 @@
+{
+  "value": [
+    {
+      "id": "1767079989997o7fnlpptr",
+      "supplierName": "ABADI BAUT",
+      "codeItem": "TRM0114",
+      "description": "BOLT (BAUT L) M6XP1.0XL20MM (SUS304) (NB204)",
+      "kategori": "KWT",
+      "satuan": "PCS",
+      "price": 1732,
+      "stockPremonth": 0,
+      "receive": 6,
+      "outgoing": 6,
+      "return": 3,
+      "nextStock": 3,
+      "processedGRNs": [
+        "GRN-251230-56T2F"
+      ],
+      "lastUpdate": "2025-12-30T09:12:27.112Z",
+      "padCode": "",
+      "processedDeliveries": [
+        "DEL_1767080040310_TRM0114"
+      ]
+    },
+    {
+      "id": "17670799951444ad843038",
+      "supplierName": "ABADI BAUT",
+      "codeItem": "TRM4307",
+      "description": "SPACER NUT M6X18MM (GALVANIZED) FOR XF-400RA (CN050)",
+      "kategori": "KWT",
+      "satuan": "PCS",
+      "price": 0,
+      "stockPremonth": 0,
+      "receive": 4,
+      "outgoing": 4,
+      "return": 0,
+      "nextStock": 0,
+      "processedGRNs": [
+        "GRN-251230-X57U1"
+      ],
+      "lastUpdate": "2025-12-30T07:34:00.324Z",
+      "padCode": "",
+      "processedDeliveries": [
+        "DEL_1767080040310_TRM4307"
+      ]
+    },
+    {
+      "id": "1767079998193on192jmrb",
+      "supplierName": "ABADI BAUT",
+      "codeItem": "TRM0672",
+      "description": "BOLT (BAUT JT) M4XP0.7XL12MM (GALVANIZED) (NB180-1)",
+      "kategori": "KWT",
+      "satuan": "PCS",
+      "price": 475,
+      "stockPremonth": 0,
+      "receive": 20,
+      "outgoing": 4,
+      "return": 5,
+      "nextStock": 21,
+      "processedGRNs": [
+        "GRN-251230-W38ZO"
+      ],
+      "lastUpdate": "2025-12-30T07:38:36.240Z",
+      "padCode": "",
+      "processedDeliveries": [
+        "DEL_1767080040310_TRM0672"
+      ]
+    },
+    {
+      "id": "1767080001596osac8ed3f",
+      "supplierName": "ABADI BAUT",
+      "codeItem": "TRM3917",
+      "description": "BOLT (BAUT L) M4XP0.7XL20MM (SUS304) (HC026)",
+      "kategori": "KWT",
+      "satuan": "PCS",
+      "price": 989,
+      "stockPremonth": 0,
+      "receive": 30,
+      "outgoing": 30,
+      "return": 0,
+      "nextStock": 0,
+      "processedGRNs": [
+        "GRN-251230-V4C3C"
+      ],
+      "lastUpdate": "2025-12-30T07:34:00.325Z",
+      "processedDeliveries": [
+        "DEL_1767080040310_TRM3917"
+      ]
+    },
+    {
+      "id": "1767086292391kij55ic3u",
+      "supplierName": "AGSON INTERNASIONAL",
+      "codeItem": "TRM1787",
+      "description": "ADAPTOR DC 7,5 V 1 AMPERE",
+      "kategori": "SHR",
+      "satuan": "PCS",
+      "price": 31474,
+      "stockPremonth": 0,
+      "receive": 5,
+      "outgoing": 5,
+      "return": 0,
+      "nextStock": 0,
+      "processedGRNs": [
+        "GRN-251230-4BTZM"
+      ],
+      "lastUpdate": "2025-12-30T09:18:19.662Z",
+      "processedDeliveries": [
+        "DEL_1767086299629_TRM1787"
+      ]
+    }
+  ],
+  "timestamp": 1767086299662,
+  "_timestamp": 1767086299662
+}

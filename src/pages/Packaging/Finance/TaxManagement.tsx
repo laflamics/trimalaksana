@@ -397,29 +397,44 @@ const TaxManagement = () => {
   };
 
   const handleDelete = (record: TaxRecord) => {
-    showConfirm(
-      'Delete this tax record?',
-      async () => {
-        try {
-          // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
-          const deleteResult = await deletePackagingItem('taxRecords', record.id, 'id');
-          if (deleteResult.success) {
-            // Reload data dengan helper (handle race condition)
-            await reloadPackagingData('taxRecords', setTaxRecords);
+    try {
+      if (!record || !record.reference) {
+        showAlert('Tax record tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate record.id exists
+      if (!record.id) {
+        showAlert(`❌ Error: Tax record ${record.reference || 'Unknown'} tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Tax Record ${record.reference}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
+            const deleteResult = await deletePackagingItem('taxRecords', record.id, 'id');
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              await reloadPackagingData('taxRecords', setTaxRecords);
+              closeDialog();
+              showAlert('Tax record deleted successfully', 'Success');
+            } else {
+              closeDialog();
+              showAlert(`Error deleting tax record: ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
             closeDialog();
-            showAlert('Tax record deleted successfully', 'Success');
-          } else {
-            closeDialog();
-            showAlert(`Error deleting tax record: ${deleteResult.error || 'Unknown error'}`, 'Error');
+            showAlert(`Error deleting tax record: ${error.message}`, 'Error');
           }
-        } catch (error: any) {
-          closeDialog();
-          showAlert(`Error deleting tax record: ${error.message}`, 'Error');
-        }
-      },
-      () => closeDialog(),
-      'Delete Confirmation'
-    );
+        },
+        () => closeDialog(),
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
   };
 
   const handleExportExcel = () => {

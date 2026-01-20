@@ -4,7 +4,8 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
+import { deleteTruckingItem, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { useDialog } from '../../../hooks/useDialog';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -31,58 +32,16 @@ interface Route {
 const Routes = () => {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [showForm, setShowForm] = useState(false);
-  // Custom Dialog state
-  const [dialogState, setDialogState] = useState<{
-    show: boolean;
-    type: 'alert' | 'confirm' | null;
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-  }>({
-    show: false,
-    type: null,
-    title: '',
-    message: '',
-  });
-
-  // Helper functions untuk dialog
+  // Custom Dialog - menggunakan hook terpusat
+  const { showAlert: showAlertBase, showConfirm: showConfirmBase, DialogComponent } = useDialog();
+  
+  // Wrapper untuk kompatibilitas dengan urutan parameter yang berbeda
   const showAlert = (message: string, title: string = 'Information') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'alert',
-      title,
-      message,
-    });
+    showAlertBase(message, title);
   };
-
+  
   const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'confirm',
-      title,
-      message,
-      onConfirm,
-      onCancel,
-    });
-  };
-
-  const closeDialog = () => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(false);
-    }
-    setDialogState({
-      show: false,
-      type: null,
-      title: '',
-      message: '',
-    });
+    showConfirmBase(message, onConfirm, onCancel, title);
   };
 
   const [editingItem, setEditingItem] = useState<Route | null>(null);
@@ -167,29 +126,49 @@ const Routes = () => {
   };
 
   const handleDelete = async (item: Route) => {
-    showConfirm(
-      `Are you sure you want to delete route "${item.routeName}"?`,
-      async () => {
-        try {
-          // Pakai helper function untuk safe delete (tombstone pattern)
-          const success = await safeDeleteItem('trucking_routes', item.id, 'id');
-          
-          if (success) {
-            // Reload data dengan filter active items
-            const updatedRoutes = await storageService.get<Route[]>('trucking_routes') || [];
-            const activeRoutes = filterActiveItems(updatedRoutes);
-            setRoutes(activeRoutes.map((r, idx) => ({ ...r, no: idx + 1 })));
-            showAlert(`Route "${item.routeName}" deleted successfully`, 'Success');
-          } else {
-            showAlert(`Error deleting route "${item.routeName}". Please try again.`, 'Error');
+    try {
+      console.log('[Trucking Routes] handleDelete called for:', item?.routeName, item?.id);
+      
+      if (!item || !item.routeName) {
+        showAlert('Route tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[Trucking Routes] Route missing ID:', item);
+        showAlert(`❌ Error: Route "${item.routeName}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Route "${item.routeName}"?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deleteTruckingItem('trucking_routes', item.id, 'id');
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              const activeRoutes = await reloadTruckingData('trucking_routes', setRoutes);
+              setRoutes(activeRoutes.map((r, idx) => ({ ...r, no: idx + 1 })));
+              showAlert(`✅ Route "${item.routeName}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[Trucking Routes] Delete failed:', deleteResult.error);
+              showAlert(`❌ Error deleting route "${item.routeName}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[Trucking Routes] Error deleting route:', error);
+            showAlert(`❌ Error deleting route: ${error.message}`, 'Error');
           }
-        } catch (error: any) {
-          showAlert(`Error deleting route: ${error.message}`, 'Error');
-        }
-      },
-      undefined,
-      'Confirm Delete'
-    );
+        },
+        undefined,
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[Trucking Routes] Error in handleDelete:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
   };
 
   const handleImportRoutes = () => {
@@ -558,34 +537,8 @@ const Routes = () => {
         <Table columns={columns} data={filteredRoutes} emptyMessage={searchQuery ? "No routes found matching your search" : "No routes data"} />
       </Card>
       {/* Custom Dialog */}
-      {dialogState.show && (
-        <div className="dialog-overlay" onClick={closeDialog}>
-          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
-            <Card className="dialog-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h2>{dialogState.title}</h2>
-                <Button variant="secondary" onClick={closeDialog} style={{ padding: '6px 12px' }}>✕</Button>
-              </div>
-              <p style={{ marginBottom: '20px', whiteSpace: 'pre-wrap' }}>{dialogState.message}</p>
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                {dialogState.type === 'confirm' && (
-                  <Button variant="secondary" onClick={closeDialog}>Cancel</Button>
-                )}
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    if (dialogState.onConfirm) dialogState.onConfirm();
-                    closeDialog();
-                  }}
-                >
-                  {dialogState.type === 'confirm' ? 'Confirm' : 'OK'}
-                </Button>
-              </div>
-            </Card>
-          </div>
-        </div>
-      )}
-
+      {/* Custom Dialog - menggunakan hook terpusat */}
+      <DialogComponent />
     </div>
   );
 };

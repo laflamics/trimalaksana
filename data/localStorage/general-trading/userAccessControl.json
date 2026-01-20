@@ -1,5 +1,8 @@
 {
-  "value": {},
-  "timestamp": 0,
-  "_timestamp": 0
+  "value": {
+    "value": {},
+    "timestamp": 0
+  },
+  "timestamp": 1768257255562,
+  "_timestamp": 1768257255562
 }

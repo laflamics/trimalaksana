@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quick BOM Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+        .info { color: #2196F3; }
+        .warning { color: #ff9800; }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #45a049; }
+        pre {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .green { background-color: #388e3c; }
+        .orange { background-color: #ff9800; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Quick BOM Test</h1>
+        
+        <div id="status">
+            <p class="info">Ready to test BOM logic...</p>
+        </div>
+
+        <div>
+            <button onclick="testBOMLogic()">Test BOM Logic</button>
+            <button onclick="testStorageService()">Test Storage Service</button>
+            <button onclick="simulateReactLogic()">Simulate React Logic</button>
+        </div>
+
+        <div id="results" style="margin-top: 20px;"></div>
+    </div>
+
+    <script>
+        // BOM data from file
+        const bomData = {
+            "value": [
+                {"id": "1764370552734-0qxn5u2vk", "product_id": "KRT00137", "material_id": "MTRL-00023", "ratio": 1},
+                {"id": "bom-1766622882529-0ehof9ft9", "product_id": "KRT04072", "material_id": "MTRL-00003", "ratio": 1},
+                {"id": "bom-1767584480090-s0qdt7ykv", "product_id": "KRT04072", "material_id": "MTRL-00002", "ratio": 1},
+                {"id": "bom-1767585926336-dind24xwa", "product_id": "KRT04173", "material_id": "MTRL-00002", "ratio": 1},
+                {"id": "bom-1768327305553-u42lefmxv", "product_id": "KRT00248", "material_id": "MTRL-00828", "ratio": 1}
+            ]
+        };
+
+        // Sample products data
+        const sampleProducts = [
+            {"id": "1768532435877-0-03ilm6j40", "no": 1, "nama": "KARTON BOX 430X350X350", "product_id": "KRT04072"},
+            {"id": "1768532435877-1-uin3m0wub", "no": 2, "nama": "LAYER KARTON", "product_id": "KRT04173"},
+            {"id": "1768532435877-2-b8jbn1vpf", "no": 3, "nama": "CARTON LAYER 950X770", "product_id": "KRT00248"},
+            {"id": "1768532435878-10-hspn4ihfa", "no": 4, "nama": "CARTON BOX DH1 560X380X340 C/FLUTE", "product_id": "KRT00199"},
+            {"id": "1768532435878-11-zws0kbhmc", "no": 5, "nama": "CARTON BOX DH8 POLOS 727X380X320MM", "product_id": "KRT02722"}
+        ];
+
+        function log(message, type = 'info') {
+            const results = document.getElementById('results');
+            const className = type === 'success' ? 'success' : 
+                            type === 'error' ? 'error' : 
+                            type === 'warning' ? 'warning' : 'info';
+            results.innerHTML += \`<p class="\${className}">\${message}</p>\`;
+            console.log(message);
+        }
+
+        function testBOMLogic() {
+            document.getElementById('results').innerHTML = '';
+            log('🧪 Testing BOM Logic...', 'info');
+            
+            // Extract BOM items
+            const bomItems = bomData.value || [];
+            log(\`📊 BOM items loaded: \${bomItems.length}\`, 'success');
+            
+            // Create bomProductIdsSet (like React code)
+            const bomProductIdsSet = new Set();
+            bomItems.forEach(b => {
+                if (b && b.product_id) {
+                    bomProductIdsSet.add(b.product_id.toLowerCase());
+                }
+            });
+            
+            log(\`✅ bomProductIdsSet created: \${bomProductIdsSet.size} unique IDs\`, 'success');
+            log(\`📋 BOM Product IDs: \${Array.from(bomProductIdsSet).join(', ')}\`, 'info');
+            
+            // Test hasBOM function
+            const hasBOM = (product) => {
+                const productId = (product.product_id || product.padCode || product.kode || '').toString().trim().toLowerCase();
+                if (!productId) return false;
+                return bomProductIdsSet.has(productId);
+            };
+            
+            // Test with sample products
+            log('\\n🔍 Testing products:', 'info');
+            let hasIndicators = 0;
+            
+            sampleProducts.forEach((product, index) => {
+                const hasBom = hasBOM(product);
+                const color = hasBom ? '#388e3c' : '#ff9800';
+                const status = hasBom ? 'HAS BOM' : 'NO BOM';
+                
+                if (hasBom) hasIndicators++;
+                
+                log(\`\${index + 1}. \${product.nama} (\${product.product_id}) - \${status}\`, hasBom ? 'success' : 'warning');
+            });
+            
+            log(\`\\n📊 Result: \${hasIndicators}/\${sampleProducts.length} products should show green dots\`, 'success');
+            
+            // Visual indicators
+            results.innerHTML += '<h3>Visual BOM Indicators:</h3>';
+            results.innerHTML += '<table><tr><th>Product</th><th>BOM</th><th>Status</th></tr>';
+            
+            sampleProducts.forEach(product => {
+                const hasBom = hasBOM(product);
+                const dotClass = hasBom ? 'green' : 'orange';
+                const status = hasBom ? 'Has BOM' : 'No BOM';
+                
+                results.innerHTML += \`
+                    <tr>
+                        <td>\${product.nama}</td>
+                        <td><span class="dot \${dotClass}"></span></td>
+                        <td>\${status}</td>
+                    </tr>
+                \`;
+            });
+            
+            results.innerHTML += '</table>';
+        }
+
+        function testStorageService() {
+            document.getElementById('results').innerHTML = '';
+            log('🔍 Testing Storage Service...', 'info');
+            
+            // Test localStorage
+            const bomFromStorage = localStorage.getItem('bom');
+            if (bomFromStorage) {
+                try {
+                    const parsed = JSON.parse(bomFromStorage);
+                    const items = parsed.value || parsed;
+                    log(\`✅ localStorage has BOM data: \${Array.isArray(items) ? items.length + ' items' : 'invalid structure'}\`, 'success');
+                } catch (e) {
+                    log(\`❌ localStorage BOM data parse error: \${e.message}\`, 'error');
+                }
+            } else {
+                log('❌ No BOM data in localStorage', 'error');
+                log('💡 This might be the problem!', 'warning');
+                
+                // Try to populate localStorage
+                log('🔧 Attempting to populate localStorage...', 'info');
+                localStorage.setItem('bom', JSON.stringify(bomData));
+                log('✅ BOM data saved to localStorage', 'success');
+            }
+            
+            // Test business context
+            const selectedBusiness = localStorage.getItem('selectedBusiness');
+            log(\`🏢 Selected Business: \${selectedBusiness || 'packaging (default)'}\`, 'info');
+            
+            // Test storage key
+            const getStorageKey = (key) => {
+                const business = selectedBusiness || 'packaging';
+                if (business === 'packaging') {
+                    return key;
+                }
+                return business + '/' + key;
+            };
+            
+            const bomKey = getStorageKey('bom');
+            log(\`🔑 BOM Storage Key: "\${bomKey}"\`, 'info');
+            
+            const bomDataByKey = localStorage.getItem(bomKey);
+            log(\`📦 BOM Data by Key: \${bomDataByKey ? 'Found' : 'Not found'}\`, bomDataByKey ? 'success' : 'error');
+        }
+
+        function simulateReactLogic() {
+            document.getElementById('results').innerHTML = '';
+            log('⚛️ Simulating React Logic...', 'info');
+            
+            // Simulate extractStorageValue
+            const extractStorageValue = (data) => {
+                if (!data) return [];
+                if (Array.isArray(data)) return data;
+                if (data && typeof data === 'object' && 'value' in data) {
+                    const extracted = data.value;
+                    if (Array.isArray(extracted)) return extracted;
+                    if (!extracted || (typeof extracted === 'object' && Object.keys(extracted).length === 0)) return [];
+                }
+                return [];
+            };
+            
+            // Simulate storageService.get('bom')
+            const bomFromStorage = localStorage.getItem('bom');
+            let bomDataFromService = null;
+            
+            if (bomFromStorage) {
+                bomDataFromService = JSON.parse(bomFromStorage);
+            } else {
+                log('⚠️ No BOM data in localStorage, using file data', 'warning');
+                bomDataFromService = bomData;
+                localStorage.setItem('bom', JSON.stringify(bomData));
+            }
+            
+            const extractedBOM = extractStorageValue(bomDataFromService);
+            log(\`📊 extractStorageValue result: \${extractedBOM.length} items\`, 'success');
+            
+            // Simulate setBomData
+            log(\`💾 setBomData called with \${extractedBOM.length} items\`, 'success');
+            
+            // Simulate bomProductIdsSet creation
+            const bomProductIdsSet = new Set();
+            extractedBOM.forEach(b => {
+                if (b) {
+                    const bomProductId = (b.product_id || b.padCode || b.kode || '').toString().trim().toLowerCase();
+                    if (bomProductId) {
+                        bomProductIdsSet.add(bomProductId);
+                    }
+                }
+            });
+            
+            log(\`✅ bomProductIdsSet created: \${bomProductIdsSet.size} unique IDs\`, 'success');
+            
+            // Simulate hasBOM function
+            const hasBOM = (product) => {
+                const productId = (product.product_id || product.padCode || product.kode || '').toString().trim().toLowerCase();
+                if (!productId) return false;
+                return bomProductIdsSet.has(productId);
+            };
+            
+            // Test rendering
+            log('\\n🎨 Simulating BOM indicator rendering:', 'info');
+            sampleProducts.forEach((product, index) => {
+                const hasBom = hasBOM(product);
+                const color = hasBom ? '#388e3c' : '#ff9800';
+                const title = hasBom ? 'Memiliki BOM' : 'Tidak memiliki BOM';
+                
+                log(\`\${index + 1}. \${product.nama}: \${hasBom ? '🟢' : '🟠'} (\${title})\`, hasBom ? 'success' : 'warning');
+            });
+            
+            log('\\n✅ React logic simulation complete', 'success');
+            log('💡 If this works but UI doesn\'t, check React DevTools for state issues', 'info');
+        }
+
+        // Auto-run basic test on load
+        window.addEventListener('load', () => {
+            log('🚀 Quick BOM Test loaded', 'info');
+            log('📋 Click buttons above to run tests', 'info');
+        });
+    </script>
+</body>
+</html>

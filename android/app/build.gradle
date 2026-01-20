@@ -17,8 +17,8 @@ android {
         applicationId "com.trimalaksana.erp"
         minSdk rootProject.ext.minSdkVersion
         targetSdk rootProject.ext.targetSdkVersion
-        versionCode 22
-        versionName "1.0.6-build.22"
+        versionCode 77
+        versionName "1.0.6-build.77"
     }
 
     signingConfigs {

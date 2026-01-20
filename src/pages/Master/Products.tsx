@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../../components/Card';
 import Table from '../../components/Table';
@@ -32,6 +32,7 @@ interface Product {
   hargaFg?: number;
   bom?: any[];
   padCode?: string; // PAD Code untuk product
+  kodeIpos?: string; // Kode Ipos untuk product (khusus packaging)
 }
 
 interface Customer {
@@ -53,6 +54,8 @@ const Products = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
   const [customerInputValue, setCustomerInputValue] = useState('');
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [stockAmanInputValue, setStockAmanInputValue] = useState('');
   const [stockMinimumInputValue, setStockMinimumInputValue] = useState('');
   const [priceInputValue, setPriceInputValue] = useState('');
@@ -83,6 +86,7 @@ const Products = () => {
     kode: '',
     nama: '',
     padCode: '',
+    kodeIpos: '',
     satuan: '',
     stockAman: 0,
     stockMinimum: 0,
@@ -92,13 +96,24 @@ const Products = () => {
   });
 
   const loadProducts = useCallback(async () => {
+    console.log('[Products] 🔄 Loading products and BOM data...');
     const dataRaw = extractStorageValue(await storageService.get<Product[]>('products'));
     // Filter out deleted items menggunakan helper function
     const data = filterActiveItems(dataRaw);
     const bom = extractStorageValue(await storageService.get<any[]>('bom'));
     
+    console.log('[Products] 📊 Loaded data:', {
+      products: data.length,
+      bomItems: bom.length,
+      bomSample: bom.slice(0, 3)
+    });
+    
     // Update bomData (simple update, no comparison needed for now)
     setBomData(bom);
+    console.log('[Products] 💾 BOM data set to state:', {
+      bomCount: bom.length,
+      firstFewIds: bom.slice(0, 5).map(b => b.product_id)
+    });
     
     // Ensure padCode is always present (even if empty string) for all products
     const productsWithPadCode = data.map((p, idx) => ({ 
@@ -148,7 +163,6 @@ const Products = () => {
         return;
       }
       
-      console.log(`[Master Products] BOM updated from ${source}:`, customEvent.detail);
       // Reload products to sync BOM changes dari module lain
       loadProducts();
     };
@@ -196,8 +210,25 @@ const Products = () => {
     return '';
   };
 
+  // Filtered customers untuk dropdown
+  const filteredCustomers = useMemo(() => {
+    const customersArray = Array.isArray(customers) ? customers : [];
+    if (!customerSearch) return customersArray.slice(0, 200); // Limit untuk performance
+    const query = customerSearch.toLowerCase();
+    return customersArray
+      .filter(c => {
+        if (!c) return false;
+        const code = (c.kode || '').toLowerCase();
+        const name = (c.nama || '').toLowerCase();
+        return code.includes(query) || name.includes(query);
+      })
+      .slice(0, 200); // Limit untuk performance
+  }, [customerSearch, customers]);
+
   const handleCustomerInputChange = (text: string) => {
     setCustomerInputValue(text);
+    setCustomerSearch(text);
+    setShowCustomerDropdown(true);
     if (!text) {
       setFormData({ ...formData, customer: '' });
       return;
@@ -240,17 +271,19 @@ const Products = () => {
       }
     }
     
-    // Cari sequence number terakhir untuk customer ini
+    // Cari sequence number terakhir untuk customer ini (semua product_id)
     const existingProducts = products.filter(p => {
       const pid = (p.product_id || '').toString().trim();
-      return pid.startsWith(`FG-${customerCode}-`);
+      // Sekarang mencocokkan semua product_id yang mengandung customerCode
+      return pid.includes(customerCode);
     });
     
-    // Extract sequence numbers
+    // Extract sequence numbers dari semua format product_id
     const sequences = existingProducts
       .map(p => {
         const pid = (p.product_id || '').toString().trim();
-        const match = pid.match(/FG-[A-Z0-9]+-(\d+)$/);
+        // Match angka di akhir product_id (bukan hanya FG pattern)
+        const match = pid.match(/(\d+)$/);
         return match ? parseInt(match[1], 10) : 0;
       })
       .filter(n => !isNaN(n) && n > 0);
@@ -258,19 +291,121 @@ const Products = () => {
     // Get next sequence number
     const nextSequence = sequences.length > 0 ? Math.max(...sequences) + 1 : 1;
     
-    // Format: FG-{customerCode}-{5 digit sequence}
-    return `FG-${customerCode}-${String(nextSequence).padStart(5, '0')}`;
+    // Format: {customerCode}{sequence} - Bebas tanpa pattern FG
+    return `${customerCode}${String(nextSequence).padStart(3, '0')}`;
   }, [customers, products]);
 
-  const hasBOM = (product: Product): boolean => {
-    const productId = (product.product_id || product.padCode || product.kode || '').toString().trim();
-    if (!productId) return false;
-    return bomData.some(b => {
-      // Fallback: product_id -> padCode -> kode
-      const bomProductId = (b.product_id || b.padCode || b.kode || '').toString().trim();
-      return bomProductId === productId;
+  // Optimize: Create Set untuk fast BOM lookup (O(1) instead of O(n) dengan .some())
+  const bomProductIdsSet = useMemo(() => {
+    console.log('[Products] 🔄 Creating bomProductIdsSet from bomData:', bomData.length);
+    const bomDataArray = Array.isArray(bomData) ? bomData : [];
+    const setId = new Set<string>();
+    
+    // Helper function to normalize BOM product ID
+    const normalizeBomId = (id: string): string => {
+      if (!id) return '';
+      
+      let normalized = String(id).trim().toLowerCase();
+      
+      // Remove FG- prefix if exists
+      if (normalized.startsWith('fg-')) {
+        normalized = normalized.substring(3);
+      }
+      
+      // Remove customer code suffix but keep KRT-style codes intact
+      if (normalized.includes('-') && !normalized.match(/^[a-z]{3}-?\d{4,5}$/)) {
+        const parts = normalized.split('-');
+        if (parts.length > 1 && parts[parts.length - 1].match(/^[a-z]{3}\d{4,5}$/)) {
+          normalized = parts[parts.length - 1];
+        } else if (parts.length > 1 && parts[0].match(/^[a-z]{3}\d{4,5}$/)) {
+          normalized = parts[0];
+        }
+      }
+      
+      // Remove dashes for KRT codes
+      if (normalized.match(/^[a-z]{3}-\d{4,5}$/)) {
+        normalized = normalized.replace('-', '');
+      }
+      
+      return normalized;
+    };
+    
+    bomDataArray.forEach(b => {
+      if (b) {
+        const bomProductId = (b.product_id || b.padCode || b.kode || '').toString().trim();
+        if (bomProductId) {
+          const normalized = normalizeBomId(bomProductId);
+          if (normalized) {
+            setId.add(normalized);
+          }
+        }
+      }
     });
-  };
+    
+    console.log('[Products] ✅ bomProductIdsSet created:', {
+      size: setId.size,
+      ids: Array.from(setId).slice(0, 10)
+    });
+    return setId;
+  }, [bomData]);
+
+  // Helper function to normalize product ID for BOM matching
+  const normalizeProductIdForBOM = useCallback((id: string): string => {
+    if (!id) return '';
+    
+    let normalized = String(id).trim().toLowerCase();
+    
+    // Remove FG- prefix if exists
+    if (normalized.startsWith('fg-')) {
+      normalized = normalized.substring(3);
+    }
+    
+    // Remove customer code suffix (everything after last -)
+    // But keep KRT-style codes intact
+    if (normalized.includes('-') && !normalized.match(/^[a-z]{3}-?\d{4,5}$/)) {
+      const parts = normalized.split('-');
+      // If it looks like customer-product format, take the last part
+      if (parts.length > 1 && parts[parts.length - 1].match(/^[a-z]{3}\d{4,5}$/)) {
+        normalized = parts[parts.length - 1];
+      }
+      // If it looks like product-customer format, take the first part  
+      else if (parts.length > 1 && parts[0].match(/^[a-z]{3}\d{4,5}$/)) {
+        normalized = parts[0];
+      }
+    }
+    
+    // Remove any remaining dashes for KRT codes
+    if (normalized.match(/^[a-z]{3}-\d{4,5}$/)) {
+      normalized = normalized.replace('-', '');
+    }
+    
+    return normalized;
+  }, []);
+
+  // Optimize: Memoized hasBOM function dengan Set lookup (O(1) instead of O(n))
+  const hasBOM = useCallback((product: Product): boolean => {
+    const rawProductId = (product.product_id || product.padCode || product.kode || '').toString().trim();
+    if (!rawProductId) return false;
+    
+    // Normalize product ID to handle FG prefix and customer codes
+    const normalizedProductId = normalizeProductIdForBOM(rawProductId);
+    if (!normalizedProductId) return false;
+    
+    const result = bomProductIdsSet.has(normalizedProductId);
+    
+    // Debug log for first few products only to avoid spam
+    if (product.no <= 5) {
+      console.log('[Products] 🔍 hasBOM check:', {
+        productName: product.nama,
+        rawProductId: rawProductId,
+        normalizedProductId: normalizedProductId,
+        hasBOM: result,
+        bomSetSize: bomProductIdsSet.size
+      });
+    }
+    
+    return result;
+  }, [bomProductIdsSet, normalizeProductIdForBOM]);
 
   // Helper function to check if product has customer and price
   const hasCustomerAndPrice = (product: Product): boolean => {
@@ -280,23 +415,76 @@ const Products = () => {
     return hasCustomer && hasPrice;
   };
 
-  // Filter products based on search query
-  // Ensure products is always an array
-  const productsArray = Array.isArray(products) ? products : [];
-  const filteredProducts = productsArray
-    .filter(product => {
+  // Filter products based on search query - MEMOIZED untuk performance
+  const filteredProducts = useMemo(() => {
+    const productsArray = Array.isArray(products) ? products : [];
+    
+    // Build lookup maps untuk cross-reference kodeIpos dengan kode
+    const productsByKode = new Map<string, Product[]>();
+    const productsByKodeIpos = new Map<string, Product[]>();
+    
+    productsArray.forEach(product => {
+      const kode = (product.kode || '').trim().toLowerCase();
+      const kodeIpos = (product.kodeIpos || '').trim().toLowerCase();
+      
+      if (kode) {
+        if (!productsByKode.has(kode)) {
+          productsByKode.set(kode, []);
+        }
+        productsByKode.get(kode)!.push(product);
+      }
+      
+      if (kodeIpos) {
+        if (!productsByKodeIpos.has(kodeIpos)) {
+          productsByKodeIpos.set(kodeIpos, []);
+        }
+        productsByKodeIpos.get(kodeIpos)!.push(product);
+      }
+    });
+    
+    // Filter first
+    const filtered = productsArray.filter(product => {
       if (!searchQuery) return true;
-      const query = searchQuery.toLowerCase();
-      return (
+      const query = searchQuery.toLowerCase().trim();
+      
+      // Direct match
+      const directMatch = (
         (product.kode || '').toLowerCase().includes(query) ||
         (product.product_id || '').toLowerCase().includes(query) ||
         (product.nama || '').toLowerCase().includes(query) ||
         (product.kategori || '').toLowerCase().includes(query) ||
         (product.customer || product.supplier || '').toLowerCase().includes(query) ||
-        (product.padCode || '').toLowerCase().includes(query)
+        (product.padCode || '').toLowerCase().includes(query) ||
+        (product.kodeIpos || '').toLowerCase().includes(query)
       );
-    })
-    .sort((a, b) => {
+      
+      if (directMatch) return true;
+      
+      // Cross-reference: Jika query sama dengan kodeIpos produk ini, cari produk lain yang punya kode sama dengan kodeIpos ini
+      const productKodeIpos = (product.kodeIpos || '').trim().toLowerCase();
+      if (productKodeIpos && productKodeIpos === query) {
+        // Cari produk lain yang punya kode sama dengan kodeIpos produk ini
+        const relatedProducts = productsByKode.get(productKodeIpos) || [];
+        if (relatedProducts.length > 0) {
+          return true; // Include produk ini karena kodeIpos-nya match dengan kode produk lain
+        }
+      }
+      
+      // Cross-reference: Jika query sama dengan kode produk ini, cari produk lain yang punya kodeIpos sama dengan kode ini
+      const productKode = (product.kode || '').trim().toLowerCase();
+      if (productKode && productKode === query) {
+        // Cari produk lain yang punya kodeIpos sama dengan kode produk ini
+        const relatedProducts = productsByKodeIpos.get(productKode) || [];
+        if (relatedProducts.length > 0) {
+          return true; // Include produk ini karena kode-nya match dengan kodeIpos produk lain
+        }
+      }
+      
+      return false;
+    });
+    
+    // Then sort dengan optimized BOM check
+    return filtered.sort((a, b) => {
       // Priority sorting:
       // 1. Products with padCode (highest priority - muncul paling atas)
       // 2. Products with customer + price + BOM
@@ -336,12 +524,13 @@ const Products = () => {
       // Same priority, sort by kode
       return (a.kode || '').localeCompare(b.kode || '');
     });
+  }, [products, searchQuery, hasBOM]);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedProducts = filteredProducts.slice(startIndex, endIndex);
+  // Pagination - MEMOIZED untuk performance
+  const totalPages = useMemo(() => Math.ceil(filteredProducts.length / itemsPerPage), [filteredProducts.length, itemsPerPage]);
+  const startIndex = useMemo(() => (currentPage - 1) * itemsPerPage, [currentPage, itemsPerPage]);
+  const endIndex = useMemo(() => startIndex + itemsPerPage, [startIndex, itemsPerPage]);
+  const paginatedProducts = useMemo(() => filteredProducts.slice(startIndex, endIndex), [filteredProducts, startIndex, endIndex]);
 
   // Reset to page 1 when search changes
   useEffect(() => {
@@ -350,8 +539,9 @@ const Products = () => {
 
   const handleSave = async () => {
     try {
-      // Extract padCode explicitly to ensure it's not lost
+      // Extract padCode and kodeIpos explicitly to ensure it's not lost
       const padCodeValue = (formData.padCode || '').trim();
+      const kodeIposValue = (formData.kodeIpos || '').trim();
       
       if (editingItem) {
         const updated = products.map(p => {
@@ -372,6 +562,7 @@ const Products = () => {
               kode: formData.kode !== undefined && formData.kode !== null ? String(formData.kode).trim() : (p.kode || ''),
               nama: formData.nama !== undefined && formData.nama !== null ? String(formData.nama).trim() : (p.nama || ''),
               padCode: padCodeValue, // Always set padCode explicitly
+              kodeIpos: kodeIposValue, // Always set kodeIpos explicitly
               satuan: formData.satuan !== undefined && formData.satuan !== null ? String(formData.satuan).trim() : (p.satuan || ''),
               stockAman: formData.stockAman !== undefined ? Number(formData.stockAman) : (p.stockAman || 0),
               stockMinimum: formData.stockMinimum !== undefined ? Number(formData.stockMinimum) : (p.stockMinimum || 0),
@@ -407,6 +598,7 @@ const Products = () => {
           kode: formData.kode || '',
           nama: formData.nama || '',
           padCode: padCodeValue, // Explicitly set padCode
+          kodeIpos: kodeIposValue, // Explicitly set kodeIpos
           satuan: formData.satuan || '',
           stockAman: formData.stockAman || 0,
           stockMinimum: formData.stockMinimum || 0,
@@ -431,7 +623,7 @@ const Products = () => {
       setStockAmanInputValue('');
       setStockMinimumInputValue('');
       setPriceInputValue('');
-      setFormData({ kode: '', nama: '', padCode: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0 });
+      setFormData({ kode: '', nama: '', padCode: '', kodeIpos: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0 });
     } catch (error: any) {
       showAlert(`Error saving product: ${error.message}`, 'Error');
     }
@@ -458,37 +650,392 @@ const Products = () => {
   };
 
   const handleDelete = async (item: Product) => {
-    showConfirm(
-      `Are you sure you want to delete product "${item.nama}"? This action cannot be undone.`,
-      async () => {
-        try {
-          // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
-          const deleteResult = await deletePackagingItem('products', item.id, 'id');
-          
-          if (deleteResult.success) {
-            // Reload data dengan helper (handle race condition)
-            const dataRaw = extractStorageValue(await storageService.get<Product[]>('products'));
-            const data = filterActiveItems(dataRaw);
-            setProducts(data.map((p, idx) => ({ ...p, no: idx + 1 })));
-            showAlert(`Product "${item.nama}" deleted successfully`, 'Success');
-          } else {
-            showAlert(`Error deleting product: ${deleteResult.error || 'Unknown error'}`, 'Error');
+    try {
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[Products] Item missing ID:', item);
+        showAlert(`❌ Error: Product "${item.nama}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Product: ${item.nama}?
+
+⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.
+
+Tindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deletePackagingItem('products', item.id, 'id');
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition) - sama seperti SalesOrders
+              await reloadPackagingData('products', setProducts);
+              
+              // Re-number products setelah reload
+              const currentProducts = await storageService.get<Product[]>('products') || [];
+              const activeProducts = filterActiveItems(currentProducts);
+              setProducts(activeProducts.map((p, idx) => ({ ...p, no: idx + 1 })));
+              
+              showAlert(`✅ Product "${item.nama}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[Products] Delete failed:', deleteResult.error);
+              showAlert(`❌ Error deleting product "${item.nama}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[Products] Error in delete:', error);
+            showAlert(`❌ Error deleting product: ${error.message}`, 'Error');
           }
-        } catch (error: any) {
-          showAlert(`Error deleting product: ${error.message}`, 'Error');
-        }
-      },
-      undefined,
-      'Confirm Delete'
-    );
+        },
+        () => {
+          // Delete cancelled
+        },
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[Products] Error in handleDelete:', error);
+      showAlert(`❌ Error: ${error.message}`, 'Error');
+    }
+  };
+
+  // Cleanup Duplicates
+  const handleCleanupDuplicates = async () => {
+    try {
+      const currentProducts = Array.isArray(products) ? products : [];
+      
+      if (currentProducts.length === 0) {
+        showAlert('Tidak ada data produk untuk dibersihkan', 'Info');
+        return;
+      }
+
+      showConfirm(
+        `🧹 Bersihkan Data Duplikat?
+
+Fungsi ini akan:
+- Deteksi duplikat berdasarkan Kode, Kode Ipos, Pad Code, atau Nama
+- Merge duplikat (ambil yang lebih lengkap/baru)
+- Simpan data yang sudah dibersihkan
+
+Total produk saat ini: ${currentProducts.length}
+
+Lanjutkan?`,
+        async () => {
+          try {
+            const deduplicatedMap = new Map<string, Product>();
+            const duplicatesFound: string[] = [];
+            
+            // Helper untuk normalize nama (untuk similarity check) - lebih toleran
+            const normalizeName = (name: string): string => {
+              return name.toLowerCase().trim()
+                .replace(/[""]/g, '"')
+                .replace(/['']/g, "'")
+                .replace(/\s*inch\s*/gi, '"') // Normalize "inch" jadi "
+                .replace(/\s*in\s*/gi, '"') // Normalize "in" jadi "
+                .replace(/\s*([*xX\/-])\s*/g, '$1') // Hapus spasi sekitar simbol
+                .replace(/\s*(["\'])\s*/g, '$1') // Hapus spasi setelah quote
+                .replace(/\s*(["\'])\s*/g, '$1') // Hapus spasi sebelum quote
+                .replace(/(\d+)\s*(pcs|pc|unit|units)/gi, '$1$2') // Hapus spasi antara angka dan unit
+                .replace(/\s+/g, ' ') // Normalize semua spasi jadi satu
+                .trim();
+            };
+
+            // Helper untuk cek nama mirip - lebih toleran
+            const isSimilarName = (name1: string, name2: string): boolean => {
+              const n1 = normalizeName(name1);
+              const n2 = normalizeName(name2);
+              if (n1 === n2) return true;
+              
+              const longer = n1.length > n2.length ? n1 : n2;
+              const shorter = n1.length > n2.length ? n2 : n1;
+              
+              // Cek substring match (lebih toleran)
+              if (longer.includes(shorter)) {
+                return shorter.length >= longer.length * 0.6; // Turunkan threshold jadi 60%
+              }
+              
+              // Cek similarity dengan menghitung karakter yang sama
+              let matches = 0;
+              const minLen = Math.min(n1.length, n2.length);
+              for (let i = 0; i < minLen; i++) {
+                if (n1[i] === n2[i]) matches++;
+              }
+              // Turunkan threshold jadi 75% untuk lebih toleran
+              return matches >= minLen * 0.75;
+            };
+
+            // Build lookup maps untuk cross-reference
+            const productsByKode = new Map<string, Product>();
+            const productsByKodeIpos = new Map<string, Product>();
+            const productsByPadCode = new Map<string, Product>();
+            const productsByNama = new Map<string, Product[]>();
+            
+            currentProducts.forEach(p => {
+              const kode = (p.kode || '').trim().toLowerCase();
+              const kodeIpos = (p.kodeIpos || '').trim().toLowerCase();
+              const padCode = (p.padCode || '').trim().toLowerCase();
+              const nama = normalizeName(p.nama || '');
+              
+              if (kode) productsByKode.set(kode, p);
+              if (kodeIpos) productsByKodeIpos.set(kodeIpos, p);
+              if (padCode) productsByPadCode.set(padCode, p);
+              if (nama) {
+                if (!productsByNama.has(nama)) {
+                  productsByNama.set(nama, []);
+                }
+                productsByNama.get(nama)!.push(p);
+              }
+            });
+
+            // Group products yang harus di-merge (cross-reference kode, kodeIpos, dan nama mirip)
+            // OPTIMIZED: Hindari nested loop O(n²), gunakan lookup map yang sudah ada
+            const productGroups = new Map<string, Product[]>();
+            const processedIds = new Set<string>();
+            
+            currentProducts.forEach((product, index) => {
+              const productId = product.id || `unknown-${index}`;
+              if (processedIds.has(productId)) return;
+              
+              const kode = (product.kode || '').trim().toLowerCase();
+              const kodeIpos = (product.kodeIpos || '').trim().toLowerCase();
+              const padCode = (product.padCode || '').trim().toLowerCase();
+              const nama = normalizeName(product.nama || '');
+              const productHarga = product.hargaFg || product.harga || 0;
+              
+              // Cari group key - bisa dari kode, kodeIpos, atau cross-reference
+              let groupKey = '';
+              
+              // Prioritas 1: Cross-reference - Jika kode produk ini sama dengan kodeIpos produk lain
+              if (kode && productsByKodeIpos.has(kode)) {
+                groupKey = `kode:${kode}`;
+              }
+              
+              // Prioritas 2: Cross-reference - Jika kodeIpos produk ini sama dengan kode produk lain
+              if (!groupKey && kodeIpos && productsByKode.has(kodeIpos)) {
+                const relatedProduct = productsByKode.get(kodeIpos)!;
+                const relatedKode = (relatedProduct.kode || '').trim().toLowerCase();
+                if (relatedKode) {
+                  groupKey = `kode:${relatedKode}`;
+                } else {
+                  groupKey = `kodeIpos:${kodeIpos}`;
+                }
+              }
+              
+              // Prioritas 3: Jika punya kode, gunakan kode sebagai group key
+              if (!groupKey && kode) {
+                groupKey = `kode:${kode}`;
+              }
+              
+              // Prioritas 4: Jika punya kodeIpos, cek apakah ada produk lain dengan kode yang sama
+              if (!groupKey && kodeIpos) {
+                if (productsByKode.has(kodeIpos)) {
+                  groupKey = `kode:${kodeIpos}`;
+                } else {
+                  groupKey = `kodeIpos:${kodeIpos}`;
+                }
+              }
+              
+              // Prioritas 5: Gunakan padCode sebagai key
+              if (!groupKey && padCode) {
+                groupKey = `padCode:${padCode}`;
+              }
+              
+              // Prioritas 6: Cek nama exact match dengan produk lain
+              if (!groupKey && nama) {
+                if (productsByNama.has(nama)) {
+                  const sameNameProducts = productsByNama.get(nama)!;
+                  const matched = sameNameProducts.find(p => {
+                    if (p.id === productId) return false;
+                    const pHarga = p.hargaFg || p.harga || 0;
+                    return (productHarga === 0 || pHarga === 0 || Math.abs(productHarga - pHarga) < 0.01);
+                  });
+                  
+                  if (matched) {
+                    const matchedKode = (matched.kode || '').trim().toLowerCase();
+                    if (matchedKode) {
+                      groupKey = `kode:${matchedKode}`;
+                    } else {
+                      groupKey = `nama:${nama}`;
+                    }
+                  }
+                }
+              }
+              
+              // Prioritas 7: Similarity check untuk produk yang saling melengkapi (hanya jika belum ada groupKey)
+              // OPTIMIZED: Cek similarity hanya untuk produk dalam productsByNama, bukan semua produk
+              if (!groupKey && nama) {
+                // Cek similarity dengan produk lain yang sudah di-group berdasarkan nama
+                for (const [otherNama, otherProducts] of productsByNama.entries()) {
+                  if (otherNama === nama) continue; // Skip exact match (sudah dicek di prioritas 6)
+                  
+                  if (isSimilarName(nama, otherNama)) {
+                    // Cari produk yang bisa merge (harga sama atau salah satu kosong, dan saling melengkapi)
+                    const matched = otherProducts.find(p => {
+                      if (p.id === productId) return false;
+                      const pHarga = p.hargaFg || p.harga || 0;
+                      if (productHarga > 0 && pHarga > 0 && Math.abs(productHarga - pHarga) >= 0.01) {
+                        return false; // Harga berbeda, skip
+                      }
+                      
+                      const pKodeIpos = (p.kodeIpos || '').trim().toLowerCase();
+                      // CRITICAL: Jika salah satu punya kodeIpos dan yang lain tidak, mereka HARUS merge
+                      return (kodeIpos && !pKodeIpos) || (!kodeIpos && pKodeIpos);
+                    });
+                    
+                    if (matched) {
+                      const matchedKode = (matched.kode || '').trim().toLowerCase();
+                      if (matchedKode) {
+                        groupKey = `kode:${matchedKode}`;
+                      } else {
+                        groupKey = `similar:${nama}`;
+                      }
+                      break;
+                    }
+                  }
+                }
+              }
+              
+              // Fallback: Gunakan id
+              if (!groupKey) {
+                groupKey = `id:${productId}`;
+              }
+
+              if (groupKey) {
+                if (!productGroups.has(groupKey)) {
+                  productGroups.set(groupKey, []);
+                }
+                productGroups.get(groupKey)!.push(product);
+                processedIds.add(productId);
+              }
+            });
+
+            // Merge products dalam setiap group
+            productGroups.forEach((groupProducts, groupKey) => {
+              if (groupProducts.length === 1) {
+                deduplicatedMap.set(groupKey, groupProducts[0]);
+                return;
+              }
+
+              // Duplikat ditemukan - merge dengan memilih yang lebih lengkap
+              duplicatesFound.push(`${groupProducts[0].kode || groupProducts[0].nama || 'Unknown'} (${groupKey})`);
+              
+              // Score setiap produk dalam group
+              const scoredProducts = groupProducts.map(product => {
+                const score = 
+                  ((product.hargaFg || product.harga || 0) > 0 ? 100 : 0) +
+                  (product.padCode && product.padCode.trim() ? 50 : 0) +
+                  (product.kodeIpos && product.kodeIpos.trim() ? 30 : 0) +
+                  (product.nama || '').trim().length;
+                
+                return { score, product };
+              });
+              
+              // Sort by score (desc), then by lastUpdate (desc)
+              scoredProducts.sort((a, b) => {
+                if (a.score !== b.score) return b.score - a.score;
+                const aUpdate = a.product.lastUpdate || '';
+                const bUpdate = b.product.lastUpdate || '';
+                return bUpdate.localeCompare(aUpdate);
+              });
+              
+              // Ambil yang terbaik dan merge SEMUA data dari yang lain (saling melengkapi)
+              const bestProduct = scoredProducts[0].product;
+              
+              // Merge semua field - ambil yang lebih lengkap dari semua produk dalam group
+              const mergedProduct: Product = {
+                ...bestProduct,
+                // Keep kode dari yang terbaik (atau yang punya kode lebih lengkap)
+                kode: bestProduct.kode || groupProducts.find(p => p.kode)?.kode || '',
+                // Merge kodeIpos - ambil yang ada (saling melengkapi)
+                kodeIpos: bestProduct.kodeIpos || groupProducts.find(p => p.kodeIpos && p.kodeIpos.trim())?.kodeIpos || '',
+                // Merge padCode - ambil yang ada (saling melengkapi)
+                padCode: bestProduct.padCode || groupProducts.find(p => p.padCode && p.padCode.trim())?.padCode || '',
+                // Merge harga - ambil yang lebih besar (atau yang ada jika yang lain 0)
+                hargaFg: Math.max(...groupProducts.map(p => p.hargaFg || p.harga || 0)),
+                // Merge nama yang lebih lengkap
+                nama: groupProducts.reduce((longest, p) => 
+                  (p.nama || '').trim().length > (longest.nama || '').trim().length ? p : longest
+                ).nama,
+                // Merge customer jika ada
+                customer: bestProduct.customer || groupProducts.find(p => p.customer)?.customer || '',
+                // Merge kategori jika ada
+                kategori: bestProduct.kategori || groupProducts.find(p => p.kategori)?.kategori || '',
+                // Merge satuan jika ada
+                satuan: bestProduct.satuan || groupProducts.find(p => p.satuan)?.satuan || '',
+              };
+              
+              deduplicatedMap.set(groupKey, mergedProduct);
+            });
+
+            const deduplicated = Array.from(deduplicatedMap.values());
+            const removedCount = currentProducts.length - deduplicated.length;
+            
+            if (removedCount === 0) {
+              showAlert('✅ Tidak ada duplikat ditemukan. Data sudah bersih!', 'Success');
+              return;
+            }
+
+            // Re-number products
+            const renumbered = deduplicated.map((p, idx) => ({ ...p, no: idx + 1 }));
+
+            // Save to storage
+            await storageService.set('products', renumbered);
+            setProducts(renumbered);
+
+            const duplicateList = duplicatesFound.slice(0, 10).join('\n');
+            const moreText = duplicatesFound.length > 10 ? `\n... dan ${duplicatesFound.length - 10} duplikat lainnya` : '';
+            
+            showAlert(
+              `✅ Data duplikat berhasil dibersihkan!\n\n` +
+              `📊 Statistik:\n` +
+              `- Sebelum: ${currentProducts.length} produk\n` +
+              `- Sesudah: ${renumbered.length} produk\n` +
+              `- Dihapus: ${removedCount} duplikat\n\n` +
+              `Duplikat yang ditemukan:\n${duplicateList}${moreText}`,
+              'Success'
+            );
+          } catch (error: any) {
+            showAlert(`❌ Error membersihkan duplikat: ${error.message}`, 'Error');
+          }
+        },
+        () => {
+          // Cancelled
+        },
+        'Cleanup Duplicates Confirmation'
+      );
+    } catch (error: any) {
+      showAlert(`❌ Error: ${error.message}`, 'Error');
+    }
   };
 
   // Download Template Excel
   const handleDownloadTemplate = () => {
     try {
       const templateData = [
-        { 'Kode': 'PRD-001', 'Nama': 'Product Example 1', 'Pad Code': 'PAD001', 'Satuan': 'PCS', 'Kategori': 'Product', 'Customer': 'Customer A', 'Stock Aman': '100', 'Stock Minimum': '50', 'Harga FG': '50000' },
-        { 'Kode': 'PRD-002', 'Nama': 'Product Example 2', 'Pad Code': 'PAD002', 'Satuan': 'BOX', 'Kategori': 'Product', 'Customer': 'Customer B', 'Stock Aman': '200', 'Stock Minimum': '100', 'Harga FG': '75000' },
+        { 
+          'product_id': 'PRD-001', 
+          'Nama': 'Product Example 1', 
+          'Pad Code': 'PAD001', 
+          'Kode Ipos': 'KRT00123', 
+          'Satuan': 'PCS', 
+          'Kategori': 'Product', 
+          'Customer': 'Customer A', 
+          'Stock Aman': '100', 
+          'Stock Minimum': '50', 
+          'Harga FG': '50000' 
+        },
+        { 
+          'product_id': 'PRD-002', 
+          'Nama': 'Product Example 2', 
+          'Pad Code': 'PAD002', 
+          'Kode Ipos': 'KRT00456', 
+          'Satuan': 'BOX', 
+          'Kategori': 'Product', 
+          'Customer': 'Customer B', 
+          'Stock Aman': '200', 
+          'Stock Minimum': '100', 
+          'Harga FG': '75000' 
+        },
       ];
 
       const ws = XLSX.utils.json_to_sheet(templateData);
@@ -505,15 +1052,30 @@ const Products = () => {
 
   const handleImportExcel = () => {
     // Show preview dialog dengan contoh header sebelum browse file
-    const exampleHeaders = ['Kode', 'Nama', 'Pad Code', 'Satuan', 'Kategori', 'Customer', 'Stock Aman', 'Stock Minimum', 'Harga FG'];
+    const exampleHeaders = ['product_id', 'Nama', 'Pad Code', 'Kode Ipos', 'Satuan', 'Kategori', 'Customer', 'Stock Aman', 'Stock Minimum', 'Harga FG'];
     const exampleData = [
-      { 'Kode': 'PRD-001', 'Nama': 'Product Example 1', 'Satuan': 'PCS', 'Kategori': 'Product', 'Customer': 'Customer A', 'Stock Aman': '100', 'Stock Minimum': '50', 'Harga FG': '50000' },
-      { 'Kode': 'PRD-002', 'Nama': 'Product Example 2', 'Satuan': 'BOX', 'Kategori': 'Product', 'Customer': 'Customer B', 'Stock Aman': '200', 'Stock Minimum': '100', 'Harga FG': '75000' },
+      { 'product_id': 'PRD-001', 'Nama': 'Product Example 1', 'Pad Code': 'PAD001', 'Kode Ipos': 'KRT00123', 'Satuan': 'PCS', 'Kategori': 'Product', 'Customer': 'Customer A', 'Stock Aman': '100', 'Stock Minimum': '50', 'Harga FG': '50000' },
+      { 'product_id': 'PRD-002', 'Nama': 'Product Example 2', 'Pad Code': 'PAD002', 'Kode Ipos': 'KRT00456', 'Satuan': 'BOX', 'Kategori': 'Product', 'Customer': 'Customer B', 'Stock Aman': '200', 'Stock Minimum': '100', 'Harga FG': '75000' },
     ];
     
     const showPreviewDialog = () => {
       showConfirm(
-        `📋 Format Excel untuk Import Products\n\nPastikan file Excel Anda memiliki header berikut:\n\n${exampleHeaders.join(' | ')}\n\nContoh data:\n${exampleData.map((row, idx) => `${idx + 1}. ${exampleHeaders.map(h => String(row[h as keyof typeof row] || '')).join(' | ')}`).join('\n')}\n\n⚠️ Catatan:\n- Header harus ada di baris pertama\n- Kode dan Nama wajib diisi\n- Header bisa menggunakan variasi: Kode/Code/SKU, Nama/Name, Satuan/Unit/UOM, dll\n\nKlik "Download Template" untuk mendapatkan file Excel template, atau "Lanjutkan" untuk memilih file Excel yang sudah Anda siapkan.`,
+        `📋 Format Excel untuk Import Products
+
+Pastikan file Excel Anda memiliki header berikut:
+
+${exampleHeaders.join(' | ')}
+
+Contoh data:
+${exampleData.map((row, idx) => `${idx + 1}. ${exampleHeaders.map(h => String(row[h as keyof typeof row] || '')).join(' | ')}`).join('\\n')}
+')}
+
+⚠️ Catatan:
+- Header harus ada di baris pertama
+- Kode dan Nama wajib diisi
+- Header bisa menggunakan variasi: Kode/Code/SKU, Nama/Name, Satuan/Unit/UOM, dll
+
+Klik "Download Template" untuk mendapatkan file Excel template, atau "Lanjutkan" untuk memilih file Excel yang sudah Anda siapkan.`,
         () => {
           closeDialog();
           const input = document.createElement('input');
@@ -536,24 +1098,33 @@ const Products = () => {
           return;
         }
 
-        // Auto-map columns (case-insensitive)
+        // Auto-map columns (case-insensitive, handle whitespace)
         const mapColumn = (row: any, possibleNames: string[]): string => {
+          // Normalize key: trim, lowercase, replace multiple spaces with single space
+          const normalizeKey = (key: string) => key.trim().toLowerCase().replace(/\s+/g, ' ');
+          
           for (const name of possibleNames) {
+            const normalizedName = normalizeKey(name);
             const keys = Object.keys(row);
-            const found = keys.find(k => k.toLowerCase() === name.toLowerCase());
-            if (found && row[found]) return String(row[found]).trim();
+            const found = keys.find(k => normalizeKey(k) === normalizedName);
+            if (found !== undefined) {
+              // Return value even if it's 0 or empty string (valid values)
+              const value = String(row[found] || '').trim();
+              return value;
+            }
           }
           return '';
         };
 
-        const newProducts: Product[] = [];
         const errors: string[] = [];
+        const newProductsMap = new Map<string, Product>(); // Untuk deduplication di tahap parsing
 
         jsonData.forEach((row, index) => {
           try {
             const kode = mapColumn(row, ['Kode', 'KODE', 'Code', 'CODE', 'SKU', 'sku', 'Product Code', 'product_code']);
             const nama = mapColumn(row, ['Nama', 'NAMA', 'Name', 'NAME', 'Product Name', 'product_name']);
             const padCode = mapColumn(row, ['Pad Code', 'PAD CODE', 'PadCode', 'pad_code', 'PAD', 'pad']);
+            const kodeIpos = mapColumn(row, ['Kode Ipos', 'KODE IPOS', 'Kode IPOS', 'code_ipos', 'IPOS', 'kode ipos', 'code ipos']);
             const satuan = mapColumn(row, ['Satuan', 'SATUAN', 'Unit', 'UNIT', 'UOM', 'uom']);
             const kategori = mapColumn(row, ['Kategori', 'KATEGORI', 'Category', 'CATEGORY']);
             const customer = mapColumn(row, ['Customer', 'CUSTOMER', 'Customer Name', 'customer_name']);
@@ -566,46 +1137,231 @@ const Products = () => {
               return;
             }
 
-            if (!kode || !nama) {
-              errors.push(`Row ${index + 2}: Kode and Nama are required`);
+            // Hanya nama yang wajib, kode bisa kosong dan akan di-generate
+            if (!nama) {
+              errors.push(`Row ${index + 2}: Nama is required`);
               return;
             }
 
-            // Check if product already exists (by kode)
-            const existingIndex = products.findIndex(p => 
-              p.kode.toLowerCase() === kode.toLowerCase()
-            );
+            // Helper function untuk normalize nama (hapus spasi berlebih, normalize karakter)
+            const normalizeName = (name: string): string => {
+              return name
+                .toLowerCase()
+                .trim()
+                // Normalize spasi: hapus spasi berlebih, normalize spasi di sekitar karakter khusus
+                .replace(/\s+/g, ' ') // Multiple spaces jadi satu
+                .replace(/\s*([*xX])\s*/g, '$1') // Normalize 370*370*430 atau 370X370X430
+                .replace(/\s*([\/])\s*/g, '$1') // Normalize spasi di sekitar /
+                .replace(/\s*([-])\s*/g, '$1') // Normalize spasi di sekitar -
+                .trim();
+            };
+
+            // Helper function untuk cek nama mirip (yang pendek merge ke yang lengkap)
+            const isSimilarName = (name1: string, name2: string): boolean => {
+              const n1 = normalizeName(name1);
+              const n2 = normalizeName(name2);
+              
+              if (n1 === n2) return true;
+              
+              // Cek apakah yang satu adalah substring dari yang lain (minimal 70% match)
+              const longer = n1.length > n2.length ? n1 : n2;
+              const shorter = n1.length > n2.length ? n2 : n1;
+              
+              // Exact substring match
+              if (longer.includes(shorter)) {
+                return shorter.length >= longer.length * 0.7;
+              }
+              
+              // Cek similarity dengan menghitung karakter yang sama
+              let matches = 0;
+              const minLen = Math.min(n1.length, n2.length);
+              for (let i = 0; i < minLen; i++) {
+                if (n1[i] === n2[i]) matches++;
+              }
+              
+              // Minimal 85% karakter sama untuk dianggap mirip
+              return matches >= minLen * 0.85;
+            };
+
+            // Helper function untuk cek harga sama (dengan toleransi kecil)
+            // Jika salah satu harga kosong, tetap bisa merge (anggap harga sama)
+            const isSamePrice = (price1: number, price2: number): boolean => {
+              if (price1 === 0 && price2 === 0) return true;
+              // Jika salah satu kosong, anggap sama (bisa merge)
+              if (price1 === 0 || price2 === 0) return true;
+              const diff = Math.abs(price1 - price2);
+              return diff < 0.01; // Toleransi 0.01 untuk floating point
+            };
+
+            const hargaFg = parseFloat(hargaFgStr) || 0;
+
+            // Check if product already exists dengan prioritas:
+            // 1. Kode (exact match)
+            // 2. KodeIpos (exact match)
+            // 3. PadCode (exact match)
+            // 4. Nama mirip + harga sama (yang pendek merge ke yang lengkap)
+            let existingIndex = -1;
+            let existingProduct: Product | null = null;
+
+            // Prioritas 1: Cek berdasarkan kode
+            if (kode && kode.trim()) {
+              const found = products.find(p => {
+                const pKode = (p.kode || '').trim();
+                return pKode && pKode.toLowerCase() === kode.trim().toLowerCase();
+              });
+              if (found) {
+                existingIndex = products.indexOf(found);
+                existingProduct = found;
+              }
+            }
+
+            // Prioritas 2: Cek berdasarkan kodeIpos
+            if (existingIndex < 0 && kodeIpos && kodeIpos.trim()) {
+              const found = products.find(p => {
+                const pKodeIpos = (p.kodeIpos || '').trim();
+                return pKodeIpos && pKodeIpos.toLowerCase() === kodeIpos.trim().toLowerCase();
+              });
+              if (found) {
+                existingIndex = products.indexOf(found);
+                existingProduct = found;
+              }
+            }
+
+            // Prioritas 3: Cek berdasarkan padCode
+            if (existingIndex < 0 && padCode && padCode.trim()) {
+              const found = products.find(p => {
+                const pPadCode = (p.padCode || '').trim();
+                return pPadCode && pPadCode.toLowerCase() === padCode.trim().toLowerCase();
+              });
+              if (found) {
+                existingIndex = products.indexOf(found);
+                existingProduct = found;
+              }
+            }
+
+            // Prioritas 4: Cek berdasarkan nama mirip + harga sama (atau salah satu kosong)
+            if (existingIndex < 0) {
+              const found = products.find(p => {
+                const pNama = (p.nama || '').trim();
+                
+                // Cek nama mirip
+                if (!isSimilarName(pNama, nama)) return false;
+                
+                // Cek harga sama (atau salah satu kosong)
+                const pHargaFg = p.hargaFg || 0;
+                if (!isSamePrice(pHargaFg, hargaFg)) return false;
+                
+                // Pastikan yang lebih lengkap yang jadi target merge
+                // (yang pendek merge ke yang lengkap)
+                return pNama.length >= nama.length;
+              });
+              if (found) {
+                existingIndex = products.indexOf(found);
+                existingProduct = found;
+              }
+            }
+
+            // Fallback: Cek exact match nama (untuk backward compatibility)
+            if (existingIndex < 0) {
+              const found = products.find(p => {
+                const pNama = (p.nama || '').toLowerCase().trim();
+                return pNama === nama.toLowerCase().trim();
+              });
+              if (found) {
+                existingIndex = products.indexOf(found);
+                existingProduct = found;
+              }
+            }
+
+            // Auto-generate kode jika kosong (prioritas: kodeIpos > padCode > nama)
+            // Tapi jika existing product punya kode, keep kode existing
+            let finalKode = kode;
+            if (existingProduct) {
+              // Jika existing product punya kode, keep kode existing
+              finalKode = existingProduct.kode || kode || '';
+            }
+            
+            // Jika masih kosong, generate
+            if (!finalKode || finalKode.trim() === '') {
+              if (kodeIpos && kodeIpos.trim()) {
+                finalKode = kodeIpos.trim();
+              } else if (padCode && padCode.trim()) {
+                finalKode = padCode.trim();
+              } else {
+                // Generate dari nama (ambil 10 karakter pertama, uppercase, hapus spasi)
+                finalKode = nama.trim().substring(0, 10).toUpperCase().replace(/\s+/g, '-');
+                // Tambahkan timestamp untuk uniqueness
+                finalKode = `${finalKode}-${Date.now().toString().slice(-6)}`;
+              }
+            }
 
             const stockAman = parseFloat(stockAmanStr) || 0;
             const stockMinimum = parseFloat(stockMinimumStr) || 0;
-            const hargaFg = parseFloat(hargaFgStr) || 0;
 
-            if (existingIndex >= 0) {
-              // Update existing product
-              const existing = products[existingIndex];
-              newProducts.push({
-                ...existing,
-                kode,
-                nama,
-                padCode: padCode || existing.padCode || '',
-                satuan: satuan || existing.satuan || 'PCS',
-                kategori: kategori || existing.kategori || '',
-                customer: customer || existing.customer || '',
-                stockAman,
-                stockMinimum,
-                hargaFg,
+            // Generate key untuk deduplication di tahap parsing
+            let dedupKey = '';
+            if (kode && kode.trim()) {
+              dedupKey = `kode:${kode.trim().toLowerCase()}`;
+            } else if (kodeIpos && kodeIpos.trim()) {
+              dedupKey = `kodeIpos:${kodeIpos.trim().toLowerCase()}`;
+            } else if (padCode && padCode.trim()) {
+              dedupKey = `padCode:${padCode.trim().toLowerCase()}`;
+            } else {
+              dedupKey = `nama:${nama.trim().toLowerCase()}`;
+            }
+
+            if (existingProduct) {
+              // Merge/Update existing product
+              // Gunakan nama yang lebih lengkap (yang lebih panjang)
+              const existingNama = (existingProduct.nama || '').trim();
+              const importNama = nama.trim();
+              const finalNama = existingNama.length >= importNama.length ? existingNama : importNama;
+
+              const mergedProduct: Product = {
+                ...existingProduct,
+                // Keep kode existing jika di import kosong, atau update jika ada
+                kode: kode && kode.trim() ? kode.trim() : (existingProduct.kode || finalKode),
+                nama: finalNama, // Gunakan nama yang lebih lengkap
+                // Update padCode jika di import ada, atau keep existing
+                padCode: padCode && padCode.trim() ? padCode.trim() : (existingProduct.padCode || ''),
+                // Update kodeIpos jika di import ada, atau keep existing
+                kodeIpos: kodeIpos && kodeIpos.trim() ? kodeIpos.trim() : (existingProduct.kodeIpos || ''),
+                // Update field lainnya jika ada di import, atau keep existing
+                satuan: satuan && satuan.trim() ? satuan.trim() : (existingProduct.satuan || 'PCS'),
+                kategori: kategori && kategori.trim() ? kategori.trim() : (existingProduct.kategori || ''),
+                customer: customer && customer.trim() ? customer.trim() : (existingProduct.customer || ''),
+                stockAman: stockAman > 0 ? stockAman : (existingProduct.stockAman || 0),
+                stockMinimum: stockMinimum > 0 ? stockMinimum : (existingProduct.stockMinimum || 0),
+                hargaFg: hargaFg > 0 ? hargaFg : (existingProduct.hargaFg || 0),
                 lastUpdate: new Date().toISOString(),
                 userUpdate: 'System',
                 ipAddress: '127.0.0.1',
-              });
+              };
+
+              // Update di map jika sudah ada, atau add baru
+              if (dedupKey) {
+                const existingInMap = newProductsMap.get(dedupKey);
+                if (existingInMap) {
+                  // Merge dengan yang sudah ada di map (pilih yang lebih lengkap)
+                  const existingNamaInMap = (existingInMap.nama || '').trim();
+                  if (finalNama.length > existingNamaInMap.length) {
+                    newProductsMap.set(dedupKey, mergedProduct);
+                  }
+                } else {
+                  newProductsMap.set(dedupKey, mergedProduct);
+                }
+              }
             } else {
               // Create new product
-              newProducts.push({
-                id: Date.now().toString() + index,
-                no: products.length + newProducts.length + 1,
-                kode,
+              // Generate unique ID dengan timestamp + index + random untuk avoid duplicates
+              const uniqueId = `${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`;
+              const newProduct: Product = {
+                id: uniqueId,
+                no: products.length + newProductsMap.size + 1,
+                kode: finalKode, // Gunakan finalKode (bisa dari auto-generate)
                 nama,
                 padCode: padCode || '',
+                kodeIpos: kodeIpos || '',
                 satuan: satuan || 'PCS',
                 kategori: kategori || '',
                 customer: customer || '',
@@ -615,40 +1371,272 @@ const Products = () => {
                 lastUpdate: new Date().toISOString(),
                 userUpdate: 'System',
                 ipAddress: '127.0.0.1',
-              } as Product);
+              } as Product;
+
+              // Cek apakah sudah ada di map (duplikat di Excel)
+              if (dedupKey && newProductsMap.has(dedupKey)) {
+                // Merge dengan yang sudah ada (pilih yang lebih lengkap)
+                const existingInMap = newProductsMap.get(dedupKey)!;
+                const existingNamaInMap = (existingInMap.nama || '').trim();
+                if (nama.trim().length > existingNamaInMap.length) {
+                  newProductsMap.set(dedupKey, newProduct);
+                }
+              } else {
+                newProductsMap.set(dedupKey, newProduct);
+              }
             }
           } catch (error: any) {
-            errors.push(`Row ${index + 2}: ${error.message}`);
+            const errorMsg = error?.message || 'Unknown error';
+            const rowData = Object.keys(row).slice(0, 3).map(k => `${k}:${row[k]}`).join(', ');
+            errors.push(`Row ${index + 2}: ${errorMsg}${rowData ? ` (${rowData}...)` : ''}`);
           }
         });
 
+        // Convert map ke array (sudah deduplicated)
+        const newProducts = Array.from(newProductsMap.values());
+
         if (newProducts.length === 0) {
-          showAlert('No valid data found in Excel file', 'Error');
+          const availableKeys = jsonData.length > 0 ? Object.keys(jsonData[0]).join(', ') : 'none';
+          showAlert(`❌ Tidak ada data valid yang ditemukan di file Excel.
+
+Total rows: ${jsonData.length}
+Available columns: ${availableKeys}
+
+Pastikan:
+- Ada kolom "Nama" atau "Name"
+- Data tidak kosong semua
+- Format file benar`, 'Error');
           return;
         }
 
         const importProducts = async () => {
-          // Merge with existing products (update existing, add new)
+          // Show loading indicator
+          showAlert('⏳ Memproses import... Harap tunggu.', 'Info');
+          
+          // Helper function untuk normalize nama (hapus spasi berlebih, normalize karakter)
+          const normalizeName = (name: string): string => {
+            return name
+              .toLowerCase()
+              .trim()
+              // Normalize spasi: hapus spasi berlebih, normalize spasi di sekitar karakter khusus
+              .replace(/\s+/g, ' ') // Multiple spaces jadi satu
+              .replace(/\s*([*xX])\s*/g, '$1') // Normalize 370*370*430 atau 370X370X430
+              .replace(/\s*([\/])\s*/g, '$1') // Normalize spasi di sekitar /
+              .replace(/\s*([-])\s*/g, '$1') // Normalize spasi di sekitar -
+              .trim();
+          };
+
+          // Helper function untuk cek nama mirip (yang pendek merge ke yang lengkap)
+          const isSimilarName = (name1: string, name2: string): boolean => {
+            const n1 = normalizeName(name1);
+            const n2 = normalizeName(name2);
+            
+            if (n1 === n2) return true;
+            
+            // Cek apakah yang satu adalah substring dari yang lain (minimal 70% match)
+            const longer = n1.length > n2.length ? n1 : n2;
+            const shorter = n1.length > n2.length ? n2 : n1;
+            
+            // Exact substring match
+            if (longer.includes(shorter)) {
+              return shorter.length >= longer.length * 0.7;
+            }
+            
+            // Cek similarity dengan menghitung karakter yang sama
+            let matches = 0;
+            const minLen = Math.min(n1.length, n2.length);
+            for (let i = 0; i < minLen; i++) {
+              if (n1[i] === n2[i]) matches++;
+            }
+            
+            // Minimal 85% karakter sama untuk dianggap mirip
+            return matches >= minLen * 0.85;
+          };
+
+          // Helper function untuk cek harga sama (dengan toleransi kecil)
+          // Jika salah satu harga kosong, tetap bisa merge (anggap harga sama)
+          const isSamePrice = (price1: number, price2: number): boolean => {
+            if (price1 === 0 && price2 === 0) return true;
+            // Jika salah satu kosong, anggap sama (bisa merge)
+            if (price1 === 0 || price2 === 0) return true;
+            const diff = Math.abs(price1 - price2);
+            return diff < 0.01;
+          };
+
+          // OPTIMIZE: Buat Map untuk fast lookup (O(1) instead of O(n))
+          const productsByKode = new Map<string, { index: number; product: Product }>();
+          const productsByKodeIpos = new Map<string, { index: number; product: Product }>();
+          const productsByPadCode = new Map<string, { index: number; product: Product }>();
+          const productsByNama = new Map<string, { index: number; product: Product }>();
+          
+          products.forEach((p, idx) => {
+            const kode = (p.kode || '').trim().toLowerCase();
+            const kodeIpos = (p.kodeIpos || '').trim().toLowerCase();
+            const padCode = (p.padCode || '').trim().toLowerCase();
+            const nama = (p.nama || '').trim().toLowerCase();
+            
+            if (kode) productsByKode.set(kode, { index: idx, product: p });
+            if (kodeIpos) productsByKodeIpos.set(kodeIpos, { index: idx, product: p });
+            if (padCode) productsByPadCode.set(padCode, { index: idx, product: p });
+            if (nama) productsByNama.set(nama, { index: idx, product: p });
+          });
+
+          // Merge with existing products (update existing, add new) - OPTIMIZED dengan Map lookup
           const updatedProducts = [...products];
           newProducts.forEach(newProduct => {
-            const existingIndex = updatedProducts.findIndex(p => p.kode.toLowerCase() === newProduct.kode.toLowerCase());
-            if (existingIndex >= 0) {
-              updatedProducts[existingIndex] = newProduct;
+            let existingIndex = -1;
+            let existing: Product | null = null;
+
+            // Prioritas 1: Cek berdasarkan kode (O(1) lookup)
+            if (newProduct.kode && newProduct.kode.trim()) {
+              const kodeKey = newProduct.kode.trim().toLowerCase();
+              const found = productsByKode.get(kodeKey);
+              if (found) {
+                existingIndex = found.index;
+                existing = found.product;
+              }
+            }
+
+            // Prioritas 2: Cek berdasarkan kodeIpos (O(1) lookup)
+            if (existingIndex < 0 && newProduct.kodeIpos && newProduct.kodeIpos.trim()) {
+              const kodeIposKey = newProduct.kodeIpos.trim().toLowerCase();
+              const found = productsByKodeIpos.get(kodeIposKey);
+              if (found) {
+                existingIndex = found.index;
+                existing = found.product;
+              }
+            }
+
+            // Prioritas 3: Cek berdasarkan padCode (O(1) lookup)
+            if (existingIndex < 0 && newProduct.padCode && newProduct.padCode.trim()) {
+              const padCodeKey = newProduct.padCode.trim().toLowerCase();
+              const found = productsByPadCode.get(padCodeKey);
+              if (found) {
+                existingIndex = found.index;
+                existing = found.product;
+              }
+            }
+
+            // Prioritas 4: Cek berdasarkan nama mirip + harga sama (skip untuk performance, hanya exact match)
+            // Skip similarity check untuk performance - hanya exact match
+            if (existingIndex < 0 && newProduct.nama && newProduct.nama.trim()) {
+              const namaKey = newProduct.nama.trim().toLowerCase();
+              const found = productsByNama.get(namaKey);
+              if (found) {
+                // Cek harga sama
+                const pHargaFg = found.product.hargaFg || 0;
+                const newHargaFg = newProduct.hargaFg || 0;
+                if (isSamePrice(pHargaFg, newHargaFg)) {
+                  existingIndex = found.index;
+                  existing = found.product;
+                }
+              }
+            }
+
+            if (existingIndex >= 0 && existing) {
+              // Merge: update existing dengan data dari import
+              // Gunakan nama yang lebih lengkap
+              const existingNama = (existing.nama || '').trim();
+              const newNama = (newProduct.nama || '').trim();
+              const finalNama = existingNama.length >= newNama.length ? existingNama : newNama;
+
+              updatedProducts[existingIndex] = {
+                ...existing,
+                ...newProduct,
+                // Keep id dan no dari existing
+                id: existing.id,
+                no: existing.no,
+                // Gunakan nama yang lebih lengkap
+                nama: finalNama,
+              };
             } else {
               updatedProducts.push(newProduct);
             }
           });
 
-          // Re-number products
-          const renumbered = updatedProducts.map((p, idx) => ({ ...p, no: idx + 1 }));
+          // OPTIMIZE: Final deduplication dengan single pass (lebih cepat)
+          const deduplicatedMap = new Map<string, Product>();
+          
+          // Single pass deduplication
+          for (const product of updatedProducts) {
+            let key = '';
+            
+            // Prioritas 1: Gunakan kode sebagai key
+            if (product.kode && product.kode.trim()) {
+              key = `kode:${product.kode.trim().toLowerCase()}`;
+            }
+            // Prioritas 2: Gunakan kodeIpos sebagai key
+            else if (product.kodeIpos && product.kodeIpos.trim()) {
+              key = `kodeIpos:${product.kodeIpos.trim().toLowerCase()}`;
+            }
+            // Prioritas 3: Gunakan padCode sebagai key
+            else if (product.padCode && product.padCode.trim()) {
+              key = `padCode:${product.padCode.trim().toLowerCase()}`;
+            }
+            // Prioritas 4: Gunakan nama sebagai key
+            else if (product.nama && product.nama.trim()) {
+              key = `nama:${product.nama.trim().toLowerCase()}`;
+            }
+            // Fallback: Gunakan id
+            else {
+              key = `id:${product.id || Date.now().toString()}`;
+            }
 
+            if (key) {
+              const existing = deduplicatedMap.get(key);
+              if (!existing) {
+                deduplicatedMap.set(key, product);
+              } else {
+                // Jika ada duplikat, pilih yang lebih lengkap (nama lebih panjang, atau lastUpdate lebih baru)
+                const existingNama = (existing.nama || '').trim();
+                const newNama = (product.nama || '').trim();
+                const existingLastUpdate = existing.lastUpdate || '';
+                const newLastUpdate = product.lastUpdate || '';
+                
+                // Pilih yang lebih lengkap atau lebih baru
+                if (newNama.length > existingNama.length || 
+                    (newNama.length === existingNama.length && newLastUpdate > existingLastUpdate)) {
+                  deduplicatedMap.set(key, product);
+                }
+              }
+            }
+          }
+
+          const deduplicated = Array.from(deduplicatedMap.values());
+
+          // Re-number products
+          const renumbered = deduplicated.map((p, idx) => ({ ...p, no: idx + 1 }));
+
+          // Save dengan async untuk non-blocking
           await storageService.set('products', renumbered);
-          setProducts(renumbered);
+          
+          // Update state di next tick untuk avoid blocking
+          setTimeout(() => {
+            setProducts(renumbered);
+          }, 0);
+
+          // Sync ke server di background (non-blocking)
+          const syncToServer = async () => {
+            try {
+              const storageConfig = JSON.parse(localStorage.getItem('storage_config') || '{"type":"local"}');
+              if (storageConfig.type === 'server' && storageConfig.serverUrl) {
+                await storageService.syncToServer();
+              }
+            } catch (syncError) {
+              // Ignore sync error - tidak block import
+            }
+          };
+          syncToServer().catch(() => {}); // Fire and forget
 
           if (errors.length > 0) {
-            showAlert(`Imported ${newProducts.length} products, but ${errors.length} errors occurred.\n\nFirst few errors:\n${errors.slice(0, 5).join('\n')}`, 'Import Completed');
+            showAlert(`✅ Imported ${newProducts.length} products
+📊 Total: ${renumbered.length} products
+
+⚠️ ${errors.length} errors occurred:
+${errors.slice(0, 5).join('\\n')}
+')}`, 'Import Completed');
           } else {
-            showAlert(`✅ Successfully imported ${newProducts.length} products`, 'Success');
+            showAlert(`✅ Successfully imported ${newProducts.length} products\n📊 Total: ${renumbered.length} products`, 'Success');
           }
         };
 
@@ -659,7 +1647,9 @@ const Products = () => {
           'Confirm Import'
         );
       } catch (error: any) {
-        showAlert(`Error importing Excel: ${error.message}\n\nMake sure the file is a valid Excel file (.xlsx or .xls)`, 'Error');
+        const errorMessage = error?.message || 'Unknown error';
+        const errorStack = error?.stack ? `\n\nStack: ${error.stack.split('\n').slice(0, 3).join('\n')}` : '';
+        showAlert(`❌ Error importing Excel: ${errorMessage}${errorStack}\n\nPastikan:\n- File adalah format Excel yang valid (.xlsx atau .xls)\n- File tidak sedang dibuka di aplikasi lain\n- File tidak corrupt`, 'Error');
       }
           };
           input.click();
@@ -679,6 +1669,7 @@ const Products = () => {
         'Kode': product.kode,
         'Nama': product.nama,
         'Pad Code': product.padCode || '',
+        'Kode Ipos': product.kodeIpos || '',
         'Satuan': product.satuan,
         'Kategori': product.kategori,
         'Customer': product.customer || '',
@@ -738,10 +1729,51 @@ const Products = () => {
       }
 
       // Remove old BOM items for this product (hapus semua yang product_id sama)
+      // CRITICAL: Juga hapus BOM yang product_id match dengan kode/kodeIpos/padCode produk ini
+      const productIdLower = productId.toLowerCase();
       const filteredBOM = existingBOM.filter(b => {
-        // Fallback: product_id -> padCode -> kode
-        const bomProductId = (b.product_id || b.padCode || b.kode || '').toString().trim();
-        return bomProductId !== productId;
+        if (!b) return true;
+        const bomProductId = String(b.product_id || b.padCode || b.kode || '').trim().toLowerCase();
+        
+        // Direct match
+        if (bomProductId === productIdLower) return false;
+        
+        // Cross-reference: Cari produk yang punya kode/kodeIpos/product_id/padCode sama dengan bomProductId
+        const matchingProduct = products.find(p => {
+          if (!p) return false;
+          const pKode = String(p.kode || '').trim().toLowerCase();
+          const pKodeIpos = String(p.kodeIpos || '').trim().toLowerCase();
+          const pProductId = String(p.product_id || '').trim().toLowerCase();
+          const pPadCode = String(p.padCode || '').trim().toLowerCase();
+          
+          return (pKode && pKode === bomProductId) ||
+                 (pKodeIpos && pKodeIpos === bomProductId) ||
+                 (pProductId && pProductId === bomProductId) ||
+                 (pPadCode && pPadCode === bomProductId);
+        });
+        
+        // Jika ada produk yang match dengan bomProductId, cek apakah produk itu sama dengan produk yang sedang di-edit
+        if (matchingProduct) {
+          const pKode = String(matchingProduct.kode || '').trim().toLowerCase();
+          const pKodeIpos = String(matchingProduct.kodeIpos || '').trim().toLowerCase();
+          const pProductId = String(matchingProduct.product_id || '').trim().toLowerCase();
+          const pPadCode = String(matchingProduct.padCode || '').trim().toLowerCase();
+          
+          // Cek apakah produk ini sama dengan produk yang sedang di-edit
+          const editingProductKode = String(currentEditingBOM.kode || '').trim().toLowerCase();
+          const editingProductKodeIpos = String(currentEditingBOM.kodeIpos || '').trim().toLowerCase();
+          const editingProductId = String(currentEditingBOM.product_id || '').trim().toLowerCase();
+          const editingProductPadCode = String(currentEditingBOM.padCode || '').trim().toLowerCase();
+          
+          if ((pKode && (pKode === editingProductKode || pKode === productIdLower)) ||
+              (pKodeIpos && (pKodeIpos === editingProductKodeIpos || pKodeIpos === productIdLower)) ||
+              (pProductId && (pProductId === editingProductId || pProductId === productIdLower)) ||
+              (pPadCode && (pPadCode === editingProductPadCode || pPadCode === productIdLower))) {
+            return false; // Hapus BOM ini karena match dengan produk yang sedang di-edit
+          }
+        }
+        
+        return true; // Keep BOM ini
       });
 
       // Add new BOM items - format sesuai sheet: product_id, material_id, ratio
@@ -809,6 +1841,17 @@ const Products = () => {
       header: 'BOM',
       render: (item: Product) => {
         const hasBom = hasBOM(item);
+        
+        // Debug log for first few items
+        if (item.no <= 3) {
+          console.log('[Products] 🎨 Rendering BOM indicator:', {
+            productName: item.nama,
+            productId: item.product_id || item.padCode || item.kode,
+            hasBom: hasBom,
+            color: hasBom ? '#388e3c' : '#ff9800'
+          });
+        }
+        
         return (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div
@@ -833,9 +1876,15 @@ const Products = () => {
         return index >= 0 ? startIndex + index + 1 : '';
       },
     },
-    { key: 'kode', header: 'Kode (SKU/ID)' },
+    { key: 'product_id', header: 'Kode (SKU/ID)' },
     { key: 'nama', header: 'Nama' },
     { key: 'padCode', header: 'Pad Code' },
+    // Hidden: Kode Ipos column
+    // { 
+    //   key: 'kodeIpos', 
+    //   header: 'Kode Ipos',
+    //   render: (item: Product) => item.kodeIpos || '-',
+    // },
     { key: 'satuan', header: 'Satuan (Unit)' },
     { key: 'kategori', header: 'Kategori' },
     { 
@@ -890,28 +1939,29 @@ const Products = () => {
       <div className="page-header">
         <h1>Master Products</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
+          <Button variant="secondary" onClick={handleCleanupDuplicates}>🧹 Cleanup Duplicates</Button>
           <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
           <Button variant="secondary" onClick={handleDownloadTemplate}>📋 Download Template</Button>
           <Button variant="primary" onClick={handleImportExcel}>📤 Import Excel</Button>
           <Button onClick={() => { 
-            if (showForm) {
               setCustomerInputValue('');
               setStockAmanInputValue('');
               setStockMinimumInputValue('');
               setPriceInputValue('');
-              setFormData({ kode: '', nama: '', padCode: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0 });
+              setFormData({ kode: '', nama: '', padCode: '', kodeIpos: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0 });
               setEditingItem(null);
-            }
-            setShowForm(!showForm);
+            setShowForm(true);
           }}>
-            {showForm ? 'Cancel' : '+ Add Product'}
+            + Add Product
           </Button>
         </div>
       </div>
 
 
       {showForm && (
-        <Card title={editingItem ? "Edit Product" : "Add New Product"} className="mb-4">
+        <div className="dialog-overlay" onClick={() => { setShowForm(false); setEditingItem(null); setCustomerInputValue(''); setStockAmanInputValue(''); setStockMinimumInputValue(''); setPriceInputValue(''); setFormData({ kode: '', nama: '', padCode: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0 }); }} style={{ zIndex: 10000 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', width: '90%', maxHeight: '90vh', overflowY: 'auto', zIndex: 10001 }}>
+            <Card title={editingItem ? "Edit Product" : "Add New Product"} className="dialog-card">
           <Input
             label="Kode (SKU/ID)"
             value={formData.kode || ''}
@@ -927,6 +1977,12 @@ const Products = () => {
             value={formData.padCode || ''}
             onChange={(v) => setFormData({ ...formData, padCode: v })}
           />
+          {/* Hidden: Kode Ipos input */}
+          {/* <Input
+            label="Kode Ipos"
+            value={formData.kodeIpos || ''}
+            onChange={(v) => setFormData({ ...formData, kodeIpos: v })}
+          /> */}
           <Input
             label="Satuan (Unit)"
             value={formData.satuan || ''}
@@ -1069,28 +2125,19 @@ const Products = () => {
             value={formData.kategori || ''}
             onChange={(v) => setFormData({ ...formData, kategori: v })}
           />
-          <div style={{ marginBottom: '16px' }}>
+          <div style={{ marginBottom: '16px', position: 'relative' }}>
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
               Customer
             </label>
             <input
               type="text"
-              list={`customer-list-${editingItem?.id || 'new'}`}
               value={getCustomerInputDisplayValue()}
               onChange={(e) => {
                 handleCustomerInputChange(e.target.value);
               }}
-              onBlur={(e) => {
-                const value = e.target.value;
-                const matchedCustomer = customers.find(c => {
-                  const label = `${c.kode || ''}${c.kode ? ' - ' : ''}${c.nama || ''}`;
-                  return label === value;
-                });
-                if (matchedCustomer) {
-                  setFormData({ ...formData, customer: matchedCustomer.nama });
-                }
-              }}
-              placeholder="-- Pilih Customer --"
+              onFocus={() => setShowCustomerDropdown(true)}
+              onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
+              placeholder="Type to search customer..."
               style={{
                 width: '100%',
                 padding: '8px 12px',
@@ -1101,13 +2148,51 @@ const Products = () => {
                 fontSize: '14px',
               }}
             />
-            <datalist id={`customer-list-${editingItem?.id || 'new'}`}>
-              {customers.map(c => (
-                <option key={c.id} value={`${c.kode} - ${c.nama}`}>
-                  {c.kode} - {c.nama}
-                </option>
+            {showCustomerDropdown && filteredCustomers.length > 0 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  backgroundColor: 'var(--bg-primary)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                  zIndex: 10002,
+                  maxHeight: '300px',
+                  overflowY: 'auto',
+                  marginTop: '4px',
+                }}
+              >
+                {filteredCustomers.map(c => (
+                  <div
+                    key={c.id}
+                    onClick={() => {
+                      const label = `${c.kode || ''}${c.kode ? ' - ' : ''}${c.nama || ''}`;
+                      setCustomerInputValue(label);
+                      setCustomerSearch('');
+                      setFormData({ ...formData, customer: c.nama });
+                      setShowCustomerDropdown(false);
+                    }}
+                    style={{
+                      padding: '10px 12px',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid var(--border)',
+                      fontSize: '13px',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--hover-bg)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
+                  >
+                    <div style={{ fontWeight: '500' }}>{c.kode || ''}{c.kode ? ' - ' : ''}{c.nama || ''}</div>
+                  </div>
               ))}
-            </datalist>
+              </div>
+            )}
           </div>
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
@@ -1175,8 +2260,8 @@ const Products = () => {
               }}
             />
           </div>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-            <Button onClick={() => { setShowForm(false); setEditingItem(null); setCustomerInputValue(''); setStockAmanInputValue(''); setStockMinimumInputValue(''); setPriceInputValue(''); setFormData({ kode: '', nama: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0 }); }} variant="secondary">
+          <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
+            <Button onClick={() => { setShowForm(false); setEditingItem(null); setCustomerInputValue(''); setStockAmanInputValue(''); setStockMinimumInputValue(''); setPriceInputValue(''); setFormData({ kode: '', nama: '', padCode: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0 }); }} variant="secondary">
               Cancel
             </Button>
             <Button onClick={handleSave} variant="primary">
@@ -1184,6 +2269,8 @@ const Products = () => {
             </Button>
           </div>
         </Card>
+          </div>
+        </div>
       )}
 
       <Card>
@@ -1231,6 +2318,13 @@ const Products = () => {
             }}>
             <Button 
               variant="secondary" 
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+            >
+              First
+            </Button>
+            <Button 
+              variant="secondary" 
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
             >
@@ -1270,6 +2364,13 @@ const Products = () => {
               disabled={currentPage === totalPages}
             >
               Next
+            </Button>
+            <Button 
+              variant="secondary" 
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+            >
+              Last
             </Button>
             <div style={{ marginLeft: '16px', color: 'var(--text-secondary)', fontSize: '14px' }}>
               Page {currentPage} of {totalPages}

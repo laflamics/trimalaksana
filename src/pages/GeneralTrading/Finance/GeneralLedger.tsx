@@ -4,7 +4,7 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService } from '../../../services/storage';
+import { storageService, extractStorageValue } from '../../../services/storage';
 import { loadGTDataFromLocalStorage } from '../../../utils/gtStorageHelper';
 import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
@@ -134,18 +134,18 @@ const GeneralLedger = () => {
   // Generate journal entries dari transaksi yang sudah ada
   const generateJournalEntriesFromTransactions = async () => {
     try {
-      const [invoices, payments, purchaseOrders, existingEntries] = await Promise.all([
-        storageService.get<any[]>('gt_invoices') || [],
-        storageService.get<any[]>('gt_payments') || [],
-        storageService.get<any[]>('gt_purchaseOrders') || [],
-        storageService.get<any[]>('gt_journalEntries') || [],
+      const [invoicesRaw, paymentsRaw, purchaseOrdersRaw, existingEntriesRaw] = await Promise.all([
+        storageService.get<any[]>('gt_invoices'),
+        storageService.get<any[]>('gt_payments'),
+        storageService.get<any[]>('gt_purchaseOrders'),
+        storageService.get<any[]>('gt_journalEntries'),
       ]);
 
-      // Pastikan semua data adalah array, bukan null
-      const invoicesData = (invoices || []);
-      const paymentsData = (payments || []);
-      const purchaseOrdersData = (purchaseOrders || []);
-      const existingEntriesData = (existingEntries || []);
+      // Pastikan semua data adalah array menggunakan extractStorageValue
+      const invoicesData = Array.isArray(extractStorageValue(invoicesRaw)) ? extractStorageValue(invoicesRaw) : [];
+      const paymentsData = Array.isArray(extractStorageValue(paymentsRaw)) ? extractStorageValue(paymentsRaw) : [];
+      const purchaseOrdersData = Array.isArray(extractStorageValue(purchaseOrdersRaw)) ? extractStorageValue(purchaseOrdersRaw) : [];
+      const existingEntriesData = Array.isArray(extractStorageValue(existingEntriesRaw)) ? extractStorageValue(existingEntriesRaw) : [];
 
       console.log(`📊 Data ditemukan: ${invoicesData.length} invoices, ${paymentsData.length} payments, ${purchaseOrdersData.length} POs`);
 
@@ -159,39 +159,42 @@ const GeneralLedger = () => {
       let entryNo = 1;
 
       // Generate dari Invoices (AR + Revenue)
-      invoicesData.forEach((inv: any) => {
-        const invoiceTotal = inv.bom?.total || inv.total || 0;
-        if (invoiceTotal > 0) {
-          const entryDate = inv.created ? new Date(inv.created).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
-          newEntries.push(
-            {
-              id: `inv-${inv.id}-1`,
-              no: entryNo++,
-              entryDate: entryDate,
-              reference: inv.invoiceNo || inv.id,
-              account: '1100',
-              accountName: 'Accounts Receivable',
-              debit: invoiceTotal,
-              credit: 0,
-              description: `Invoice ${inv.invoiceNo || inv.id} - ${inv.customer || 'Customer'}`,
-            },
-            {
-              id: `inv-${inv.id}-2`,
-              no: entryNo++,
-              entryDate: entryDate,
-              reference: inv.invoiceNo || inv.id,
-              account: '4000',
-              accountName: 'Sales Revenue',
-              debit: 0,
-              credit: invoiceTotal,
-              description: `Invoice ${inv.invoiceNo || inv.id} - ${inv.customer || 'Customer'}`,
-            }
-          );
-        }
-      });
+      if (Array.isArray(invoicesData)) {
+        invoicesData.forEach((inv: any) => {
+          const invoiceTotal = inv.bom?.total || inv.total || 0;
+          if (invoiceTotal > 0) {
+            const entryDate = inv.created ? new Date(inv.created).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+            newEntries.push(
+              {
+                id: `inv-${inv.id}-1`,
+                no: entryNo++,
+                entryDate: entryDate,
+                reference: inv.invoiceNo || inv.id,
+                account: '1100',
+                accountName: 'Accounts Receivable',
+                debit: invoiceTotal,
+                credit: 0,
+                description: `Invoice ${inv.invoiceNo || inv.id} - ${inv.customer || 'Customer'}`,
+              },
+              {
+                id: `inv-${inv.id}-2`,
+                no: entryNo++,
+                entryDate: entryDate,
+                reference: inv.invoiceNo || inv.id,
+                account: '4000',
+                accountName: 'Sales Revenue',
+                debit: 0,
+                credit: invoiceTotal,
+                description: `Invoice ${inv.invoiceNo || inv.id} - ${inv.customer || 'Customer'}`,
+              }
+            );
+          }
+        });
+      }
 
       // Generate dari Payments (Receipt: Cash + AR, Payment: AP + Cash)
-      paymentsData.forEach((pay: any) => {
+      if (Array.isArray(paymentsData)) {
+        paymentsData.forEach((pay: any) => {
         const amount = pay.amount || pay.total || 0;
         if (amount > 0) {
           const entryDate = pay.paymentDate || pay.created ? new Date(pay.paymentDate || pay.created).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
@@ -252,9 +255,11 @@ const GeneralLedger = () => {
           }
         }
       });
+      }
 
       // Generate dari Invoice Payments (jika invoice status CLOSE tapi tidak ada payment record)
-      invoicesData.forEach((inv: any) => {
+      if (Array.isArray(invoicesData)) {
+        invoicesData.forEach((inv: any) => {
         if (inv.status === 'CLOSE' && inv.paymentProof) {
           const invoiceTotal = inv.bom?.total || inv.total || 0;
           if (invoiceTotal > 0) {
@@ -290,9 +295,11 @@ const GeneralLedger = () => {
           }
         }
       });
+      }
 
       // Generate dari Purchase Orders yang sudah CLOSE/RECEIVED (Inventory + AP)
-      purchaseOrdersData.forEach((po: any) => {
+      if (Array.isArray(purchaseOrdersData)) {
+        purchaseOrdersData.forEach((po: any) => {
         if ((po.status === 'CLOSE' || po.status === 'RECEIVED') && po.total > 0) {
           // Cek apakah sudah ada journal entry untuk PO ini
           const hasJournalEntry = newEntries.some((e: any) => e.reference === po.poNo && e.account === '2000');
@@ -328,6 +335,7 @@ const GeneralLedger = () => {
           }
         }
       });
+      }
 
       if (newEntries.length > 0) {
         await storageService.set('gt_journalEntries', newEntries);

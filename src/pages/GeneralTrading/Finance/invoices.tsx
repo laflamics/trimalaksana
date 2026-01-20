@@ -5,7 +5,7 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import NotificationBell from '../../../components/NotificationBell';
 import { storageService } from '../../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
+import { deleteGTItem, reloadGTData, filterActiveItems } from '../../../utils/gt-delete-helper';
 import { loadGTDataFromLocalStorage } from '../../../utils/gtStorageHelper';
 import { generateInvoiceHtml } from '../../../pdf/invoice-pdf-template';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../../utils/actions';
@@ -21,13 +21,15 @@ const Accounting = () => {
   
   // Format notifications untuk NotificationBell
   const invoiceNotifBell = useMemo(() => {
-    return invoiceNotifications.map((notif: any) => ({
+    const formatted = invoiceNotifications.map((notif: any) => ({
       id: notif.id,
       title: `Delivery ${notif.sjNo || 'N/A'}`,
       message: `SO: ${notif.soNo || 'N/A'} | Customer: ${notif.customer || 'N/A'}`,
       timestamp: notif.created || notif.timestamp,
       notif: notif, // Keep original data
     }));
+    
+    return formatted;
   }, [invoiceNotifications]);
   const [toast, setToast] = useState<{ message: string; variant: 'success' | 'error' | 'info' } | null>(null);
   const [viewSJData, setViewSJData] = useState<{ signedDocument: string; signedDocumentName: string; sjNo: string } | null>(null);
@@ -111,27 +113,43 @@ const Accounting = () => {
 
   useEffect(() => {
     loadData();
-    // Refresh setiap 2 detik untuk cek notifikasi baru
+    // Optimasi: Refresh setiap 30 detik untuk mengurangi bandwidth (sebelumnya 2 detik)
+    // Gunakan event-based updates untuk real-time changes
     const interval = setInterval(() => {
       loadData();
-    }, 2000);
+    }, 30000); // 30 detik - cukup untuk notifikasi
     return () => clearInterval(interval);
   }, []);
 
   const loadData = async () => {
-    // Load langsung dari localStorage untuk memastikan data terbaru
-    const invRaw = await loadGTDataFromLocalStorage<any>(
-      'gt_invoices',
-      async () => await storageService.get<any[]>('gt_invoices') || []
-    );
-    const expRaw = await loadGTDataFromLocalStorage<any>(
-      'gt_expenses',
-      async () => await storageService.get<any[]>('gt_expenses') || []
-    );
-    const notifsRaw = await loadGTDataFromLocalStorage<any>(
-      'gt_invoiceNotifications',
-      async () => await storageService.get<any[]>('gt_invoiceNotifications') || []
-    );
+    // Load data directly using storage service (like GT Payments) - bypass helper for notifications
+    let [invRaw, expRaw, notifsRaw] = await Promise.all([
+      storageService.get<any[]>('gt_invoices') || [],
+      storageService.get<any[]>('gt_expenses') || [],
+      storageService.get<any[]>('gt_invoiceNotifications') || []
+    ]);
+    
+    // Force reload invoice notifications if undefined or empty (same as GT Payments)
+    if (!notifsRaw || !Array.isArray(notifsRaw) || notifsRaw.length === 0) {
+      const fileData = await storageService.forceReloadFromFile<any[]>('gt_invoiceNotifications');
+      if (fileData && Array.isArray(fileData) && fileData.length > 0) {
+        notifsRaw = fileData;
+      } else {
+        // Fallback: try direct file read
+        try {
+          const directRead = await storageService.get<any[]>('gt_invoiceNotifications');
+          if (directRead && Array.isArray(directRead)) {
+            notifsRaw = directRead;
+          } else {
+            notifsRaw = [];
+          }
+        } catch (error) {
+          console.error('[GT Invoice] Error in direct file read:', error);
+          notifsRaw = [];
+        }
+      }
+    }
+    
     const custRaw = await loadGTDataFromLocalStorage<any>(
       'gt_customers',
       async () => await storageService.get<any[]>('gt_customers') || []
@@ -183,11 +201,11 @@ const Accounting = () => {
     // Update notifications di storage (cleanup yang sudah tidak relevan)
     if (JSON.stringify(cleanedNotifs) !== JSON.stringify(notifsArray)) {
       await storageService.set('gt_invoiceNotifications', cleanedNotifs);
-      console.log(`🧹 Cleaned up ${notifsArray.length - cleanedNotifs.length} obsolete invoice notifications`);
     }
     
     // Filter notifications yang belum dibuat invoice (status PENDING)
     const pendingNotifs = cleanedNotifs.filter((n: any) => n.status === 'PENDING');
+    
     setInvoiceNotifications(pendingNotifs);
     setCustomers(cust);
     setProducts(prod);
@@ -557,7 +575,6 @@ const Accounting = () => {
               }));
 
               await storageService.set('gt_journalEntries', [...currentEntries, ...cogsEntriesWithNo]);
-              console.log(`✅ COGS journal entries created for Invoice ${invoiceNo}: COGS +${cogsAmount}, Inventory -${cogsAmount}`);
             }
           }
         } catch (error: any) {
@@ -947,8 +964,8 @@ const Accounting = () => {
       // Simpan kode item dan nama produk
       if (product) {
         // Ambil kode dari berbagai field yang mungkin ada di master products
-        // Prioritaskan: product_id > kode > sku > codeItem > id
-        const productCode = product.product_id || product.kode || product.sku || product.codeItem || product.id || '';
+        // Prioritas: Pad Code → KRT (kodeIpos) → Code/SKU
+        const productCode = product.padCode || product.kodeIpos || product.product_id || product.kode || product.sku || product.codeItem || product.id || '';
         productCodeMap[line.itemSku] = productCode;
         productMap[line.itemSku] = product.nama || product.description || product.name || line.itemSku;
       } else {
@@ -1197,29 +1214,49 @@ const Accounting = () => {
   };
 
   const handleDeleteExpense = async (item: any) => {
-    showConfirm(
-      `Delete expense: ${item.expenseNo}?`,
-      async () => {
-        try {
-          // Pakai helper function untuk safe delete (tombstone pattern)
-          const success = await safeDeleteItem('gt_expenses', item.id, 'id');
-          
-          if (success) {
-            // Reload data dengan filter active items
-            const updatedExpenses = await storageService.get<any[]>('gt_expenses') || [];
-            const activeExpenses = filterActiveItems(updatedExpenses);
-            setExpenses(activeExpenses);
-            showAlert(`Expense ${item.expenseNo} deleted successfully`, 'Success');
-          } else {
-            showAlert(`Error deleting expense. Silakan coba lagi.`, 'Error');
+    try {
+      console.log('[GT Finance Invoices] handleDeleteExpense called for:', item?.expenseNo, item?.id);
+      
+      if (!item || !item.expenseNo) {
+        showAlert('Expense tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[GT Finance Invoices] Expense missing ID:', item);
+        showAlert(`❌ Error: Expense "${item.expenseNo}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Expense ${item.expenseNo}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deleteGTItem('gt_expenses', item.id, 'id');
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              const activeExpenses = await reloadGTData('gt_expenses', setExpenses);
+              setExpenses(activeExpenses);
+              showAlert(`✅ Expense ${item.expenseNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[GT Finance Invoices] Delete failed:', deleteResult.error);
+              showAlert(`❌ Error deleting expense "${item.expenseNo}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[GT Finance Invoices] Error deleting expense:', error);
+            showAlert(`❌ Error deleting expense: ${error.message}`, 'Error');
           }
-        } catch (error: any) {
-          showAlert(`Error deleting expense: ${error.message}`, 'Error');
-        }
-      },
-      () => {},
-      'Delete Expense'
-    );
+        },
+        undefined,
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[GT Finance Invoices] Error in handleDeleteExpense:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
   };
 
   const tabs = [
@@ -2076,6 +2113,27 @@ const EditInvoiceDialog = ({
       }
     }
   }, [paymentTerms, topDays]);
+
+  // Enable semua input di dalam dialog saat dialog terbuka
+  useEffect(() => {
+    const enableDialogInputs = () => {
+      const dialogInputs = document.querySelectorAll('.dialog-card input, .dialog-card textarea, .dialog-card select');
+      dialogInputs.forEach((input: Element) => {
+        if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement || input instanceof HTMLSelectElement) {
+          input.removeAttribute('readonly');
+          input.removeAttribute('disabled');
+          (input as any).readOnly = false;
+          (input as any).disabled = false;
+        }
+      });
+    };
+    
+    // Enable inputs multiple times untuk memastikan
+    enableDialogInputs();
+    setTimeout(enableDialogInputs, 50);
+    setTimeout(enableDialogInputs, 100);
+    setTimeout(enableDialogInputs, 200);
+  }, []);
 
   // Helper function untuk remove leading zero dari input angka
   const removeLeadingZero = (value: string): string => {
@@ -3045,6 +3103,32 @@ const CreateInvoiceDialog = ({
     };
     loadData();
   }, []); // Empty dependency - only run once when dialog opens
+
+  // Enable semua input di dalam dialog saat dialog terbuka (simple, tidak massive)
+  useEffect(() => {
+    const enableDialogInputs = () => {
+      const dialogCard = document.querySelector('.dialog-card');
+      if (!dialogCard) return;
+      
+      const inputs = dialogCard.querySelectorAll('input, textarea, select');
+      inputs.forEach((input) => {
+        if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) {
+          input.removeAttribute('readonly');
+          input.removeAttribute('disabled');
+          input.readOnly = false;
+          input.disabled = false;
+        } else if (input instanceof HTMLSelectElement) {
+          input.removeAttribute('disabled');
+          input.disabled = false;
+        }
+      });
+    };
+    
+    // Enable sekali saat mount, lalu sekali lagi setelah render
+    enableDialogInputs();
+    const timer = setTimeout(enableDialogInputs, 100);
+    return () => clearTimeout(timer);
+  }, [mode]); // Re-run saat mode berubah
   
   // Auto-populate data ketika SO dipilih
   useEffect(() => {
@@ -3318,10 +3402,25 @@ const CreateInvoiceDialog = ({
   };
   
   const handleCalculationChange = (field: string, value: any) => {
-    const updated = { ...calculation, [field]: value };
+    // Recalculate subtotal dari items yang aktif (sesuai mode)
+    let subtotal = 0;
+    if (mode === 'sj' && autoDNItems.length > 0) {
+      // Mode DO: gunakan subtotal dari autoDNItems
+      subtotal = autoDNItems.reduce((sum, item) => sum + (item.qty * item.price), 0);
+    } else if (mode === 'manual' && manualItems.length > 0) {
+      // Mode manual: gunakan subtotal dari manualItems
+      subtotal = manualItems.reduce((sum, item) => sum + (Number(item.qty || 0) * Number(item.price || 0)), 0);
+    } else if (mode === 'so' && autoItems.length > 0) {
+      // Mode SO: gunakan subtotal dari autoItems
+      subtotal = autoItems.reduce((sum, item) => sum + (item.qty * item.price), 0);
+    } else {
+      // Fallback: gunakan subtotal dari calculation yang ada
+      subtotal = calculation.subtotal || 0;
+    }
+    
+    const updated = { ...calculation, [field]: value, subtotal };
     
     // Recalculate totals
-    const subtotal = updated.subtotal || 0;
     const discount = updated.discount || 0;
     const tax = updated.tax || 0;
     const biayaLain = updated.biayaLain || 0;
@@ -3333,6 +3432,7 @@ const CreateInvoiceDialog = ({
     
     setCalculation({
       ...updated,
+      subtotal,
       total,
       discountPercent,
       taxPercent,
@@ -3419,6 +3519,7 @@ const CreateInvoiceDialog = ({
 
   return (
     <div
+      className="dialog-overlay"
       style={{
         position: 'fixed',
         top: 0,
@@ -3438,6 +3539,7 @@ const CreateInvoiceDialog = ({
       }}
     >
       <div
+        className="dialog-card"
         style={{
           backgroundColor: 'var(--bg-primary)',
           borderRadius: '8px',

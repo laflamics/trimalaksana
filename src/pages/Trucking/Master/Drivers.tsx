@@ -4,7 +4,8 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
+import { deleteTruckingItem, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { useDialog } from '../../../hooks/useDialog';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -29,58 +30,16 @@ const Drivers = () => {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
-  // Custom Dialog state
-  const [dialogState, setDialogState] = useState<{
-    show: boolean;
-    type: 'alert' | 'confirm' | null;
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-  }>({
-    show: false,
-    type: null,
-    title: '',
-    message: '',
-  });
-
-  // Helper functions untuk dialog
+  // Custom Dialog - menggunakan hook terpusat
+  const { showAlert: showAlertBase, showConfirm: showConfirmBase, DialogComponent } = useDialog();
+  
+  // Wrapper untuk kompatibilitas dengan urutan parameter yang berbeda
   const showAlert = (message: string, title: string = 'Information') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'alert',
-      title,
-      message,
-    });
+    showAlertBase(message, title);
   };
-
+  
   const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'confirm',
-      title,
-      message,
-      onConfirm,
-      onCancel,
-    });
-  };
-
-  const closeDialog = () => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(false);
-    }
-    setDialogState({
-      show: false,
-      type: null,
-      title: '',
-      message: '',
-    });
+    showConfirmBase(message, onConfirm, onCancel, title);
   };
 
   const [editingItem, setEditingItem] = useState<Driver | null>(null);
@@ -169,29 +128,49 @@ const Drivers = () => {
   };
 
   const handleDelete = async (item: Driver) => {
-    showConfirm(
-      `Are you sure you want to delete driver "${item.name}"?`,
-      async () => {
-        try {
-          // Pakai helper function untuk safe delete (tombstone pattern)
-          const success = await safeDeleteItem('trucking_drivers', item.id, 'id');
-          
-          if (success) {
-            // Reload data dengan filter active items
-            const updatedDrivers = await storageService.get<Driver[]>('trucking_drivers') || [];
-            const activeDrivers = filterActiveItems(updatedDrivers);
-            setDrivers(activeDrivers.map((d, idx) => ({ ...d, no: idx + 1 })));
-            showAlert(`Driver "${item.name}" deleted successfully`, 'Success');
-          } else {
-            showAlert(`Error deleting driver "${item.name}". Please try again.`, 'Error');
+    try {
+      console.log('[Trucking Drivers] handleDelete called for:', item?.name, item?.id);
+      
+      if (!item || !item.name) {
+        showAlert('Driver tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[Trucking Drivers] Driver missing ID:', item);
+        showAlert(`❌ Error: Driver "${item.name}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Driver "${item.name}"?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deleteTruckingItem('trucking_drivers', item.id, 'id');
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              const activeDrivers = await reloadTruckingData('trucking_drivers', setDrivers);
+              setDrivers(activeDrivers.map((d, idx) => ({ ...d, no: idx + 1 })));
+              showAlert(`✅ Driver "${item.name}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[Trucking Drivers] Delete failed:', deleteResult.error);
+              showAlert(`❌ Error deleting driver "${item.name}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[Trucking Drivers] Error deleting driver:', error);
+            showAlert(`❌ Error deleting driver: ${error.message}`, 'Error');
           }
-        } catch (error: any) {
-          showAlert(`Error deleting driver: ${error.message}`, 'Error');
-        }
-      },
-      undefined,
-      'Confirm Delete'
-    );
+        },
+        undefined,
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[Trucking Drivers] Error in handleDelete:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
   };
 
   const filteredDrivers = useMemo(() => {
@@ -401,34 +380,8 @@ const Drivers = () => {
         <Table columns={columns} data={filteredDrivers} emptyMessage={searchQuery ? "No drivers found matching your search" : "No drivers data"} />
       </Card>
       {/* Custom Dialog */}
-      {dialogState.show && (
-        <div className="dialog-overlay" onClick={closeDialog}>
-          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
-            <Card className="dialog-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h2>{dialogState.title}</h2>
-                <Button variant="secondary" onClick={closeDialog} style={{ padding: '6px 12px' }}>✕</Button>
-              </div>
-              <p style={{ marginBottom: '20px', whiteSpace: 'pre-wrap' }}>{dialogState.message}</p>
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                {dialogState.type === 'confirm' && (
-                  <Button variant="secondary" onClick={closeDialog}>Cancel</Button>
-                )}
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    if (dialogState.onConfirm) dialogState.onConfirm();
-                    closeDialog();
-                  }}
-                >
-                  {dialogState.type === 'confirm' ? 'Confirm' : 'OK'}
-                </Button>
-              </div>
-            </Card>
-          </div>
-        </div>
-      )}
-
+      {/* Custom Dialog - menggunakan hook terpusat */}
+      <DialogComponent />
     </div>
   );
 };

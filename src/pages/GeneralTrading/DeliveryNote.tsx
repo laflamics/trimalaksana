@@ -6,7 +6,7 @@ import Input from '../../components/Input';
 import ScheduleTable from '../../components/ScheduleTable';
 import NotificationBell from '../../components/NotificationBell';
 import { storageService, extractStorageValue } from '../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
+import { deleteGTItem, reloadGTData, filterActiveItems } from '../../utils/gt-delete-helper';
 import { generateSuratJalanHtml, generateGTDeliveryNoteHtml } from '../../pdf/suratjalan-pdf-template';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import { useDialog } from '../../hooks/useDialog';
@@ -431,18 +431,50 @@ const DeliveryNote = () => {
   useEffect(() => {
     let isMounted = true;
     let timeoutId: NodeJS.Timeout | null = null;
+    let debounceTimer: NodeJS.Timeout | null = null;
+    let isLoading = false; // Guard untuk prevent loop
     
     const loadAllData = async () => {
-      if (!isMounted) return;
+      if (!isMounted || isLoading) return;
+      isLoading = true;
+      try {
       await loadDeliveries();
       await loadCustomers();
       await loadProducts();
       await loadSalesOrders();
       await loadNotifications();
       await loadScheduleData();
+      } finally {
+        isLoading = false;
+      }
     };
     
     loadAllData();
+    
+    // CRITICAL: Listen untuk storage changes (untuk refresh data ketika ada perubahan dari server)
+    const handleStorageChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ key?: string }>;
+      const key = customEvent.detail?.key || '';
+      
+      // CRITICAL: Listen untuk gt_delivery changes (termasuk signed document upload)
+      if (key === 'gt_delivery' || key === 'general-trading/gt_delivery') {
+        // Skip jika sedang loading untuk prevent loop
+        if (isLoading) return;
+        
+        // Debounce: tunggu 300ms sebelum reload, kalau ada perubahan lagi dalam 300ms, cancel yang sebelumnya
+        if (debounceTimer) {
+          clearTimeout(debounceTimer);
+        }
+        debounceTimer = setTimeout(async () => {
+          if (isMounted && !isLoading) {
+            await loadDeliveries();
+            debounceTimer = null;
+          }
+        }, 300);
+      }
+    };
+    
+    window.addEventListener('app-storage-changed', handleStorageChange as EventListener);
     
     // Refresh setiap 10 detik untuk cek notifikasi baru (diperlambat untuk mengurangi re-render)
     const interval = setInterval(() => {
@@ -452,7 +484,7 @@ const DeliveryNote = () => {
         clearTimeout(timeoutId);
       }
       timeoutId = setTimeout(async () => {
-        if (isMounted) {
+        if (isMounted && !isLoading) {
           await loadDeliveries();
           await loadNotifications();
           await loadScheduleData();
@@ -466,6 +498,10 @@ const DeliveryNote = () => {
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      window.removeEventListener('app-storage-changed', handleStorageChange as EventListener);
     };
   }, []);
 
@@ -690,12 +726,37 @@ const DeliveryNote = () => {
   };
 
   const loadDeliveries = async () => {
+    // CRITICAL: Extract dengan proper extraction untuk handle nested structure
     const dataRaw = await storageService.get<DeliveryNote[]>('gt_delivery') || [];
+    let data = extractStorageValue(dataRaw) || [];
+    
+    // CRITICAL: Ensure data is always an array
+    if (!Array.isArray(data)) {
+      data = [];
+    }
+    
     // Filter out deleted items menggunakan helper function
-    const activeData = filterActiveItems(dataRaw);
+    const activeData = filterActiveItems(data);
     setDeliveries((prev: DeliveryNote[]) => {
       // Optimize: hanya update jika data benar-benar berubah
-      if (JSON.stringify(prev) === JSON.stringify(activeData)) {
+      // CRITICAL: Compare dengan signedDocument dan signedDocumentPath untuk detect changes
+      const prevStr = JSON.stringify(prev.map(d => ({
+        id: d.id,
+        sjNo: d.sjNo,
+        status: d.status,
+        signedDocument: d.signedDocument ? 'hasSignedDoc' : null,
+        signedDocumentPath: d.signedDocumentPath,
+        signedDocumentName: d.signedDocumentName
+      })));
+      const activeStr = JSON.stringify(activeData.map(d => ({
+        id: d.id,
+        sjNo: d.sjNo,
+        status: d.status,
+        signedDocument: d.signedDocument ? 'hasSignedDoc' : null,
+        signedDocumentPath: d.signedDocumentPath,
+        signedDocumentName: d.signedDocumentName
+      })));
+      if (prevStr === activeStr && prev.length === activeData.length) {
         return prev;
       }
       return activeData;
@@ -1045,8 +1106,9 @@ const DeliveryNote = () => {
     
     if (hasChanges) {
       // Non-blocking update untuk mencegah blocking UI dan infinite loop
+      // CRITICAL: Force sync ke server untuk update notification (POST/PUT/DELETE)
       setTimeout(async () => {
-        await storageService.set('gt_deliveryNotifications', cleanedNotifications);
+        await storageService.set('gt_deliveryNotifications', cleanedNotifications, true);
       }, 1000); // Debounce 1 detik untuk mencegah update terlalu sering
     }
     
@@ -1614,6 +1676,58 @@ const DeliveryNote = () => {
     handleEdit(item);
   };
 
+  const handleDelete = async (item: DeliveryNote) => {
+    try {
+      console.log('[GT DeliveryNote] handleDelete called for:', item?.sjNo, item?.id);
+      
+      if (!item || !item.sjNo) {
+        showAlert('Delivery Note tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[GT DeliveryNote] Delivery Note missing ID:', item);
+        showAlert(`❌ Error: Delivery Note "${item.sjNo}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        'Hapus Delivery Note',
+        `Hapus Delivery Note ${item.sjNo}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deleteGTItem('gt_delivery', item.id, 'id');
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              const activeDeliveries = await reloadGTData('gt_delivery', setDeliveries);
+              setDeliveries(activeDeliveries);
+              
+              // Reload deliveries untuk update UI
+              await loadDeliveries();
+              
+              // Reload notifications untuk update status (kembali ke READY_TO_SHIP jika delivery dihapus)
+              await loadNotifications();
+              
+              showAlert(`✅ Delivery Note ${item.sjNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[GT DeliveryNote] Delete failed:', deleteResult.error);
+              showAlert(`❌ Error deleting delivery note "${item.sjNo}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[GT DeliveryNote] Error deleting delivery note:', error);
+            showAlert(`❌ Error deleting delivery note: ${error.message}`, 'Error');
+          }
+        }
+      );
+    } catch (error: any) {
+      console.error('[GT DeliveryNote] Error in handleDelete:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
+  };
+
   const handleViewSignedDocument = async (item: DeliveryNote) => {
     if (!item.signedDocument && !item.signedDocumentPath) {
       showAlert('Error', 'No signed document available');
@@ -1875,8 +1989,9 @@ const DeliveryNote = () => {
         );
         
         // Save ke local storage
+        // CRITICAL: Force immediate sync ke server untuk memastikan signed document langsung tersedia di device lain
         try {
-          await storageService.set('gt_delivery', updated);
+          await storageService.set('gt_delivery', updated, true);
         } catch (storageError: any) {
           // Jika save ke storage gagal karena quota, coba handle khusus
           if (storageError.message?.includes('quota') || storageError.message?.includes('exceeded')) {
@@ -1964,6 +2079,8 @@ const DeliveryNote = () => {
         );
         
         if (!existingInvoiceNotif) {
+          // CRITICAL: Invoice notification HANYA dibuat saat surat jalan sudah di-upload (signed document)
+          // Ini adalah tempat yang benar untuk create invoice notification
           const newInvoiceNotification = {
             id: `invoice-${Date.now()}-${item.sjNo}`,
             type: 'CUSTOMER_INVOICE',
@@ -1975,12 +2092,15 @@ const DeliveryNote = () => {
             customerKode: so?.customerKode || '',
             items: itemsInSJ, // Items sesuai dengan SJ
             totalQty: itemsInSJ.reduce((sum: number, itm: any) => sum + (itm.qty || 0), 0),
-            signedDocument: base64,
+            signedDocument: isPDF ? undefined : base64, // Hanya simpan base64 untuk image, PDF disimpan di file system
+            signedDocumentPath: signedDocumentPath, // Path untuk PDF
             signedDocumentName: file.name,
+            signedDocumentType: fileType, // PDF atau image
             status: 'PENDING',
             created: new Date().toISOString(),
           };
-          await storageService.set('gt_invoiceNotifications', [...invoiceNotifications, newInvoiceNotification]);
+          // CRITICAL: Force immediate sync ke server untuk invoice notification
+          await storageService.set('gt_invoiceNotifications', [...invoiceNotifications, newInvoiceNotification], true);
         }
 
         // Check if any notifications were updated
@@ -3050,55 +3170,34 @@ const DeliveryNote = () => {
           // IMPORTANT: Hanya update gt_deliveryNotifications (GT), jangan load dari deliveryNotifications (packaging)
           const deliveryNotifications = await storageService.get<any[]>('gt_deliveryNotifications') || [];
           const notificationIds = notificationsToProcess.map((n: any) => n.id);
-          const updatedNotifications = deliveryNotifications.map((n: any) =>
-            notificationIds.includes(n.id) ? { ...n, status: 'DELIVERY_CREATED' } : n
-          );
-          await storageService.set('gt_deliveryNotifications', updatedNotifications);
+          // Include parent grouped notification ID jika ada
+          const parentNotificationId = notif.isGrouped ? notif.id : null;
+          const allNotificationIds = parentNotificationId 
+            ? [...notificationIds, parentNotificationId]
+            : notificationIds;
           
-          // Send notification to Accounting for invoice creation (saat delivery dibuat, belum ada signed doc)
-          // Notifikasi ini akan di-update saat signed doc di-upload
-          try {
-            const invoiceNotifications = await storageService.get<any[]>('gt_invoiceNotifications') || [];
-            const existingInvoiceNotif = invoiceNotifications.find((n: any) => 
-              n.sjNo === sjNo && n.type === 'CUSTOMER_INVOICE'
-            );
-            
-            if (!existingInvoiceNotif) {
-              // Get SO info
-              const salesOrders = await storageService.get<any[]>('gt_salesOrders') || [];
-              const so = salesOrders.find((s: any) => s.soNo === notif.soNo);
-              const poCustomerNo = so?.poCustomerNo || so?.soNo || '-';
-              
-              // Get SPK numbers from delivery items
-              const spkNosFromSJ = deliveryItems
-                .map((item: any) => item.spkNo)
-                .filter((spk: string) => spk && spk.trim() !== '');
-              
-              const newInvoiceNotification = {
-                id: `invoice-${Date.now()}-${sjNo}`,
-                type: 'CUSTOMER_INVOICE',
-                sjNo: sjNo,
-                soNo: notif.soNo,
-                poCustomerNo: poCustomerNo,
-                spkNos: spkNosFromSJ,
-                customer: notif.customer,
-                customerKode: so?.customerKode || '',
-                items: deliveryItems.map((item: any) => ({
-                  product: item.product || '',
-                  productId: item.productId || '',
-                  productKode: item.productKode || '',
-                  qty: item.qty || 0,
-                  unit: item.unit || 'PCS',
-                })),
-                totalQty: deliveryItems.reduce((sum: number, item: any) => sum + (item.qty || 0), 0),
-                status: 'PENDING',
-                created: new Date().toISOString(),
-              };
-              await storageService.set('gt_invoiceNotifications', [...invoiceNotifications, newInvoiceNotification]);
+          const updatedNotifications = deliveryNotifications.map((n: any) => {
+            // Update individual notifications yang diproses
+            if (notificationIds.includes(n.id)) {
+              return { ...n, status: 'DELIVERY_CREATED', updated: new Date().toISOString() };
             }
-          } catch (error: any) {
-            console.error('❌ Error creating invoice notification:', error);
-          }
+            // Update parent grouped notification jika semua child sudah DELIVERY_CREATED
+            if (parentNotificationId && n.id === parentNotificationId && n.isGrouped && n.groupedNotifications) {
+              const allChildrenDelivered = n.groupedNotifications.every((child: any) => 
+                notificationIds.includes(child.id) || child.status === 'DELIVERY_CREATED'
+              );
+              if (allChildrenDelivered) {
+                return { ...n, status: 'DELIVERY_CREATED', updated: new Date().toISOString() };
+              }
+            }
+            return n;
+          });
+          // CRITICAL: Force immediate sync ke server untuk update notification status (POST/PUT)
+          await storageService.set('gt_deliveryNotifications', updatedNotifications, true);
+          
+          // CRITICAL: Invoice notification HANYA dibuat saat surat jalan sudah di-upload (signed document)
+          // Jangan create invoice notification saat delivery note dibuat, karena belum ada signed document
+          // Invoice notification akan dibuat di handleUploadSignedDocument() atau handleStatusChange() jika sudah ada signed document
 
           const itemCount = deliveryItems.length;
           const totalQty = deliveryItems.reduce((sum, item) => sum + (item.qty || 0), 0);
@@ -3149,6 +3248,7 @@ const DeliveryNote = () => {
                 .map((deliveryItem: any) => deliveryItem.spkNo)
                 .filter((spk: string) => spk && spk.trim() !== '');
               
+              // CRITICAL: Invoice notification HANYA dibuat jika surat jalan sudah di-upload (signed document)
               const newInvoiceNotification = {
                 id: `invoice-${Date.now()}-${item.sjNo}`,
                 type: 'CUSTOMER_INVOICE',
@@ -3166,12 +3266,15 @@ const DeliveryNote = () => {
                   unit: deliveryItem.unit || 'PCS',
                 })),
                 totalQty: (item.items || []).reduce((sum: number, deliveryItem: any) => sum + (deliveryItem.qty || 0), 0),
-                signedDocument: item.signedDocument,
+                signedDocument: item.signedDocument, // Base64 untuk image
+                signedDocumentPath: item.signedDocumentPath, // Path untuk PDF
                 signedDocumentName: item.signedDocumentName,
+                signedDocumentType: item.signedDocumentType, // PDF atau image
                 status: 'PENDING',
                 created: new Date().toISOString(),
               };
-              await storageService.set('gt_invoiceNotifications', [...invoiceNotifications, newInvoiceNotification]);
+              // CRITICAL: Force immediate sync ke server untuk invoice notification
+              await storageService.set('gt_invoiceNotifications', [...invoiceNotifications, newInvoiceNotification], true);
               showAlert('Success', `✅ Status updated to: ${newStatus}\n\n📧 Notification sent to Accounting - Customer Invoice tab`);
             } else {
               showAlert('Success', `✅ Status updated to: ${newStatus}`);
@@ -3249,6 +3352,13 @@ const DeliveryNote = () => {
             style={{ fontSize: '11px', padding: '4px 8px', backgroundColor: '#9C27B0', color: 'white' }}
           >
             Print
+          </Button>
+          <Button 
+            variant="secondary" 
+            onClick={() => handleDelete(item)}
+            style={{ fontSize: '11px', padding: '4px 8px', backgroundColor: '#f44336', color: 'white' }}
+          >
+            Delete
           </Button>
           {item.status === 'OPEN' && !item.signedDocument && (
             <>
@@ -4662,6 +4772,27 @@ const EditSJDialog = ({ delivery, onClose, onSave }: { delivery: DeliveryNote; o
     loadData();
   }, []);
 
+  // Enable semua input di dalam dialog saat dialog terbuka
+  useEffect(() => {
+    const enableDialogInputs = () => {
+      const dialogInputs = document.querySelectorAll('.dialog-card input, .dialog-card textarea, .dialog-card select');
+      dialogInputs.forEach((input: Element) => {
+        if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement || input instanceof HTMLSelectElement) {
+          input.removeAttribute('readonly');
+          input.removeAttribute('disabled');
+          (input as any).readOnly = false;
+          (input as any).disabled = false;
+        }
+      });
+    };
+    
+    // Enable inputs multiple times untuk memastikan
+    enableDialogInputs();
+    setTimeout(enableDialogInputs, 50);
+    setTimeout(enableDialogInputs, 100);
+    setTimeout(enableDialogInputs, 200);
+  }, []);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -5618,6 +5749,27 @@ const CreateDeliveryNoteDialog = ({
       showAlert('Error', `Error creating delivery note: ${error.message}`);
     }
   };
+
+  // Enable semua input di dalam dialog saat dialog terbuka
+  useEffect(() => {
+    const enableDialogInputs = () => {
+      const dialogInputs = document.querySelectorAll('.dialog-card input, .dialog-card textarea, .dialog-card select');
+      dialogInputs.forEach((input: Element) => {
+        if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement || input instanceof HTMLSelectElement) {
+          input.removeAttribute('readonly');
+          input.removeAttribute('disabled');
+          (input as any).readOnly = false;
+          (input as any).disabled = false;
+        }
+      });
+    };
+    
+    // Enable inputs multiple times untuk memastikan
+    enableDialogInputs();
+    setTimeout(enableDialogInputs, 50);
+    setTimeout(enableDialogInputs, 100);
+    setTimeout(enableDialogInputs, 200);
+  }, []);
 
   return (
     <div className="dialog-overlay" onClick={onClose} style={{ zIndex: 10001 }}>

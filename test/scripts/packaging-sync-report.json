@@ -1,0 +1,66 @@
+{
+  "timestamp": "2026-01-12T04:36:04.331Z",
+  "action": "force-packaging-sync",
+  "totalItemsSynced": 2259,
+  "dataTypesSynced": 9,
+  "syncedData": [
+    "products",
+    "materials",
+    "customers",
+    "suppliers",
+    "salesOrders",
+    "purchaseOrders",
+    "production",
+    "inventory",
+    "userAccessControl"
+  ],
+  "serverUrl": "http://localhost:3001",
+  "success": true,
+  "details": [
+    {
+      "dataType": "products",
+      "itemCount": 1287,
+      "syncedAt": "2026-01-12T04:36:04.301Z"
+    },
+    {
+      "dataType": "materials",
+      "itemCount": 816,
+      "syncedAt": "2026-01-12T04:36:04.305Z"
+    },
+    {
+      "dataType": "customers",
+      "itemCount": 74,
+      "syncedAt": "2026-01-12T04:36:04.305Z"
+    },
+    {
+      "dataType": "suppliers",
+      "itemCount": 32,
+      "syncedAt": "2026-01-12T04:36:04.306Z"
+    },
+    {
+      "dataType": "salesOrders",
+      "itemCount": 10,
+      "syncedAt": "2026-01-12T04:36:04.306Z"
+    },
+    {
+      "dataType": "purchaseOrders",
+      "itemCount": 2,
+      "syncedAt": "2026-01-12T04:36:04.306Z"
+    },
+    {
+      "dataType": "production",
+      "itemCount": 4,
+      "syncedAt": "2026-01-12T04:36:04.306Z"
+    },
+    {
+      "dataType": "inventory",
+      "itemCount": 6,
+      "syncedAt": "2026-01-12T04:36:04.306Z"
+    },
+    {
+      "dataType": "userAccessControl",
+      "itemCount": 28,
+      "syncedAt": "2026-01-12T04:36:04.307Z"
+    }
+  ]
+}

@@ -134,38 +134,58 @@ const Settings = () => {
     setStorageType(config.type || 'local');
     
     if (config.serverUrl) {
-      try {
-        const url = new URL(config.serverUrl.trim()); // Trim to remove spaces
-        const hostname = url.hostname.trim();
-        const isTailscaleFunnel = hostname.includes('tailscale') || hostname.includes('tail') || hostname.includes('.ts.net');
-        
-        setServerUrl(hostname);
-        // Tailscale funnel tidak perlu port, set default 8888 hanya untuk display
-        if (isTailscaleFunnel) {
-          setServerPort(8888); // Default untuk display, tapi tidak digunakan
-        } else {
-          setServerPort(Number(url.port) || 8888);
-        }
-      } catch (e) {
-        // If URL parsing fails, try to extract from string
-        const match = config.serverUrl.trim().match(/https?:\/\/([^:]+):?(\d+)?/);
-        if (match) {
-          const hostname = match[1].trim();
+      // Skip WebSocket URLs (ws:// or wss://) - hanya ambil HTTP/HTTPS URLs
+      const serverUrlStr = config.serverUrl.trim();
+      if (serverUrlStr.startsWith('ws://') || serverUrlStr.startsWith('wss://')) {
+        // Ini WebSocket URL, skip dan set default
+        setServerUrl('server-tljp.tail75a421.ts.net');
+        setServerPort(8888);
+      } else {
+        try {
+          const url = new URL(serverUrlStr);
+          const hostname = url.hostname.trim();
           const isTailscaleFunnel = hostname.includes('tailscale') || hostname.includes('tail') || hostname.includes('.ts.net');
           
           setServerUrl(hostname);
+          // Tailscale funnel tidak perlu port, set default 8888 hanya untuk display
           if (isTailscaleFunnel) {
-            setServerPort(8888); // Default untuk display
+            setServerPort(8888); // Default untuk display, tapi tidak digunakan
           } else {
-            setServerPort(match[2] ? Number(match[2]) : 8888);
+            setServerPort(Number(url.port) || 8888);
+          }
+        } catch (e) {
+          // If URL parsing fails, try to extract from string
+          const match = serverUrlStr.match(/https?:\/\/([^:\/]+):?(\d+)?/);
+          if (match) {
+            const hostname = match[1].trim();
+            const isTailscaleFunnel = hostname.includes('tailscale') || hostname.includes('tail') || hostname.includes('.ts.net');
+            
+            setServerUrl(hostname);
+            if (isTailscaleFunnel) {
+              setServerPort(8888); // Default untuk display
+            } else {
+              setServerPort(match[2] ? Number(match[2]) : 8888);
+            }
+          } else {
+            // If all parsing fails, set default
+            setServerUrl('server-tljp.tail75a421.ts.net');
+            setServerPort(8888);
           }
         }
       }
     } else if (config.type === 'server') {
-      // Auto-set default Vercel server jika mode server tapi belum ada URL
+      // Auto-set default Tailscale server jika mode server tapi belum ada URL
       if (!config.serverUrl) {
-        setServerUrl('vercel-proxy-blond-nine.vercel.app');
+        setServerUrl('server-tljp.tail75a421.ts.net');
+        setServerPort(8888);
+      } else {
+        setServerPort(8888);
       }
+    }
+    
+    // Set default server URL jika kosong dan mode server
+    if (storageType === 'server' && !serverUrl) {
+      setServerUrl('server-tljp.tail75a421.ts.net');
       setServerPort(8888);
     }
 
@@ -184,6 +204,12 @@ const Settings = () => {
     // Load theme
     const currentTheme = getTheme();
     setTheme(currentTheme);
+    
+    // Set default WebSocket URL if not set
+    if (config.type === 'server' && !localStorage.getItem('websocket_url')) {
+      localStorage.setItem('websocket_url', 'ws://server-tljp.tail75a421.ts.net:8888/ws');
+      localStorage.setItem('websocket_enabled', 'true');
+    }
   };
 
   useEffect(() => {
@@ -213,15 +239,24 @@ const Settings = () => {
   const handleCheckConnection = async () => {
     setConnectionStatus('checking');
     try {
+      // Set default jika kosong atau jika ini WebSocket URL
+      let currentServerUrl = serverUrl.trim();
+      if (!currentServerUrl || currentServerUrl.startsWith('ws://') || currentServerUrl.startsWith('wss://')) {
+        currentServerUrl = 'server-tljp.tail75a421.ts.net';
+        setServerUrl(currentServerUrl);
+        setServerPort(8888);
+      }
+      
       // Normalize serverUrl (remove http:// or https:// if user accidentally included it)
-      let cleanUrl = serverUrl.replace(/^https?:\/\//, '').trim();
+      let cleanUrl = currentServerUrl.replace(/^https?:\/\//, '').trim();
+      // Jika masih ada ws:// atau wss://, hapus juga
+      cleanUrl = cleanUrl.replace(/^wss?:\/\//, '').trim();
       // Use https for Tailscale funnel and Vercel, http for others
       const isTailscaleFunnel = cleanUrl.includes('tailscale') || cleanUrl.includes('tail') || cleanUrl.includes('.ts.net');
-      const isVercel = cleanUrl.includes('vercel.app');
-      const protocol = (isTailscaleFunnel || isVercel) ? 'https' : 'http';
+      const protocol = isTailscaleFunnel ? 'https' : 'http';
       
-      // Tailscale funnel and Vercel tidak perlu port (sudah di-proxy)
-      const fullUrl = (isTailscaleFunnel || isVercel)
+      // Tailscale funnel tidak perlu port
+      const fullUrl = isTailscaleFunnel
         ? `${protocol}://${cleanUrl}` 
         : `${protocol}://${cleanUrl}:${serverPort}`;
       
@@ -295,9 +330,8 @@ const Settings = () => {
       // Normalize error URL display (same logic as handleCheckConnection)
       let cleanErrorUrl = serverUrl.replace(/^https?:\/\//, '').trim();
       const isTailscaleFunnel = cleanErrorUrl.includes('tailscale') || cleanErrorUrl.includes('tail') || cleanErrorUrl.includes('.ts.net');
-      const isVercel = cleanErrorUrl.includes('vercel.app');
-      const protocol = (isTailscaleFunnel || isVercel) ? 'https' : 'http';
-      const errorUrl = (isTailscaleFunnel || isVercel)
+      const protocol = isTailscaleFunnel ? 'https' : 'http';
+      const errorUrl = isTailscaleFunnel
         ? `${protocol}://${cleanErrorUrl}`
         : `${protocol}://${cleanErrorUrl}:${serverPort}`;
       showAlert(`Connection error: ${error.message}\n\nURL: ${errorUrl}\n\nPlease check console for details.`, 'Error');
@@ -307,14 +341,23 @@ const Settings = () => {
   const handleSave = async () => {
     // Trim serverUrl to remove any spaces
     let cleanServerUrl = serverUrl.trim();
-    // Remove protocol if user accidentally included it
+    
+    // Set default jika kosong atau jika ini WebSocket URL
+    if (storageType === 'server' && (!cleanServerUrl || cleanServerUrl.startsWith('ws://') || cleanServerUrl.startsWith('wss://'))) {
+      cleanServerUrl = 'server-tljp.tail75a421.ts.net';
+      setServerUrl(cleanServerUrl);
+      setServerPort(8888);
+    }
+    
+    // Remove protocol if user accidentally included it (HTTP/HTTPS only)
     cleanServerUrl = cleanServerUrl.replace(/^https?:\/\//, '');
+    // Juga hapus ws:// atau wss:// jika ada
+    cleanServerUrl = cleanServerUrl.replace(/^wss?:\/\//, '');
     // Use https for Tailscale funnel and Vercel, http for others
     const isTailscaleFunnel = cleanServerUrl.includes('tailscale') || cleanServerUrl.includes('tail') || cleanServerUrl.includes('.ts.net');
-    const isVercel = cleanServerUrl.includes('vercel.app');
-    const protocol = (isTailscaleFunnel || isVercel) ? 'https' : 'http';
-    // Tailscale funnel and Vercel tidak perlu port (sudah di-proxy)
-    const finalServerUrl = (isTailscaleFunnel || isVercel)
+    const protocol = isTailscaleFunnel ? 'https' : 'http';
+    // Tailscale funnel tidak perlu port
+    const finalServerUrl = isTailscaleFunnel
       ? `${protocol}://${cleanServerUrl}`
       : `${protocol}://${cleanServerUrl}:${serverPort}`;
     const config = {
@@ -324,6 +367,9 @@ const Settings = () => {
     await storageService.setConfig(config);
     if (storageType === 'server') {
       await storageService.syncFromServer();
+      // Set default WebSocket URL
+      localStorage.setItem('websocket_url', 'ws://server-tljp.tail75a421.ts.net:8888/ws');
+      localStorage.setItem('websocket_enabled', 'true');
     }
 
     // Save company settings
@@ -476,13 +522,12 @@ const Settings = () => {
       
       // Get server URL from config
       const config = storageService.getConfig();
-      let serverUrl = config.serverUrl || 'vercel-proxy-blond-nine.vercel.app';
+      let serverUrl = config.serverUrl || 'server-tljp.tail75a421.ts.net';
       
       // Normalize server URL (same logic as handleCheckConnection)
       if (!serverUrl.startsWith('http')) {
         const isTailscaleFunnel = serverUrl.includes('.ts.net') || serverUrl.includes('tailscale') || serverUrl.includes('tail');
-        const isVercel = serverUrl.includes('vercel.app');
-        const protocol = (isTailscaleFunnel || isVercel) ? 'https' : 'http';
+        const protocol = isTailscaleFunnel ? 'https' : 'http';
         serverUrl = `${protocol}://${serverUrl}`;
       }
       serverUrl = serverUrl.replace(/:\d+$/, ''); // Remove port if exists
@@ -660,7 +705,7 @@ const Settings = () => {
                   setStorageType(e.target.value as StorageType);
                   // Auto-set Tailscale server URL saat pilih server mode
                   if (!serverUrl || serverUrl.trim() === '') {
-                    setServerUrl('vercel-proxy-blond-nine.vercel.app');
+                    setServerUrl('server-tljp.tail75a421.ts.net');
                     setServerPort(8888);
                   }
                 }}
@@ -676,7 +721,7 @@ const Settings = () => {
               label="Server URL"
               value={serverUrl}
               onChange={setServerUrl}
-              placeholder="vercel-proxy-blond-nine.vercel.app (default Vercel)"
+              placeholder="server-tljp.tail75a421.ts.net (default)"
             />
             <Input
               label="Server Port"

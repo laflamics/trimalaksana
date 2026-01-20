@@ -167,30 +167,50 @@ const Customers = () => {
   };
 
   const handleDelete = async (item: Customer) => {
-    showConfirm(
-      `Are you sure you want to delete customer "${item.nama}"? This action cannot be undone.`,
-      async () => {
-        try {
-          // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
-          const deleteResult = await deleteGTItem('gt_customers', item.id, 'id');
-          
-          if (deleteResult.success) {
-            // Reload data dengan helper (handle race condition)
-            const activeCustomers = await reloadGTData('gt_customers', setCustomers);
-            // Re-number customers
-            setCustomers(activeCustomers.map((c, idx) => ({ ...c, no: idx + 1 })));
-            showAlert(`✅ Customer "${item.nama}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
-          } else {
-            showAlert(`❌ Error deleting customer "${item.nama}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+    try {
+      console.log('[GT Customers] handleDelete called for:', item?.nama, item?.id);
+      
+      if (!item || !item.nama) {
+        showAlert('Customer tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[GT Customers] Customer missing ID:', item);
+        showAlert(`❌ Error: Customer "${item.nama}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Customer "${item.nama}"?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deleteGTItem('gt_customers', item.id, 'id');
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              const activeCustomers = await reloadGTData('gt_customers', setCustomers);
+              // Re-number customers
+              setCustomers(activeCustomers.map((c, idx) => ({ ...c, no: idx + 1 })));
+              showAlert(`✅ Customer "${item.nama}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[GT Customers] Delete failed:', deleteResult.error);
+              showAlert(`❌ Error deleting customer "${item.nama}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[GT Customers] Error deleting customer:', error);
+            showAlert(`❌ Error deleting customer: ${error.message}`, 'Error');
           }
-        } catch (error: any) {
-          console.error('[Customers] Error in safe delete:', error);
-          showAlert(`❌ Error deleting customer: ${error.message}`, 'Error');
-        }
-      },
-      undefined,
-      'Confirm Delete'
-    );
+        },
+        undefined,
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[GT Customers] Error in handleDelete:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
   };
 
   // Download Template Excel

@@ -6,63 +6,22 @@ import { storageService, StorageType, SyncStatus } from '../../../services/stora
 import { dockerServerService } from '../../../services/docker-server';
 import { getTheme, applyTheme, Theme } from '../../../utils/theme';
 import { checkMobileUpdate, downloadMobileAPK, getAPKFileName } from '../../../utils/actions';
+import { useDialog } from '../../../hooks/useDialog';
 import '../../../styles/compact.css';
 
 const Settings = () => {
   const [storageType, setStorageType] = useState<StorageType>('local');
   const [serverUrl, setServerUrl] = useState('');
-  // Custom Dialog state
-  const [dialogState, setDialogState] = useState<{
-    show: boolean;
-    type: 'alert' | 'confirm' | null;
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-  }>({
-    show: false,
-    type: null,
-    title: '',
-    message: '',
-  });
-
-  // Helper functions untuk dialog
+  // Custom Dialog - menggunakan hook terpusat
+  const { showAlert: showAlertBase, showConfirm: showConfirmBase, DialogComponent } = useDialog();
+  
+  // Wrapper untuk kompatibilitas dengan urutan parameter yang berbeda
   const showAlert = (message: string, title: string = 'Information') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'alert',
-      title,
-      message,
-    });
+    showAlertBase(message, title);
   };
-
+  
   const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'confirm',
-      title,
-      message,
-      onConfirm,
-      onCancel,
-    });
-  };
-
-  const closeDialog = () => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(false);
-    }
-    setDialogState({
-      show: false,
-      type: null,
-      title: '',
-      message: '',
-    });
+    showConfirmBase(message, onConfirm, onCancel, title);
   };
 
   const [serverPort, setServerPort] = useState(8888);
@@ -156,36 +115,55 @@ const Settings = () => {
     setStorageType(config.type || 'local');
     
     if (config.serverUrl) {
-      try {
-        const url = new URL(config.serverUrl.trim());
-        const hostname = url.hostname.trim();
-        const isTailscaleFunnel = hostname.includes('tailscale') || hostname.includes('tail') || hostname.includes('.ts.net');
-        
-        setServerUrl(hostname);
-        if (isTailscaleFunnel) {
-          setServerPort(8888);
-        } else {
-          setServerPort(Number(url.port) || 8888);
-        }
-      } catch (e) {
-        const match = config.serverUrl.trim().match(/https?:\/\/([^:]+):?(\d+)?/);
-        if (match) {
-          const hostname = match[1].trim();
+      // Skip WebSocket URLs (ws:// or wss://) - hanya ambil HTTP/HTTPS URLs
+      const serverUrlStr = config.serverUrl.trim();
+      if (serverUrlStr.startsWith('ws://') || serverUrlStr.startsWith('wss://')) {
+        // Ini WebSocket URL, skip dan set default
+        setServerUrl('server-tljp.tail75a421.ts.net');
+        setServerPort(8888);
+      } else {
+        try {
+          const url = new URL(serverUrlStr);
+          const hostname = url.hostname.trim();
           const isTailscaleFunnel = hostname.includes('tailscale') || hostname.includes('tail') || hostname.includes('.ts.net');
           
           setServerUrl(hostname);
           if (isTailscaleFunnel) {
             setServerPort(8888);
           } else {
-            setServerPort(match[2] ? Number(match[2]) : 8888);
+            setServerPort(Number(url.port) || 8888);
+          }
+        } catch (e) {
+          const match = serverUrlStr.match(/https?:\/\/([^:\/]+):?(\d+)?/);
+          if (match) {
+            const hostname = match[1].trim();
+            const isTailscaleFunnel = hostname.includes('tailscale') || hostname.includes('tail') || hostname.includes('.ts.net');
+            
+            setServerUrl(hostname);
+            if (isTailscaleFunnel) {
+              setServerPort(8888);
+            } else {
+              setServerPort(match[2] ? Number(match[2]) : 8888);
+            }
+          } else {
+            // If all parsing fails, set default
+            setServerUrl('server-tljp.tail75a421.ts.net');
+            setServerPort(8888);
           }
         }
       }
     } else if (config.type === 'server') {
-      // Auto-set default Vercel server jika mode server tapi belum ada URL
+      // Auto-set default Tailscale server jika mode server tapi belum ada URL
       if (!config.serverUrl) {
-        setServerUrl('vercel-proxy-blond-nine.vercel.app');
+        setServerUrl('server-tljp.tail75a421.ts.net');
+        setServerPort(8888);
       }
+    }
+    
+    // Set default server URL jika kosong dan mode server
+    if (storageType === 'server' && !serverUrl) {
+      setServerUrl('server-tljp.tail75a421.ts.net');
+      setServerPort(8888);
     }
 
     // Load company settings
@@ -203,17 +181,32 @@ const Settings = () => {
     // Load theme
     const currentTheme = getTheme();
     setTheme(currentTheme);
+    
+    // Set default WebSocket URL if not set
+    if (config.type === 'server' && !localStorage.getItem('websocket_url')) {
+      localStorage.setItem('websocket_url', 'ws://server-tljp.tail75a421.ts.net:8888/ws');
+      localStorage.setItem('websocket_enabled', 'true');
+    }
   };
 
   const handleCheckConnection = async () => {
     setConnectionStatus('checking');
     try {
-      let cleanUrl = serverUrl.replace(/^https?:\/\//, '').trim();
-      const isTailscaleFunnel = cleanUrl.includes('tailscale') || cleanUrl.includes('tail') || cleanUrl.includes('.ts.net');
-      const isVercel = cleanUrl.includes('vercel.app');
-      const protocol = (isTailscaleFunnel || isVercel) ? 'https' : 'http';
+      // Set default jika kosong atau jika ini WebSocket URL
+      let currentServerUrl = serverUrl.trim();
+      if (!currentServerUrl || currentServerUrl.startsWith('ws://') || currentServerUrl.startsWith('wss://')) {
+        currentServerUrl = 'server-tljp.tail75a421.ts.net';
+        setServerUrl(currentServerUrl);
+        setServerPort(8888);
+      }
       
-      const fullUrl = (isTailscaleFunnel || isVercel)
+      let cleanUrl = currentServerUrl.replace(/^https?:\/\//, '').trim();
+      // Jika masih ada ws:// atau wss://, hapus juga
+      cleanUrl = cleanUrl.replace(/^wss?:\/\//, '').trim();
+      const isTailscaleFunnel = cleanUrl.includes('tailscale') || cleanUrl.includes('tail') || cleanUrl.includes('.ts.net');
+      const protocol = isTailscaleFunnel ? 'https' : 'http';
+      
+      const fullUrl = isTailscaleFunnel
         ? `${protocol}://${cleanUrl}` 
         : `${protocol}://${cleanUrl}:${serverPort}`;
       
@@ -279,9 +272,8 @@ const Settings = () => {
       // Normalize error URL display (same logic as handleCheckConnection)
       let cleanErrorUrl = serverUrl.replace(/^https?:\/\//, '').trim();
       const isTailscaleFunnel = cleanErrorUrl.includes('tailscale') || cleanErrorUrl.includes('tail') || cleanErrorUrl.includes('.ts.net');
-      const isVercel = cleanErrorUrl.includes('vercel.app');
-      const protocol = (isTailscaleFunnel || isVercel) ? 'https' : 'http';
-      const errorUrl = (isTailscaleFunnel || isVercel)
+      const protocol = isTailscaleFunnel ? 'https' : 'http';
+      const errorUrl = isTailscaleFunnel
         ? `${protocol}://${cleanErrorUrl}`
         : `${protocol}://${cleanErrorUrl}:${serverPort}`;
       showAlert(`Connection error: ${error.message}\n\nURL: ${errorUrl}\n\nPlease check console for details.`, 'Error');
@@ -290,12 +282,21 @@ const Settings = () => {
 
   const handleSave = async () => {
     let cleanServerUrl = serverUrl.trim();
-    // Remove protocol if user accidentally included it
+    
+    // Set default jika kosong atau jika ini WebSocket URL
+    if (storageType === 'server' && (!cleanServerUrl || cleanServerUrl.startsWith('ws://') || cleanServerUrl.startsWith('wss://'))) {
+      cleanServerUrl = 'server-tljp.tail75a421.ts.net';
+      setServerUrl(cleanServerUrl);
+      setServerPort(8888);
+    }
+    
+    // Remove protocol if user accidentally included it (HTTP/HTTPS only)
     cleanServerUrl = cleanServerUrl.replace(/^https?:\/\//, '');
+    // Juga hapus ws:// atau wss:// jika ada
+    cleanServerUrl = cleanServerUrl.replace(/^wss?:\/\//, '');
     const isTailscaleFunnel = cleanServerUrl.includes('tailscale') || cleanServerUrl.includes('tail') || cleanServerUrl.includes('.ts.net');
-    const isVercel = cleanServerUrl.includes('vercel.app');
-    const protocol = (isTailscaleFunnel || isVercel) ? 'https' : 'http';
-    const finalServerUrl = (isTailscaleFunnel || isVercel)
+    const protocol = isTailscaleFunnel ? 'https' : 'http';
+    const finalServerUrl = isTailscaleFunnel
       ? `${protocol}://${cleanServerUrl}`
       : `${protocol}://${cleanServerUrl}:${serverPort}`;
     const config = {
@@ -305,6 +306,9 @@ const Settings = () => {
     await storageService.setConfig(config);
     if (storageType === 'server') {
       await storageService.syncFromServer();
+      // Set default WebSocket URL
+      localStorage.setItem('websocket_url', 'ws://server-tljp.tail75a421.ts.net:8888/ws');
+      localStorage.setItem('websocket_enabled', 'true');
     }
 
     // Save company settings
@@ -460,13 +464,12 @@ const Settings = () => {
       
       // Get server URL from config
       const config = storageService.getConfig();
-      let serverUrl = config.serverUrl || 'vercel-proxy-blond-nine.vercel.app';
+      let serverUrl = config.serverUrl || 'server-tljp.tail75a421.ts.net';
       
       // Normalize server URL (same logic as handleCheckConnection)
       if (!serverUrl.startsWith('http')) {
         const isTailscaleFunnel = serverUrl.includes('.ts.net') || serverUrl.includes('tailscale') || serverUrl.includes('tail');
-        const isVercel = serverUrl.includes('vercel.app');
-        const protocol = (isTailscaleFunnel || isVercel) ? 'https' : 'http';
+        const protocol = isTailscaleFunnel ? 'https' : 'http';
         serverUrl = `${protocol}://${serverUrl}`;
       }
       serverUrl = serverUrl.replace(/:\d+$/, ''); // Remove port if exists
@@ -645,7 +648,7 @@ const Settings = () => {
                 onChange={(e) => {
                   setStorageType(e.target.value as StorageType);
                   if (!serverUrl || serverUrl.trim() === '') {
-                    setServerUrl('vercel-proxy-blond-nine.vercel.app');
+                    setServerUrl('server-tljp.tail75a421.ts.net');
                     setServerPort(8888);
                   }
                 }}
@@ -661,7 +664,7 @@ const Settings = () => {
               label="Server URL"
               value={serverUrl}
               onChange={setServerUrl}
-              placeholder="vercel-proxy-blond-nine.vercel.app (default Vercel)"
+              placeholder="server-tljp.tail75a421.ts.net (default)"
             />
             <Input
               label="Server Port"
@@ -812,33 +815,8 @@ const Settings = () => {
         </Card>
       )}
       {/* Custom Dialog */}
-      {dialogState.show && (
-        <div className="dialog-overlay" onClick={closeDialog}>
-          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
-            <Card className="dialog-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h2>{dialogState.title}</h2>
-                <Button variant="secondary" onClick={closeDialog} style={{ padding: '6px 12px' }}>✕</Button>
-              </div>
-              <p style={{ marginBottom: '20px', whiteSpace: 'pre-wrap' }}>{dialogState.message}</p>
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                {dialogState.type === 'confirm' && (
-                  <Button variant="secondary" onClick={closeDialog}>Cancel</Button>
-                )}
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    if (dialogState.onConfirm) dialogState.onConfirm();
-                    closeDialog();
-                  }}
-                >
-                  {dialogState.type === 'confirm' ? 'Confirm' : 'OK'}
-                </Button>
-              </div>
-            </Card>
-          </div>
-        </div>
-      )}
+      {/* Custom Dialog - menggunakan hook terpusat */}
+      <DialogComponent />
 
 
     </div>

@@ -80,17 +80,10 @@ const AccountsReceivable = () => {
       const invs = extractStorageValue(invsRaw);
       const cust = extractStorageValue(custRaw);
       
-      console.log(`📦 Loaded data:`, {
-        journalEntries: Array.isArray(entries) ? entries.length : 0,
-        invoices: Array.isArray(invs) ? invs.length : 0,
-        customers: Array.isArray(cust) ? cust.length : 0,
-      });
-      
       setJournalEntries(entries || []);
       setInvoices(invs || []);
       setCustomers(cust || []);
     } catch (error: any) {
-      console.error('❌ Error loading data:', error);
       showAlert(`Error loading data: ${error.message}`, 'Error');
     } finally {
       setLoading(false);
@@ -119,8 +112,6 @@ const AccountsReceivable = () => {
     
     // Ambil semua journal entries untuk account 1100 (Accounts Receivable)
     const arEntries = journalEntries.filter((entry: JournalEntry) => entry.account === '1100');
-    
-    console.log(`📋 Total AR journal entries: ${arEntries.length}`);
     
     // Group by reference (Invoice No)
     const arByReference: Record<string, {
@@ -164,8 +155,6 @@ const AccountsReceivable = () => {
         arByReference[ref].descriptions.push(entry.description);
       }
     });
-    
-    console.log(`📋 Total AR references: ${Object.keys(arByReference).length}`);
     
     // Map ke format AR dengan data dari invoices untuk customer info
     return Object.values(arByReference)
@@ -242,8 +231,6 @@ const AccountsReceivable = () => {
           status: item.balance > 0 ? 'OPEN' : 'CLOSE',
           description: item.descriptions.join('; '),
         };
-        
-        console.log(`📊 AR ${item.reference}: Debit=${item.totalDebit}, Credit=${item.totalCredit}, Balance=${item.balance}`);
         
         return result;
       })

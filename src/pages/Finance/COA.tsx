@@ -407,27 +407,47 @@ const COA = () => {
   };
 
   const handleDelete = async (item: Account) => {
-    showConfirm(
-      'Delete Account',
-      `Delete Account: ${item.code} - ${item.name}?`,
-      async () => {
-        try {
-          // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
-          // Note: COA pakai 'code' sebagai ID field, bukan 'id'
-          const deleteResult = await deletePackagingItem('accounts', item.code, 'code');
-          if (deleteResult.success) {
-            // Reload data dengan helper (handle race condition)
-            await reloadPackagingData('accounts', setAccounts);
-            await loadData(); // Reload untuk update balances
-            showAlert(`Account ${item.code} - ${item.name} deleted successfully`, 'Success');
-          } else {
-            showAlert(`Error deleting account: ${deleteResult.error || 'Unknown error'}`, 'Error');
-          }
-        } catch (error: any) {
-          showAlert('Error', `Error deleting account: ${error.message}`);
-        }
+    try {
+      console.log('[COA] handleDelete called for:', item?.code, item?.name);
+      
+      if (!item || !item.code) {
+        showAlert('Account tidak valid. Mohon coba lagi.', 'Error');
+        return;
       }
-    );
+      
+      // Validate item.code exists (COA uses 'code' as ID field)
+      if (!item.code) {
+        console.error('[COA] Account missing code:', item);
+        showAlert(`❌ Error: Account ${item.name || 'Unknown'} tidak memiliki code. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        'Safe Delete Confirmation',
+        `Hapus Account: ${item.code} - ${item.name}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
+            // Note: COA pakai 'code' sebagai ID field, bukan 'id'
+            const deleteResult = await deletePackagingItem('accounts', item.code, 'code');
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              await reloadPackagingData('accounts', setAccounts);
+              await loadData(); // Reload untuk update balances
+              showAlert(`Account ${item.code} - ${item.name} deleted successfully`, 'Success');
+            } else {
+              showAlert(`Error deleting account: ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[COA] Error deleting account:', error);
+            showAlert('Error', `Error deleting account: ${error.message}`);
+          }
+        }
+      );
+    } catch (error: any) {
+      console.error('[COA] Error in handleDelete:', error);
+      showAlert('Error', `Error: ${error.message}`);
+    }
   };
 
   // Calculate account balances from journal entries

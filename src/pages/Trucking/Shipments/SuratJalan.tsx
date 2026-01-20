@@ -5,7 +5,8 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import NotificationBell from '../../../components/NotificationBell';
 import { storageService } from '../../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
+import { deleteTruckingItem, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { useDialog } from '../../../hooks/useDialog';
 import { generateSuratJalanHtml } from '../../../pdf/suratjalan-pdf-template';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../../utils/actions';
 import { loadLogoAsBase64 } from '../../../utils/logo-loader';
@@ -210,6 +211,14 @@ interface SuratJalanItem {
   description?: string;
 }
 
+interface SignedDocument {
+  document: string; // Base64 untuk image, atau file:// path untuk PDF
+  path?: string; // Path ke file PDF di file system
+  name: string;
+  type: 'pdf' | 'image';
+  uploadedAt?: string; // Timestamp saat upload
+}
+
 interface SuratJalan {
   id: string;
   no: number;
@@ -231,6 +240,9 @@ interface SuratJalan {
   distributedDate?: string;
   scheduledDate: string;
   scheduledTime: string;
+  // NEW: Array untuk multiple signed documents
+  signedDocuments?: SignedDocument[];
+  // OLD: Single document (backward compatibility)
   signedDocument?: string; // Base64 untuk image, atau file:// path untuk PDF
   signedDocumentPath?: string; // Path ke file PDF di file system
   signedDocumentName?: string;
@@ -286,6 +298,9 @@ const SuratJalan = () => {
   const [pendingUploadItem, setPendingUploadItem] = useState<SuratJalan | null>(null);
   const [showFormDialog, setShowFormDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<SuratJalan | null>(null);
+  const [viewingDocuments, setViewingDocuments] = useState<SignedDocument[]>([]);
+  const [viewingDocumentsItem, setViewingDocumentsItem] = useState<SuratJalan | null>(null);
+  const [selectedDocumentIndex, setSelectedDocumentIndex] = useState(0);
   const [showRouteDialog, setShowRouteDialog] = useState(false);
   const [routeDialogSearch, setRouteDialogSearch] = useState('');
   const [notificationDialog, setNotificationDialog] = useState<{
@@ -314,63 +329,23 @@ const SuratJalan = () => {
   const [newItem, setNewItem] = useState({ product: '', qty: 0, unit: 'UNIT', description: '' });
   const [viewPdfData, setViewPdfData] = useState<{ html: string; sjNo: string } | null>(null);
 
-  // Custom Dialog state
-  const [dialogState, setDialogState] = useState<{
-    show: boolean;
-    type: 'alert' | 'confirm' | null;
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-  }>({
-    show: false,
-    type: null,
-    title: '',
-    message: '',
-  });
-
+  // Custom Dialog - menggunakan hook terpusat
+  const { showAlert: showAlertBase, showConfirm: showConfirmBase, DialogComponent } = useDialog();
+  
+  // Wrapper untuk kompatibilitas dengan urutan parameter yang berbeda
   const showAlert = (message: string, title: string = 'Information') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'alert',
-      title,
-      message,
-    });
+    showAlertBase(message, title);
   };
-
+  
   const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'confirm',
-      title,
-      message,
-      onConfirm,
-      onCancel,
-    });
-  };
-
-  const closeDialog = () => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(false);
-    }
-    setDialogState({
-      show: false,
-      type: null,
-      title: '',
-      message: '',
-    });
+    showConfirmBase(message, onConfirm, onCancel, title);
   };
 
   useEffect(() => {
     loadData();
-    // Auto-refresh setiap 5 detik
-    const interval = setInterval(loadData, 5000);
+    // Optimasi: Auto-refresh setiap 30 detik untuk mengurangi bandwidth (sebelumnya 5 detik)
+    // Gunakan event-based updates untuk real-time changes
+    const interval = setInterval(loadData, 30000); // 30 detik - cukup untuk surat jalan updates
     return () => clearInterval(interval);
   }, []);
 
@@ -574,10 +549,17 @@ const SuratJalan = () => {
 
   const handleDeleteNotification = async (notif: any) => {
     try {
-      // Gunakan safeDeleteItem untuk soft delete (tombstone pattern)
-      const success = await safeDeleteItem('trucking_suratJalanNotifications', notif.id, 'id');
+      console.log('[Trucking SuratJalan] handleDeleteNotification called for:', notif?.id);
       
-      if (success) {
+      if (!notif || !notif.id) {
+        showAlert('Notification tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
+      const deleteResult = await deleteTruckingItem('trucking_suratJalanNotifications', notif.id, 'id');
+      
+      if (deleteResult.success) {
         // Reload data dengan filter active items
         const allNotifications = await storageService.get<any[]>('trucking_suratJalanNotifications') || [];
         const activeNotifs = filterActiveItems(allNotifications).filter((n: any) => {
@@ -598,9 +580,10 @@ const SuratJalan = () => {
           return true;
         });
         setNotifications(activeNotifs);
-        showAlert('Notifikasi berhasil dihapus', 'Success');
+        showAlert('✅ Notifikasi berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.', 'Success');
       } else {
-        showAlert('Error menghapus notifikasi. Silakan coba lagi.', 'Error');
+        console.error('[Trucking SuratJalan] Delete notification failed:', deleteResult.error);
+        showAlert(`❌ Error menghapus notifikasi: ${deleteResult.error || 'Unknown error'}`, 'Error');
       }
     } catch (error: any) {
       showAlert(`Error deleting notification: ${error.message}`, 'Error');
@@ -878,12 +861,11 @@ const SuratJalan = () => {
           await saveTombstoneToAuditLog(item, 'trucking_suratJalan');
           
           // Pakai helper function untuk safe delete (tombstone pattern)
-          const success = await safeDeleteItem('trucking_suratJalan', item.id, 'id');
+          const deleteResult = await deleteTruckingItem('trucking_suratJalan', item.id, 'id');
           
-          if (success) {
-            // Reload data dengan filter active items
-            const updatedSJ = await storageService.get<SuratJalan[]>('trucking_suratJalan') || [];
-            const activeSJ = filterActiveItems(updatedSJ);
+          if (deleteResult.success) {
+            // Reload data dengan helper function
+            const activeSJ = await reloadTruckingData('trucking_suratJalan', setSuratJalan);
             
             // Sort by created date (newest first)
             const sortedUpdated = activeSJ.sort((a, b) => {
@@ -894,7 +876,7 @@ const SuratJalan = () => {
             setSuratJalan(sortedUpdated.map((sj, idx) => ({ ...sj, no: idx + 1 })));
             showAlert(`Surat Jalan "${item.sjNo}" deleted successfully`, 'Success');
           } else {
-            showAlert(`Error deleting surat jalan "${item.sjNo}". Please try again.`, 'Error');
+            showAlert(`Error deleting surat jalan "${item.sjNo}": ${deleteResult.error || 'Please try again.'}`, 'Error');
           }
         } catch (error: any) {
           showAlert(`Error deleting surat jalan: ${error.message}`, 'Error');
@@ -943,7 +925,10 @@ const SuratJalan = () => {
       };
 
       // Prepare items untuk template - convert ke format yang diharapkan template
-      const items = item.items || (doData?.items || []);
+      // Ensure items is always an array to prevent "filter is not a function" error
+      const rawItems = item.items || doData?.items || [];
+      const items = Array.isArray(rawItems) ? rawItems : [];
+      
       const soLines = items.map((it: any) => ({
         itemSku: it.sku || it.productCode || '', // PRODUCT CODE hanya dari SKU/productCode, kosongkan jika tidak ada
         qty: it.qty || 0,
@@ -1037,6 +1022,29 @@ const SuratJalan = () => {
     }
   };
 
+  // Helper function untuk convert old format ke new format
+  const normalizeSignedDocuments = (sj: SuratJalan): SignedDocument[] => {
+    const docs: SignedDocument[] = [];
+    
+    // Convert old format ke new format jika ada
+    if (sj.signedDocument || sj.signedDocumentPath) {
+      docs.push({
+        document: sj.signedDocument || `file://${sj.signedDocumentPath}`,
+        path: sj.signedDocumentPath,
+        name: sj.signedDocumentName || 'Signed Document',
+        type: sj.signedDocumentType || 'image',
+        uploadedAt: sj.receivedDate || sj.created,
+      });
+    }
+    
+    // Add new format documents jika ada
+    if (sj.signedDocuments && sj.signedDocuments.length > 0) {
+      docs.push(...sj.signedDocuments);
+    }
+    
+    return docs;
+  };
+
   const handleUploadSignedDocument = async (item: SuratJalan) => {
     // Show dialog untuk input tanggal receipt dulu
     setPendingUploadItem(item);
@@ -1055,46 +1063,51 @@ const SuratJalan = () => {
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = 'image/*,.pdf';
+    fileInput.multiple = true; // Support multiple files
     fileInput.onchange = async (e: any) => {
-      const file = e.target.files?.[0];
-      if (!file) {
+      const files = Array.from(e.target.files || []) as File[];
+      if (!files || files.length === 0) {
         setPendingUploadItem(null);
         return;
       }
 
       try {
+        // Process semua files
+        const existingDocs = normalizeSignedDocuments(item);
+        const newDocs: SignedDocument[] = [];
+        
+        // Process files sequentially
+        for (const file of files) {
+          await new Promise<void>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = async (e) => {
+              try {
           const base64 = e.target?.result as string;
           
           // Deteksi tipe file
           const isPDF = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
           const fileType: 'pdf' | 'image' = isPDF ? 'pdf' : 'image';
           
-          // Untuk PDF, simpan sebagai file di file system (karena terlalu besar untuk localStorage)
-          // Untuk image, tetap simpan sebagai base64 (lebih kecil)
-          let signedDocument: string;
-          let signedDocumentPath: string | undefined;
+                let document: string;
+                let path: string | undefined;
           
           if (isPDF) {
-            // PDF: Simpan sebagai file dan simpan path-nya saja
+                  // PDF: Simpan sebagai file di file system
             const electronAPI = (window as any).electronAPI;
             
-            // Cek apakah Electron API tersedia
             if (!electronAPI) {
-              throw new Error('⚠️ Electron API tidak tersedia.\n\nPastikan aplikasi berjalan di Electron app, bukan di browser.\n\nJika sudah di Electron, silakan:\n1. Tutup aplikasi Electron\n2. Buka kembali aplikasi Electron\n3. Coba upload lagi');
+                    throw new Error('⚠️ Electron API tidak tersedia.\n\nPastikan aplikasi berjalan di Electron app, bukan di browser.');
             }
             
             if (typeof electronAPI.saveUploadedFile !== 'function') {
-              throw new Error('⚠️ Fungsi saveUploadedFile tidak tersedia.\n\nSilakan:\n1. Tutup aplikasi Electron\n2. Buka kembali aplikasi Electron\n3. Coba upload lagi');
+                    throw new Error('⚠️ Fungsi saveUploadedFile tidak tersedia.\n\nSilakan restart aplikasi Electron.');
             }
             
             try {
               const result = await electronAPI.saveUploadedFile(base64, file.name, 'pdf');
               if (result && result.success) {
-                signedDocumentPath = result.path;
-                // Simpan path sebagai reference, bukan base64
-                signedDocument = `file://${result.path}`;
+                      path = result.path;
+                      document = `file://${result.path}`;
               } else {
                 throw new Error(result?.error || 'Failed to save PDF file');
               }
@@ -1103,25 +1116,48 @@ const SuratJalan = () => {
               if (errorMessage.includes('No handler registered') || 
                   errorMessage.includes('handler registered') ||
                   errorMessage.includes('Error invoking remote method')) {
-                throw new Error('⚠️ Handler Electron belum terdaftar.\n\nSilakan:\n1. Tutup aplikasi Electron (tutup semua window)\n2. Buka kembali aplikasi Electron dari shortcut/start menu\n3. Tunggu aplikasi selesai loading\n4. Coba upload PDF lagi\n\nJika masih error, hubungi administrator.');
+                      throw new Error('⚠️ Handler Electron belum terdaftar.\n\nSilakan restart aplikasi Electron.');
               }
-              throw new Error(`❌ Gagal menyimpan PDF ke file system.\n\nError: ${errorMessage}\n\nSilakan:\n1. Restart aplikasi Electron\n2. Pastikan folder data/uploads bisa diakses\n3. Coba upload lagi`);
+                    throw new Error(`❌ Gagal menyimpan PDF: ${errorMessage}`);
             }
           } else {
-            // Image: Simpan sebagai base64 (biasanya lebih kecil)
-            signedDocument = base64;
-            signedDocumentPath = undefined;
-          }
+                  // Image: Simpan sebagai base64
+                  document = base64;
+                  path = undefined;
+                }
+                
+                newDocs.push({
+                  document: path ? `file://${path}` : document,
+                  path: path,
+                  name: file.name,
+                  type: fileType,
+                  uploadedAt: new Date().toISOString(),
+                });
+                
+                resolve();
+              } catch (error: any) {
+                reject(error);
+              }
+            };
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.readAsDataURL(file);
+          });
+        }
+        
+        // Combine existing dan new documents
+        const allDocs = [...existingDocs, ...newDocs];
           
           const updated = suratJalan.map(sj =>
             sj.id === item.id
               ? {
                   ...sj,
-                  // Jika PDF sudah disimpan di file system, jangan simpan base64 di storage
-                  signedDocument: signedDocumentPath ? undefined : signedDocument, 
-                  signedDocumentPath: signedDocumentPath, // Simpan path untuk PDF
-                  signedDocumentName: file.name,
-                  signedDocumentType: fileType, // Simpan tipe file
+                // Simpan sebagai array baru
+                signedDocuments: allDocs,
+                // Clear old format untuk konsistensi
+                signedDocument: undefined,
+                signedDocumentPath: undefined,
+                signedDocumentName: undefined,
+                signedDocumentType: undefined,
                   receivedDate: receiptDate,
                   status: 'Close' as const, // Otomatis close setelah upload signed document
                 }
@@ -1135,16 +1171,18 @@ const SuratJalan = () => {
             // Jika save ke storage gagal karena quota, coba handle khusus
             if (storageError.message?.includes('quota') || storageError.message?.includes('exceeded')) {
               // Jika PDF sudah disimpan di file system, kita bisa skip signedDocument di storage
-              if (signedDocumentPath) {
+              // Cek apakah ada path dari newDocs yang berhasil disimpan
+              const savedDoc = newDocs.find(doc => doc.path);
+              if (savedDoc && savedDoc.path) {
                 // Simpan tanpa signedDocument (hanya path)
                 const updatedWithoutBase64 = suratJalan.map(sj =>
                   sj.id === item.id
                     ? {
                         ...sj,
                         signedDocument: undefined, // Hapus base64 jika ada
-                        signedDocumentPath: signedDocumentPath,
-                        signedDocumentName: file.name,
-                        signedDocumentType: fileType,
+                        signedDocumentPath: savedDoc.path,
+                        signedDocumentName: savedDoc.name,
+                        signedDocumentType: savedDoc.type,
                         receivedDate: receiptDate,
                         status: 'Close' as const,
                       }
@@ -1227,10 +1265,8 @@ const SuratJalan = () => {
             showAlert(`✅ Signed document uploaded successfully for ${item.sjNo}\n\n✅ Status updated to CLOSE\n✅ DO ${item.doNo} closed`, 'Success');
           }
           setPendingUploadItem(null);
-        };
-        reader.readAsDataURL(file);
       } catch (error: any) {
-        showAlert(`Error uploading signed document: ${error.message}`, 'Error');
+          showAlert(`Error uploading files: ${error.message}`, 'Error');
         setPendingUploadItem(null);
       }
     };
@@ -1238,23 +1274,36 @@ const SuratJalan = () => {
   };
 
   const handleViewSignedDocument = async (item: SuratJalan) => {
-    if (!item.signedDocument && !item.signedDocumentPath) {
+    const docs = normalizeSignedDocuments(item);
+    
+    if (docs.length === 0) {
       showAlert('No signed document available for this Surat Jalan', 'Information');
       return;
     }
 
+    // Jika hanya 1 file, langsung view
+    if (docs.length === 1) {
+      await handleViewSingleDocument(item, docs[0]);
+      return;
+    }
+    
+    // Jika multiple files, buka gallery dialog
+    setViewingDocuments(docs);
+    setViewingDocumentsItem(item);
+  };
+
+  const handleViewSingleDocument = async (item: SuratJalan, doc: SignedDocument) => {
     try {
-      const fileName = item.signedDocumentName || '';
-      let signedDocument = item.signedDocument || '';
+      let documentData = doc.document;
       
       // Jika file disimpan sebagai path (PDF yang besar), load dari file system
-      if (item.signedDocumentPath) {
+      if (doc.path) {
         const electronAPI = (window as any).electronAPI;
         if (electronAPI && typeof electronAPI.loadUploadedFile === 'function') {
           try {
-            const result = await electronAPI.loadUploadedFile(item.signedDocumentPath);
+            const result = await electronAPI.loadUploadedFile(doc.path);
             if (result && result.success) {
-              signedDocument = result.data || '';
+              documentData = result.data || '';
             } else {
               throw new Error(result?.error || 'Failed to load file from file system');
             }
@@ -1262,38 +1311,43 @@ const SuratJalan = () => {
             showAlert('Error', `Gagal memuat file: ${loadError.message}`);
             return;
           }
+        } else if (isMobile() || isCapacitor()) {
+          showAlert('Error', 'File disimpan sebagai file system path, tetapi tidak bisa diakses di mobile.\n\nFile ini mungkin dibuat di aplikasi desktop. Silakan buka di aplikasi desktop untuk view file.');
+          return;
         } else {
           showAlert('Error', 'File disimpan sebagai file system, tetapi Electron API tidak tersedia.');
           return;
         }
       }
       
-      if (!signedDocument) {
+      if (!documentData) {
         showAlert('Error', 'No document data available');
         return;
       }
       
       // Deteksi tipe file
-      const isPDF = fileName.toLowerCase().endsWith('.pdf') || 
-                    signedDocument.startsWith('data:application/pdf') ||
-                    item.signedDocumentType === 'pdf' ||
-                    (signedDocument.length > 100 && signedDocument.substring(0, 100).includes('JVBERi0')); // PDF magic bytes
+      const isPDF = doc.type === 'pdf' || 
+                    doc.name.toLowerCase().endsWith('.pdf') ||
+                    documentData.startsWith('data:application/pdf') ||
+                    (documentData.length > 100 && documentData.substring(0, 100).includes('JVBERi0'));
       
       // Normalize data URI format
-      if (!signedDocument.startsWith('data:')) {
-        // Assume it's base64, need to determine MIME type
+      if (!documentData.startsWith('data:')) {
         if (isPDF) {
-          signedDocument = `data:application/pdf;base64,${signedDocument}`;
+          documentData = `data:application/pdf;base64,${documentData}`;
         } else {
-          // Assume image
-          signedDocument = `data:image/jpeg;base64,${signedDocument}`;
+          documentData = `data:image/jpeg;base64,${documentData}`;
         }
       }
       
-      // Untuk PDF, langsung download saja (lebih reliable)
+      // Untuk PDF, langsung download saja
       if (isPDF) {
-        // Langsung trigger download
-        handleDownloadSignedDocument(item);
+        const link = document.createElement('a');
+        link.href = documentData;
+        link.download = doc.name || `SJ-${item.sjNo}-signed.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
         return;
       } else {
         // Untuk image, buka di new window
@@ -1305,7 +1359,7 @@ const SuratJalan = () => {
         newWindow.document.write(`
           <html>
             <head>
-              <title>${item.signedDocumentName || 'Signed Document'}</title>
+              <title>${doc.name || 'Signed Document'}</title>
               <style>
                 body { 
                   margin: 0; 
@@ -1324,8 +1378,8 @@ const SuratJalan = () => {
               </style>
             </head>
             <body>
-            <img src="${signedDocument}" alt="${item.signedDocumentName || 'Signed Document'}" 
-                 onerror="this.parentElement.innerHTML='<div style=\\'padding:20px;text-align:center;\\'><p>Error loading image</p><p>Document length: ${signedDocument.length} chars</p></div>';" />
+            <img src="${documentData}" alt="${doc.name || 'Signed Document'}" 
+                 onerror="this.parentElement.innerHTML='<div style=\\'padding:20px;text-align:center;\\'><p>Error loading image</p></div>';" />
             </body>
           </html>
         `);
@@ -1336,52 +1390,50 @@ const SuratJalan = () => {
     }
   };
   
-  const handleDownloadSignedDocument = async (item: SuratJalan) => {
-    if (!item.signedDocument && !item.signedDocumentPath) {
+  const handleDownloadSignedDocument = async (item: SuratJalan, doc?: SignedDocument) => {
+    const docs = doc ? [doc] : normalizeSignedDocuments(item);
+    
+    if (docs.length === 0) {
       showAlert('Error', 'No signed document available');
       return;
     }
 
+    // Download semua files
+    for (const docItem of docs) {
     try {
-      // Priority 1: Load dari local file system jika ada
-      let signedDocument = item.signedDocument || '';
+        let documentData = docItem.document;
       
-      if (item.signedDocumentPath) {
+        if (docItem.path) {
         const electronAPI = (window as any).electronAPI;
         if (electronAPI && typeof electronAPI.loadUploadedFile === 'function') {
           try {
-            const result = await electronAPI.loadUploadedFile(item.signedDocumentPath);
+              const result = await electronAPI.loadUploadedFile(docItem.path);
             if (result && result.success) {
-              signedDocument = result.data || '';
+                documentData = result.data || '';
             } else {
               throw new Error(result?.error || 'Failed to load file from file system');
             }
           } catch (loadError: any) {
-            showAlert('Error', `Gagal memuat file: ${loadError.message}`);
-            return;
+              showAlert('Error', `Gagal memuat file ${docItem.name}: ${loadError.message}`);
+              continue;
           }
         } else {
-          showAlert('Error', 'File disimpan sebagai file system, tetapi Electron API tidak tersedia.');
-          return;
+            showAlert('Error', `File ${docItem.name} disimpan sebagai file system, tetapi Electron API tidak tersedia.`);
+            continue;
         }
       }
       
-      if (!signedDocument) {
-        showAlert('Error', 'No document data available');
-        return;
+        if (!documentData) {
+          continue;
       }
       
-      // Deteksi tipe file
-      const isPDF = item.signedDocumentName?.toLowerCase().endsWith('.pdf') || 
-                    signedDocument.startsWith('data:application/pdf') ||
-                    item.signedDocumentType === 'pdf';
+        const isPDF = docItem.type === 'pdf' || docItem.name.toLowerCase().endsWith('.pdf');
       
-      // Extract base64 data (remove data URL prefix jika ada)
-      let base64Data = signedDocument;
-      let mimeType = 'image/png';
+        // Extract base64 data
+        let base64Data = documentData;
+        let mimeType = isPDF ? 'application/pdf' : 'image/png';
       
       if (base64Data && base64Data.includes(',')) {
-        // Ada data URL prefix (data:image/png;base64,... atau data:application/pdf;base64,...)
         const parts = base64Data.split(',');
         base64Data = parts[1] || '';
         const mimeMatch = parts[0].match(/data:([^;]+)/);
@@ -1391,8 +1443,7 @@ const SuratJalan = () => {
       }
       
       if (!base64Data) {
-        showAlert('Error', 'No document data available');
-        return;
+          continue;
       }
       
       // Convert base64 to blob
@@ -1408,24 +1459,19 @@ const SuratJalan = () => {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      
-      // Determine file extension
-      let extension = 'png';
-      if (isPDF || mimeType.includes('pdf')) {
-        extension = 'pdf';
-      } else if (mimeType.includes('jpeg') || mimeType.includes('jpg')) {
-        extension = 'jpg';
-      } else if (mimeType.includes('png')) {
-        extension = 'png';
-      }
-      
-      link.download = item.signedDocumentName || `SJ-${item.sjNo}-signed.${extension}`;
+        link.download = docItem.name || `SJ-${item.sjNo}-signed.${isPDF ? 'pdf' : 'png'}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
+        
+        // Delay sedikit antara downloads
+        if (docs.length > 1) {
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
     } catch (error: any) {
-      showAlert('Error', `Error downloading document: ${error.message}`);
+        showAlert('Error', `Error downloading ${docItem.name}: ${error.message}`);
+      }
     }
   };
 
@@ -1474,13 +1520,17 @@ const SuratJalan = () => {
     {
       key: 'signedDocument',
       header: 'Signed Document',
-      render: (item: SuratJalan) => (
-        item.signedDocument ? (
-          <span style={{ color: '#4CAF50', fontSize: '12px' }}>✓ Uploaded</span>
-        ) : (
-          <span style={{ color: '#999', fontSize: '12px' }}>-</span>
-        )
-      ),
+      render: (item: SuratJalan) => {
+        const docs = normalizeSignedDocuments(item);
+        if (docs.length === 0) {
+          return <span style={{ color: '#999', fontSize: '12px' }}>-</span>;
+        }
+        return (
+          <span style={{ color: '#4CAF50', fontSize: '12px' }}>
+            ✓ {docs.length} file{docs.length > 1 ? 's' : ''}
+          </span>
+        );
+      },
     },
     {
       key: 'status',
@@ -1512,8 +1562,8 @@ const SuratJalan = () => {
           onReopen={item.status === 'Close' ? () => handleStatusChange(item, 'Open') : undefined}
           onEdit={() => handleEdit(item)}
           onViewPDF={() => handleViewPDF(item)}
-          onUploadSigned={!item.signedDocument ? () => handleUploadSignedDocument(item) : undefined}
-          onViewSigned={item.signedDocument ? () => handleViewSignedDocument(item) : undefined}
+          onUploadSigned={normalizeSignedDocuments(item).length === 0 ? () => handleUploadSignedDocument(item) : undefined}
+          onViewSigned={normalizeSignedDocuments(item).length > 0 ? () => handleViewSignedDocument(item) : undefined}
           onDelete={item.status === 'Open' ? () => handleDelete(item) : undefined}
         />
       ),
@@ -1971,8 +2021,10 @@ const SuratJalan = () => {
                         <div>🚛 Vehicle: {item.vehicleNo || '-'}</div>
                         <div>🚚 Route: {item.routeName || '-'}</div>
                         <div>📅 Scheduled: {item.scheduledDate || '-'} {item.scheduledTime || ''}</div>
-                        {item.signedDocument && (
-                          <div style={{ color: '#4CAF50', fontWeight: 600 }}>✓ Signed Document Uploaded</div>
+                        {normalizeSignedDocuments(item).length > 0 && (
+                          <div style={{ color: '#4CAF50', fontWeight: 600 }}>
+                            ✓ {normalizeSignedDocuments(item).length} Signed Document{normalizeSignedDocuments(item).length > 1 ? 's' : ''} Uploaded
+                          </div>
                         )}
                       </div>
                       {item.items && item.items.length > 0 && (
@@ -1992,13 +2044,13 @@ const SuratJalan = () => {
                         )}
                         <Button variant="secondary" onClick={() => handleEdit(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>Edit</Button>
                         <Button variant="primary" onClick={() => handleViewPDF(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>View PDF</Button>
-                        {!item.signedDocument ? (
+                        {normalizeSignedDocuments(item).length === 0 ? (
                           <Button variant="success" onClick={() => handleUploadSignedDocument(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>
                             📤 Upload Signed SJ
                           </Button>
                         ) : (
                           <Button variant="secondary" onClick={() => handleViewSignedDocument(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>
-                            👁️ View Signed SJ
+                            👁️ View Signed SJ ({normalizeSignedDocuments(item).length})
                           </Button>
                         )}
                         {item.status === 'Open' && (
@@ -2023,33 +2075,8 @@ const SuratJalan = () => {
         </Card>
 
         {/* Custom Dialog */}
-        {dialogState.show && (
-          <div className="dialog-overlay" onClick={closeDialog}>
-            <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
-              <Card className="dialog-card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h2>{dialogState.title}</h2>
-                  <Button variant="secondary" onClick={closeDialog} style={{ padding: '6px 12px' }}>✕</Button>
-                </div>
-                <p style={{ marginBottom: '20px', whiteSpace: 'pre-wrap' }}>{dialogState.message}</p>
-                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                  {dialogState.type === 'confirm' && (
-                    <Button variant="secondary" onClick={closeDialog}>Cancel</Button>
-                  )}
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      if (dialogState.onConfirm) dialogState.onConfirm();
-                      closeDialog();
-                    }}
-                  >
-                    {dialogState.type === 'confirm' ? 'Confirm' : 'OK'}
-                  </Button>
-                </div>
-              </Card>
-            </div>
-          </div>
-        )}
+        {/* Custom Dialog - menggunakan hook terpusat */}
+        <DialogComponent />
       </Card>
 
       {/* Receipt Date Dialog */}
@@ -2123,6 +2150,201 @@ const SuratJalan = () => {
           </div>
         </div>
       )}
+
+      {/* Gallery Dialog untuk Multiple Signed Documents */}
+      {viewingDocuments.length > 0 && viewingDocumentsItem && (
+        <div className="dialog-overlay" onClick={() => { setViewingDocuments([]); setViewingDocumentsItem(null); setSelectedDocumentIndex(0); }} style={{ zIndex: 10001 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '95%', width: '95%', maxHeight: '95vh', overflow: 'auto' }}>
+            <Card className="dialog-card" style={{ maxHeight: '95vh', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h2>Signed Documents - {viewingDocumentsItem.sjNo} ({viewingDocuments.length} files)</h2>
+                <Button variant="secondary" onClick={() => { setViewingDocuments([]); setViewingDocumentsItem(null); setSelectedDocumentIndex(0); }} style={{ padding: '6px 12px' }}>✕</Button>
+              </div>
+              
+              {/* Thumbnail List */}
+              <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', overflowX: 'auto', paddingBottom: '8px' }}>
+                {viewingDocuments.map((doc, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => setSelectedDocumentIndex(idx)}
+                    style={{
+                      minWidth: '120px',
+                      padding: '8px',
+                      border: `2px solid ${selectedDocumentIndex === idx ? 'var(--accent-color)' : 'var(--border-color)'}`,
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      backgroundColor: selectedDocumentIndex === idx ? 'var(--bg-secondary)' : 'var(--bg-primary)',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div style={{ fontSize: '32px', marginBottom: '4px' }}>
+                      {doc.type === 'pdf' ? '📄' : '🖼️'}
+                    </div>
+                    <div style={{ fontSize: '11px', fontWeight: selectedDocumentIndex === idx ? '600' : '400', wordBreak: 'break-word' }}>
+                      {doc.name}
+                    </div>
+                    {doc.uploadedAt && (
+                      <div style={{ fontSize: '10px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                        {new Date(doc.uploadedAt).toLocaleDateString('id-ID')}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Document Viewer */}
+              <DocumentViewer
+                item={viewingDocumentsItem}
+                doc={viewingDocuments[selectedDocumentIndex]}
+                index={selectedDocumentIndex}
+                total={viewingDocuments.length}
+                onPrevious={() => setSelectedDocumentIndex(Math.max(0, selectedDocumentIndex - 1))}
+                onNext={() => setSelectedDocumentIndex(Math.min(viewingDocuments.length - 1, selectedDocumentIndex + 1))}
+                onDownload={() => handleDownloadSignedDocument(viewingDocumentsItem, viewingDocuments[selectedDocumentIndex])}
+                onDownloadAll={() => handleDownloadSignedDocument(viewingDocumentsItem)}
+              />
+            </Card>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Document Viewer Component
+const DocumentViewer = ({ item, doc, index, total, onPrevious, onNext, onDownload, onDownloadAll }: {
+  item: SuratJalan;
+  doc: SignedDocument;
+  index: number;
+  total: number;
+  onPrevious: () => void;
+  onNext: () => void;
+  onDownload: () => void;
+  onDownloadAll: () => void;
+}) => {
+  const [documentData, setDocumentData] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
+
+  useEffect(() => {
+    loadDocument();
+  }, [doc]);
+
+  const loadDocument = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      let data = doc.document;
+      
+      if (doc.path) {
+        const electronAPI = (window as any).electronAPI;
+        if (electronAPI && typeof electronAPI.loadUploadedFile === 'function') {
+          try {
+            const result = await electronAPI.loadUploadedFile(doc.path);
+            if (result && result.success) {
+              data = result.data || '';
+            } else {
+              throw new Error(result?.error || 'Failed to load file');
+            }
+          } catch (loadError: any) {
+            setError(`Gagal memuat file: ${loadError.message}`);
+            setLoading(false);
+            return;
+          }
+        } else if (isMobile() || isCapacitor()) {
+          setError('File tidak bisa diakses di mobile. Silakan buka di desktop.');
+          setLoading(false);
+          return;
+        } else {
+          setError('Electron API tidak tersedia.');
+          setLoading(false);
+          return;
+        }
+      }
+      
+      if (!data) {
+        setError('No document data available');
+        setLoading(false);
+        return;
+      }
+      
+      // Normalize data URI
+      if (!data.startsWith('data:')) {
+        const isPDF = doc.type === 'pdf';
+        data = isPDF ? `data:application/pdf;base64,${data}` : `data:image/jpeg;base64,${data}`;
+      }
+      
+      setDocumentData(data);
+      setLoading(false);
+    } catch (err: any) {
+      setError(`Error loading document: ${err.message}`);
+      setLoading(false);
+    }
+  };
+
+  const isPDF = doc.type === 'pdf' || doc.name.toLowerCase().endsWith('.pdf');
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '500px' }}>
+      {/* Toolbar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', padding: '8px', background: 'var(--bg-secondary)', borderRadius: '6px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <Button variant="secondary" onClick={onPrevious} disabled={index === 0} style={{ padding: '4px 8px', fontSize: '12px' }}>
+            ← Previous
+          </Button>
+          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+            {index + 1} / {total}
+          </span>
+          <Button variant="secondary" onClick={onNext} disabled={index === total - 1} style={{ padding: '4px 8px', fontSize: '12px' }}>
+            Next →
+          </Button>
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Button variant="secondary" onClick={onDownload} style={{ padding: '4px 8px', fontSize: '12px' }}>
+            📥 Download
+          </Button>
+          {total > 1 && (
+            <Button variant="secondary" onClick={onDownloadAll} style={{ padding: '4px 8px', fontSize: '12px' }}>
+              📥 Download All
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Document Content */}
+      <div style={{ flex: 1, border: '1px solid var(--border)', borderRadius: '6px', overflow: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#f5f5f5', minHeight: '500px' }}>
+        {loading ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+            Loading document...
+          </div>
+        ) : error ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: '#EF4444' }}>
+            {error}
+          </div>
+        ) : isPDF ? (
+          <iframe
+            src={documentData}
+            style={{
+              width: '100%',
+              height: '100%',
+              minHeight: '500px',
+              border: 'none',
+            }}
+            title={doc.name}
+          />
+        ) : (
+          <img
+            src={documentData}
+            alt={doc.name}
+            style={{
+              maxWidth: '100%',
+              maxHeight: '100%',
+              objectFit: 'contain',
+            }}
+            onError={() => setError('Error loading image')}
+          />
+        )}
+      </div>
     </div>
   );
 };

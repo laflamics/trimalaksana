@@ -7,10 +7,11 @@ export function generateInvoiceHtml({
   soSpecNote = '',
   productMap = {},
   productCodeMap = {}, // Map untuk kode item
-  templateType = 'template1' // 'template1' or 'template2'
+  templateType = 'template1', // 'template1', 'template2', 'template3', or 'template4'
+  hideSO = false // Parameter untuk hide kolom SO (khusus trucking)
 }: any): string {
   
-  // Jika template2 dipilih, gunakan template kedua
+  // Jika template2, template3, atau template4 dipilih, gunakan template yang sesuai
   if (templateType === 'template2') {
     return generateInvoiceHtmlTemplate2({
       logo,
@@ -20,7 +21,36 @@ export function generateInvoiceHtml({
       customerNpwp,
       soSpecNote,
       productMap,
-      productCodeMap
+      productCodeMap,
+      hideSO
+    });
+  }
+  
+  if (templateType === 'template3') {
+    return generateInvoiceHtmlTemplate3({
+      logo,
+      company,
+      inv,
+      customerAddress,
+      customerNpwp,
+      soSpecNote,
+      productMap,
+      productCodeMap,
+      hideSO
+    });
+  }
+  
+  if (templateType === 'template4') {
+    return generateInvoiceHtmlTemplate4({
+      logo,
+      company,
+      inv,
+      customerAddress,
+      customerNpwp,
+      soSpecNote,
+      productMap,
+      productCodeMap,
+      hideSO
     });
   }
   
@@ -270,7 +300,7 @@ export function generateInvoiceHtml({
 
 <style>
   body {
-    font-family: Arial, sans-serif;
+    font-family: sans-serif;
     font-size: 12px;
     padding: 10px 1cm 10px 1cm;
   }
@@ -362,7 +392,7 @@ export function generateInvoiceHtml({
   }
 
   .header-logo {
-    height: 75px;
+    height: 100px;
     width: auto;
     margin-left: -0.5cm;
     margin-top: -0.5cm;
@@ -579,7 +609,7 @@ export function generateInvoiceHtml({
             <span class="info-label-text kepada-label">Kepada</span>
             <span class="info-label-colon"> :</span>
           </span>
-          <span class="info-value">${inv.customer || '-'}</span>
+          <span class="info-value" style="font-weight: bold;">${inv.customer || '-'}</span>
         </div>
         <div>
           <span class="info-label">
@@ -625,9 +655,10 @@ export function generateInvoiceHtml({
         <th>No</th>
         <th>Kode Item</th>
         <th>Nama Item</th>
-        <th>SO</th>
-        <th>Satuan</th>
+        ${!hideSO ? '<th>SO</th>' : ''}
+        <th>${hideSO ? 'Jml Satuan' : 'Satuan'}</th>
         <th>Harga</th>
+        ${hideSO ? '<th>POT</th>' : ''}
         <th>Total</th>
       </tr>
     </thead>
@@ -638,6 +669,7 @@ export function generateInvoiceHtml({
         name = name.replace(/\s*\(SO:\s*[^)]+\)/gi, '').trim();
         const code = productCodeMap[l.itemSku] || ''; // Ambil kode dari productCodeMap, kosongkan jika tidak ada
         const soNo = l.soNo || ''; // Ambil SO number dari line
+        const pot = l.pot || 0; // Ambil POT dari line (khusus trucking)
         const totalLine = Number(l.qty || 0) * Number(l.price || 0);
 
         return `
@@ -645,10 +677,11 @@ export function generateInvoiceHtml({
             <td>${i + 1}</td>
             <td>${code || ''}</td>
             <td>${name}</td>
-            <td>${soNo || '-'}</td>
+            ${!hideSO ? `<td>${soNo || '-'}</td>` : ''}
             <td>${l.qty} ${l.unit || 'PCS'}</td>
-            <td>${Number(l.price).toLocaleString('id-ID')}</td>
-            <td>${totalLine.toLocaleString('id-ID')}</td>
+            <td>${Number(l.price).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            ${hideSO ? `<td>${Number(pot).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>` : ''}
+            <td>${totalLine.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
         `;
       }).join('')}
@@ -657,9 +690,10 @@ export function generateInvoiceHtml({
           <td></td>
           <td></td>
           <td></td>
+          ${!hideSO ? '<td></td>' : ''}
           <td></td>
           <td></td>
-          <td></td>
+          ${hideSO ? '<td></td>' : ''}
           <td></td>
         </tr>
       `).join('')}
@@ -705,17 +739,17 @@ export function generateInvoiceHtml({
         <tr>
           <td>Potongan :</td>
           <td>${discountPercent.toFixed(2)}%</td>
-          <td>${discount.toLocaleString('id-ID')}</td>
+          <td>${discount.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
         </tr>
         <tr>
           <td>Pajak :</td>
           <td></td>
-          <td>${tax.toLocaleString('id-ID')}</td>
+          <td>${tax.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
         </tr>
         <tr>
           <td>Lain-lain :</td>
           <td></td>
-          <td>${(bom.biayaLain||0).toLocaleString('id-ID')}</td>
+          <td>${(bom.biayaLain||0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
         </tr>
         <tr>
           <td>Tanggal Jatuh Tempo :</td>
@@ -729,35 +763,35 @@ export function generateInvoiceHtml({
       <table class="summary-table">
         <tr>
           <td>Sub Total :</td>
-          <td>${subtotal.toLocaleString('id-ID')}</td>
+          <td>${subtotal.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
         </tr>
         <tr class="strong">
           <td>Total Akhir :</td>
-          <td>${total.toLocaleString('id-ID')}</td>
+          <td>${total.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
         </tr>
         <tr>
           <td>DP PO :</td>
-          <td>${dpPo.toLocaleString('id-ID')}</td>
+          <td>${dpPo.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
         </tr>
         <tr>
           <td>Tunai :</td>
-          <td>${tunai.toLocaleString('id-ID')}</td>
+          <td>${tunai.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
         </tr>
         <tr>
           <td>Kredit :</td>
-          <td>${kredit.toLocaleString('id-ID')}</td>
+          <td>${kredit.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
         </tr>
         <tr>
           <td>K.Debet :</td>
-          <td>${kredit.toLocaleString('id-ID')}</td>
+          <td>${kredit.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
         </tr>
         <tr>
           <td>K.Kredit :</td>
-          <td>${kredit.toLocaleString('id-ID')}</td>
+          <td>${kredit.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
         </tr>
         <tr>
           <td>Kembali :</td>
-          <td>${(bom.kembaliKeKasir||0).toLocaleString('id-ID')}</td>
+          <td>${(bom.kembaliKeKasir||0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
         </tr>
       </table>
     </div>
@@ -776,7 +810,8 @@ function generateInvoiceHtmlTemplate2({
   customerNpwp = '',
   soSpecNote = '',
   productMap = {},
-  productCodeMap = {} // Map untuk kode item
+  productCodeMap = {}, // Map untuk kode item
+  hideSO = false // Parameter untuk hide kolom SO (khusus trucking)
 }: any): string {
 
   const bom = inv.bom || {};
@@ -958,7 +993,7 @@ function generateInvoiceHtmlTemplate2({
   }
 
   body {
-    font-family: Arial, sans-serif;
+    font-family: sans-serif;
     font-size: 13px;
     padding: 15mm;
     color: #000;
@@ -983,8 +1018,8 @@ function generateInvoiceHtmlTemplate2({
   }
 
   .logo-container img {
-    max-width: 70px;
-    max-height: 70px;
+    max-width: 100px;
+    max-height: 100px;
     object-fit: contain;
   }
 
@@ -1332,7 +1367,7 @@ function generateInvoiceHtmlTemplate2({
     <div class="customer-row">
       <span class="customer-label">Nama</span>
       <span class="customer-label-colon">:</span>
-      <span class="customer-value">${customerName}</span>
+      <span class="customer-value" style="font-weight: bold;">${customerName}</span>
     </div>
     <div class="customer-row">
       <span class="customer-label">Alamat</span>
@@ -1353,9 +1388,10 @@ function generateInvoiceHtmlTemplate2({
         <th>No</th>
         <th>Kode Item</th>
         <th>Nama Item</th>
-        <th>SO</th>
-        <th>Satuan</th>
+        ${!hideSO ? '<th>SO</th>' : ''}
+        <th>${hideSO ? 'Jml Satuan' : 'Satuan'}</th>
         <th>Harga</th>
+        ${hideSO ? '<th>POT</th>' : ''}
         <th>Total</th>
       </tr>
     </thead>
@@ -1373,6 +1409,7 @@ function generateInvoiceHtmlTemplate2({
         }
         
         const soNo = l.soNo || ''; // Ambil SO number dari line
+        const pot = l.pot || 0; // Ambil POT dari line (khusus trucking)
         const totalLine = Number(l.qty || 0) * Number(l.price || 0);
 
         return `
@@ -1380,10 +1417,11 @@ function generateInvoiceHtmlTemplate2({
             <td>${i + 1}</td>
             <td>${code || ''}</td>
             <td>${name}</td>
-            <td>${soNo || '-'}</td>
+            ${!hideSO ? `<td>${soNo || '-'}</td>` : ''}
             <td>${l.qty} ${l.unit || 'PCS'}</td>
-            <td>${Number(l.price).toLocaleString('id-ID')}</td>
-            <td>${totalLine.toLocaleString('id-ID')}</td>
+            <td>${Number(l.price).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            ${hideSO ? `<td>${Number(pot).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>` : ''}
+            <td>${totalLine.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
         `;
       }).join('')}
@@ -1392,9 +1430,10 @@ function generateInvoiceHtmlTemplate2({
           <td></td>
           <td></td>
           <td></td>
+          ${!hideSO ? '<td></td>' : ''}
           <td></td>
           <td></td>
-          <td></td>
+          ${hideSO ? '<td></td>' : ''}
           <td></td>
         </tr>
       `).join('')}
@@ -1434,27 +1473,1330 @@ function generateInvoiceHtmlTemplate2({
         <table class="summary-table">
           <tr>
             <td>Subtotal:</td>
-            <td>${subtotal.toLocaleString('id-ID')}</td>
+            <td>${subtotal.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
           ${(bom.dpPo || 0) > 0 ? `
           <tr>
             <td>DP:</td>
-            <td>${(bom.dpPo || 0).toLocaleString('id-ID')}</td>
+            <td>${(bom.dpPo || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
           ` : ''}
           ${tax > 0 ? `
           <tr>
             <td>PPN:</td>
-            <td>${tax.toLocaleString('id-ID')}</td>
+            <td>${tax.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
           ` : ''}
           <tr class="summary-row-total summary-row-bold">
             <td>Total:</td>
-            <td>${total.toLocaleString('id-ID')}</td>
+            <td>${total.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
           <tr class="summary-row-total">
             <td>Sisa Akhir:</td>
-            <td>${(total - (bom.dpPo || 0) - (bom.tunai || 0) - (bom.kredit || 0)).toLocaleString('id-ID')}</td>
+            <td>${(total - (bom.dpPo || 0) - (bom.tunai || 0) - (bom.kredit || 0)).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>`;
+}
+
+function generateInvoiceHtmlTemplate3({
+  logo,
+  company,
+  inv,
+  customerAddress = '',
+  customerNpwp = '',
+  soSpecNote = '',
+  productMap = {},
+  productCodeMap = {}, // Map untuk kode item
+  hideSO = false // Parameter untuk hide kolom SO (khusus trucking)
+}: any): string {
+
+  const bom = inv.bom || {};
+  const lines = inv.lines || [];
+
+  const subtotal = bom.subtotal ||
+    lines.reduce((s: number, l: any) => s + Number(l.qty || 0) * Number(l.price || 0), 0);
+
+  const total = bom.total || subtotal;
+
+  const tax = bom.tax || 0;
+  const discount = bom.discount || 0;
+  const biayaLain = bom.biayaLain || 0;
+
+  // Hitung persentase potongan
+  const discountPercent = subtotal > 0 ? (discount / subtotal) * 100 : 0;
+
+  // Format tanggal dengan waktu
+  const invoiceDateObj = inv.createdAt ? new Date(inv.createdAt) : new Date();
+  const invoiceDate = invoiceDateObj.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const invoiceTime = invoiceDateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  const invoiceDateTime = `${invoiceDate} ${invoiceTime.replace(/:/g, '.')}`;
+  const tanggalJt = bom.tanggalJt ? new Date(bom.tanggalJt).toLocaleDateString('id-ID') : '';
+
+  // Format customer address
+  const customerName = inv.customer || '';
+  const customerAddressLines = customerAddress ? customerAddress.split('\n').filter((l: string) => l.trim()) : [];
+
+  // Split customer address menjadi 3 baris (sama seperti template 2)
+  let customerAddressLine1 = '';
+  let customerAddressLine2 = '';
+  let customerAddressLine3 = '';
+  
+  if (customerAddress) {
+    const isLongAddress = customerAddress.length > 30;
+    const isVeryLongAddress = customerAddress.length > 50;
+    const kabupatenIndex = customerAddress.toLowerCase().indexOf('kabupaten');
+    const lastCommaIndex = customerAddress.lastIndexOf(',');
+    const words = customerAddress.split(/\s+/);
+    
+    if (isVeryLongAddress && words.length > 10) {
+      const thirdPoint = Math.ceil(words.length / 3);
+      const twoThirdPoint = Math.ceil(words.length * 2 / 3);
+      customerAddressLine1 = words.slice(0, thirdPoint).join(' ');
+      customerAddressLine2 = words.slice(thirdPoint, twoThirdPoint).join(' ');
+      customerAddressLine3 = words.slice(twoThirdPoint).join(' ');
+    } else if (kabupatenIndex !== -1) {
+      customerAddressLine1 = customerAddress.substring(0, kabupatenIndex).trim();
+      const afterKabupaten = customerAddress.substring(kabupatenIndex).trim();
+      if (afterKabupaten.length > 40 && isVeryLongAddress) {
+        const midPoint = Math.ceil(afterKabupaten.length / 2);
+        const spaceIndex = afterKabupaten.indexOf(' ', midPoint);
+        if (spaceIndex !== -1) {
+          customerAddressLine2 = afterKabupaten.substring(0, spaceIndex).trim();
+          customerAddressLine3 = afterKabupaten.substring(spaceIndex).trim();
+        } else {
+          customerAddressLine2 = afterKabupaten;
+          customerAddressLine3 = '';
+        }
+      } else {
+        customerAddressLine2 = afterKabupaten;
+        customerAddressLine3 = '';
+      }
+    } else if (lastCommaIndex !== -1 && (lastCommaIndex > customerAddress.length * 0.3 || isLongAddress)) {
+      customerAddressLine1 = customerAddress.substring(0, lastCommaIndex).trim();
+      const afterComma = customerAddress.substring(lastCommaIndex + 1).trim();
+      if (afterComma.length > 40 && isVeryLongAddress) {
+        const midPoint = Math.ceil(afterComma.length / 2);
+        const spaceIndex = afterComma.indexOf(' ', midPoint);
+        if (spaceIndex !== -1) {
+          customerAddressLine2 = afterComma.substring(0, spaceIndex).trim();
+          customerAddressLine3 = afterComma.substring(spaceIndex).trim();
+        } else {
+          customerAddressLine2 = afterComma;
+          customerAddressLine3 = '';
+        }
+      } else {
+        customerAddressLine2 = afterComma;
+        customerAddressLine3 = '';
+      }
+    } else if (isLongAddress) {
+      if (words.length > 10 && isVeryLongAddress) {
+        const thirdPoint = Math.ceil(words.length / 3);
+        const twoThirdPoint = Math.ceil(words.length * 2 / 3);
+        customerAddressLine1 = words.slice(0, thirdPoint).join(' ');
+        customerAddressLine2 = words.slice(thirdPoint, twoThirdPoint).join(' ');
+        customerAddressLine3 = words.slice(twoThirdPoint).join(' ');
+      } else if (words.length > 6) {
+        const midPoint = Math.ceil(words.length / 2);
+        customerAddressLine1 = words.slice(0, midPoint).join(' ');
+        customerAddressLine2 = words.slice(midPoint).join(' ');
+        customerAddressLine3 = '';
+      } else {
+        const midPoint = Math.ceil(customerAddress.length / 2);
+        const spaceIndex = customerAddress.indexOf(' ', midPoint);
+        if (spaceIndex !== -1) {
+          customerAddressLine1 = customerAddress.substring(0, spaceIndex).trim();
+          customerAddressLine2 = customerAddress.substring(spaceIndex).trim();
+          customerAddressLine3 = '';
+        } else {
+          customerAddressLine1 = customerAddress.substring(0, midPoint).trim();
+          customerAddressLine2 = customerAddress.substring(midPoint).trim();
+          customerAddressLine3 = '';
+        }
+      }
+    } else {
+      customerAddressLine1 = customerAddress;
+      customerAddressLine2 = '';
+      customerAddressLine3 = '';
+    }
+  }
+
+  // Ambil nomor SO customer (bisa string atau array)
+  const soNo = bom.soNo || inv.soNo || '';
+  const soNoList = Array.isArray(soNo) ? soNo : (soNo ? [soNo] : []);
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>Invoice ${inv.invNo || ''}</title>
+
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: sans-serif;
+    font-size: 13px;
+    padding: 15mm;
+    color: #000;
+  }
+
+  .header-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+  }
+
+  .header-left {
+    flex: 1;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .logo-container {
+    flex-shrink: 0;
+  }
+
+  .logo-container img {
+    max-width: 100px;
+    max-height: 100px;
+    object-fit: contain;
+  }
+
+  .company-info {
+    flex: 1;
+  }
+
+  .company-name {
+    font-weight: bold;
+    font-size: 15px;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+
+  .company-address {
+    font-size: 11px;
+    line-height: 1.3;
+    margin-bottom: 4px;
+  }
+
+  .company-bank {
+    font-size: 11px;
+    line-height: 1.3;
+  }
+
+  .header-right {
+    text-align: right;
+    flex-shrink: 0;
+    min-width: 200px;
+  }
+
+  .invoice-info-row {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 4px;
+    font-size: 12px;
+  }
+
+  .invoice-info-label {
+    width: 110px;
+    flex-shrink: 0;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .invoice-info-colon {
+    width: 12px;
+    flex-shrink: 0;
+    text-align: left;
+    padding-right: 0;
+  }
+
+  .invoice-info-value {
+    flex: 1;
+    text-align: left;
+  }
+
+  .divider {
+    border-top: 1px solid #000;
+    margin: 8px 0;
+  }
+
+  .invoice-title-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 8px 0 15px 0;
+    gap: 10px;
+  }
+
+  .invoice-title-line {
+    flex: 1;
+    height: 1px;
+    background-color: #000;
+  }
+
+  .invoice-title-text {
+    font-size: 26px;
+    font-weight: bold;
+    text-decoration: underline;
+    text-transform: uppercase;
+    padding: 0 10px;
+  }
+
+  .customer-section {
+    margin-bottom: 15px;
+  }
+
+  .customer-row {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 5px;
+  }
+
+  .customer-label {
+    font-weight: bold;
+    min-width: 60px;
+  }
+
+  .customer-label-colon {
+    margin: 0 4px;
+  }
+
+  .customer-value {
+    flex: 1;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+  }
+
+  th, td {
+    border: none;
+    padding: 6px;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    background: #f2f2f2;
+    border-top: 1px solid #000;
+    border-bottom: 3px double #000;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: 1px solid #000;
+  }
+
+  .text-right {
+    text-align: right;
+  }
+
+  .footer-container {
+    margin-top: 20px;
+  }
+
+  .footer-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  .footer-left {
+    flex: 1;
+    padding-right: 20px;
+    padding-left: 0 !important;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-left: 0 !important;
+    margin-right: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .notes-section {
+    margin-bottom: 20px;
+    padding: 0;
+    margin-left: 0;
+    margin-right: 0;
+    display: block;
+  }
+
+  .notes-label {
+    font-weight: bold;
+    margin-bottom: 5px;
+    padding: 0;
+    margin-left: 0;
+    margin-top: 0;
+    margin-right: 0;
+    text-indent: 0;
+    display: block;
+  }
+
+  .notes-content {
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    padding: 0 !important;
+    margin: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    text-align: left !important;
+    text-indent: 0 !important;
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    position: relative;
+    left: 0 !important;
+  }
+
+  .footer-center {
+    text-align: center;
+    min-width: 200px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-right: 2.5cm;
+  }
+
+  .signature-label {
+    font-weight: bold;
+    margin-bottom: 80px;
+  }
+
+  .signature-name {
+    margin-top: 30px;
+    font-weight: bold;
+  }
+
+  .footer-right {
+    text-align: right;
+    min-width: 200px;
+    flex: 1;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .summary-table td {
+    padding: 4px 8px;
+    border: none;
+  }
+
+  .summary-table td:first-child {
+    text-align: left;
+  }
+
+  .summary-table td:last-child {
+    text-align: right;
+    font-weight: bold;
+  }
+
+  .summary-row-total {
+    border-top: 1px solid #000;
+    padding-top: 5px;
+    margin-top: 5px;
+  }
+
+  .summary-row-bold {
+    font-weight: bold;
+  }
+
+  /* Force notes alignment - override semua */
+  .footer-left .notes-section {
+    padding: 0 !important;
+    margin: 0 0 20px 0 !important;
+  }
+  
+  .footer-left .notes-label {
+    padding: 0 !important;
+    margin: 0 0 5px 0 !important;
+    text-indent: 0 !important;
+  }
+  
+  .footer-left .notes-content {
+    padding: 0 !important;
+    margin: 0 !important;
+    text-indent: 0 !important;
+    left: 0 !important;
+    position: relative;
+  }
+</style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="header-container">
+    <div class="header-left">
+      <div class="logo-container">
+        ${logo ? `<img src="${logo}" alt="Logo" />` : ''}
+      </div>
+      <div class="company-info">
+        <div class="company-name">${company.companyName || 'PT TRIMA LAKSANA JAYA PRATAMA'}</div>
+        <div class="company-address">
+          ${company.address || 'Jl. Raya Bekasi Km. 28, Cikarang, Bekasi 17530'}<br/>
+          ${company.npwp ? `NPWP: ${company.npwp}` : ''}
+        </div>
+        <div class="company-bank">
+          ${company.bankName || company.bankAccount ? 
+            `${company.bankName ? `${company.bankName}${company.bankBranch ? `, ${company.bankBranch}` : ''}` : ''}${company.bankName && company.bankAccount ? '<br/>' : ''}${company.bankAccount ? `AC : ${company.bankAccount}${company.bankAccountName ? ` a.n. ${company.bankAccountName}` : ''}` : ''}` 
+            : ''}
+        </div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="invoice-info-row">
+        <span class="invoice-info-label">No Transaksi</span>
+        <span class="invoice-info-colon">:</span>
+        <span class="invoice-info-value">${inv.invNo || '-'}</span>
+      </div>
+      <div class="invoice-info-row">
+        <span class="invoice-info-label">Tanggal</span>
+        <span class="invoice-info-colon">:</span>
+        <span class="invoice-info-value">${invoiceDateTime}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="invoice-title-wrapper">
+    <div class="invoice-title-line"></div>
+    <div class="invoice-title-text">INVOICE</div>
+    <div class="invoice-title-line"></div>
+  </div>
+
+  <!-- CUSTOMER SECTION -->
+  <div class="customer-section">
+    <div class="customer-row">
+      <span class="customer-label">Nama</span>
+      <span class="customer-label-colon">:</span>
+      <span class="customer-value" style="font-weight: bold;">${customerName}</span>
+    </div>
+    <div class="customer-row">
+      <span class="customer-label">Alamat</span>
+      <span class="customer-label-colon">:</span>
+      <span class="customer-value">
+        ${customerAddressLine1 ? customerAddressLine1 : ''}
+        ${customerAddressLine2 ? `<br/>${customerAddressLine2}` : ''}
+        ${customerAddressLine3 ? `<br/>${customerAddressLine3}` : ''}
+        ${customerNpwp ? `<br/>NPWP: ${customerNpwp}` : ''}
+      </span>
+    </div>
+  </div>
+
+  <!-- TABLE ITEM -->
+  <table>
+    <thead>
+      <tr>
+        <th>No</th>
+        <th>Kode Item</th>
+        <th>Nama Item</th>
+        ${!hideSO ? '<th>SO</th>' : ''}
+        <th>${hideSO ? 'Jml Satuan' : 'Satuan'}</th>
+        <th>Harga</th>
+        ${hideSO ? '<th>POT</th>' : ''}
+        <th>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${lines.map((l: any, i: number): string => {
+        let name = productMap[l.itemSku] || l.itemSku;
+        // Hapus informasi SO dari nama produk jika ada (format: "Product Name (SO: xxx)")
+        name = name.replace(/\s*\(SO:\s*[^)]+\)/gi, '').trim();
+        
+        // Gunakan productCodeMap jika sudah di-set dengan benar (sudah menggunakan productCodeDisplay)
+        let code = productCodeMap[l.itemSku] || '';
+        if (!code) {
+          // Fallback: gunakan itemSku sebagai code
+          code = l.itemSku || '';
+        }
+        
+        const soNo = l.soNo || ''; // Ambil SO number dari line
+        const pot = l.pot || 0; // Ambil POT dari line (khusus trucking)
+        const totalLine = Number(l.qty || 0) * Number(l.price || 0);
+
+        return `
+          <tr>
+            <td>${i + 1}</td>
+            <td>${code || ''}</td>
+            <td>${name}</td>
+            ${!hideSO ? `<td>${soNo || '-'}</td>` : ''}
+            <td>${l.qty} ${l.unit || 'PCS'}</td>
+            <td>${Number(l.price).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            ${hideSO ? `<td>${Number(pot).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>` : ''}
+            <td>${totalLine.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          </tr>
+        `;
+      }).join('')}
+      ${Array(Math.max(0, 25 - lines.length)).fill(0).map(() => `
+        <tr>
+          <td></td>
+          <td></td>
+          <td></td>
+          ${!hideSO ? '<td></td>' : ''}
+          <td></td>
+          <td></td>
+          ${hideSO ? '<td></td>' : ''}
+          <td></td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
+
+  <!-- FOOTER -->
+  <div class="footer-container">
+    <div class="footer-top">
+      <div class="footer-left">
+        <div class="notes-section">
+          <div class="notes-label">Pesan:</div>
+          <div class="notes-content">${inv.notes ? 
+              (() => {
+                // Format notes: "DN: SJ-xxx DN: SJ-xxx" (satu string dengan spasi)
+                // Tampilkan langsung tanpa menghapus "DN:" karena format sudah benar
+                const notesDisplay = inv.notes.trim();
+                return notesDisplay.length > 0 ? notesDisplay : '-';
+              })() :
+              (soSpecNote || '-')
+            }</div>
+        </div>
+      </div>
+
+      <div class="footer-center">
+        <div class="signature-label">Hormat Kami</div>
+        <div class="signature-name">
+          ${bom.tandaTangan || 'M Ali Audah'}
+        </div>
+      </div>
+
+      <div class="footer-right">
+        <table class="summary-table">
+          <tr>
+            <td>Subtotal:</td>
+            <td>${subtotal.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          </tr>
+          ${(bom.dpPo || 0) > 0 ? `
+          <tr>
+            <td>DP:</td>
+            <td>${(bom.dpPo || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          </tr>
+          ` : ''}
+          ${tax > 0 ? `
+          <tr>
+            <td>PPN:</td>
+            <td>${tax.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          </tr>
+          ` : ''}
+          <tr class="summary-row-total summary-row-bold">
+            <td>Total:</td>
+            <td>${total.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          </tr>
+          <tr class="summary-row-total">
+            <td>Sisa Akhir:</td>
+            <td>${(total - (bom.dpPo || 0) - (bom.tunai || 0) - (bom.kredit || 0)).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>`;
+}
+
+// Template 4: Mirip template 2 tapi terbilang di dalam table paling bawah
+function generateInvoiceHtmlTemplate4({
+  logo,
+  company,
+  inv,
+  customerAddress = '',
+  customerNpwp = '',
+  soSpecNote = '',
+  productMap = {},
+  productCodeMap = {},
+  hideSO = false
+}: any): string {
+
+  const bom = inv.bom || {};
+  const lines = inv.lines || [];
+
+  const subtotal = bom.subtotal ||
+    lines.reduce((s: number, l: any) => s + Number(l.qty || 0) * Number(l.price || 0), 0);
+
+  const total = bom.total || subtotal;
+
+  const tax = bom.tax || 0;
+  const discount = bom.discount || 0;
+
+  // Fungsi terbilang untuk konversi angka ke bahasa Indonesia
+  const terbilang = (angka: number): string => {
+    const bilangan = ['', 'Satu', 'Dua', 'Tiga', 'Empat', 'Lima', 'Enam', 'Tujuh', 'Delapan', 'Sembilan', 'Sepuluh', 'Sebelas'];
+    
+    if (angka < 12) {
+      return bilangan[angka];
+    } else if (angka < 20) {
+      return terbilang(angka - 10) + ' Belas';
+    } else if (angka < 100) {
+      return terbilang(Math.floor(angka / 10)) + ' Puluh' + (angka % 10 !== 0 ? ' ' + terbilang(angka % 10) : '');
+    } else if (angka < 200) {
+      return 'seratus' + (angka % 100 !== 0 ? ' ' + terbilang(angka % 100) : '');
+    } else if (angka < 1000) {
+      return terbilang(Math.floor(angka / 100)) + ' Ratus' + (angka % 100 !== 0 ? ' ' + terbilang(angka % 100) : '');
+    } else if (angka < 2000) {
+      return 'seribu' + (angka % 1000 !== 0 ? ' ' + terbilang(angka % 1000) : '');
+    } else if (angka < 1000000) {
+      return terbilang(Math.floor(angka / 1000)) + ' Ribu' + (angka % 1000 !== 0 ? ' ' + terbilang(angka % 1000) : '');
+    } else if (angka < 1000000000) {
+      return terbilang(Math.floor(angka / 1000000)) + ' Juta' + (angka % 1000000 !== 0 ? ' ' + terbilang(angka % 1000000) : '');
+    } else if (angka < 1000000000000) {
+      return terbilang(Math.floor(angka / 1000000000)) + ' Milyar' + (angka % 1000000000 !== 0 ? ' ' + terbilang(angka % 1000000000) : '');
+    } else {
+      return terbilang(Math.floor(angka / 1000000000000)) + ' Trilyun' + (angka % 1000000000000 !== 0 ? ' ' + terbilang(angka % 1000000000000) : '');
+    }
+  };
+
+  // Format terbilang dengan minimal 3-4 kata per baris
+  const formatTerbilangWithMinWords = (text: string, minWordsPerLine: number = 4): string => {
+    const words = text.split(' ');
+    if (words.length <= minWordsPerLine) {
+      return text;
+    }
+    
+    const lines: string[] = [];
+    for (let i = 0; i < words.length; i += minWordsPerLine) {
+      const lineWords = words.slice(i, Math.min(i + minWordsPerLine, words.length));
+      const line = lineWords.join('\u00A0');
+      lines.push(line);
+    }
+    
+    return lines.join('<br/>');
+  };
+  
+  const terbilangText = terbilang(Math.floor(total)).charAt(0).toUpperCase() + terbilang(Math.floor(total)).slice(1) + ' Rupiah';
+  const totalTerbilang = formatTerbilangWithMinWords(terbilangText, 4);
+
+  // Format tanggal dengan waktu
+  const invoiceDateObj = inv.createdAt ? new Date(inv.createdAt) : new Date();
+  const invoiceDate = invoiceDateObj.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const invoiceTime = invoiceDateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  const invoiceDateTime = `${invoiceDate} ${invoiceTime.replace(/:/g, '.')}`;
+
+  // Format customer address
+  const customerName = inv.customer || '';
+
+  // Split customer address menjadi 3 baris
+  let customerAddressLine1 = '';
+  let customerAddressLine2 = '';
+  let customerAddressLine3 = '';
+  
+  if (customerAddress) {
+    const isLongAddress = customerAddress.length > 30;
+    const isVeryLongAddress = customerAddress.length > 50;
+    const kabupatenIndex = customerAddress.toLowerCase().indexOf('kabupaten');
+    const lastCommaIndex = customerAddress.lastIndexOf(',');
+    const words = customerAddress.split(/\s+/);
+    
+    if (isVeryLongAddress && words.length > 10) {
+      const thirdPoint = Math.ceil(words.length / 3);
+      const twoThirdPoint = Math.ceil(words.length * 2 / 3);
+      customerAddressLine1 = words.slice(0, thirdPoint).join(' ');
+      customerAddressLine2 = words.slice(thirdPoint, twoThirdPoint).join(' ');
+      customerAddressLine3 = words.slice(twoThirdPoint).join(' ');
+    } else if (kabupatenIndex !== -1) {
+      customerAddressLine1 = customerAddress.substring(0, kabupatenIndex).trim();
+      const afterKabupaten = customerAddress.substring(kabupatenIndex).trim();
+      if (afterKabupaten.length > 40 && isVeryLongAddress) {
+        const midPoint = Math.ceil(afterKabupaten.length / 2);
+        const spaceIndex = afterKabupaten.indexOf(' ', midPoint);
+        if (spaceIndex !== -1) {
+          customerAddressLine2 = afterKabupaten.substring(0, spaceIndex).trim();
+          customerAddressLine3 = afterKabupaten.substring(spaceIndex).trim();
+        } else {
+          customerAddressLine2 = afterKabupaten;
+          customerAddressLine3 = '';
+        }
+      } else {
+        customerAddressLine2 = afterKabupaten;
+        customerAddressLine3 = '';
+      }
+    } else if (lastCommaIndex !== -1 && (lastCommaIndex > customerAddress.length * 0.3 || isLongAddress)) {
+      customerAddressLine1 = customerAddress.substring(0, lastCommaIndex).trim();
+      const afterComma = customerAddress.substring(lastCommaIndex + 1).trim();
+      if (afterComma.length > 40 && isVeryLongAddress) {
+        const midPoint = Math.ceil(afterComma.length / 2);
+        const spaceIndex = afterComma.indexOf(' ', midPoint);
+        if (spaceIndex !== -1) {
+          customerAddressLine2 = afterComma.substring(0, spaceIndex).trim();
+          customerAddressLine3 = afterComma.substring(spaceIndex).trim();
+        } else {
+          customerAddressLine2 = afterComma;
+          customerAddressLine3 = '';
+        }
+      } else {
+        customerAddressLine2 = afterComma;
+        customerAddressLine3 = '';
+      }
+    } else if (isLongAddress) {
+      if (words.length > 10 && isVeryLongAddress) {
+        const thirdPoint = Math.ceil(words.length / 3);
+        const twoThirdPoint = Math.ceil(words.length * 2 / 3);
+        customerAddressLine1 = words.slice(0, thirdPoint).join(' ');
+        customerAddressLine2 = words.slice(thirdPoint, twoThirdPoint).join(' ');
+        customerAddressLine3 = words.slice(twoThirdPoint).join(' ');
+      } else if (words.length > 6) {
+        const midPoint = Math.ceil(words.length / 2);
+        customerAddressLine1 = words.slice(0, midPoint).join(' ');
+        customerAddressLine2 = words.slice(midPoint).join(' ');
+        customerAddressLine3 = '';
+      } else {
+        const midPoint = Math.ceil(customerAddress.length / 2);
+        const spaceIndex = customerAddress.indexOf(' ', midPoint);
+        if (spaceIndex !== -1) {
+          customerAddressLine1 = customerAddress.substring(0, spaceIndex).trim();
+          customerAddressLine2 = customerAddress.substring(spaceIndex).trim();
+          customerAddressLine3 = '';
+        } else {
+          customerAddressLine1 = customerAddress.substring(0, midPoint).trim();
+          customerAddressLine2 = customerAddress.substring(midPoint).trim();
+          customerAddressLine3 = '';
+        }
+      }
+    } else {
+      customerAddressLine1 = customerAddress;
+      customerAddressLine2 = '';
+      customerAddressLine3 = '';
+    }
+  }
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>Invoice ${inv.invNo || ''}</title>
+
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: sans-serif;
+    font-size: 13px;
+    padding: 15mm;
+    color: #000;
+  }
+
+  .header-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+  }
+
+  .header-left {
+    flex: 1;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .logo-container {
+    flex-shrink: 0;
+  }
+
+  .logo-container img {
+    max-width: 100px;
+    max-height: 100px;
+    object-fit: contain;
+  }
+
+  .company-info {
+    flex: 1;
+  }
+
+  .company-name {
+    font-weight: bold;
+    font-size: 15px;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+
+  .company-address {
+    font-size: 11px;
+    line-height: 1.3;
+    margin-bottom: 4px;
+  }
+
+  .company-bank {
+    font-size: 11px;
+    line-height: 1.3;
+  }
+
+  .header-right {
+    text-align: right;
+    flex-shrink: 0;
+    min-width: 200px;
+  }
+
+  .invoice-info-row {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 4px;
+    font-size: 12px;
+  }
+
+  .invoice-info-label {
+    width: 110px;
+    flex-shrink: 0;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .invoice-info-colon {
+    width: 12px;
+    flex-shrink: 0;
+    text-align: left;
+    padding-right: 0;
+  }
+
+  .invoice-info-value {
+    flex: 1;
+    text-align: left;
+  }
+
+  .invoice-title-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 8px 0 15px 0;
+    gap: 10px;
+  }
+
+  .invoice-title-line {
+    flex: 1;
+    height: 1px;
+    background-color: #000;
+  }
+
+  .invoice-title-text {
+    font-size: 26px;
+    font-weight: bold;
+    text-decoration: underline;
+    text-transform: uppercase;
+    padding: 0 10px;
+  }
+
+  .customer-section {
+    margin-bottom: 15px;
+  }
+
+  .customer-row {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 5px;
+  }
+
+  .customer-label {
+    font-weight: bold;
+    min-width: 60px;
+  }
+
+  .customer-label-colon {
+    margin: 0 4px;
+  }
+
+  .customer-value {
+    flex: 1;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+  }
+
+  th, td {
+    border: none;
+    padding: 6px;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    background: #f2f2f2;
+    border-top: 1px solid #000;
+    border-bottom: 3px double #000;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: 1px solid #000;
+  }
+
+  .footer-container {
+    margin-top: 20px;
+  }
+
+  .footer-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  .footer-left {
+    flex: 1;
+    padding-right: 20px;
+    padding-left: 0 !important;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-left: 0 !important;
+    margin-right: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .notes-section {
+    margin-bottom: 20px;
+    padding: 0;
+    margin-left: 0;
+    margin-right: 0;
+    display: block;
+  }
+
+  .notes-label {
+    font-weight: bold;
+    margin-bottom: 5px;
+    padding: 0;
+    margin-left: 0;
+    margin-top: 0;
+    margin-right: 0;
+    text-indent: 0;
+    display: block;
+  }
+
+  .notes-content {
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    padding: 0 !important;
+    margin: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    text-align: left !important;
+    text-indent: 0 !important;
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    position: relative;
+    left: 0 !important;
+  }
+
+  .footer-center {
+    text-align: center;
+    min-width: 200px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-right: 2.5cm;
+  }
+
+  .signature-label {
+    font-weight: bold;
+    margin-bottom: 80px;
+  }
+
+  .signature-name {
+    margin-top: 30px;
+    font-weight: bold;
+  }
+
+  .footer-right {
+    text-align: right;
+    min-width: 200px;
+    flex: 1;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .summary-table td {
+    padding: 4px 8px;
+    border: none;
+  }
+
+  .summary-table td:first-child {
+    text-align: left;
+  }
+
+  .summary-table td:last-child {
+    text-align: right;
+    font-weight: bold;
+  }
+
+  .summary-row-total {
+    border-top: 1px solid #000;
+    padding-top: 5px;
+    margin-top: 5px;
+  }
+
+  .summary-row-bold {
+    font-weight: bold;
+  }
+
+  .footer-left .notes-section {
+    padding: 0 !important;
+    margin: 0 0 20px 0 !important;
+  }
+  
+  .footer-left .notes-label {
+    padding: 0 !important;
+    margin: 0 0 5px 0 !important;
+    text-indent: 0 !important;
+  }
+  
+  .footer-left .notes-content {
+    padding: 0 !important;
+    margin: 0 !important;
+    text-indent: 0 !important;
+    left: 0 !important;
+    position: relative;
+  }
+
+  .terbilang-section {
+    margin-bottom: 15px;
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .terbilang-label {
+    font-weight: bold;
+    flex-shrink: 0;
+  }
+
+  .terbilang-content {
+    font-size: 12px;
+    line-height: 1.5;
+    font-style: italic;
+    flex: 1;
+    word-spacing: 2px;
+    min-width: 0;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+  }
+</style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="header-container">
+    <div class="header-left">
+      <div class="logo-container">
+        ${logo ? `<img src="${logo}" alt="Logo" />` : ''}
+      </div>
+      <div class="company-info">
+        <div class="company-name">${company.companyName || 'PT TRIMA LAKSANA JAYA PRATAMA'}</div>
+        <div class="company-address">
+          ${company.address || 'Jl. Raya Bekasi Km. 28, Cikarang, Bekasi 17530'}<br/>
+          ${company.npwp ? `NPWP: ${company.npwp}` : ''}
+        </div>
+        <div class="company-bank">
+          ${company.bankName || company.bankAccount ? 
+            `${company.bankName ? `${company.bankName}${company.bankBranch ? `, ${company.bankBranch}` : ''}` : ''}${company.bankName && company.bankAccount ? '<br/>' : ''}${company.bankAccount ? `AC : ${company.bankAccount}${company.bankAccountName ? ` a.n. ${company.bankAccountName}` : ''}` : ''}` 
+            : ''}
+        </div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="invoice-info-row">
+        <span class="invoice-info-label">No Transaksi</span>
+        <span class="invoice-info-colon">:</span>
+        <span class="invoice-info-value">${inv.invNo || '-'}</span>
+      </div>
+      <div class="invoice-info-row">
+        <span class="invoice-info-label">Tanggal</span>
+        <span class="invoice-info-colon">:</span>
+        <span class="invoice-info-value">${invoiceDateTime}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="invoice-title-wrapper">
+    <div class="invoice-title-line"></div>
+    <div class="invoice-title-text">INVOICE</div>
+    <div class="invoice-title-line"></div>
+  </div>
+
+  <!-- CUSTOMER SECTION -->
+  <div class="customer-section">
+    <div class="customer-row">
+      <span class="customer-label">Nama</span>
+      <span class="customer-label-colon">:</span>
+      <span class="customer-value" style="font-weight: bold;">${customerName}</span>
+    </div>
+    <div class="customer-row">
+      <span class="customer-label">Alamat</span>
+      <span class="customer-label-colon">:</span>
+      <span class="customer-value">
+        ${customerAddressLine1 ? customerAddressLine1 : ''}
+        ${customerAddressLine2 ? `<br/>${customerAddressLine2}` : ''}
+        ${customerAddressLine3 ? `<br/>${customerAddressLine3}` : ''}
+        ${customerNpwp ? `<br/>NPWP: ${customerNpwp}` : ''}
+      </span>
+    </div>
+  </div>
+
+  <!-- TABLE ITEM -->
+  <table>
+    <thead>
+      <tr>
+        <th>No</th>
+        <th>Kode Item</th>
+        <th>Nama Item</th>
+        ${!hideSO ? '<th>SO</th>' : ''}
+        <th>${hideSO ? 'Jml Satuan' : 'Satuan'}</th>
+        <th>Harga</th>
+        ${hideSO ? '<th>POT</th>' : ''}
+        <th>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${lines.map((l: any, i: number): string => {
+        let name = productMap[l.itemSku] || l.itemSku;
+        name = name.replace(/\s*\(SO:\s*[^)]+\)/gi, '').trim();
+        
+        let code = productCodeMap[l.itemSku] || '';
+        if (!code) {
+          code = l.itemSku || '';
+        }
+        
+        const soNo = l.soNo || '';
+        const pot = l.pot || 0;
+        const totalLine = Number(l.qty || 0) * Number(l.price || 0);
+
+        return `
+          <tr>
+            <td>${i + 1}</td>
+            <td>${code || ''}</td>
+            <td>${name}</td>
+            ${!hideSO ? `<td>${soNo || '-'}</td>` : ''}
+            <td>${l.qty} ${l.unit || 'PCS'}</td>
+            <td>${Number(l.price).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            ${hideSO ? `<td>${Number(pot).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>` : ''}
+            <td>${totalLine.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          </tr>
+        `;
+      }).join('')}
+      ${Array(Math.max(0, 25 - lines.length)).fill(0).map(() => `
+        <tr>
+          <td></td>
+          <td></td>
+          <td></td>
+          ${!hideSO ? '<td></td>' : ''}
+          <td></td>
+          <td></td>
+          ${hideSO ? '<td></td>' : ''}
+          <td></td>
+        </tr>
+      `).join('')}
+      <!-- TERBILANG DI DALAM TABLE, ROW TERAKHIR -->
+      <tr>
+        <td colspan="${hideSO ? '7' : '8'}" style="text-align: left; padding: 8px;">
+          <div style="display: flex; align-items: flex-start; gap: 5px;">
+            <div style="font-weight: bold; flex-shrink: 0;">Terbilang:</div>
+            <div style="font-size: 12px; line-height: 1.5; font-style: italic; flex: 1; word-spacing: 2px; overflow-wrap: break-word; word-wrap: break-word;">${totalTerbilang}</div>
+          </div>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- FOOTER -->
+  <div class="footer-container">
+    <div class="footer-top">
+      <div class="footer-left">
+        <div class="notes-section">
+          <div class="notes-label">Pesan:</div>
+          <div class="notes-content">${inv.notes ? 
+              (() => {
+                const notesDisplay = inv.notes.trim();
+                return notesDisplay.length > 0 ? notesDisplay : '-';
+              })() :
+              (soSpecNote || '-')
+            }</div>
+        </div>
+      </div>
+
+      <div class="footer-center">
+        <div class="signature-label">Hormat Kami</div>
+        <div class="signature-name">
+          ${bom.tandaTangan || 'M Ali Audah'}
+        </div>
+      </div>
+
+      <div class="footer-right">
+        <table class="summary-table">
+          <tr>
+            <td>Subtotal:</td>
+            <td>${subtotal.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          </tr>
+          ${(bom.dpPo || 0) > 0 ? `
+          <tr>
+            <td>DP:</td>
+            <td>${(bom.dpPo || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          </tr>
+          ` : ''}
+          ${tax > 0 ? `
+          <tr>
+            <td>PPN:</td>
+            <td>${tax.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          </tr>
+          ` : ''}
+          <tr class="summary-row-total summary-row-bold">
+            <td>Total:</td>
+            <td>${total.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          </tr>
+          <tr class="summary-row-total">
+            <td>Sisa Akhir:</td>
+            <td>${(total - (bom.dpPo || 0) - (bom.tunai || 0) - (bom.kredit || 0)).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
         </table>
       </div>

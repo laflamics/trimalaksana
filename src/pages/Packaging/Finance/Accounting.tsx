@@ -163,7 +163,6 @@ const Accounting = () => {
       
       // Jika sudah ada entries, skip generate (prevent duplicate)
       if (existingEntries.length > 0) {
-        console.log(`✅ Journal entries sudah ada (${existingEntries.length} entries), skip generate`);
         return;
       }
       
@@ -372,10 +371,8 @@ const Accounting = () => {
 
       if (newEntries.length > 0) {
         await storageService.set('journalEntries', newEntries);
-        console.log(`✅ Generated ${newEntries.length} journal entries from existing transactions`);
       }
     } catch (error: any) {
-      console.error('Error generating journal entries:', error);
     }
   };
 
@@ -712,9 +709,6 @@ const Accounting = () => {
               const activeUpdated = filterActiveItems(updated);
               setEntries(activeUpdated.map((e, idx) => ({ ...e, no: idx + 1 })));
               showAlert(`✅ Imported ${newEntries.length} entries${errors.length > 0 ? `\n⚠️ ${errors.length} errors` : ''}`, 'Success');
-              if (errors.length > 0) {
-                console.error('Import errors:', errors);
-              }
             } else {
               showAlert('⚠️ No valid entries to import', 'Warning');
             }

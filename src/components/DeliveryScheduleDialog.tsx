@@ -333,12 +333,23 @@ const DeliveryScheduleDialog = ({ item, onClose, onSave, inline = false }: Deliv
         return;
       }
       // Set deliveryDate untuk semua forms dari commonDeliveryDate
+      // IMPORTANT: Pastikan semua selected SPK ter-include, jangan hanya yang sudah ada form-nya
       const updatedForms: { [spkNo: string]: { qty: number; deliveryDate: string } } = {};
       selectedSPKs.forEach(spkNo => {
         const form = multipleBatchForms[spkNo];
+        const spk = spkDeliveries.find(s => s.spkNo === spkNo);
         if (form) {
+          // Form sudah ada, update deliveryDate
           updatedForms[spkNo] = {
             ...form,
+            deliveryDate: commonDeliveryDate,
+          };
+        } else if (spk) {
+          // Form tidak ada, buat form baru dengan qty dari remaining
+          const spkBatchQty = spk.deliveryBatches.reduce((sum, b) => sum + b.qty, 0);
+          const spkRemaining = spk.qty - spkBatchQty;
+          updatedForms[spkNo] = {
+            qty: spkRemaining > 0 ? spkRemaining : 0,
             deliveryDate: commonDeliveryDate,
           };
         }
@@ -370,7 +381,10 @@ const DeliveryScheduleDialog = ({ item, onClose, onSave, inline = false }: Deliv
     const updated = spkDeliveries.map(spk => {
       if (selectedSPKs.includes(spk.spkNo)) {
         const form = multipleBatchForms[spk.spkNo];
-        if (!form) return spk;
+        // IMPORTANT: Form seharusnya sudah ter-validasi di atas, tapi tetap check untuk safety
+        if (!form) {
+          return spk;
+        }
         
         const spkBatchQty = spk.deliveryBatches.reduce((sum, b) => sum + b.qty, 0);
         const totalQty = spkBatchQty + form.qty;

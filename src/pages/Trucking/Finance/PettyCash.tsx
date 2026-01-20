@@ -5,7 +5,8 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import NotificationBell from '../../../components/NotificationBell';
 import { storageService } from '../../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
+import { deleteTruckingItem, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { useDialog } from '../../../hooks/useDialog';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../../utils/actions';
 import { loadLogoAsBase64 } from '../../../utils/logo-loader';
 import { generatePettyCashMemoHtml } from '../../../pdf/pettycash-memo-pdf-template';
@@ -380,58 +381,16 @@ const PettyCash = () => {
   const [activeTab, setActiveTab] = useState<'requests' | 'memo'>('requests');
   const [showSelectRequestDialog, setShowSelectRequestDialog] = useState(false);
   const [selectedRequestsForMemo, setSelectedRequestsForMemo] = useState<string[]>([]);
-  // Custom Dialog state
-  const [dialogState, setDialogState] = useState<{
-    show: boolean;
-    type: 'alert' | 'confirm' | null;
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-  }>({
-    show: false,
-    type: null,
-    title: '',
-    message: '',
-  });
-
-  // Helper functions untuk dialog
+  // Custom Dialog - menggunakan hook terpusat
+  const { showAlert: showAlertBase, showConfirm: showConfirmBase, DialogComponent } = useDialog();
+  
+  // Wrapper untuk kompatibilitas dengan urutan parameter yang berbeda
   const showAlert = (message: string, title: string = 'Information') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'alert',
-      title,
-      message,
-    });
+    showAlertBase(message, title);
   };
-
+  
   const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'confirm',
-      title,
-      message,
-      onConfirm,
-      onCancel,
-    });
-  };
-
-  const closeDialog = () => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(false);
-    }
-    setDialogState({
-      show: false,
-      type: null,
-      title: '',
-      message: '',
-    });
+    showConfirmBase(message, onConfirm, onCancel, title);
   };
 
   const [editingItem, setEditingItem] = useState<PettyCashRequest | null>(null);
@@ -764,118 +723,38 @@ const PettyCash = () => {
       return;
     }
     
-    // Gunakan single input dengan multiple untuk upload 2 file sekaligus
-    const files = await new Promise<File[]>((resolve) => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*,.pdf';
-      input.multiple = true;
-      input.style.display = 'none';
-      document.body.appendChild(input);
-      
-      const handleChange = (e: Event) => {
-        const target = e.target as HTMLInputElement;
-        const selectedFiles = Array.from(target.files || []);
-        input.removeEventListener('change', handleChange);
-        document.body.removeChild(input);
-        resolve(selectedFiles);
-      };
-      
-      // Tambahkan listener untuk window focus untuk detect cancel
-      const handleFocus = () => {
-        setTimeout(() => {
-          if (!input.files || input.files.length === 0) {
-            window.removeEventListener('focus', handleFocus);
-            input.removeEventListener('change', handleChange);
-            document.body.removeChild(input);
-            resolve([]);
-          }
-        }, 300);
-      };
-      
-      input.addEventListener('change', handleChange);
-      window.addEventListener('focus', handleFocus);
-      input.click();
-      
-      // Cleanup setelah 5 detik jika tidak ada response
-      setTimeout(() => {
-        window.removeEventListener('focus', handleFocus);
-        if (document.body.contains(input)) {
-          input.removeEventListener('change', handleChange);
-          document.body.removeChild(input);
-          resolve([]);
-        }
-      }, 5000);
-    });
-
-    if (!files || files.length === 0) {
-      showAlert('Harus upload minimal 1 file (Receipt Proof atau Transfer Proof)', 'Information');
-      return;
-    }
-
-    // File pertama = Receipt Proof, File kedua = Transfer Proof (jika ada)
-    const receiptFile = files[0];
-    const transferFile = files.length > 1 ? files[1] : null;
-
-    try {
-      // Baca receipt file
-      const receiptReader = new FileReader();
-      receiptReader.onload = async (e) => {
-        const receiptBase64 = e.target?.result as string;
-        
-        // Jika ada transfer file, baca juga
-        if (transferFile) {
-          const transferReader = new FileReader();
-          transferReader.onload = async (e2) => {
-            const transferBase64 = e2.target?.result as string;
-            
-            // Update dengan paidDate, receipt, dan transfer
-            const updated = requests.map(r =>
-              r.id === item.id
-                ? { 
-                    ...r, 
-                    status: 'Open' as const,
-                    paidDate: new Date().toISOString().split('T')[0],
-                    receiptProof: receiptBase64,
-                    receiptProofName: receiptFile.name,
-                    transferProof: transferBase64,
-                    transferProofName: transferFile.name,
-                    distributedDate: new Date().toISOString().split('T')[0],
-                  }
-                : r
-            );
-            await processDistributionUpdate(updated, item, transferBase64, transferFile.name);
-          };
-          transferReader.readAsDataURL(transferFile);
-        } else {
-          // Hanya receipt file, transfer proof tetap null atau gunakan yang sudah ada
+    // Konfirmasi distribusi tanpa upload file
+    showConfirm(
+      `Konfirmasi distribusi Petty Cash Request ${item.requestNo}?\n\n` +
+      `Driver: ${item.driverName} (${item.driverCode})\n` +
+      `Amount: Rp ${item.amount.toLocaleString('id-ID')}\n` +
+      `Purpose: ${item.purpose}\n\n` +
+      `Petty cash akan ditandai sebagai sudah di-distribusi.`,
+      async () => {
+        try {
+          // Update dengan distributedDate saja, tanpa upload file
           const updated = requests.map(r =>
             r.id === item.id
               ? { 
                   ...r, 
                   status: 'Open' as const,
-                  paidDate: new Date().toISOString().split('T')[0],
-                  receiptProof: receiptBase64,
-                  receiptProofName: receiptFile.name,
-                  // Transfer proof tetap yang sudah ada atau null
                   distributedDate: new Date().toISOString().split('T')[0],
                 }
               : r
           );
-          await processDistributionUpdate(updated, item, null, null);
+          await processDistributionUpdate(updated, item);
+        } catch (error: any) {
+          showAlert(`Error distributing petty cash: ${error.message}`, 'Error');
         }
-      };
-      receiptReader.readAsDataURL(receiptFile);
-    } catch (error: any) {
-      showAlert(`Error distributing petty cash: ${error.message}`, 'Error');
-    }
+      },
+      undefined,
+      'Confirm Distribution'
+    );
   };
 
   const processDistributionUpdate = async (
     updated: PettyCashRequest[],
-    item: PettyCashRequest,
-    transferBase64: string | null,
-    transferFileName: string | null
+    item: PettyCashRequest
   ) => {
     try {
           await storageService.set('trucking_pettycash_requests', updated);
@@ -1012,15 +891,6 @@ const PettyCash = () => {
             // Jangan block proses, hanya log error
           }
           
-          // Setelah distribusi, tampilkan bukti distribusi jika ada transfer proof
-          if (transferBase64 && transferFileName) {
-            setViewTransferProof({
-              show: true,
-              proof: transferBase64,
-              proofName: transferFileName,
-            });
-          }
-          
           showAlert('✅ Petty cash berhasil di-distribusi', 'Success');
     } catch (error: any) {
       console.error('Error processing distribution update:', error);
@@ -1097,27 +967,23 @@ const PettyCash = () => {
       warningMessage,
       async () => {
         try {
-          // Simpan tombstone ke audit log sebelum menghapus
-          await saveTombstoneToAuditLog(item, 'trucking_pettycash_requests');
+          // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
+          const deleteResult = await deleteTruckingItem('trucking_pettycash_requests', item.id, 'id');
           
-          // Pakai helper function untuk safe delete (tombstone pattern)
-          const success = await safeDeleteItem('trucking_pettycash_requests', item.id, 'id');
-          
-          if (success) {
-            // Reload data dengan filter active items
-            const updatedRequests = await storageService.get<PettyCashRequest[]>('trucking_pettycash_requests') || [];
-            const activeRequests = filterActiveItems(updatedRequests);
-            
+          if (deleteResult.success) {
+            // Reload data dengan helper (handle race condition)
+            const activeRequests = await reloadTruckingData('trucking_pettycash_requests', setRequests);
             // Sort by requestDate (newest first)
-            const sortedUpdated = activeRequests.sort((a, b) => {
+            const sortedUpdated = [...activeRequests].sort((a, b) => {
               const dateA = a.requestDate ? new Date(a.requestDate).getTime() : 0;
               const dateB = b.requestDate ? new Date(b.requestDate).getTime() : 0;
               return dateB - dateA; // Newest first
             });
             setRequests(sortedUpdated.map((r, idx) => ({ ...r, no: idx + 1 })));
-            showAlert(`Request "${item.requestNo}" deleted successfully`, 'Success');
+            showAlert(`✅ Request "${item.requestNo}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
           } else {
-            showAlert(`Error deleting request "${item.requestNo}". Please try again.`, 'Error');
+            console.error('[Trucking PettyCash] Delete failed:', deleteResult.error);
+            showAlert(`❌ Error deleting request "${item.requestNo}": ${deleteResult.error || 'Unknown error'}`, 'Error');
           }
         } catch (error: any) {
           showAlert(`Error deleting request: ${error.message}`, 'Error');
@@ -1405,32 +1271,55 @@ const PettyCash = () => {
   };
 
   const handleDeleteMemo = async (memo: PettyCashMemo) => {
-    showConfirm(
-      `Are you sure you want to delete memo "${memo.memoNo}"?`,
-      async () => {
-        try {
-          // Simpan tombstone ke audit log sebelum menghapus
-          await saveTombstoneToAuditLog(memo, 'trucking_pettycash_memos');
-          
-          // Pakai helper function untuk safe delete (tombstone pattern)
-          const success = await safeDeleteItem('trucking_pettycash_memos', memo.id, 'id');
-          
-          if (success) {
-            // Reload data dengan filter active items
-            const updatedMemos = await storageService.get<PettyCashMemo[]>('trucking_pettycash_memos') || [];
-            const activeMemos = filterActiveItems(updatedMemos);
-            setMemos(activeMemos);
-            showAlert(`Memo "${memo.memoNo}" deleted successfully`, 'Success');
-          } else {
-            showAlert(`Error deleting memo "${memo.memoNo}". Please try again.`, 'Error');
+    try {
+      console.log('[Trucking PettyCash] handleDeleteMemo called for:', memo?.memoNo, memo?.id);
+      
+      if (!memo || !memo.memoNo) {
+        showAlert('Petty Cash Memo tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate memo.id exists
+      if (!memo.id) {
+        console.error('[Trucking PettyCash] Memo missing ID:', memo);
+        showAlert(`❌ Error: Memo "${memo.memoNo}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Memo "${memo.memoNo}"?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deleteTruckingItem('trucking_pettycash_memos', memo.id, 'id');
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              const activeMemos = await reloadTruckingData('trucking_pettycash_memos', setMemos);
+              // Sort by memoDate (newest first)
+              const sortedUpdated = [...activeMemos].sort((a, b) => {
+                const dateA = a.memoDate ? new Date(a.memoDate).getTime() : 0;
+                const dateB = b.memoDate ? new Date(b.memoDate).getTime() : 0;
+                return dateB - dateA; // Newest first
+              });
+              setMemos(sortedUpdated.map((m, idx) => ({ ...m, no: idx + 1 })));
+              showAlert(`✅ Memo "${memo.memoNo}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[Trucking PettyCash] Delete memo failed:', deleteResult.error);
+              showAlert(`❌ Error deleting memo "${memo.memoNo}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[Trucking PettyCash] Error deleting memo:', error);
+            showAlert(`❌ Error deleting memo: ${error.message}`, 'Error');
           }
-        } catch (error: any) {
-          showAlert(`Error deleting memo: ${error.message}`, 'Error');
-        }
-      },
-      undefined,
-      'Confirm Delete'
-    );
+        },
+        undefined,
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[Trucking PettyCash] Error in handleDeleteMemo:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
   };
 
   // Columns untuk memo table
@@ -2634,34 +2523,8 @@ const PettyCash = () => {
         </div>
       )}
 
-      {/* Custom Dialog */}
-      {dialogState.show && (
-        <div className="dialog-overlay" onClick={closeDialog}>
-          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
-            <Card className="dialog-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h2>{dialogState.title}</h2>
-                <Button variant="secondary" onClick={closeDialog} style={{ padding: '6px 12px' }}>✕</Button>
-              </div>
-              <p style={{ marginBottom: '20px', whiteSpace: 'pre-wrap' }}>{dialogState.message}</p>
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                {dialogState.type === 'confirm' && (
-                  <Button variant="secondary" onClick={closeDialog}>Cancel</Button>
-                )}
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    if (dialogState.onConfirm) dialogState.onConfirm();
-                    closeDialog();
-                  }}
-                >
-                  {dialogState.type === 'confirm' ? 'Confirm' : 'OK'}
-                </Button>
-              </div>
-            </Card>
-          </div>
-        </div>
-      )}
+      {/* Custom Dialog - menggunakan hook terpusat */}
+      <DialogComponent />
 
       {/* Notification Dialog untuk Create Request */}
       {notificationDialog.show && notificationDialog.notif && (

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Button from '../components/Button';
 import '../styles/common.css';
 
@@ -92,17 +93,31 @@ export const useDialog = () => {
     return { type: 'info', icon: 'ℹ️' };
   };
 
-  // Dialog Component
+  // Dialog Component - menggunakan Portal untuk memastikan selalu di top level
   const DialogComponent = () => {
-    if (!dialogState.show) return null;
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+      setMounted(true);
+      return () => setMounted(false);
+    }, []);
+
+    if (!dialogState.show || !mounted) return null;
 
     const iconInfo = getIconType(dialogState.title);
 
-    return (
+    const dialogContent = (
       <div 
         className="dialog-overlay" 
         onClick={dialogState.type === 'alert' ? closeDialog : undefined} 
-        style={{ zIndex: 10000 }}
+        style={{ 
+          zIndex: 99999,
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+        }}
       >
         <div 
           className="dialog-card" 
@@ -244,6 +259,11 @@ export const useDialog = () => {
         </div>
       </div>
     );
+
+    // Gunakan Portal untuk render di document.body agar selalu di top level
+    return typeof window !== 'undefined' && window.document 
+      ? createPortal(dialogContent, document.body)
+      : dialogContent;
   };
 
   return {

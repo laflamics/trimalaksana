@@ -106,7 +106,7 @@ import TruckingCustomers from './pages/Trucking/Master/Customers';
 
 // Trucking - Shipments
 import TruckingDeliveryOrders from './pages/Trucking/Shipments/DeliveryOrders';
-import TruckingSuratJalan from './pages/Trucking/Shipments/SuratJalan';
+import TruckingDeliveryNote from './pages/Trucking/Shipments/DeliveryNote';
 
 // Trucking - Finance
 import TruckingGeneralLedger from './pages/Trucking/Finance/GeneralLedger';
@@ -126,8 +126,6 @@ import TruckingPettyCash from './pages/Trucking/Finance/PettyCash';
 import TruckingSettings from './pages/Trucking/Settings/Settings';
 import TruckingDBActivity from './pages/Trucking/Settings/DBActivity';
 import TruckingUserControl from './pages/Trucking/Settings/UserControl';
-// Trucking - Unit Scheduling
-import TruckingUnitScheduling from './pages/Trucking/UnitScheduling';
 
 function App() {
   console.log('📱 App component rendering...');
@@ -290,10 +288,7 @@ function App() {
 
                   {/* Shipments */}
                   <Route path="shipments/delivery-orders" element={<TruckingDeliveryOrders />} />
-                  <Route path="shipments/surat-jalan" element={<TruckingSuratJalan />} />
-                  
-                  {/* Unit Scheduling */}
-                  <Route path="unit-scheduling" element={<TruckingUnitScheduling />} />
+                  <Route path="shipments/delivery-note" element={<TruckingDeliveryNote />} />
 
                   {/* Finance */}
                   <Route path="finance/ledger" element={<TruckingGeneralLedger />} />

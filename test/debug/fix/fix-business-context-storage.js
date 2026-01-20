@@ -1,0 +1,306 @@
+#!/usr/bin/env node
+
+/**
+ * Fix Business Context Storage Issue
+ * 
+ * Masalah: React membaca BOM dari business-specific file, bukan main bom.json
+ * Console log menunjukkan bomSetSize: 139 tapi file analysis menunjukkan 53
+ * Ini berarti ada mismatch antara file yang dibaca vs yang dianalisis
+ */
+
+const fs = require('fs');
+const path = require('path');
+
+console.log('🔧 Fix Business Context Storage Issue...\n');
+
+// Generate browser script to check current business context and storage
+const browserScript = `
+// Check Business Context and Storage
+console.log('🔍 Checking business context and storage...');
+
+// 1. Check current business context
+const selectedBusiness = localStorage.getItem('selectedBusiness');
+console.log('Selected Business:', selectedBusiness || 'packaging (default)');
+
+// 2. Simulate getStorageKey function (from storage service)
+const getStorageKey = (key) => {
+  const business = selectedBusiness || 'packaging';
+  if (business === 'packaging') {
+    return key; // "bom"
+  }
+  return business + '/' + key; // "general-trading/bom" or "trucking/bom"
+};
+
+const bomStorageKey = getStorageKey('bom');
+console.log('BOM Storage Key:', bomStorageKey);
+
+// 3. Check what's actually in localStorage for this key
+const bomData = localStorage.getItem(bomStorageKey);
+console.log('BOM Data Found:', bomData ? 'Yes' : 'No');
+
+if (bomData) {
+  try {
+    const parsed = JSON.parse(bomData);
+    const items = parsed.value || parsed;
+    console.log('BOM Items Count:', Array.isArray(items) ? items.length : 'Invalid structure');
+    
+    if (Array.isArray(items) && items.length > 0) {
+      console.log('First BOM item:', items[0]);
+      
+      // Create bomProductIdsSet like React does
+      const bomProductIdsSet = new Set();
+      items.forEach(b => {
+        if (b) {
+          const bomProductId = (b.product_id || b.padCode || b.kode || '').toString().trim().toLowerCase();
+          if (bomProductId) {
+            bomProductIdsSet.add(bomProductId);
+          }
+        }
+      });
+      
+      console.log('BOM Product IDs Set Size:', bomProductIdsSet.size);
+      console.log('BOM Product IDs (first 10):', Array.from(bomProductIdsSet).slice(0, 10));
+      
+      // Test problem products
+      const problemProducts = ['krt04173', 'krt02722', 'krt04072'];
+      console.log('\\nTesting problem products:');
+      problemProducts.forEach(id => {
+        const found = bomProductIdsSet.has(id);
+        console.log(\`• \${id.toUpperCase()}: \${found ? '✅ FOUND' : '❌ NOT FOUND'}\`);
+      });
+      
+      // If size is 139, there's definitely an issue
+      if (bomProductIdsSet.size > 100) {
+        console.log('\\n⚠️ BOM set size is too large! Investigating...');
+        
+        // Check for invalid entries
+        const allIds = Array.from(bomProductIdsSet);
+        const invalidIds = allIds.filter(id => !/^[a-z]{3}\\d{5}$/.test(id));
+        if (invalidIds.length > 0) {
+          console.log('Invalid product IDs:', invalidIds.slice(0, 10));
+        }
+        
+        // Check for very long IDs
+        const longIds = allIds.filter(id => id.length > 10);
+        if (longIds.length > 0) {
+          console.log('Unusually long IDs:', longIds.slice(0, 10));
+        }
+      }
+    }
+  } catch (error) {
+    console.log('Error parsing BOM data:', error.message);
+  }
+} else {
+  console.log('❌ No BOM data found for key:', bomStorageKey);
+  
+  // Check alternative keys
+  const alternativeKeys = ['bom', 'packaging/bom', 'general-trading/bom', 'trucking/bom'];
+  console.log('\\nChecking alternative keys:');
+  alternativeKeys.forEach(key => {
+    const data = localStorage.getItem(key);
+    if (data) {
+      try {
+        const parsed = JSON.parse(data);
+        const items = parsed.value || parsed;
+        console.log(\`• \${key}: \${Array.isArray(items) ? items.length + ' items' : 'invalid'}\`);
+      } catch (e) {
+        console.log(\`• \${key}: parse error\`);
+      }
+    } else {
+      console.log(\`• \${key}: not found\`);
+    }
+  });
+}
+
+// 4. Fix: Force use main bom.json data
+console.log('\\n🔧 Attempting to fix by using main bom.json data...');
+
+// Try to get main bom data
+const mainBomData = localStorage.getItem('bom');
+if (mainBomData) {
+  try {
+    const parsed = JSON.parse(mainBomData);
+    const items = parsed.value || parsed;
+    
+    if (Array.isArray(items) && items.length > 0) {
+      // Force update the business-specific key with main bom data
+      localStorage.setItem(bomStorageKey, mainBomData);
+      console.log(\`✅ Copied main bom.json data to \${bomStorageKey}\`);
+      
+      // Dispatch storage change event
+      window.dispatchEvent(new CustomEvent('app-storage-changed', {
+        detail: { key: bomStorageKey.split('/').pop() || bomStorageKey, value: items }
+      }));
+      console.log('✅ Storage change event dispatched');
+      
+      console.log('🎯 Now check Products page - BOM indicators should appear!');
+    }
+  } catch (error) {
+    console.log('Error processing main BOM data:', error.message);
+  }
+} else {
+  console.log('❌ Main bom.json data not found in localStorage');
+}
+`;
+
+// Write browser script to file
+fs.writeFileSync('fix-business-context-storage-browser.js', browserScript);
+console.log('✅ Browser script created: fix-business-context-storage-browser.js');
+
+// Also create HTML tool
+const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fix Business Context Storage</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+        .info { color: #2196F3; }
+        .warning { color: #ff9800; }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover { background: #45a049; }
+        .secondary { background: #2196F3; }
+        .secondary:hover { background: #1976D2; }
+        pre {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Fix Business Context Storage</h1>
+        
+        <div id="status">
+            <p class="info">Ready to fix business context storage issue...</p>
+        </div>
+
+        <div>
+            <button onclick="checkBusinessContext()">Check Business Context</button>
+            <button onclick="fixStorageKey()" class="secondary">Fix Storage Key</button>
+            <button onclick="forcePackaging()" class="secondary">Force Packaging Mode</button>
+        </div>
+
+        <div id="results" style="margin-top: 20px;"></div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const results = document.getElementById('results');
+            const className = type === 'success' ? 'success' : 
+                            type === 'error' ? 'error' : 
+                            type === 'warning' ? 'warning' : 'info';
+            results.innerHTML += \`<p class="\${className}">\${message}</p>\`;
+            console.log(message);
+        }
+
+        function checkBusinessContext() {
+            document.getElementById('results').innerHTML = '';
+            log('🔍 Checking business context...', 'info');
+            
+            ${browserScript}
+        }
+
+        function fixStorageKey() {
+            document.getElementById('results').innerHTML = '';
+            log('🔧 Fixing storage key...', 'info');
+            
+            const selectedBusiness = localStorage.getItem('selectedBusiness');
+            const bomStorageKey = selectedBusiness && selectedBusiness !== 'packaging' ? 
+                selectedBusiness + '/bom' : 'bom';
+            
+            log(\`Current business: \${selectedBusiness || 'packaging'}\`, 'info');
+            log(\`Current BOM key: \${bomStorageKey}\`, 'info');
+            
+            // Get main BOM data
+            const mainBomData = localStorage.getItem('bom');
+            if (mainBomData) {
+                // Copy to business-specific key
+                localStorage.setItem(bomStorageKey, mainBomData);
+                log(\`✅ Copied main BOM data to \${bomStorageKey}\`, 'success');
+                
+                // Dispatch event
+                const keyName = bomStorageKey.split('/').pop() || bomStorageKey;
+                window.dispatchEvent(new CustomEvent('app-storage-changed', {
+                    detail: { key: keyName, value: JSON.parse(mainBomData).value }
+                }));
+                log('✅ Storage change event dispatched', 'success');
+                
+                log('🎯 Check Products page now!', 'success');
+            } else {
+                log('❌ Main BOM data not found', 'error');
+            }
+        }
+
+        function forcePackaging() {
+            document.getElementById('results').innerHTML = '';
+            log('🔧 Forcing packaging mode...', 'info');
+            
+            // Remove selectedBusiness to force packaging mode
+            localStorage.removeItem('selectedBusiness');
+            log('✅ Removed selectedBusiness from localStorage', 'success');
+            log('✅ Now in packaging mode (default)', 'success');
+            
+            // Refresh page to apply changes
+            log('🔄 Refreshing page in 2 seconds...', 'info');
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        }
+
+        // Auto-run on page load
+        window.addEventListener('load', () => {
+            log('🚀 Business context storage fix tool loaded', 'info');
+            log('📋 Click "Check Business Context" to diagnose the issue', 'info');
+        });
+    </script>
+</body>
+</html>`;
+
+fs.writeFileSync('fix-business-context-storage.html', htmlContent);
+console.log('✅ HTML tool created: fix-business-context-storage.html');
+
+console.log('\n🚀 INSTRUCTIONS:');
+console.log('1. 🌐 Open fix-business-context-storage.html in browser');
+console.log('2. 🔍 Click "Check Business Context" to see current state');
+console.log('3. 🔧 Click "Fix Storage Key" to copy main BOM data to correct key');
+console.log('4. 📱 Check Products page for BOM indicators');
+
+console.log('\n💡 ALTERNATIVE - Browser Console:');
+console.log('Copy and paste the script from fix-business-context-storage-browser.js');
+
+console.log('\n🎯 EXPECTED RESULT:');
+console.log('• BOM set size should be ~53 (not 139)');
+console.log('• Problem products should be found in BOM set');
+console.log('• BOM indicators should appear in Products page');
+
+console.log('\n✅ Business context storage fix ready!');

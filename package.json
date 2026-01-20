@@ -1,6 +1,6 @@
 {
   "name": "trima-laksana-erp",
-  "version": "1.0.6-build.56",
+  "version": "1.0.6-build.86",
   "description": "PT.Trima Laksana Jaya Pratama - Enterprise Resource Planning System",
   "main": "dist/main.js",
   "scripts": {
@@ -33,7 +33,15 @@
     "cap:sync:ios": "npm run build:renderer && npx cap sync ios",
     "build:ios": "npm run build:renderer && npx cap sync ios && npx cap open ios",
     "build:ios:release": "npm run build:renderer && npx cap sync ios",
-    "build:ios:shareable": "npm run build:renderer && npx cap sync ios"
+    "build:ios:shareable": "npm run build:renderer && npx cap sync ios",
+    "test": "node scripts/run-tests.js all",
+    "test:unit": "node scripts/run-tests.js unit",
+    "test:e2e": "node scripts/run-tests.js e2e",
+    "test:integration": "node scripts/run-tests.js integration",
+    "test:coverage": "node scripts/run-tests.js coverage",
+    "test:interactive": "node scripts/run-tests.js",
+    "organize:md": "node scripts/organize-md-files.js",
+    "organize:test": "node scripts/organize-test-files.js"
   },
   "keywords": [
     "trima-laksana",
@@ -80,7 +88,6 @@
   "build": {
     "appId": "com.trimalaksana.erp",
     "productName": "PT.Trima Laksana Jaya Pratama",
-    "icon": "public/noxtiz.ico",
     "directories": {
       "output": "release-build",
       "buildResources": "build"
@@ -88,6 +95,8 @@
     "files": [
       "dist/**/*",
       "package.json",
+      "public/noxtiz.ico",
+      "public/noxtiz.png",
       "!**/*.map",
       "!**/*.d.ts",
       "!**/test/**",
@@ -136,8 +145,7 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "public/noxtiz.ico",
-      "sign": false,
+      "icon": "icon.ico",
       "signDlls": false,
       "signAndEditExecutable": false,
       "signingHashAlgorithms": [],
@@ -157,9 +165,11 @@
       "perMachine": false,
       "differentialPackage": false,
       "artifactName": "${productName} Setup ${version}.${ext}",
-      "packElevateHelper": false
+      "packElevateHelper": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
     },
     "publish": null,
-    "buildVersion": "56"
+    "buildVersion": "86"
   }
 }

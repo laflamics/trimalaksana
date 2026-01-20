@@ -109,13 +109,14 @@ export function generateSuratJalanHtml({
   let mainProductUnit = 'PCS';
 
   // Helper function untuk mendapatkan product code berdasarkan preference
+  // Prioritas: Pad Code → KRT (kodeIpos) → Code/SKU
   const getProductCode = (product: any, defaultCode: string): string => {
     if (productCodeDisplay === 'padCode') {
-      // Default: Pad Code, fallback ke Product ID jika tidak ada
-      return product?.padCode || product?.sku || product?.kode || product?.id || defaultCode;
+      // Default: Pad Code → KRT (kodeIpos) → Code/SKU
+      return product?.padCode || product?.kodeIpos || product?.sku || product?.kode || product?.id || defaultCode;
     } else {
-      // Product ID / SKU ID
-      return product?.sku || product?.kode || product?.id || defaultCode;
+      // Product ID / SKU ID (tetap dengan prioritas yang sama)
+      return product?.padCode || product?.kodeIpos || product?.sku || product?.kode || product?.id || defaultCode;
     }
   };
 
@@ -350,12 +351,12 @@ export function generateSuratJalanHtml({
     }
     return `
       <tr>
-        <td style="text-align:center; padding:8px 6px;">${idx + 2}</td>
-        <td style="padding:8px 6px; font-size:12px;">${htmlEscape(prodId)}</td>
-        <td style="padding:8px 6px; font-size:12px;">${htmlEscape(prodName)}</td>
-        <td style="text-align:center; padding:8px 6px;">${line.qty || ''}</td>
-        <td style="text-align:center; padding:8px 6px;">${unit}</td>
-        <td style="padding:8px 6px;"></td>
+        <td style="text-align:center; padding:4px 3px; font-size:10px; font-family: Arial, Helvetica, sans-serif;">${idx + 2}</td>
+        <td style="padding:4px 3px; font-size:10px; font-family: Arial, Helvetica, sans-serif;">${htmlEscape(prodId)}</td>
+        <td style="padding:4px 3px; font-size:10px; font-family: Arial, Helvetica, sans-serif;">${htmlEscape(prodName)}</td>
+        <td style="text-align:center; padding:4px 3px; font-size:10px; font-family: Arial, Helvetica, sans-serif;">${line.qty || ''}</td>
+        <td style="text-align:center; padding:4px 3px; font-size:10px; font-family: Arial, Helvetica, sans-serif;">${unit}</td>
+        <td style="padding:4px 3px;"></td>
       </tr>
     `;
   }).join('');
@@ -368,8 +369,8 @@ export function generateSuratJalanHtml({
   <title>SURAT JALAN - ${htmlEscape(item.soNo || sj.sjNo || '')}</title>
   <style>
     @page { 
-      size: Letter; 
-      margin: 12mm; 
+      size: A5; 
+      margin: 8mm; 
     }
     
     /* Ensure images load properly for PDF */
@@ -387,10 +388,10 @@ export function generateSuratJalanHtml({
       background: #fff; 
     }
     body { 
-      font-family: Arial, sans-serif; 
-      font-size: 12px; 
+      font-family: Arial, Helvetica, sans-serif; 
+      font-size: 11px; 
       color: #000; 
-      padding: 8mm 10mm 14mm 10mm; 
+      padding: 4mm 6mm 8mm 6mm; 
     }
 
     /* Header: Logo kiri, Company name + address center, garis sejajar dengan panjang alamat */
@@ -398,7 +399,7 @@ export function generateSuratJalanHtml({
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      margin-bottom: 4px;
+      margin-bottom: 2px;
     }
 
     .header-left {
@@ -409,7 +410,7 @@ export function generateSuratJalanHtml({
     }
 
     .header-logo {
-      height: 90px;
+      height: 70px;
       width: auto;
       max-width: 100%;
       object-fit: contain;
@@ -429,11 +430,11 @@ export function generateSuratJalanHtml({
     .header-center-text {
       flex: 1;
       text-align: center;
-      line-height: 1.3;
-      font-size: 12px;
-      padding: 0 20px;
-      padding-bottom: 6px;
-      margin-bottom: 4px;
+      line-height: 1.2;
+      font-size: 11px;
+      padding: 0 15px;
+      padding-bottom: 4px;
+      margin-bottom: 2px;
       position: relative;
     }
 
@@ -450,14 +451,16 @@ export function generateSuratJalanHtml({
     .header-center-text .company-name {
       font-weight: 700;
       text-align: center;
-      font-size: 22px;
-      margin-bottom: 2px;
+      font-size: 18px;
+      margin-bottom: 1px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .header-center-text .company-address {
-      font-size: 11px;
+      font-size: 10px;
       text-align: center;
-      line-height: 1.4;
+      line-height: 1.3;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .header-center-text .company-address-line {
@@ -477,8 +480,8 @@ export function generateSuratJalanHtml({
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      margin-top: 4px;
-      margin-bottom: 12px;
+      margin-top: 2px;
+      margin-bottom: 8px;
     }
 
     .sj-title-wrapper .sj-spacer-left {
@@ -489,7 +492,7 @@ export function generateSuratJalanHtml({
     .sj-title-section {
       flex: 1;
       text-align: center;
-      padding: 0 20px;
+      padding: 0 15px;
     }
 
     .sj-title-wrapper .sj-spacer-right {
@@ -499,23 +502,26 @@ export function generateSuratJalanHtml({
 
     .sj-title-section .title {
       font-weight: 700;
-      font-size: 20px;
-      letter-spacing: 1px;
-      margin-bottom: 4px;
+      font-size: 16px;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .sj-title-section .sj-number {
       font-weight: 600;
-      font-size: 12px;
+      font-size: 11px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     /* Info section */
     .info {
       display: flex;
       justify-content: space-between;
-      margin-top: 12px;
-      font-size: 11px;
-      line-height: 1.6;
+      margin-top: 6px;
+      font-size: 10px;
+      line-height: 1.4;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .info .left {
@@ -529,8 +535,8 @@ export function generateSuratJalanHtml({
     }
 
     .info .info-row {
-      margin-bottom: 6px;
-      line-height: 1.6;
+      margin-bottom: 3px;
+      line-height: 1.4;
     }
 
     .info .left .info-row:last-child {
@@ -592,16 +598,18 @@ export function generateSuratJalanHtml({
     table.items {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 14px;
-      font-size: 12px;
+      margin-top: 8px;
+      font-size: 10px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     table.items thead th {
       border: 1px solid #000;
-      padding: 8px 6px;
+      padding: 5px 4px;
       background: #f6f6f6;
       font-weight: 700;
       text-align: left;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     table.items thead th:nth-child(1),
@@ -612,8 +620,9 @@ export function generateSuratJalanHtml({
 
     table.items td {
       border: 1px solid #000;
-      padding: 8px 6px;
+      padding: 5px 4px;
       vertical-align: top;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     table.items tbody tr:last-child td {
@@ -622,12 +631,13 @@ export function generateSuratJalanHtml({
 
     /* Footer */
     .footer {
-      margin-top: 30px;
+      margin-top: 12px;
     }
 
     .footer-left {
-      font-size: 11px;
-      margin-bottom: 20px;
+      font-size: 10px;
+      margin-bottom: 10px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .keterangan {
@@ -636,26 +646,30 @@ export function generateSuratJalanHtml({
 
     .keterangan .title {
       font-weight: 700;
-      margin-bottom: 4px;
-      font-size: 11px;
+      margin-bottom: 2px;
+      font-size: 10px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .keterangan .note-text {
-      font-size: 11px;
-      line-height: 1.4;
-      margin-bottom: 8px;
-      padding-bottom: 1.4em;
+      font-size: 10px;
+      line-height: 1.3;
+      margin-bottom: 4px;
+      padding-bottom: 0.8em;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .footer-date {
-      margin-top: 10px;
-      font-size: 11px;
+      margin-top: 6px;
+      font-size: 10px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .footer-hormat {
-      margin-top: 6px;
-      font-size: 11px;
-      margin-bottom: 20px;
+      margin-top: 4px;
+      font-size: 10px;
+      margin-bottom: 10px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     /* Signature section - sejajar horizontal: PIC, Driver, Penerima */
@@ -664,27 +678,29 @@ export function generateSuratJalanHtml({
       justify-content: flex-start;
       align-items: flex-start;
       width: 100%;
-      margin-top: 20px;
-      gap: 15px;
+      margin-top: 10px;
+      gap: 10px;
     }
 
     .sig {
       text-align: left;
-      font-size: 12px;
-      min-width: 100px;
+      font-size: 10px;
+      min-width: 80px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .sig-right {
       text-align: right;
-      font-size: 12px;
-      min-width: 100px;
+      font-size: 10px;
+      min-width: 80px;
       margin-left: auto;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .sig .line,
     .sig-right .line {
       border-top: 1px solid #000;
-      margin-top: 54px;
+      margin-top: 40px;
       display: block;
       width: 70%;
     }
@@ -696,30 +712,33 @@ export function generateSuratJalanHtml({
 
     .sig .label,
     .sig-right .label {
-      margin-top: 6px;
+      margin-top: 4px;
       font-weight: 600;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .sig .driver-name {
-      margin-top: 6px;
+      margin-top: 4px;
       font-weight: 700;
-      font-size: 11px;
+      font-size: 10px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     @media print {
       @page { 
-        size: Letter; 
-        margin: 12mm; 
+        size: A5; 
+        margin: 8mm; 
       }
       body { 
-        padding: 8mm 10mm 14mm 10mm; 
+        padding: 4mm 6mm 8mm 6mm; 
+        font-family: Arial, Helvetica, sans-serif;
       }
       .header-logo {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
         max-width: 100%;
         height: auto;
-        max-height: 90px;
+        max-height: 70px;
         display: block;
       }
       
@@ -963,12 +982,12 @@ export function generateSuratJalanRecapHtml({
     const description = sjNumbers.length > 0 ? sjNumbers.join(', ') : '';
     return `
       <tr>
-        <td style="text-align:center;">${idx + 1}</td>
-        <td>${htmlEscape(itm.productCode?.replace(/\s*\([^)]*\)/g, '').trim() || '')}</td>
-        <td>${htmlEscape(itm.product || '')}</td>
-        <td style="text-align:center;">${itm.qty || ''}</td>
-        <td style="text-align:center;">${itm.unit || 'PCS'}</td>
-        <td>${htmlEscape(description)}</td>
+        <td style="text-align:center; padding:4px 3px; font-size:10px; font-family: Arial, Helvetica, sans-serif;">${idx + 1}</td>
+        <td style="padding:4px 3px; font-size:10px; font-family: Arial, Helvetica, sans-serif;">${htmlEscape(itm.productCode?.replace(/\s*\([^)]*\)/g, '').trim() || '')}</td>
+        <td style="padding:4px 3px; font-size:10px; font-family: Arial, Helvetica, sans-serif;">${htmlEscape(itm.product || '')}</td>
+        <td style="text-align:center; padding:4px 3px; font-size:10px; font-family: Arial, Helvetica, sans-serif;">${itm.qty || ''}</td>
+        <td style="text-align:center; padding:4px 3px; font-size:10px; font-family: Arial, Helvetica, sans-serif;">${itm.unit || 'PCS'}</td>
+        <td style="padding:4px 3px; font-size:10px; font-family: Arial, Helvetica, sans-serif;">${htmlEscape(description)}</td>
       </tr>
     `;
   }).join('');
@@ -981,8 +1000,8 @@ export function generateSuratJalanRecapHtml({
   <title>SURAT JALAN RECAP - ${htmlEscape(sj.sjNo || '')}</title>
   <style>
     @page { 
-      size: Letter; 
-      margin: 12mm; 
+      size: A5; 
+      margin: 8mm; 
     }
     
     img {
@@ -999,17 +1018,17 @@ export function generateSuratJalanRecapHtml({
       background: #fff; 
     }
     body { 
-      font-family: Arial, sans-serif; 
-      font-size: 12px; 
+      font-family: Arial, Helvetica, sans-serif; 
+      font-size: 11px; 
       color: #000; 
-      padding: 8mm 10mm 14mm 10mm; 
+      padding: 4mm 6mm 8mm 6mm; 
     }
 
     .header {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      margin-bottom: 4px;
+      margin-bottom: 2px;
     }
 
     .header-left {
@@ -1020,7 +1039,7 @@ export function generateSuratJalanRecapHtml({
     }
 
     .header-logo {
-      height: 90px;
+      height: 70px;
       width: auto;
       max-width: 100%;
       object-fit: contain;
@@ -1040,11 +1059,11 @@ export function generateSuratJalanRecapHtml({
     .header-center-text {
       flex: 1;
       text-align: center;
-      line-height: 1.3;
-      font-size: 12px;
-      padding: 0 20px;
-      padding-bottom: 6px;
-      margin-bottom: 4px;
+      line-height: 1.2;
+      font-size: 11px;
+      padding: 0 15px;
+      padding-bottom: 4px;
+      margin-bottom: 2px;
       position: relative;
     }
 
@@ -1061,14 +1080,16 @@ export function generateSuratJalanRecapHtml({
     .header-center-text .company-name {
       font-weight: 700;
       text-align: center;
-      font-size: 22px;
-      margin-bottom: 2px;
+      font-size: 18px;
+      margin-bottom: 1px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .header-center-text .company-address {
-      font-size: 11px;
+      font-size: 10px;
       text-align: center;
-      line-height: 1.4;
+      line-height: 1.3;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .header-center-text .company-address-line {
@@ -1079,16 +1100,17 @@ export function generateSuratJalanRecapHtml({
       width: 20%;
       flex-shrink: 0;
       text-align: auto;
-      font-size: 12px;
+      font-size: 11px;
       padding-top: 0;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .sj-title-wrapper {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      margin-top: 4px;
-      margin-bottom: 12px;
+      margin-top: 2px;
+      margin-bottom: 8px;
     }
 
     .sj-title-wrapper .sj-spacer-left {
@@ -1099,7 +1121,7 @@ export function generateSuratJalanRecapHtml({
     .sj-title-section {
       flex: 1;
       text-align: center;
-      padding: 0 20px;
+      padding: 0 15px;
     }
 
     .sj-title-wrapper .sj-spacer-right {
@@ -1109,22 +1131,25 @@ export function generateSuratJalanRecapHtml({
 
     .sj-title-section .title {
       font-weight: 700;
-      font-size: 20px;
-      letter-spacing: 1px;
-      margin-bottom: 4px;
+      font-size: 16px;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .sj-title-section .sj-number {
       font-weight: 600;
-      font-size: 12px;
+      font-size: 11px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .info {
       display: flex;
       justify-content: space-between;
-      margin-top: 12px;
-      font-size: 11px;
-      line-height: 1.6;
+      margin-top: 6px;
+      font-size: 10px;
+      line-height: 1.4;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .info .left {
@@ -1240,16 +1265,18 @@ export function generateSuratJalanRecapHtml({
     table.items {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 14px;
-      font-size: 12px;
+      margin-top: 8px;
+      font-size: 10px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     table.items thead th {
       border: 1px solid #000;
-      padding: 8px 6px;
+      padding: 5px 4px;
       background: #f6f6f6;
       font-weight: 700;
       text-align: left;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     table.items thead th:nth-child(1),
@@ -1260,8 +1287,9 @@ export function generateSuratJalanRecapHtml({
 
     table.items td {
       border: 1px solid #000;
-      padding: 8px 6px;
+      padding: 5px 4px;
       vertical-align: top;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     table.items tbody tr:last-child td {
@@ -1269,12 +1297,13 @@ export function generateSuratJalanRecapHtml({
     }
 
     .footer {
-      margin-top: 30px;
+      margin-top: 12px;
     }
 
     .footer-left {
-      font-size: 11px;
-      margin-bottom: 20px;
+      font-size: 10px;
+      margin-bottom: 10px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .keterangan {
@@ -1283,26 +1312,30 @@ export function generateSuratJalanRecapHtml({
 
     .keterangan .title {
       font-weight: 700;
-      margin-bottom: 4px;
-      font-size: 11px;
+      margin-bottom: 2px;
+      font-size: 10px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .keterangan .note-text {
-      font-size: 11px;
-      line-height: 1.4;
-      margin-bottom: 8px;
-      padding-bottom: 1.4em;
+      font-size: 10px;
+      line-height: 1.3;
+      margin-bottom: 4px;
+      padding-bottom: 0.8em;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .footer-date {
-      margin-top: 10px;
-      font-size: 11px;
+      margin-top: 6px;
+      font-size: 10px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .footer-hormat {
-      margin-top: 6px;
-      font-size: 11px;
-      margin-bottom: 20px;
+      margin-top: 4px;
+      font-size: 10px;
+      margin-bottom: 10px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .signature-section {
@@ -1310,27 +1343,29 @@ export function generateSuratJalanRecapHtml({
       justify-content: flex-start;
       align-items: flex-start;
       width: 100%;
-      margin-top: 20px;
-      gap: 15px;
+      margin-top: 10px;
+      gap: 10px;
     }
 
     .sig {
       text-align: left;
-      font-size: 12px;
-      min-width: 100px;
+      font-size: 10px;
+      min-width: 80px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .sig-right {
       text-align: right;
-      font-size: 12px;
-      min-width: 100px;
+      font-size: 10px;
+      min-width: 80px;
       margin-left: auto;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .sig .line,
     .sig-right .line {
       border-top: 1px solid #000;
-      margin-top: 54px;
+      margin-top: 40px;
       display: block;
       width: 70%;
     }
@@ -1342,30 +1377,33 @@ export function generateSuratJalanRecapHtml({
 
     .sig .label,
     .sig-right .label {
-      margin-top: 6px;
+      margin-top: 4px;
       font-weight: 600;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .sig .driver-name {
-      margin-top: 6px;
+      margin-top: 4px;
       font-weight: 700;
-      font-size: 11px;
+      font-size: 10px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     @media print {
       @page { 
-        size: Letter; 
-        margin: 12mm; 
+        size: A5; 
+        margin: 8mm; 
       }
       body { 
-        padding: 8mm 10mm 14mm 10mm; 
+        padding: 4mm 6mm 8mm 6mm; 
+        font-family: Arial, Helvetica, sans-serif;
       }
       .header-logo {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
         max-width: 100%;
         height: auto;
-        max-height: 90px;
+        max-height: 70px;
         display: block;
       }
       
@@ -1588,12 +1626,12 @@ export function generateGTDeliveryNoteHtml({
 
   const itemsHtml = tableItems.map((itm, idx) => `
     <tr>
-      <td style="text-align:center;">${htmlEscape(itm.poLineNo)}</td>
-      <td style="text-align:center;">${htmlEscape(itm.itemCode)}</td>
-      <td>${itm.description}</td>
-      <td style="text-align:center;">${itm.ordered}</td>
-      <td style="text-align:center;">${itm.delivered}</td>
-      <td style="text-align:center;">${itm.outstanding > 0 ? itm.outstanding : '-'}</td>
+      <td style="text-align:center; padding:4px 3px; font-size:10px; font-family: Arial, Helvetica, sans-serif;">${htmlEscape(itm.poLineNo)}</td>
+      <td style="text-align:center; padding:4px 3px; font-size:10px; font-family: Arial, Helvetica, sans-serif;">${htmlEscape(itm.itemCode)}</td>
+      <td style="padding:4px 3px; font-size:10px; font-family: Arial, Helvetica, sans-serif;">${itm.description}</td>
+      <td style="text-align:center; padding:4px 3px; font-size:10px; font-family: Arial, Helvetica, sans-serif;">${itm.ordered}</td>
+      <td style="text-align:center; padding:4px 3px; font-size:10px; font-family: Arial, Helvetica, sans-serif;">${itm.delivered}</td>
+      <td style="text-align:center; padding:4px 3px; font-size:10px; font-family: Arial, Helvetica, sans-serif;">${itm.outstanding > 0 ? itm.outstanding : '-'}</td>
     </tr>
   `).join('');
 
@@ -1617,8 +1655,8 @@ export function generateGTDeliveryNoteHtml({
   <title>Delivery Note - ${htmlEscape(sjNoDisplay)}</title>
   <style>
     @page { 
-      size: Letter; 
-      margin: 15mm; 
+      size: A5; 
+      margin: 8mm; 
     }
     * {
       box-sizing: border-box;
@@ -1629,27 +1667,29 @@ export function generateGTDeliveryNoteHtml({
       background: #fff; 
     }
     body { 
-      font-family: Arial, sans-serif; 
-      font-size: 11px; 
+      font-family: Arial, Helvetica, sans-serif; 
+      font-size: 10px; 
       color: #000; 
-      padding: 0;
-      line-height: 1.4;
+      padding: 4mm 6mm 8mm 6mm;
+      line-height: 1.3;
     }
 
     .header-title {
       text-align: center;
-      font-size: 24px;
+      font-size: 18px;
       font-weight: 700;
-      margin-bottom: 12px;
-      letter-spacing: 1px;
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .header-info {
       text-align: left;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
-      margin-bottom: 20px;
-      line-height: 1.6;
+      margin-bottom: 10px;
+      line-height: 1.4;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .header-info-item {
@@ -1677,8 +1717,8 @@ export function generateGTDeliveryNoteHtml({
     .info-section {
       display: flex;
       justify-content: space-between;
-      margin-bottom: 20px;
-      gap: 20px;
+      margin-bottom: 10px;
+      gap: 15px;
     }
 
     .from-section, .to-section {
@@ -1687,20 +1727,22 @@ export function generateGTDeliveryNoteHtml({
 
     .section-title {
       font-weight: 700;
-      margin-bottom: 8px;
-      font-size: 12px;
+      margin-bottom: 4px;
+      font-size: 11px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .section-content {
-      font-size: 11px;
-      line-height: 1.6;
+      font-size: 10px;
+      line-height: 1.4;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .order-details {
-      margin-bottom: 20px;
+      margin-bottom: 10px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 4px;
     }
 
     .order-detail-item {
@@ -1727,28 +1769,31 @@ export function generateGTDeliveryNoteHtml({
     hr {
       border: none;
       border-top: 1px solid #000;
-      margin: 15px 0;
+      margin: 8px 0;
     }
 
     table.items-table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 20px;
-      font-size: 11px;
+      margin-bottom: 10px;
+      font-size: 10px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     table.items-table th {
       border: 1px solid #000;
-      padding: 8px 6px;
+      padding: 5px 4px;
       background: #f0f0f0;
       font-weight: 700;
       text-align: center;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     table.items-table td {
       border: 1px solid #000;
-      padding: 8px 6px;
+      padding: 5px 4px;
       text-align: left;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     table.items-table td:first-child,
@@ -1765,20 +1810,22 @@ export function generateGTDeliveryNoteHtml({
 
     .note-label {
       font-weight: 700;
-      margin-bottom: 8px;
-      font-size: 11px;
+      margin-bottom: 4px;
+      font-size: 10px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .note-box {
       border: 1px solid #000;
-      min-height: 80px;
-      padding: 8px;
+      min-height: 60px;
+      padding: 5px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .signature-section {
       display: flex;
       justify-content: space-between;
-      margin-top: 0;
+      margin-top: 8px;
     }
 
     .signature-block {
@@ -1786,21 +1833,23 @@ export function generateGTDeliveryNoteHtml({
     }
 
     .signature-title {
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
-      margin-bottom: 40px;
+      margin-bottom: 30px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .signature-line {
       border-top: 1px solid #000;
       margin-top: 0;
-      margin-bottom: 50px;
+      margin-bottom: 35px;
       width: 100%;
     }
 
     .signature-label {
-      font-size: 11px;
-      margin-bottom: 4px;
+      font-size: 10px;
+      margin-bottom: 3px;
+      font-family: Arial, Helvetica, sans-serif;
     }
   </style>
 </head>

@@ -3,7 +3,8 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import { storageService } from '../../../services/storage';
-import { filterActiveItems } from '../../../utils/data-persistence-helper';
+import { deleteTruckingItem, deleteTruckingItems, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { useDialog } from '../../../hooks/useDialog';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -20,20 +21,17 @@ const DBActivity = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(50);
   
-  // Custom dialog state
-  const [dialogState, setDialogState] = useState<{
-    show: boolean;
-    type: 'alert' | 'confirm';
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-  }>({
-    show: false,
-    type: 'alert',
-    title: '',
-    message: '',
-  });
+  // Custom Dialog - menggunakan hook terpusat
+  const { showAlert: showAlertBase, showConfirm: showConfirmBase, DialogComponent } = useDialog();
+  
+  // Wrapper untuk kompatibilitas dengan urutan parameter yang berbeda
+  const showAlert = (message: string, title: string = 'Information') => {
+    showAlertBase(message, title);
+  };
+  
+  const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
+    showConfirmBase(message, onConfirm, onCancel, title);
+  };
   
   // Clear dialog state with checkboxes
   const [showClearDialog, setShowClearDialog] = useState(false);
@@ -42,24 +40,6 @@ const DBActivity = () => {
   
   // Seed dialog state
   const [showSeedDialog, setShowSeedDialog] = useState(false);
-
-  const showAlert = (message: string, title: string = 'Information') => {
-    setDialogState({
-      show: true,
-      type: 'alert',
-      title,
-      message,
-    });
-  };
-
-  const closeDialog = () => {
-    setDialogState({
-      show: false,
-      type: 'alert',
-      title: '',
-      message: '',
-    });
-  };
 
   const sections = [
     // Master Data
@@ -917,39 +897,8 @@ const DBActivity = () => {
         </div>
       )}
       
-      {/* Custom Dialog */}
-      {dialogState.show && (
-        <div className="dialog-overlay" onClick={dialogState.type === 'alert' ? closeDialog : undefined} style={{ zIndex: 10000 }}>
-          <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
-            <div style={{ marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)' }}>
-                {dialogState.title}
-              </h3>
-            </div>
-            
-            <div style={{ marginBottom: '24px', fontSize: '14px', color: 'var(--text-primary)', whiteSpace: 'pre-line' }}>
-              {dialogState.message}
-            </div>
-            
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              {dialogState.type === 'confirm' && (
-                <Button variant="secondary" onClick={() => {
-                  if (dialogState.onCancel) dialogState.onCancel();
-                  closeDialog();
-                }}>
-                  Cancel
-                </Button>
-              )}
-              <Button variant="primary" onClick={() => {
-                if (dialogState.onConfirm) dialogState.onConfirm();
-                if (dialogState.type === 'alert') closeDialog();
-              }}>
-                {dialogState.type === 'alert' ? 'OK' : 'Confirm'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Custom Dialog - menggunakan hook terpusat */}
+      <DialogComponent />
       
       {/* Clear Dialog */}
       {showClearDialog && (

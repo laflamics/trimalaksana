@@ -1,52 +1,5 @@
 {
-  "value": [
-    {
-      "id": "1767152341803mcv576a8a",
-      "poNo": "PO-251231-66N0K",
-      "supplier": "PT. KATI KARTIKA MURNI",
-      "soNo": "GBU/PO/C/12/2025/00103",
-      "spkNo": "SPK/251231/T26DZ",
-      "sourcePRId": "17671523242560y20a39bo",
-      "purchaseReason": "",
-      "materialItem": "TEST 1",
-      "materialId": "MTRL-00828",
-      "qty": 50,
-      "price": 5000,
-      "total": 250000,
-      "paymentTerms": "TOP",
-      "topDays": 30,
-      "status": "CLOSE",
-      "receiptDate": "2025-12-31",
-      "created": "2025-12-31T03:39:01.803Z",
-      "padCode": "",
-      "deleted": true,
-      "deletedAt": "2026-01-09T08:00:06.506Z",
-      "deletedTimestamp": 1767945606506
-    },
-    {
-      "id": "1767157177838kwdkzkk8o",
-      "poNo": "PO-251231-YXC1D",
-      "supplier": "PT. PARAMITRA GUNAKARYA CEMERLANG",
-      "soNo": "TEST-000",
-      "spkNo": "SPK/251231/947I2",
-      "sourcePRId": "1767157154856yu6yxrlio",
-      "purchaseReason": "",
-      "materialItem": "SHEET 165 X 120 CM K150/M125/K125 B/F BRUTO",
-      "materialId": "MTRL-00005",
-      "qty": 100,
-      "price": 2000,
-      "total": 200000,
-      "paymentTerms": "TOP",
-      "topDays": 30,
-      "status": "CLOSE",
-      "receiptDate": "2025-12-31",
-      "created": "2025-12-31T04:59:37.838Z",
-      "padCode": "",
-      "deleted": true,
-      "deletedAt": "2026-01-09T08:00:08.938Z",
-      "deletedTimestamp": 1767945608938
-    }
-  ],
-  "timestamp": 1767945608939,
-  "_timestamp": 1767945608939
+  "value": [],
+  "timestamp": 1768895989554,
+  "_timestamp": 1768895989554
 }

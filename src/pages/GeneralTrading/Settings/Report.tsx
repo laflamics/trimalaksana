@@ -4,7 +4,7 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService } from '../../../services/storage';
+import { storageService, extractStorageValue } from '../../../services/storage';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../../utils/actions';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
@@ -101,9 +101,10 @@ const Report = () => {
   
   // Filtered data berdasarkan search query
   const filteredSoData = useMemo(() => {
-    if (!searchQuery) return soData;
+    if (!searchQuery) return Array.isArray(soData) ? soData : [];
     const query = searchQuery.toLowerCase();
-    return soData.filter(item => {
+    const soDataArray = Array.isArray(soData) ? soData : [];
+    return soDataArray.filter(item => {
       const itemsMatch = item.items?.some((itm: any) => 
         (itm.productName || itm.product || '').toLowerCase().includes(query)
       );
@@ -118,9 +119,10 @@ const Report = () => {
   }, [soData, searchQuery]);
   
   const filteredPoData = useMemo(() => {
-    if (!searchQuery) return poData;
+    if (!searchQuery) return Array.isArray(poData) ? poData : [];
     const query = searchQuery.toLowerCase();
-    return poData.filter(item => 
+    const poDataArray = Array.isArray(poData) ? poData : [];
+    return poDataArray.filter(item => 
       (item.poNo || '').toLowerCase().includes(query) ||
       (item.supplier || '').toLowerCase().includes(query) ||
       (item.soNo || '').toLowerCase().includes(query) ||
@@ -133,9 +135,10 @@ const Report = () => {
   }, [poData, searchQuery]);
   
   const filteredDeliveryData = useMemo(() => {
-    if (!searchQuery) return deliveryData;
+    if (!searchQuery) return Array.isArray(deliveryData) ? deliveryData : [];
     const query = searchQuery.toLowerCase();
-    return deliveryData.filter(item => {
+    const deliveryDataArray = Array.isArray(deliveryData) ? deliveryData : [];
+    return deliveryDataArray.filter(item => {
       const itemsMatch = item.items?.some((itm: any) => 
         (itm.product || '').toLowerCase().includes(query)
       );
@@ -152,9 +155,10 @@ const Report = () => {
   }, [deliveryData, searchQuery]);
   
   const filteredInvoiceData = useMemo(() => {
-    if (!searchQuery) return invoiceData;
+    if (!searchQuery) return Array.isArray(invoiceData) ? invoiceData : [];
     const query = searchQuery.toLowerCase();
-    return invoiceData.filter(item => 
+    const invoiceDataArray = Array.isArray(invoiceData) ? invoiceData : [];
+    return invoiceDataArray.filter(item => 
       (item.invoiceNo || '').toLowerCase().includes(query) ||
       (item.customer || '').toLowerCase().includes(query) ||
       (item.soNo || '').toLowerCase().includes(query) ||
@@ -164,9 +168,10 @@ const Report = () => {
   }, [invoiceData, searchQuery]);
   
   const filteredInventoryData = useMemo(() => {
-    if (!searchQuery) return inventoryData;
+    if (!searchQuery) return Array.isArray(inventoryData) ? inventoryData : [];
     const query = searchQuery.toLowerCase();
-    return inventoryData.filter(item => 
+    const inventoryDataArray = Array.isArray(inventoryData) ? inventoryData : [];
+    return inventoryDataArray.filter(item => 
       (item.codeItem || '').toLowerCase().includes(query) ||
       (item.description || '').toLowerCase().includes(query) ||
       (item.kategori || '').toLowerCase().includes(query) ||
@@ -185,7 +190,8 @@ const Report = () => {
       return kategori.includes('product') || kategori.includes('finished') || kategori.includes('fg');
     };
 
-    const productItems = inventoryData.filter((item: any) => isProduct(item));
+    const inventoryDataArray = Array.isArray(inventoryData) ? inventoryData : [];
+    const productItems = inventoryDataArray.filter((item: any) => isProduct(item));
 
     const productValue = productItems.reduce((sum: number, item: any) => {
       const nextStock = item.nextStock || 0;
@@ -543,38 +549,48 @@ const Report = () => {
   const loadAllData = async () => {
     try {
       // Load SO data - GT menggunakan gt_salesOrders
-      const salesOrders = await storageService.get<any[]>('gt_salesOrders') || [];
+      const salesOrdersRaw = await storageService.get<any[]>('gt_salesOrders');
+      const salesOrders = extractStorageValue(salesOrdersRaw);
       setSoData(salesOrders);
 
       // Load PO data - GT menggunakan gt_purchaseOrders
-      const purchaseOrders = await storageService.get<any[]>('gt_purchaseOrders') || [];
+      const purchaseOrdersRaw = await storageService.get<any[]>('gt_purchaseOrders');
+      const purchaseOrders = extractStorageValue(purchaseOrdersRaw);
       setPoData(purchaseOrders);
 
       // Load Delivery data - GT menggunakan gt_delivery
-      const delivery = await storageService.get<any[]>('gt_delivery') || [];
+      const deliveryRaw = await storageService.get<any[]>('gt_delivery');
+      const delivery = extractStorageValue(deliveryRaw);
       setDeliveryData(delivery);
 
       // Load Invoice data - GT menggunakan gt_invoices
-      const invoices = await storageService.get<any[]>('gt_invoices') || [];
+      const invoicesRaw = await storageService.get<any[]>('gt_invoices');
+      const invoices = extractStorageValue(invoicesRaw);
       setInvoiceData(invoices);
 
       // Load Payment data - GT menggunakan gt_payments
-      const paymentRecords = await storageService.get<any[]>('gt_payments') || [];
+      const paymentRecordsRaw = await storageService.get<any[]>('gt_payments');
+      const paymentRecords = extractStorageValue(paymentRecordsRaw);
       setPaymentData(paymentRecords);
 
       // Load Inventory data - GT menggunakan gt_inventory
-      const inventoryData = await storageService.get<any[]>('gt_inventory') || [];
+      const inventoryDataRaw = await storageService.get<any[]>('gt_inventory');
+      const inventoryData = extractStorageValue(inventoryDataRaw);
       setInventoryData(inventoryData);
 
       // Load Financial data - GT menggunakan gt_journalEntries dan gt_accounts
-      const entries = await storageService.get<any[]>('gt_journalEntries') || [];
-      const accs = await storageService.get<any[]>('gt_accounts') || [];
+      const entriesRaw = await storageService.get<any[]>('gt_journalEntries');
+      const accsRaw = await storageService.get<any[]>('gt_accounts');
+      const entries = Array.isArray(extractStorageValue(entriesRaw)) ? extractStorageValue(entriesRaw) : [];
+      const accs = Array.isArray(extractStorageValue(accsRaw)) ? extractStorageValue(accsRaw) : [];
       setJournalEntries(entries);
       setAccounts(accs);
 
     // Calculate Financial Summary from Journal Entries
     const balances: Record<string, { debit: number; credit: number; balance: number }> = {};
-    const filteredEntries = (entries || []).filter((e: any) => {
+    const entriesArray = Array.isArray(entries) ? entries : [];
+    const accsArray = Array.isArray(accs) ? accs : [];
+    const filteredEntries = entriesArray.filter((e: any) => {
       if (!dateTo) return true;
       const entryDate = new Date(e.entryDate);
       const to = new Date(dateTo);
@@ -589,7 +605,7 @@ const Report = () => {
       balances[entry.account].credit += entry.credit || 0;
     });
     
-    (accs || []).forEach(acc => {
+    accsArray.forEach(acc => {
       if (!balances[acc.code]) {
         balances[acc.code] = { debit: 0, credit: 0, balance: 0 };
       }
@@ -620,14 +636,15 @@ const Report = () => {
       .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
     
     // Salary Staff - dari staff data atau payroll
-    const staffData = await storageService.get<any[]>('staff') || [];
+    const staffDataRaw = await storageService.get<any[]>('staff');
+    const staffData = extractStorageValue(staffDataRaw);
     const totalSalary = staffData.reduce((sum: number, s: any) => {
       const salary = s['GAJI POKOK'] || s.salary || s.gaji || 0;
       return sum + (typeof salary === 'string' ? parseFloat(salary.replace(/[^\d.-]/g, '')) || 0 : salary);
     }, 0);
     
     // Expense Accounts dari Journal Entries (COA type Expense)
-    const expenseAccounts = (accs || []).filter(a => a.type === 'Expense');
+    const expenseAccounts = accsArray.filter(a => a.type === 'Expense');
     const expenseFromCOA = expenseAccounts.reduce((sum, acc) => {
       const accBalance = balances[acc.code]?.balance || 0;
       return sum + Math.abs(accBalance); // Expense biasanya negative, jadi pakai abs
@@ -651,7 +668,7 @@ const Report = () => {
     const netProfit = revenue - expenses;
     const totalAssets = cash + accountsReceivable + inventory + fixedAssets;
     const totalLiabilities = accountsPayable;
-    const totalEquity = (accs || []).filter(a => a.type === 'Equity').reduce((sum, acc) => {
+    const totalEquity = accsArray.filter(a => a.type === 'Equity').reduce((sum, acc) => {
       let balance = balances[acc.code]?.balance || 0;
       if (acc.code === '3100') {
         balance = balance + netProfit; // Retained Earnings
@@ -722,7 +739,9 @@ const Report = () => {
     while (currentDate <= toDate) {
       const monthKey = currentDate.toLocaleDateString('en-US', { month: 'short' });
       const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-      const monthEntries = (journalEntries || []).filter((e: any) => {
+      const journalEntriesArray = Array.isArray(journalEntries) ? journalEntries : [];
+      const accountsArray = Array.isArray(accounts) ? accounts : [];
+      const monthEntries = journalEntriesArray.filter((e: any) => {
         const entryDate = new Date(e.entryDate);
         return entryDate <= monthEnd;
       });
@@ -734,7 +753,7 @@ const Report = () => {
         monthBalances[entry.account].debit += entry.debit || 0;
         monthBalances[entry.account].credit += entry.credit || 0;
       });
-      (accounts || []).forEach((acc: any) => {
+      accountsArray.forEach((acc: any) => {
         if (!monthBalances[acc.code]) {
           monthBalances[acc.code] = { debit: 0, credit: 0, balance: 0 };
         }
@@ -744,7 +763,7 @@ const Report = () => {
           monthBalances[acc.code].balance = monthBalances[acc.code].credit - monthBalances[acc.code].debit;
         }
       });
-      const totalAssets = (accounts || []).filter((a: any) => a.type === 'Asset').reduce((sum: number, acc: any) => sum + (monthBalances[acc.code]?.balance || 0), 0);
+      const totalAssets = accountsArray.filter((a: any) => a.type === 'Asset').reduce((sum: number, acc: any) => sum + (monthBalances[acc.code]?.balance || 0), 0);
       data.push({ month: monthKey, value: Math.max(0, totalAssets) });
       currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
     }

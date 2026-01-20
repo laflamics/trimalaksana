@@ -5,7 +5,9 @@ import Button from '../../components/Button';
 import Input from '../../components/Input';
 import NotificationBell from '../../components/NotificationBell';
 import { storageService } from '../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../utils/data-persistence-helper';
+import { filterActiveItems } from '../../utils/data-persistence-helper';
+import { useDialog } from '../../hooks/useDialog';
+import { deleteTruckingItem, reloadTruckingData } from '../../utils/trucking-delete-helper';
 import '../../styles/common.css';
 import '../../styles/compact.css';
 
@@ -285,56 +287,16 @@ const UnitScheduling = () => {
   });
 
   // Custom Dialog state
-  const [dialogState, setDialogState] = useState<{
-    show: boolean;
-    type: 'alert' | 'confirm' | null;
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-  }>({
-    show: false,
-    type: null,
-    title: '',
-    message: '',
-  });
-
+  // Custom Dialog - menggunakan hook terpusat
+  const { showAlert: showAlertBase, showConfirm: showConfirmBase, DialogComponent } = useDialog();
+  
+  // Wrapper untuk kompatibilitas dengan urutan parameter yang berbeda
   const showAlert = (message: string, title: string = 'Information') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'alert',
-      title,
-      message,
-    });
+    showAlertBase(message, title);
   };
-
+  
   const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'confirm',
-      title,
-      message,
-      onConfirm,
-      onCancel,
-    });
-  };
-
-  const closeDialog = () => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(false);
-    }
-    setDialogState({
-      show: false,
-      type: null,
-      title: '',
-      message: '',
-    });
+    showConfirmBase(message, onConfirm, onCancel, title);
   };
 
   useEffect(() => {
@@ -523,30 +485,68 @@ const UnitScheduling = () => {
       const driver = drivers.find(d => d.id === formData.driverId);
       const route = routes.find(r => r.id === formData.routeId);
 
-      const newSchedule: UnitSchedule = {
-        id: Date.now().toString(),
-        doNo: formData.doNo || '',
-        customerName: formData.customerName || '',
-        customerAddress: formData.customerAddress || '',
-        vehicleId: formData.vehicleId || '',
-        vehicleNo: vehicle?.vehicleNo || formData.vehicleNo || '',
-        driverId: formData.driverId || '',
-        driverName: driver?.name || formData.driverName || '',
-        routeId: formData.routeId || '',
-        routeName: route?.routeName || formData.routeName || '',
-        scheduledDate: formData.scheduledDate || '',
-        scheduledTime: formData.scheduledTime || '',
-        estimatedArrivalDate: formData.estimatedArrivalDate || '',
-        estimatedArrivalTime: formData.estimatedArrivalTime || '',
-        estimatedArrival: formData.estimatedArrivalDate && formData.estimatedArrivalTime 
-          ? `${formData.estimatedArrivalDate} ${formData.estimatedArrivalTime}` 
-          : formData.estimatedArrival || '', // Keep for backward compatibility
-        status: formData.status || 'Open',
-        notes: formData.notes || '',
-        created: new Date().toISOString(),
-      };
+      // FIX: Cek apakah ini edit atau create baru
+      const isEditing = formData.id && schedules.find(s => s.id === formData.id);
+      
+      let updatedSchedules: UnitSchedule[];
+      
+      if (isEditing) {
+        // UPDATE: Update schedule yang sudah ada
+        const existingSchedule = schedules.find(s => s.id === formData.id);
+        updatedSchedules = schedules.map(s =>
+          s.id === formData.id
+            ? {
+                ...s,
+                doNo: formData.doNo || '',
+                customerName: formData.customerName || '',
+                customerAddress: formData.customerAddress || '',
+                vehicleId: formData.vehicleId || '',
+                vehicleNo: vehicle?.vehicleNo || formData.vehicleNo || '',
+                driverId: formData.driverId || '',
+                driverName: driver?.name || formData.driverName || '',
+                routeId: formData.routeId || '',
+                routeName: route?.routeName || formData.routeName || '',
+                scheduledDate: formData.scheduledDate || '',
+                scheduledTime: formData.scheduledTime || '',
+                estimatedArrivalDate: formData.estimatedArrivalDate || '',
+                estimatedArrivalTime: formData.estimatedArrivalTime || '',
+                estimatedArrival: formData.estimatedArrivalDate && formData.estimatedArrivalTime 
+                  ? `${formData.estimatedArrivalDate} ${formData.estimatedArrivalTime}` 
+                  : formData.estimatedArrival || '',
+                status: formData.status || s.status,
+                notes: formData.notes || '',
+                // Keep existing created date
+                created: existingSchedule?.created || new Date().toISOString(),
+              }
+            : s
+        );
+      } else {
+        // CREATE: Tambah schedule baru
+        const newSchedule: UnitSchedule = {
+          id: Date.now().toString(),
+          doNo: formData.doNo || '',
+          customerName: formData.customerName || '',
+          customerAddress: formData.customerAddress || '',
+          vehicleId: formData.vehicleId || '',
+          vehicleNo: vehicle?.vehicleNo || formData.vehicleNo || '',
+          driverId: formData.driverId || '',
+          driverName: driver?.name || formData.driverName || '',
+          routeId: formData.routeId || '',
+          routeName: route?.routeName || formData.routeName || '',
+          scheduledDate: formData.scheduledDate || '',
+          scheduledTime: formData.scheduledTime || '',
+          estimatedArrivalDate: formData.estimatedArrivalDate || '',
+          estimatedArrivalTime: formData.estimatedArrivalTime || '',
+          estimatedArrival: formData.estimatedArrivalDate && formData.estimatedArrivalTime 
+            ? `${formData.estimatedArrivalDate} ${formData.estimatedArrivalTime}` 
+            : formData.estimatedArrival || '', // Keep for backward compatibility
+          status: formData.status || 'Open',
+          notes: formData.notes || '',
+          created: new Date().toISOString(),
+        };
+        updatedSchedules = [...schedules, newSchedule];
+      }
 
-      const updatedSchedules = [...schedules, newSchedule];
       await storageService.set('trucking_unitSchedules', updatedSchedules);
       // Sort by created date (newest first)
       const sortedSchedules = updatedSchedules.sort((a: any, b: any) => {
@@ -556,66 +556,80 @@ const UnitScheduling = () => {
       });
       setSchedules(sortedSchedules.map((s, idx) => ({ ...s, no: idx + 1 })) as any);
 
-      // Hapus notification setelah schedule dibuat (hapus semua notifikasi untuk DO ini)
-      const allNotifications = await storageService.get<any[]>('trucking_unitNotifications') || [];
-      const updatedNotifications = allNotifications.filter((n: any) => 
-        !(n.type === 'DO_CONFIRMED' && n.doNo === newSchedule.doNo)
-      );
-      await storageService.set('trucking_unitNotifications', updatedNotifications);
-      
-      // Update state notifications
-      const scheduledDONos = new Set([...schedules.map((s: any) => s.doNo), newSchedule.doNo]);
-      const remainingNotifs = updatedNotifications.filter((n: any) => {
-        if (n.type !== 'DO_CONFIRMED' || (n.status || 'Open') !== 'Open') {
-          return false;
-        }
-        if (n.doNo && scheduledDONos.has(n.doNo)) {
-          return false;
-        }
-        return true;
-      });
-      setNotifications(remainingNotifs);
-
-      // Kirim notifikasi ke Petty Cash untuk pengaturan uang jalan
-      try {
-        const pettyCashNotifications = await storageService.get<any[]>('trucking_pettyCashNotifications') || [];
-        const existingNotif = pettyCashNotifications.find((n: any) => 
-          n.scheduleId === newSchedule.id && n.type === 'SCHEDULE_CREATED'
+      // Hapus notification setelah schedule dibuat (hanya untuk CREATE, bukan UPDATE)
+      if (!isEditing) {
+        const scheduleDoNo = formData.doNo || '';
+        const allNotifications = await storageService.get<any[]>('trucking_unitNotifications') || [];
+        const updatedNotifications = allNotifications.filter((n: any) => 
+          !(n.type === 'DO_CONFIRMED' && n.doNo === scheduleDoNo)
         );
+        await storageService.set('trucking_unitNotifications', updatedNotifications);
         
-        if (!existingNotif && newSchedule.driverId) {
-          const newPettyCashNotification = {
-            id: `pettycash-${Date.now()}-${newSchedule.id}`,
-            type: 'SCHEDULE_CREATED',
-            scheduleId: newSchedule.id,
-            doNo: newSchedule.doNo,
-            customerName: newSchedule.customerName,
-            customerAddress: newSchedule.customerAddress,
-            driverId: newSchedule.driverId,
-            driverName: newSchedule.driverName,
-            vehicleId: newSchedule.vehicleId,
-            vehicleNo: newSchedule.vehicleNo,
-            routeId: newSchedule.routeId,
-            routeName: newSchedule.routeName,
-            scheduledDate: newSchedule.scheduledDate,
-            scheduledTime: newSchedule.scheduledTime,
-            estimatedArrival: newSchedule.estimatedArrival,
-            notes: newSchedule.notes || '',
-            status: 'Open',
-            created: new Date().toISOString(),
-          };
-          await storageService.set('trucking_pettyCashNotifications', [...pettyCashNotifications, newPettyCashNotification]);
+        // Update state notifications
+        const scheduledDONos = new Set([...schedules.map((s: any) => s.doNo), scheduleDoNo]);
+        const remainingNotifs = updatedNotifications.filter((n: any) => {
+          if (n.type !== 'DO_CONFIRMED' || (n.status || 'Open') !== 'Open') {
+            return false;
+          }
+          if (n.doNo && scheduledDONos.has(n.doNo)) {
+            return false;
+          }
+          return true;
+        });
+        setNotifications(remainingNotifs);
+
+        // Kirim notifikasi ke Petty Cash untuk pengaturan uang jalan (hanya untuk CREATE)
+        try {
+          const savedSchedule = updatedSchedules.find(s => s.doNo === scheduleDoNo && !schedules.find(os => os.id === s.id));
+          if (savedSchedule) {
+            const pettyCashNotifications = await storageService.get<any[]>('trucking_pettyCashNotifications') || [];
+            const existingNotif = pettyCashNotifications.find((n: any) => 
+              n.scheduleId === savedSchedule.id && n.type === 'SCHEDULE_CREATED'
+            );
+            
+            if (!existingNotif && savedSchedule.driverId) {
+              const newPettyCashNotification = {
+                id: `pettycash-${Date.now()}-${savedSchedule.id}`,
+                type: 'SCHEDULE_CREATED',
+                scheduleId: savedSchedule.id,
+                doNo: savedSchedule.doNo,
+                customerName: savedSchedule.customerName,
+                customerAddress: savedSchedule.customerAddress,
+                driverId: savedSchedule.driverId,
+                driverName: savedSchedule.driverName,
+                vehicleId: savedSchedule.vehicleId,
+                vehicleNo: savedSchedule.vehicleNo,
+                routeId: savedSchedule.routeId,
+                routeName: savedSchedule.routeName,
+                scheduledDate: savedSchedule.scheduledDate,
+                scheduledTime: savedSchedule.scheduledTime,
+                estimatedArrival: savedSchedule.estimatedArrival,
+                notes: savedSchedule.notes || '',
+                status: 'Open',
+                created: new Date().toISOString(),
+              };
+              await storageService.set('trucking_pettyCashNotifications', [...pettyCashNotifications, newPettyCashNotification]);
+            }
+          }
+        } catch (error: any) {
+          // Error creating petty cash notification - silent fail
         }
-      } catch (error: any) {
-        // Error creating petty cash notification - silent fail
       }
 
-      showAlert(`Schedule berhasil dibuat untuk DO ${formData.doNo}!\n\n📧 Notification sent to Petty Cash for uang jalan setup.`, 'Success');
+      showAlert(
+        isEditing 
+          ? `Schedule berhasil diupdate untuk DO ${formData.doNo}!` 
+          : `Schedule berhasil dibuat untuk DO ${formData.doNo}!\n\n📧 Notification sent to Petty Cash for uang jalan setup.`, 
+        'Success'
+      );
       setShowScheduleForm(false);
       setSelectedNotification(null);
       setFormData({
+        id: undefined, // Reset ID untuk create baru
         scheduledDate: new Date().toISOString().split('T')[0],
         scheduledTime: '08:00',
+        estimatedArrivalDate: '',
+        estimatedArrivalTime: '',
         estimatedArrival: '',
         status: 'Open',
         notes: '',
@@ -659,12 +673,12 @@ const UnitScheduling = () => {
       async () => {
         try {
           // Pakai helper function untuk safe delete (tombstone pattern)
-          const success = await safeDeleteItem('trucking_unitSchedules', schedule.id, 'id');
+          const deleteResult = await deleteTruckingItem('trucking_unitSchedules', schedule.id, 'id');
+          const success = deleteResult.success;
           
-          if (success) {
-            // Reload data dengan filter active items
-            const updatedSchedules = await storageService.get<UnitSchedule[]>('trucking_unitSchedules') || [];
-            const activeSchedules = filterActiveItems(updatedSchedules);
+          if (deleteResult.success) {
+            // Reload data dengan helper function
+            const activeSchedules = await reloadTruckingData('trucking_unitSchedules', setSchedules);
             
             // Sort by created date (newest first)
             const sortedSchedules = activeSchedules.sort((a: any, b: any) => {
@@ -675,7 +689,7 @@ const UnitScheduling = () => {
             setSchedules(sortedSchedules.map((s, idx) => ({ ...s, no: idx + 1 })) as any);
             showAlert(`Schedule for DO "${schedule.doNo}" deleted successfully`, 'Success');
           } else {
-            showAlert(`Error deleting schedule for DO "${schedule.doNo}". Please try again.`, 'Error');
+            showAlert(`Error deleting schedule for DO "${schedule.doNo}": ${deleteResult.error || 'Please try again.'}`, 'Error');
           }
         } catch (error: any) {
           showAlert(`Error deleting schedule: ${error.message}`, 'Error');
@@ -708,16 +722,16 @@ const UnitScheduling = () => {
 
   const handleDeleteNotification = async (notification: any) => {
     try {
-      // Gunakan safeDeleteItem untuk soft delete (tombstone pattern)
+      // Gunakan deleteTruckingItem untuk soft delete (tombstone pattern)
       const notifId = notification.notif?.id || notification.id;
       if (!notifId) {
         showAlert('Error: Notification ID tidak ditemukan', 'Error');
         return;
       }
       
-      const success = await safeDeleteItem('trucking_unitNotifications', notifId, 'id');
+      const deleteResult = await deleteTruckingItem('trucking_unitNotifications', notifId, 'id');
       
-      if (success) {
+      if (deleteResult.success) {
         // Reload data dengan filter active items
         const allNotifications = await storageService.get<any[]>('trucking_unitNotifications') || [];
         const activeNotifs = filterActiveItems(allNotifications).filter((n: any) => {
@@ -734,7 +748,7 @@ const UnitScheduling = () => {
         setNotifications(activeNotifs);
         showAlert('Notifikasi berhasil dihapus', 'Success');
       } else {
-        showAlert('Error menghapus notifikasi. Silakan coba lagi.', 'Error');
+        showAlert(`Error menghapus notifikasi: ${deleteResult.error || 'Silakan coba lagi.'}`, 'Error');
       }
     } catch (error: any) {
       showAlert(`Error deleting notification: ${error.message}`, 'Error');
@@ -754,14 +768,14 @@ const UnitScheduling = () => {
         return;
       }
       
-      const success = await safeDeleteItem('trucking_unitNotifications', matchingNotif.id, 'id');
+      const deleteResult = await deleteTruckingItem('trucking_unitNotifications', matchingNotif.id, 'id');
       
-      if (success) {
+      if (deleteResult.success) {
         // Reload data
         await loadData();
         showAlert('Confirmed DO berhasil dihapus', 'Success');
       } else {
-        showAlert('Error menghapus confirmed DO. Silakan coba lagi.', 'Error');
+        showAlert(`Error menghapus confirmed DO: ${deleteResult.error || 'Silakan coba lagi.'}`, 'Error');
       }
     } catch (error: any) {
       showAlert(`Error deleting confirmed DO: ${error.message}`, 'Error');
@@ -1385,34 +1399,8 @@ const UnitScheduling = () => {
           </div>
         )}
 
-        {/* Custom Dialog */}
-        {dialogState.show && (
-          <div className="dialog-overlay" onClick={closeDialog}>
-            <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
-              <Card className="dialog-card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h2>{dialogState.title}</h2>
-                  <Button variant="secondary" onClick={closeDialog} style={{ padding: '6px 12px' }}>✕</Button>
-                </div>
-                <p style={{ marginBottom: '20px', whiteSpace: 'pre-wrap' }}>{dialogState.message}</p>
-                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                  {dialogState.type === 'confirm' && (
-                    <Button variant="secondary" onClick={closeDialog}>Cancel</Button>
-                  )}
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      if (dialogState.onConfirm) dialogState.onConfirm();
-                      closeDialog();
-                    }}
-                  >
-                    {dialogState.type === 'confirm' ? 'Confirm' : 'OK'}
-                  </Button>
-                </div>
-              </Card>
-            </div>
-          </div>
-        )}
+        {/* Custom Dialog - menggunakan hook terpusat */}
+        <DialogComponent />
       </Card>
     </div>
   );

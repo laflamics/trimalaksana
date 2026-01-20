@@ -1,4 +1,4 @@
-import { storageService } from '../services/storage';
+import { storageService, extractStorageValue } from '../services/storage';
 import { filterActiveItems } from './data-persistence-helper';
 
 export interface UserAccess {
@@ -87,8 +87,10 @@ export function pathMatchesAccess(path: string, allowedPaths: string[]): boolean
  */
 export async function getUserAccessData(userId: string): Promise<UserAccess | null> {
   try {
-    const users = await storageService.get<UserAccess[]>('userAccessControl');
-    if (!users || !Array.isArray(users)) return null;
+    const rawUsers = await storageService.get<UserAccess[]>('userAccessControl');
+    // 🚀 FIX: Extract array with robust handling (handle object {} case)
+    const users = extractStorageValue(rawUsers) as UserAccess[];
+    if (!users || !Array.isArray(users) || users.length === 0) return null;
     
     // Filter active and non-deleted users
     const activeUsers = filterActiveItems(users);
@@ -230,6 +232,7 @@ export async function getAccessibleRoutes(
 
 /**
  * Validate user login (check isActive and deleted status)
+ * 🚀 FIX: Extract array with robust handling to prevent "is not an array" errors
  */
 export async function validateUserLogin(username: string): Promise<{
   valid: boolean;
@@ -238,33 +241,45 @@ export async function validateUserLogin(username: string): Promise<{
 }> {
   try {
     const normalizedUsername = username.trim().toLowerCase();
-    const users = await storageService.get<UserAccess[]>('userAccessControl');
+    const rawUsers = await storageService.get<UserAccess[]>('userAccessControl');
     
-    if (!users || !Array.isArray(users)) {
-      return { valid: false, user: null, error: 'User tidak ditemukan' };
+    // 🚀 FIX: Extract array with robust handling (handle object {} case)
+    const users = extractStorageValue(rawUsers) as UserAccess[];
+    
+    if (!users || !Array.isArray(users) || users.length === 0) {
+      console.warn('[validateUserLogin] No users found or data is not an array:', users);
+      return { valid: false, user: null, error: 'User tidak ditemukan. Pastikan user sudah terdaftar di User Control.' };
     }
     
     // Filter active and non-deleted users
     const activeUsers = filterActiveItems(users);
+    
+    if (activeUsers.length === 0) {
+      console.warn('[validateUserLogin] No active users found');
+      return { valid: false, user: null, error: 'Tidak ada user aktif. Hubungi admin.' };
+    }
     
     const user = activeUsers.find(
       (u) => (u.username || '').toLowerCase() === normalizedUsername
     );
     
     if (!user) {
-      return { valid: false, user: null, error: 'User tidak ditemukan' };
+      console.warn(`[validateUserLogin] User not found: ${normalizedUsername}. Available users:`, activeUsers.map(u => u.username));
+      return { valid: false, user: null, error: `User "${username}" tidak ditemukan. Pastikan username benar atau hubungi admin untuk registrasi.` };
     }
     
     if (!user.isActive) {
-      return { valid: false, user: null, error: 'User tidak aktif' };
+      return { valid: false, user: null, error: 'User tidak aktif. Hubungi admin untuk mengaktifkan akun.' };
     }
     
     if (user.deleted) {
-      return { valid: false, user: null, error: 'User telah dihapus' };
+      return { valid: false, user: null, error: 'User telah dihapus. Hubungi admin untuk registrasi ulang.' };
     }
     
+    console.log(`[validateUserLogin] ✅ User found: ${user.username} (${user.fullName})`);
     return { valid: true, user };
   } catch (error: any) {
+    console.error('[validateUserLogin] Error:', error);
     return { valid: false, user: null, error: error.message || 'Error validasi user' };
   }
 }

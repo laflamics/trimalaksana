@@ -53,6 +53,29 @@ const Inventory = () => {
     loadProducts();
   }, []);
 
+  // Enable semua input di dalam dialog saat dialog terbuka
+  useEffect(() => {
+    if (editingInventory) {
+      const enableDialogInputs = () => {
+        const dialogInputs = document.querySelectorAll('.dialog-card input, .dialog-card textarea, .dialog-card select');
+        dialogInputs.forEach((input: Element) => {
+          if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement || input instanceof HTMLSelectElement) {
+            input.removeAttribute('readonly');
+            input.removeAttribute('disabled');
+            (input as any).readOnly = false;
+            (input as any).disabled = false;
+          }
+        });
+      };
+      
+      // Enable inputs multiple times untuk memastikan
+      enableDialogInputs();
+      setTimeout(enableDialogInputs, 50);
+      setTimeout(enableDialogInputs, 100);
+      setTimeout(enableDialogInputs, 200);
+    }
+  }, [editingInventory]);
+
   // Helper to get image data (handle both old format string and new format object)
   const getImageData = (imageEntry: string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number } | undefined): string | null => {
     if (!imageEntry) return null;
@@ -1697,6 +1720,7 @@ const Inventory = () => {
       {/* Edit Inventory Dialog */}
       {editingInventory && (
         <div 
+          className="dialog-overlay"
           style={{
             position: 'fixed',
             top: 0,
@@ -1715,6 +1739,7 @@ const Inventory = () => {
           }}
         >
           <Card 
+            className="dialog-card"
             title={`Edit Inventory: ${editingInventory.codeItem}`}
             style={{ 
               maxWidth: '600px', 

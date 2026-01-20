@@ -17,6 +17,20 @@ import '../../styles/common.css';
 import '../../styles/compact.css';
 import './Purchasing.css';
 
+// CRITICAL: Safe .some() helper to prevent TypeError
+const safeSome = (array: any, predicate: (item: any) => boolean): boolean => {
+  if (!Array.isArray(array)) {
+    console.error('[GT Purchasing] safeSome: array is not an array:', typeof array);
+    return false;
+  }
+  try {
+    return array.some(predicate);
+  } catch (error) {
+    console.error('[GT Purchasing] safeSome: error in .some() operation:', error);
+    return false;
+  }
+};
+
 interface PurchaseOrder {
   id: string;
   poNo: string;
@@ -377,6 +391,10 @@ const Purchasing = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setproducts] = useState<product[]>([]);
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
+  
+  // CRITICAL: Flag untuk skip event listener setelah confirm notifikasi lokal
+  // Ini mencegah loadPurchaseRequests() trigger yang menyebabkan PR hilang dari table list
+  const skipReloadRef = useRef<{ skipUntil: number; reason: string }>({ skipUntil: 0, reason: '' });
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<PurchaseOrder | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'outstanding'>('all');
@@ -434,7 +452,16 @@ const Purchasing = () => {
   };
 
   useEffect(() => {
+    let debounceTimer: NodeJS.Timeout | null = null;
+    let isLoading = false; // Guard untuk prevent loop
+    
     const loadAll = async () => {
+      // Guard untuk prevent multiple simultaneous loads
+      if (isLoading) {
+        return;
+      }
+      isLoading = true;
+      try {
       // Load orders first (untuk enrich PO dengan spkNo)
       await loadOrders();
       // Then load PRs (untuk auto-update PR status berdasarkan PO yang sudah ada)
@@ -443,24 +470,53 @@ const Purchasing = () => {
       loadSuppliers();
       loadproducts();
       loadGRN();
+      } finally {
+        isLoading = false;
+      }
     };
     loadAll();
     
     // Listen untuk storage changes (untuk refresh data ketika ada perubahan)
     const handleStorageChange = (e: CustomEvent) => {
       const key = e.detail?.key || '';
-      if (key === 'gt_purchaseOrders' || key === 'gt_purchaseRequests' || key === 'gt_grn') {
-        if (key === 'gt_grn') {
+      
+      // CRITICAL: Skip reload jika baru saja confirm notifikasi lokal (untuk prevent PR hilang dari table list)
+      const now = Date.now();
+      if (now < skipReloadRef.current.skipUntil) {
+        return; // Skip reload untuk perubahan lokal
+      }
+      
+      // CRITICAL: Skip jika sedang loading untuk prevent loop
+      if (isLoading) {
+        return;
+      }
+      
+      // CRITICAL: Listen untuk semua format key (dengan dan tanpa prefix) untuk memastikan PR dari PPIC langsung muncul
+      // CRITICAL: JANGAN listen untuk gt_products karena akan trigger loop (products tidak perlu reload dari event)
+      if (key === 'gt_purchaseOrders' || key === 'gt_purchaseRequests' || key === 'gt_grn' || 
+          key === 'general-trading/gt_purchaseRequests' || key === 'general-trading/gt_purchaseOrders' ||
+          key === 'gt_purchasingNotifications' || key === 'general-trading/gt_purchasingNotifications') {
+        // CRITICAL: Debounce untuk prevent multiple rapid calls
+        if (debounceTimer) {
+          clearTimeout(debounceTimer);
+        }
+        debounceTimer = setTimeout(() => {
+          if (key === 'gt_grn' || key === 'general-trading/gt_grn') {
           loadGRN();
         } else {
           loadAll();
         }
+          debounceTimer = null;
+        }, 300); // 300ms debounce
       }
     };
     
     window.addEventListener('app-storage-changed', handleStorageChange as EventListener);
     
     return () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
       window.removeEventListener('app-storage-changed', handleStorageChange as EventListener);
     };
   }, []);
@@ -481,23 +537,28 @@ const Purchasing = () => {
   };
 
   const loadproducts = async () => {
-    console.log('[GT Purchasing] Loading products...');
-    let data = await storageService.get<product[]>('gt_products') || [];
-    console.log(`[GT Purchasing] Raw products from storage: ${data.length} items`);
+    // CRITICAL: Remove console.log untuk prevent spam
+    let dataRaw = await storageService.get<product[]>('gt_products') || [];
+    
+    // CRITICAL: Extract dengan proper extraction untuk handle nested structure
+    let data = extractStorageValue(dataRaw) || [];
+    
+    // CRITICAL: Ensure data is always an array
+    if (!Array.isArray(data)) {
+      data = [];
+    }
     
     // If we have very few products, try force reload from file
     if (data.length <= 1) {
-      console.log('[GT Purchasing] Few products detected, trying force reload from file...');
       const fileData = await storageService.forceReloadFromFile<product[]>('gt_products');
-      if (fileData && Array.isArray(fileData) && fileData.length > data.length) {
-        console.log(`[GT Purchasing] Force reload successful: ${fileData.length} products from file`);
-        data = fileData;
+      const extractedFileData = extractStorageValue(fileData) || [];
+      if (Array.isArray(extractedFileData) && extractedFileData.length > data.length) {
+        data = extractedFileData;
       }
     }
     
     // Filter out deleted items menggunakan helper function
     const activeProducts = filterActiveItems(data);
-    console.log(`[GT Purchasing] Active products after filtering: ${activeProducts.length} items`);
     setproducts(activeProducts);
   };
 
@@ -591,8 +652,43 @@ const Purchasing = () => {
   };
 
   const loadPurchaseRequests = async () => {
-    const data = await storageService.get<PurchaseRequest[]>('gt_purchaseRequests') || [];
-    const poData = await storageService.get<PurchaseOrder[]>('gt_purchaseOrders') || [];
+    // CRITICAL: Force reload dari server untuk memastikan PR terbaru dari PPIC selalu di-load
+    // Ini memastikan PR yang dibuat di PPIC langsung muncul di Purchasing
+    let dataRaw = await storageService.get<PurchaseRequest[]>('gt_purchaseRequests') || [];
+    
+    // CRITICAL: Extract dengan proper extraction untuk handle nested structure
+    let data = extractStorageValue(dataRaw) || [];
+    
+    // CRITICAL: Ensure data is always an array
+    if (!Array.isArray(data)) {
+      console.warn('[GT Purchasing] loadPurchaseRequests: data is not an array, resetting to empty array');
+      data = [];
+    }
+    
+    // CRITICAL: Jika data sedikit atau tidak ada, force reload dari server
+    if (data.length <= 1) {
+      try {
+        // Coba load dari server via storageService.get() yang akan sync dari server
+        const serverDataRaw = await storageService.get<PurchaseRequest[]>('gt_purchaseRequests');
+        const serverData = extractStorageValue(serverDataRaw) || [];
+        if (Array.isArray(serverData) && serverData.length > data.length) {
+          data = serverData;
+        }
+      } catch (error) {
+        // Fallback ke force reload dari file jika server sync gagal
+        const fileData = await storageService.forceReloadFromFile<PurchaseRequest[]>('gt_purchaseRequests');
+        const extractedFileData = extractStorageValue(fileData) || [];
+        if (Array.isArray(extractedFileData) && extractedFileData.length > data.length) {
+          data = extractedFileData;
+        }
+      }
+    }
+    
+    const poDataRaw = await storageService.get<PurchaseOrder[]>('gt_purchaseOrders') || [];
+    const poData = extractStorageValue(poDataRaw) || [];
+    
+    // CRITICAL: Ensure poData is always an array
+    const poDataArray = Array.isArray(poData) ? poData : [];
     
     // Helper untuk normalize string (trim, lowercase)
     const normalize = (str: string | undefined | null): string => {
@@ -607,7 +703,7 @@ const Purchasing = () => {
       
       // Cek apakah sudah ada PO untuk PR ini
       // IMPORTANT: Gunakan normalize yang sama seperti di pendingPRs untuk konsistensi
-      const hasPO = poData.some((po: PurchaseOrder) => {
+      const hasPO = safeSome(poDataArray, (po: PurchaseOrder) => {
         // Match berdasarkan sourcePRId
         if (po.sourcePRId && normalize(po.sourcePRId) === normalize(pr.id)) {
           return true;
@@ -1360,7 +1456,7 @@ const Purchasing = () => {
       
       // Prevent duplicate before save - hanya cek berdasarkan grnNo (karena grnNo sudah unique dengan random code)
       // JANGAN cek berdasarkan poNo + qtyReceived + receivedDate karena user bisa membuat multiple GRN dengan qty yang sama pada tanggal yang sama untuk partial receipt
-      const isDuplicate = currentGRN.some((grn: any) => 
+      const isDuplicate = safeSome(currentGRN, (grn: any) => 
         grn.grnNo === newGRN.grnNo
       );
       
@@ -1371,13 +1467,11 @@ const Purchasing = () => {
       
       const updatedGRNs = Array.isArray(currentGRN) ? [...currentGRN, newGRN] : [newGRN];
       
-      // Save GRN immediately untuk UI responsiveness
-      await storageService.set('gt_grn', updatedGRNs);
+      // Save GRN immediately untuk UI responsiveness dengan immediateSync untuk pastikan langsung sync ke server
+      await storageService.set('gt_grn', updatedGRNs, true); // immediateSync = true untuk pastikan langsung sync ke server
       
       // Update grnList immediately untuk UI responsiveness
       setGrnList(Array.isArray(updatedGRNs) ? updatedGRNs : []);
-      
-      // Note: storageService.set() already triggers sync automatically, no need for manual sync
       
       // Update PO status: CLOSE hanya jika semua qty benar-benar sudah diterima (tidak ada outstanding)
       // IMPORTANT: Reload GRN data untuk memastikan kita menggunakan data terbaru setelah save
@@ -1584,7 +1678,7 @@ const Purchasing = () => {
         
         // Cek apakah sudah ada journal entry untuk GRN ini (prevent duplicate)
         const journalEntriesArray = Array.isArray(journalEntries) ? journalEntries : [];
-        const hasGRNEntry = journalEntriesArray.some((entry: any) =>
+        const hasGRNEntry = safeSome(journalEntriesArray, (entry: any) =>
           entry && entry.reference === newGRN.grnNo &&
           (entry.account === '1200' || entry.account === '2000')
         );
@@ -1637,6 +1731,9 @@ const Purchasing = () => {
       // Create notification untuk Finance - Supplier Payment (setelah GRN, ready untuk payment)
       try {
         const notifications = await storageService.get<any[]>('gt_financeNotifications') || [];
+        console.log(`[GT Purchasing] Creating finance notification for GRN ${newGRN.grnNo}`);
+        console.log(`[GT Purchasing] Existing notifications: ${notifications.length}`);
+        
         // Check if notification already exists
         const existingPaymentNotif = notifications.find((n: any) => 
           n.poNo === item.poNo && n.type === 'SUPPLIER_PAYMENT' && n.grnNo === newGRN.grnNo
@@ -1676,10 +1773,17 @@ const Purchasing = () => {
             status: 'PENDING',
             created: new Date().toISOString(),
           };
+          
+          console.log(`[GT Purchasing] Creating new finance notification:`, newNotification);
           await storageService.set('gt_financeNotifications', [...notifications, newNotification]);
+          console.log(`[GT Purchasing] ✅ Finance notification created successfully for GRN ${newGRN.grnNo}`);
+        } else {
+          console.log(`[GT Purchasing] Finance notification already exists for GRN ${newGRN.grnNo}`);
         }
       } catch (error: any) {
-        // Error handling - silent fail untuk background operation
+        console.error(`[GT Purchasing] ❌ Error creating finance notification for GRN ${newGRN.grnNo}:`, error);
+        // Show error to user instead of silent fail
+        showAlert(`Error creating finance notification: ${error.message}`, 'Error');
       }
 
       // Update Production notification - product sudah diterima
@@ -2321,14 +2425,14 @@ const Purchasing = () => {
       header: 'Actions',
       render: (item: PurchaseOrder) => {
         const grnPackagingRecords = Array.isArray(grnList) ? grnList : [];
-        const hasGRN = grnPackagingRecords.some((grn: any) => {
+        const hasGRN = safeSome(grnPackagingRecords, (grn: any) => {
           const grnPO = (grn.poNo || '').toString().trim();
           const currentPO = (item.poNo || '').toString().trim();
           return grnPO === currentPO;
         });
         
         const financeNotificationsArray = Array.isArray(financeNotifications) ? financeNotifications : [];
-        const hasPendingFinance = financeNotificationsArray.some((notif: any) => {
+        const hasPendingFinance = safeSome(financeNotificationsArray, (notif: any) => {
           const notifPO = (notif.poNo || '').toString().trim();
           const currentPO = (item.poNo || '').toString().trim();
           return notifPO === currentPO && notif.status === 'PENDING';
@@ -2356,6 +2460,11 @@ const Purchasing = () => {
   // Filter PENDING PR and remove duplicates (by spkNo)
   // Also exclude PRs that already have PO created (by checking orders)
   const pendingPRs = useMemo(() => {
+    // CRITICAL: Ensure purchaseRequests is always an array to prevent .filter() error
+    if (!Array.isArray(purchaseRequests)) {
+      return [];
+    }
+    
     // Helper untuk normalize string (trim, lowercase)
     const normalize = (str: string | undefined | null): string => {
       return (str || '').toString().trim().toLowerCase();
@@ -2368,7 +2477,7 @@ const Purchasing = () => {
       }
       
       // Cek apakah sudah ada PO untuk PR ini (berdasarkan sourcePRId, spkNo, atau soNo)
-      const hasPO = orders.some((po: PurchaseOrder) => {
+      const hasPO = safeSome(orders, (po: PurchaseOrder) => {
         // Match berdasarkan sourcePRId (jika PO dibuat dari PR)
         if (po.sourcePRId && normalize(po.sourcePRId) === normalize(pr.id)) {
           return true;
@@ -2452,10 +2561,14 @@ const Purchasing = () => {
 
   // Format notifications untuk NotificationBell
   const prNotifications = useMemo(() => {
+    // CRITICAL: Ensure pendingPRs is always an array to prevent .map() error
+    if (!Array.isArray(pendingPRs)) {
+      return [];
+    }
     return pendingPRs.map((pr) => ({
       id: pr.id,
       title: `PR ${pr.prNo}`,
-      message: `SPK: ${pr.spkNo} | SO: ${pr.soNo} | Customer: ${pr.customer} | ${pr.items.length} item(s)`,
+      message: `SPK: ${pr.spkNo} | SO: ${pr.soNo} | Customer: ${pr.customer} | ${(pr.items || []).length} item(s)`,
       timestamp: pr.created,
       pr: pr,
     }));
@@ -2574,54 +2687,66 @@ const Purchasing = () => {
   };
 
   const handleDeletePO = async (item: PurchaseOrder) => {
-    if (!item || !item.poNo) {
-      showAlert('PO tidak valid. Mohon coba lagi.', 'Error');
-      return;
-    }
+    try {
+      console.log('[GT Purchasing] handleDeletePO called for:', item?.poNo, item?.id);
+      
+      if (!item || !item.poNo) {
+        showAlert('PO tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[GT Purchasing] PO missing ID:', item);
+        showAlert(`❌ Error: PO "${item.poNo}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
 
-    const poNo = item.poNo.toString().trim();
-    // Defensive check: pastikan grnList dan financeNotifications adalah array
-    const grnListArray = Array.isArray(grnList) ? grnList : [];
-    const financeNotificationsArray = Array.isArray(financeNotifications) ? financeNotifications : [];
-    
-    const hasGRN = grnListArray.some((grn: any) => grn && (grn.poNo || '').toString().trim() === poNo);
-    if (hasGRN) {
-      showAlert(`Tidak bisa menghapus PO ${poNo}.\n\nGRN sudah dibuat untuk PO ini. Silakan hapus GRN terlebih dahulu jika ingin membatalkan PO.`, 'Cannot Delete');
-      return;
-    }
+      const poNo = item.poNo.toString().trim();
+      // Defensive check: pastikan grnList dan financeNotifications adalah array
+      const grnListArray = Array.isArray(grnList) ? grnList : [];
+      const financeNotificationsArray = Array.isArray(financeNotifications) ? financeNotifications : [];
+      
+      const hasGRN = safeSome(grnListArray, (grn: any) => grn && (grn.poNo || '').toString().trim() === poNo);
+      if (hasGRN) {
+        showAlert(`Tidak bisa menghapus PO ${poNo}.\n\nGRN sudah dibuat untuk PO ini. Silakan hapus GRN terlebih dahulu jika ingin membatalkan PO.`, 'Cannot Delete');
+        return;
+      }
 
-    const hasPendingFinance = financeNotificationsArray.some((notif: any) => {
-      if (!notif) return false;
-      const notifPo = (notif.poNo || '').toString().trim();
-      const notifStatus = (notif.status || 'PENDING').toString().toUpperCase();
-      return notifPo === poNo && notifStatus !== 'CLOSE';
-    });
-    if (hasPendingFinance) {
-      showAlert(`Tidak bisa menghapus PO ${poNo}.\n\nFinance sudah menerima notifikasi pembayaran supplier untuk PO ini. Batalkan pembayaran terlebih dahulu.`, 'Cannot Delete');
-      return;
-    }
+      const hasPendingFinance = safeSome(financeNotificationsArray, (notif: any) => {
+        if (!notif) return false;
+        const notifPo = (notif.poNo || '').toString().trim();
+        const notifStatus = (notif.status || 'PENDING').toString().toUpperCase();
+        return notifPo === poNo && notifStatus !== 'CLOSE';
+      });
+      if (hasPendingFinance) {
+        showAlert(`Tidak bisa menghapus PO ${poNo}.\n\nFinance sudah menerima notifikasi pembayaran supplier untuk PO ini. Batalkan pembayaran terlebih dahulu.`, 'Cannot Delete');
+        return;
+      }
 
-    showConfirm(
-      `Hapus PO ${poNo}?\n\nTindakan ini akan:\n• Menghapus PO dari daftar\n• Menghapus notifikasi Finance terkait\n• Mengembalikan PR ke status APPROVED (jika ada)\n\nPastikan tidak ada proses lanjutan untuk PO ini.`,
-      async () => {
-        try {
-          // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
-          const deleteResult = await deleteGTItem('gt_purchaseOrders', item.id, 'id');
-          
-          if (!deleteResult.success) {
-            showAlert(`❌ Error deleting PO ${item.poNo}: ${deleteResult.error || 'Unknown error'}`, 'Error');
-            return;
-          }
-          
-          // Reload data dengan helper (handle race condition)
-          const updatedOrders = await reloadGTData('gt_purchaseOrders', setOrders);
+      showConfirm(
+        `Hapus PO ${poNo}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini akan:\n• Menghapus PO dari daftar\n• Menghapus notifikasi Finance terkait\n• Mengembalikan PR ke status APPROVED (jika ada)\n\nPastikan tidak ada proses lanjutan untuk PO ini.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deleteGTItem('gt_purchaseOrders', item.id, 'id');
+            
+            if (!deleteResult.success) {
+              console.error('[GT Purchasing] Delete failed:', deleteResult.error);
+              showAlert(`❌ Error deleting PO ${item.poNo}: ${deleteResult.error || 'Unknown error'}`, 'Error');
+              return;
+            }
+            
+            // Reload data dengan helper (handle race condition)
+            const updatedOrders = await reloadGTData('gt_purchaseOrders', setOrders);
+            setOrders(updatedOrders);
 
           let updatedPRs = purchaseRequests;
           let prChanged = false;
           const normalizeId = (value: any) => (value || '').toString().trim();
 
           const revertPRStatus = (targetId: string) => {
-            const stillHasPO = updatedOrders.some((po: any) => po && normalizeId(po.sourcePRId) === targetId);
+            const stillHasPO = safeSome(updatedOrders, (po: any) => po && normalizeId(po.sourcePRId) === targetId);
             if (stillHasPO) return;
             updatedPRs = purchaseRequests.map(pr => {
               if (pr.id === targetId && pr.status === 'PO_CREATED') {
@@ -2638,7 +2763,7 @@ const Purchasing = () => {
             const candidate = purchaseRequests.find(pr => pr.spkNo === item.spkNo && pr.status === 'PO_CREATED');
             if (candidate) {
               const candidateId = candidate.id;
-              const stillHasPO = updatedOrders.some((po: any) => {
+              const stillHasPO = safeSome(updatedOrders, (po: any) => {
                 if (!po) return false;
                 if (normalizeId(po.sourcePRId) === candidateId) return true;
                 return (po.spkNo || '').toString().trim() === (item.spkNo || '').toString().trim();
@@ -2661,14 +2786,19 @@ const Purchasing = () => {
             setFinanceNotifications(updatedFinanceNotif);
           }
 
-          showAlert(`PO ${poNo} berhasil dihapus dan PR terkait sudah dikembalikan ke status APPROVED.`, 'Success');
+          showAlert(`✅ PO ${poNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.\n\nPR terkait sudah dikembalikan ke status APPROVED.`, 'Success');
         } catch (error: any) {
-          showAlert(`Error deleting PO: ${error.message}`, 'Error');
+          console.error('[GT Purchasing] Error deleting PO:', error);
+          showAlert(`❌ Error deleting PO: ${error.message}`, 'Error');
         }
       },
       undefined,
-      'Confirm Delete'
+      'Safe Delete Confirmation'
     );
+    } catch (error: any) {
+      console.error('[GT Purchasing] Error in handleDeletePO:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
   };
 
   return (
@@ -2679,8 +2809,38 @@ const Purchasing = () => {
           {pendingPRs.length > 0 && (
             <NotificationBell
               notifications={prNotifications}
-              onNotificationClick={(notification) => {
+              onNotificationClick={async (notification) => {
+                // CRITICAL: Saat user klik notifikasi, langsung update state dan pastikan PR muncul di table list
                 if (notification.pr) {
+                  // CRITICAL: Skip event listener untuk 2 detik setelah confirm notifikasi
+                  // Ini mencegah loadPurchaseRequests() trigger yang menyebabkan PR hilang dari table list
+                  skipReloadRef.current = {
+                    skipUntil: Date.now() + 2000, // Skip reload selama 2 detik
+                    reason: 'confirmPRNotification'
+                  };
+                  
+                  // Pastikan PR ada di purchaseRequests state
+                  const existingPR = purchaseRequests.find((p: any) => p.id === notification.pr.id || p.prNo === notification.pr.prNo);
+                  if (!existingPR) {
+                    // Jika PR belum ada di state, tambahkan langsung
+                    const updatedPRs = [...purchaseRequests, notification.pr];
+                    setPurchaseRequests(updatedPRs);
+                    // CRITICAL: Force immediate sync ke server untuk confirm notifikasi
+                    // Ini memastikan data langsung tersedia di device lain
+                    await storageService.set('gt_purchaseRequests', updatedPRs, true);
+                  } else {
+                    // Pastikan status tetap PENDING
+                    if (existingPR.status !== 'PENDING') {
+                      const updatedPRs = purchaseRequests.map((p: any) => 
+                        p.id === notification.pr.id || p.prNo === notification.pr.prNo
+                          ? { ...p, status: 'PENDING' }
+                          : p
+                      );
+                      setPurchaseRequests(updatedPRs);
+                      // CRITICAL: Force immediate sync ke server untuk confirm notifikasi
+                      await storageService.set('gt_purchaseRequests', updatedPRs, true);
+                    }
+                  }
                   handleCreatePOFromPR(notification.pr);
                 }
               }}
@@ -3254,7 +3414,7 @@ const Purchasing = () => {
                   const grnListArray = Array.isArray(grnList) ? grnList : [];
                   const financeNotificationsArray = Array.isArray(financeNotifications) ? financeNotifications : [];
                   
-                  const hasGRN = grnListArray.some((grn: any) => grn && grn.poNo === item.poNo);
+                  const hasGRN = safeSome(grnListArray, (grn: any) => grn && grn.poNo === item.poNo);
                   const existingGRNs = grnListArray.filter((grn: any) => 
                     grn && (grn.poNo || '').toString().trim() === (item.poNo || '').toString().trim()
                   );
@@ -3262,7 +3422,7 @@ const Purchasing = () => {
                   const remainingQty = item.qty - totalReceived;
                   const hasOutstandingQty = remainingQty > 0;
                   const buttonColors = getButtonColor(item.poNo || '');
-                  const hasPendingFinance = financeNotificationsArray.some((notif: any) => {
+                  const hasPendingFinance = safeSome(financeNotificationsArray, (notif: any) => {
                     if (!notif) return false;
                     const notifPo = (notif.poNo || '').toString().trim();
                     const currentPo = (item.poNo || '').toString().trim();
@@ -3978,7 +4138,7 @@ const PRApprovalDialog = ({ pr, suppliers, products, onClose, onApprove, onSuppl
                     // Pastikan kode unik
                     let finalKode = supplierKode;
                     let counter = 1;
-                    while (suppliers?.some((s: any) => (s.kode || '').toString().trim() === finalKode)) {
+                    while (safeSome(suppliers || [], (s: any) => (s.kode || '').toString().trim() === finalKode)) {
                       finalKode = `${supplierKode}${counter}`;
                       counter++;
                     }
@@ -4211,6 +4371,27 @@ const ReceiptDialog = ({ po, onClose, onSave }: { po: PurchaseOrder; onClose: ()
 
     handleFiles();
   };
+
+  // Enable semua input di dalam dialog saat dialog terbuka
+  useEffect(() => {
+    const enableDialogInputs = () => {
+      const dialogInputs = document.querySelectorAll('.dialog-card input, .dialog-card textarea, .dialog-card select');
+      dialogInputs.forEach((input: Element) => {
+        if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement || input instanceof HTMLSelectElement) {
+          input.removeAttribute('readonly');
+          input.removeAttribute('disabled');
+          (input as any).readOnly = false;
+          (input as any).disabled = false;
+        }
+      });
+    };
+    
+    // Enable inputs multiple times untuk memastikan
+    enableDialogInputs();
+    setTimeout(enableDialogInputs, 50);
+    setTimeout(enableDialogInputs, 100);
+    setTimeout(enableDialogInputs, 200);
+  }, []);
 
   return (
     <div className="dialog-overlay" onClick={onClose}>

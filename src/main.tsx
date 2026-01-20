@@ -14,6 +14,22 @@ import { storageService } from './services/storage';
 
 console.log('🚀 Starting React app...');
 
+// Set default WebSocket settings sebelum WebSocket client di-initialize
+if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+  const config = storageService.getConfig();
+  if (config.type === 'server') {
+    if (!localStorage.getItem('websocket_url')) {
+      localStorage.setItem('websocket_url', 'ws://server-tljp.tail75a421.ts.net:8888/ws');
+    }
+    if (!localStorage.getItem('websocket_enabled')) {
+      localStorage.setItem('websocket_enabled', 'true');
+    }
+  }
+}
+
+// Import WebSocket client untuk memastikan dia di-initialize lebih awal
+import './services/websocket-client';
+
 // 🚀 NEW ARCHITECTURE: Tidak perlu auto-sync
 // Server adalah single source of truth, client langsung fetch dari server saat get()
 // Tidak perlu sync complex, langsung POST saat set()

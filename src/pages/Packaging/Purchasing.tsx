@@ -522,7 +522,6 @@ const Purchasing = () => {
       const data = Array.isArray(dataRaw) ? dataRaw : [];
       setSpkData(data);
     } catch (error) {
-      console.error('[Purchasing] Error loading SPK data:', error);
       setSpkData([]);
     }
   };
@@ -533,7 +532,6 @@ const Purchasing = () => {
       const data = Array.isArray(dataRaw) ? dataRaw : [];
       setGrnList(data);
     } catch (error) {
-      console.error('[Purchasing] Error loading GRN:', error);
       setGrnList([]);
     }
   };
@@ -567,7 +565,6 @@ const Purchasing = () => {
       setOrders(activePOs);
       setFinanceNotifications(financeNotifData);
     } catch (error) {
-      console.error('[Purchasing] Error loading orders:', error);
       setOrders([]);
       setFinanceNotifications([]);
     }
@@ -810,7 +807,6 @@ const Purchasing = () => {
           const updatedPRs = prArray.map(pr => {
             // Match berdasarkan spkNo saja (tidak boleh match berdasarkan soNo karena terlalu luas)
             if (newPO.spkNo && normalize(pr.spkNo || '') === normalize(newPO.spkNo) && pr.status === 'PENDING') {
-              console.log(`[PO Manual] Updating PR ${pr.prNo} status to PO_CREATED (matched by spkNo: ${newPO.spkNo})`);
               return { ...pr, status: 'PO_CREATED' as const };
             }
             return pr;
@@ -821,7 +817,6 @@ const Purchasing = () => {
           if (hasUpdatedPR) {
             await storageService.set('purchaseRequests', updatedPRs);
             setPurchaseRequests(updatedPRs);
-            console.log(`[PO Manual] Updated ${updatedPRs.filter((pr, idx) => pr.status === 'PO_CREATED' && prArray[idx].status === 'PENDING').length} PR(s) to PO_CREATED`);
           }
         }
         
@@ -948,7 +943,6 @@ const Purchasing = () => {
         pic = currentUser.fullName || currentUser.username || '-';
       }
     } catch (e) {
-      console.error('Error getting current user:', e);
     }
 
     // Load material data untuk mendapatkan kode/description
@@ -1141,35 +1135,19 @@ const Purchasing = () => {
 
       // GRN Partial Handling: Cek total qtyReceived dari semua GRN untuk PO ini
       const grnPackagingRecords = extractStorageValue(await storageService.get<any[]>('grnPackaging'));
-      console.log('[GRN Debug] Total GRN records:', grnPackagingRecords.length);
-      console.log('[GRN Debug] Looking for PO:', item.poNo);
       
       const existingGRNsForPO = grnPackagingRecords.filter((grn: any) => {
         const grnPO = (grn.poNo || '').toString().trim();
         const currentPO = (item.poNo || '').toString().trim();
         const match = grnPO === currentPO;
-        if (match) {
-          console.log('[GRN Debug] Found matching GRN:', {
-            grnNo: grn.grnNo,
-            poNo: grn.poNo,
-            qtyReceived: grn.qtyReceived,
-            date: grn.receivedDate
-          });
-        }
         return match;
       });
       
-      console.log('[GRN Debug] Existing GRNs for this PO:', existingGRNsForPO.length);
       const totalQtyReceived = existingGRNsForPO.reduce((sum: number, grn: any) => sum + (grn.qtyReceived || 0), 0);
-      console.log('[GRN Debug] Total Qty Received:', totalQtyReceived);
-      console.log('[GRN Debug] PO Qty Ordered:', item.qty);
       const remainingQty = item.qty - totalQtyReceived;
-      console.log('[GRN Debug] Remaining Qty:', remainingQty);
       
       // Auto-fix: Jika total GRN melebihi PO qty (data corrupt), hapus GRN yang berlebihan
       if (totalQtyReceived > item.qty && existingGRNsForPO.length > 0) {
-        console.warn('[GRN Debug] ⚠️ Data corrupt detected! Total GRN > PO qty. Cleaning up...');
-        
         // Tampilkan konfirmasi ke user
         const grnList = existingGRNsForPO.map(g => `• ${g.grnNo}: ${g.qtyReceived} (${g.receivedDate})`).join('\n');
         showConfirm(
@@ -1182,29 +1160,24 @@ const Purchasing = () => {
           `(Anda bisa create GRN baru setelah reset)`,
           async () => {
             // Hapus semua GRN untuk PO ini
-            console.log('[GRN Cleanup] Deleting GRNs:', existingGRNsForPO.map(g => g.grnNo));
             const cleanedGRNs = grnPackagingRecords.filter((grn: any) => {
               const grnPO = (grn.poNo || '').toString().trim();
               const currentPO = (item.poNo || '').toString().trim();
               return grnPO !== currentPO;
             });
             
-            console.log('[GRN Cleanup] Before:', grnPackagingRecords.length, 'After:', cleanedGRNs.length);
             await storageService.set('grnPackaging', cleanedGRNs);
             
             // Force sync to server immediately
             if ((storageService as any).syncToServer) {
-              console.log('[GRN Cleanup] Force syncing to server...');
               await (storageService as any).syncToServer();
             }
             
-            console.log('[GRN Debug] ✅ Cleaned up corrupt GRNs and synced to server');
             showAlert(`✅ Berhasil hapus ${existingGRNsForPO.length} GRN corrupt untuk PO ${item.poNo}.\n\nData sudah di-sync ke server.\n\nSilakan create GRN baru.`, 'Success');
             setSelectedPOForReceipt(null);
             loadOrders();
           },
           () => {
-            console.log('[GRN Debug] User cancelled cleanup');
             setSelectedPOForReceipt(null);
           },
           '🧹 Clean Up Corrupt GRN Data'
@@ -1244,12 +1217,10 @@ const Purchasing = () => {
       );
       
       if (duplicateGRN) {
-        console.warn('[GRN Debug] ⚠️ Duplicate GRN detected, preventing save');
         showAlert(`⚠️ GRN duplicate terdeteksi!\n\nGRN ${duplicateGRN.grnNo} dengan qty ${duplicateGRN.qtyReceived} untuk PO ${item.poNo} sudah ada.\n\nTidak bisa membuat GRN duplicate.`, 'Duplicate Detected');
         return;
       }
       
-      console.log('[GRN Debug] Creating new GRN:', grnNo);
       const newGRN = {
         id: Date.now().toString(),
         grnNo: grnNo,
@@ -1275,7 +1246,6 @@ const Purchasing = () => {
       
       // IMPORTANT: Load dan save ke key yang SAMA!
       const currentGRN = extractStorageValue(await storageService.get<any[]>('grnPackaging'));
-      console.log('[GRN Debug] Current GRN count before save:', currentGRN.length);
       
       // Prevent duplicate before save
       const isDuplicate = currentGRN.some((grn: any) => 
@@ -1287,19 +1257,13 @@ const Purchasing = () => {
       );
       
       if (isDuplicate) {
-        console.error('[GRN Debug] ❌ Duplicate GRN detected before save, aborting!');
         showAlert('⚠️ GRN duplicate terdeteksi! Tidak bisa save.\n\nKemungkinan double-click atau data sudah ada.', 'Error');
         return;
       }
       
       const updatedGRNs = Array.isArray(currentGRN) ? [...currentGRN, newGRN] : [newGRN];
-      await storageService.set('grnPackaging', updatedGRNs);
-      console.log('[GRN Debug] ✅ GRN saved. New count:', updatedGRNs.length);
-      
-      // Force sync to server
-      if ((storageService as any).syncToServer) {
-        await (storageService as any).syncToServer();
-      }
+      // Save GRN dengan immediateSync untuk pastikan langsung sync ke server
+      await storageService.set('grnPackaging', updatedGRNs, true); // immediateSync = true untuk pastikan langsung sync ke server
       
       setGrnList(Array.isArray(updatedGRNs) ? updatedGRNs : []);
       
@@ -1315,10 +1279,6 @@ const Purchasing = () => {
         );
         await storageService.set('purchaseOrders', updatedOrders);
         setOrders(updatedOrders);
-        console.log(`✅ [GRN] PO ${item.poNo} status updated to CLOSE (all material received)`);
-      } else {
-        // Masih ada sisa, PO tetap OPEN
-        console.log(`ℹ️ [GRN] PO ${item.poNo} masih OPEN (received: ${newTotalQtyReceived}/${item.qty})`);
       }
       
       // Update inventory - material received (OTOMATIS MASUK KE INVENTORY)
@@ -1359,20 +1319,11 @@ const Purchasing = () => {
           // item.price sudah price per unit, bukan total!
           const pricePerUnit = item.price || 0;
           const poNo = item.poNo || '';
-          console.log('[GRN Inventory] Price update:', {
-            codeItem,
-            poPrice: item.price,
-            pricePerUnit,
-            qtyReceived,
-            total: item.total,
-            note: 'item.price is already per unit, not total'
-          });
           
           // ANTI-DUPLICATE: Cek apakah PO number sudah pernah diproses untuk material ini
           if (existingMaterial && poNo) {
             const processedPOs = existingMaterial.processedPOs || [];
             if (processedPOs.includes(poNo)) {
-              console.warn(`⚠️ [GRN Inventory] PO ${poNo} sudah pernah diproses untuk material ${codeItem}. Skip update.`);
               showAlert(`⚠️ PO ${poNo} sudah pernah diproses untuk material ini.\n\nInventory tidak di-update untuk menghindari double counting.`, 'Warning');
               return;
             }
@@ -1391,12 +1342,6 @@ const Purchasing = () => {
             // Update price dengan price dari PO (jika PO punya price per unit)
             // pricePerUnit sudah price per unit dari PO, langsung pakai
             const updatedPrice = pricePerUnit > 0 ? pricePerUnit : (existingMaterial.price || material.priceMtr || material.harga || 0);
-            console.log('[GRN Inventory] Updated price:', {
-              codeItem,
-              oldPrice: existingMaterial.price,
-              newPrice: updatedPrice,
-              source: pricePerUnit > 0 ? 'PO' : 'master/default'
-            });
             
             // Tambahkan PO number ke processedPOs untuk anti-duplicate
             const processedPOs = existingMaterial.processedPOs || [];
@@ -1427,11 +1372,6 @@ const Purchasing = () => {
                 : inv
             );
             await storageService.set('inventory', updatedInventory);
-            console.log(`✅ [GRN Inventory] Material inventory updated (RECEIVE from PO ${poNo}):`);
-            console.log(`   Material: ${item.materialItem} (${codeItem})`);
-            console.log(`   PO: ${poNo}`);
-            console.log(`   Receive: ${oldReceive} → ${newReceive} (+${qtyReceived})`);
-            console.log(`   NextStock: ${newNextStock} | Price: ${updatedPrice}`);
             showAlert(`✅ Inventory updated: ${item.materialItem}\n\nStock: ${newNextStock} ${material.satuan || 'PCS'}\nPrice: Rp ${updatedPrice.toLocaleString('id-ID')}`, 'Success');
           } else {
             // Create new inventory entry for material
@@ -1462,11 +1402,6 @@ const Purchasing = () => {
             };
             inventory.push(newInventoryEntry);
             await storageService.set('inventory', inventory);
-            console.log(`✅ [GRN Inventory] New material inventory created (RECEIVE from PO ${poNo}):`);
-            console.log(`   Material: ${item.materialItem} (${codeItem})`);
-            console.log(`   PO: ${poNo} | SO: ${item.soNo || 'N/A'} | SPK: ${spkNo || 'N/A'}`);
-            console.log(`   Receive: ${qtyReceived} | Stock: ${qtyReceived} | Price: ${materialPrice} (from PO)`);
-            console.log(`   AllocatedSPKs: ${allocatedSPKs.length > 0 ? allocatedSPKs.join(', ') : 'None (available for all SPKs)'}`);
             showAlert(`✅ New inventory entry created: ${item.materialItem}\n\nStock: ${qtyReceived} ${material.satuan || 'PCS'}\nPrice: Rp ${materialPrice.toLocaleString('id-ID')} (from PO)`, 'Success');
           }
         }
@@ -1542,10 +1477,8 @@ const Purchasing = () => {
           }));
           
           await storageService.set('journalEntries', [...journalEntries, ...entriesWithNo]);
-          console.log(`✅ Journal entries created for GRN ${newGRN.grnNo}: Inventory +${poTotal}, AP +${poTotal}`);
         }
       } catch (error: any) {
-        console.error('Error creating journal entries for GRN:', error);
         // Jangan block proses, hanya log error (non-blocking)
       }
       
@@ -1570,7 +1503,6 @@ const Purchasing = () => {
       });
       
       if (existingNotification) {
-        console.log(`⚠️ [Finance Notification] Duplicate notification found for PO ${item.poNo} and GRN ${newGRN.grnNo}, skipping create`);
         // Update existing notification dengan data terbaru jika perlu
         const updatedNotifications = notifications.map((notif: any) => {
           if (notif.id === existingNotification.id) {
@@ -1591,7 +1523,6 @@ const Purchasing = () => {
           return notif;
         });
         await storageService.set('financeNotifications', updatedNotifications);
-        console.log(`✅ [Finance Notification] Updated existing notification instead of creating duplicate`);
       } else {
         // Buat notification baru jika belum ada
         const newNotification = {
@@ -1616,15 +1547,12 @@ const Purchasing = () => {
           created: new Date().toISOString(),
         };
         await storageService.set('financeNotifications', [...notifications, newNotification]);
-        console.log(`✅ [Finance Notification] Created new notification for PO ${item.poNo} and GRN ${newGRN.grnNo}`);
       }
 
       // Update Production notification - material sudah diterima
       // IMPORTANT: Filter deleted notifications untuk prevent data resurrection
       const productionNotificationsRaw = extractStorageValue(await storageService.get<any[]>('productionNotifications'));
       const productionNotifications = filterActiveItems(productionNotificationsRaw);
-      console.log('[GRN Notification] Current production notifications:', productionNotifications.length);
-      console.log('[GRN Notification] Looking for SPK/SO:', { spkNo: item.spkNo, soNo: item.soNo });
       
       // Helper function untuk normalize SPK number (remove batch suffix untuk matching)
       const normalizeSPK = (spk: string) => {
@@ -1717,12 +1645,6 @@ const Purchasing = () => {
         
         if (matchesSPK) {
           notificationUpdated = true;
-          console.log('[GRN Notification] ✅ Found matching notification:', { 
-            notifSPK: n.spkNo, 
-            grnSPK: item.spkNo,
-            matchType: 'SPK',
-            note: 'Matched by SPK only (not SO)'
-          });
           
           // Enrich dengan material requirements jika belum ada
           const enrichedNotif = await enrichNotificationWithMaterials({
@@ -1732,10 +1654,6 @@ const Purchasing = () => {
             grnNo: newGRN.grnNo,
             lastUpdate: new Date().toISOString(),
           });
-          
-          if (enrichedNotif.materialRequirements && enrichedNotif.materialRequirements.length > 0) {
-            console.log(`[GRN Notification] ✅ Material requirements added to existing notification: ${enrichedNotif.materialRequirements.length} materials`);
-          }
           
           return enrichedNotif;
         }
@@ -1762,13 +1680,11 @@ const Purchasing = () => {
         });
         
         if (existingNotif) {
-          console.log('[GRN Notification] ⚠️ Notification already exists for SPK:', item.spkNo, '- skipping create to avoid duplicate');
           notificationUpdated = true; // Mark as updated untuk skip create
         }
       }
       
       if (!notificationUpdated && item.spkNo) {
-        console.log('[GRN Notification] No matching notification found, searching for SPK...');
         // Cari SPK data untuk mendapatkan info lengkap
         const spkData = extractStorageValue(await storageService.get<any[]>('spk'));
         
@@ -1790,8 +1706,6 @@ const Purchasing = () => {
         });
         
         if (relatedSPK) {
-          console.log('[GRN Notification] ✅ Creating new notification for SPK:', relatedSPK.spkNo);
-          
           // Enrich dengan material requirements dari BOM
           const normalizeKey = (value: any) => (value ?? '').toString().trim().toLowerCase();
           const toNumber = (value: any) => {
@@ -1856,23 +1770,11 @@ const Purchasing = () => {
           };
           updatedProductionNotifications.push(newProductionNotification);
           notificationUpdated = true;
-          console.log(`[GRN Notification] ✅ Material requirements added: ${materialRequirements.length} materials`);
-        } else {
-          console.warn('[GRN Notification] ⚠️ SPK not found for:', { 
-            spkNo: item.spkNo, 
-            soNo: item.soNo,
-            normalizedSPK: grnSPKNormalized,
-            availableSPKs: spkData.map((s: any) => ({ spkNo: s.spkNo, soNo: s.soNo })).slice(0, 5)
-          });
         }
       }
       
       if (notificationUpdated) {
         await storageService.set('productionNotifications', updatedProductionNotifications);
-        console.log(`✅ Production notification updated: Material RECEIVED, status READY_TO_PRODUCE for SPK/SO: ${item.spkNo || item.soNo}`);
-        console.log('[GRN Notification] Total notifications after update:', updatedProductionNotifications.length);
-      } else {
-        console.warn('[GRN Notification] ⚠️ No notification updated. SPK/SO might be missing:', { spkNo: item.spkNo, soNo: item.soNo });
       }
       
       // Update receipt date di PO
@@ -2397,7 +2299,6 @@ const Purchasing = () => {
       });
       
       if (hasPOBySourcePRId) {
-        console.log(`[Pending PR Filter] PR ${pr.prNo} excluded: has PO by sourcePRId`);
         return false;
       }
       
@@ -2410,7 +2311,6 @@ const Purchasing = () => {
       });
       
       if (hasPOBySpkNo) {
-        console.log(`[Pending PR Filter] PR ${pr.prNo} excluded: has PO by spkNo`);
         return false;
       }
       
@@ -2533,7 +2433,6 @@ const Purchasing = () => {
         openPrintWindow(viewPRPdfData.html);
       }
     } catch (error: any) {
-      console.error('Error saving PDF:', error);
       showAlert(`Error: ${error.message || 'Unknown error'}`, 'Error');
     }
   };
@@ -2808,12 +2707,19 @@ const Purchasing = () => {
   };
 
   const handleDeletePO = async (item: PurchaseOrder) => {
-    if (!item || !item.poNo) {
-      showAlert('PO tidak valid. Mohon coba lagi.', 'Error');
-      return;
-    }
+    try {
+      if (!item || !item.poNo) {
+        showAlert('PO tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        showAlert(`❌ Error: PO ${item.poNo} tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
 
-    const poNo = item.poNo.toString().trim();
+      const poNo = item.poNo.toString().trim();
     // Defensive check: pastikan grnList dan financeNotifications adalah array
     const grnListArray = Array.isArray(grnList) ? grnList : [];
     const financeNotificationsArray = Array.isArray(financeNotifications) ? financeNotifications : [];
@@ -2835,19 +2741,20 @@ const Purchasing = () => {
       return;
     }
 
-    showConfirm(
-      `Hapus PO ${poNo}?\n\nTindakan ini akan:\n• Menghapus PO dari daftar\n• Menghapus notifikasi Finance terkait\n• Mengembalikan PR ke status APPROVED (jika ada)\n\nPastikan tidak ada proses lanjutan untuk PO ini.`,
-      async () => {
-        try {
-          // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
-          const deleteResult = await deletePackagingItem('purchaseOrders', item.id, 'id');
-          if (!deleteResult.success) {
-            showAlert(`Gagal menghapus PO: ${deleteResult.error || 'Unknown error'}`, 'Error');
-            return;
-          }
-          
-          // Reload orders dengan helper (handle race condition)
-          await reloadPackagingData('purchaseOrders', setOrders);
+      showConfirm(
+        `Hapus PO ${poNo}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini akan:\n• Menghapus PO dari daftar\n• Menghapus notifikasi Finance terkait\n• Mengembalikan PR ke status APPROVED (jika ada)\n\nPastikan tidak ada proses lanjutan untuk PO ini.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deletePackagingItem('purchaseOrders', item.id, 'id');
+            
+            if (!deleteResult.success) {
+              showAlert(`❌ Error deleting PO ${poNo}: ${deleteResult.error || 'Unknown error'}`, 'Error');
+              return;
+            }
+            
+            // Reload orders dengan helper (handle race condition)
+            await reloadPackagingData('purchaseOrders', setOrders);
 
           // Ensure purchaseRequests is always an array
           const prArray = Array.isArray(purchaseRequests) ? purchaseRequests : [];
@@ -2898,14 +2805,18 @@ const Purchasing = () => {
             setFinanceNotifications(updatedFinanceNotif);
           }
 
-          showAlert(`PO ${poNo} berhasil dihapus dan PR terkait sudah dikembalikan ke status APPROVED.`, 'Success');
-        } catch (error: any) {
-          showAlert(`Error deleting PO: ${error.message}`, 'Error');
-        }
-      },
-      undefined,
-      'Confirm Delete'
-    );
+            showAlert(`✅ PO ${poNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.\n\nPR terkait sudah dikembalikan ke status APPROVED.`, 'Success');
+          } catch (error: any) {
+            showAlert(`❌ Error deleting PO: ${error.message}`, 'Error');
+          }
+        },
+        () => {
+        },
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      showAlert(`❌ Error: ${error.message}`, 'Error');
+    }
   };
 
   return (

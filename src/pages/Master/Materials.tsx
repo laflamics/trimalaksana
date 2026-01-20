@@ -5,7 +5,7 @@ import Button from '../../components/Button';
 import Input from '../../components/Input';
 import { storageService } from '../../services/storage';
 import { filterActiveItems } from '../../utils/data-persistence-helper';
-import { deletePackagingItem } from '../../utils/packaging-delete-helper';
+import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import * as XLSX from 'xlsx';
 import '../../styles/common.css';
 import './Master.css';
@@ -42,6 +42,8 @@ const Materials = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
   const [supplierInputValue, setSupplierInputValue] = useState('');
+  const [supplierSearch, setSupplierSearch] = useState('');
+  const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
   const [stockAmanInputValue, setStockAmanInputValue] = useState('');
   const [stockMinimumInputValue, setStockMinimumInputValue] = useState('');
   const [priceInputValue, setPriceInputValue] = useState('');
@@ -140,7 +142,13 @@ const Materials = () => {
     const dataRaw = await storageService.get<Material[]>('materials') || [];
     // Filter out deleted items menggunakan helper function
     const data = filterActiveItems(dataRaw);
-    setMaterials(data.map((m, idx) => ({ ...m, no: idx + 1 })));
+    // Sort berdasarkan kode (SKU/ID) secara ascending
+    const sorted = data.sort((a, b) => {
+      const kodeA = (a.kode || '').toUpperCase();
+      const kodeB = (b.kode || '').toUpperCase();
+      return kodeA.localeCompare(kodeB, undefined, { numeric: true, sensitivity: 'base' });
+    });
+    setMaterials(sorted.map((m, idx) => ({ ...m, no: idx + 1 })));
   };
 
   const loadSuppliers = async () => {
@@ -182,8 +190,25 @@ const Materials = () => {
     return '';
   };
 
+  // Filtered suppliers untuk dropdown
+  const filteredSuppliers = useMemo(() => {
+    const suppliersArray = Array.isArray(suppliers) ? suppliers : [];
+    if (!supplierSearch) return suppliersArray.slice(0, 200); // Limit untuk performance
+    const query = supplierSearch.toLowerCase();
+    return suppliersArray
+      .filter(s => {
+        if (!s) return false;
+        const code = (s.kode || '').toLowerCase();
+        const name = (s.nama || '').toLowerCase();
+        return code.includes(query) || name.includes(query);
+      })
+      .slice(0, 200); // Limit untuk performance
+  }, [supplierSearch, suppliers]);
+
   const handleSupplierInputChange = (text: string) => {
     setSupplierInputValue(text);
+    setSupplierSearch(text);
+    setShowSupplierDropdown(true);
     if (!text) {
       setFormData({ ...formData, supplier: '' });
       return;
@@ -204,14 +229,13 @@ const Materials = () => {
 
   const handleSave = async () => {
     try {
+      let updated: Material[];
       if (editingItem) {
-        const updated = materials.map(m =>
+        updated = materials.map(m =>
           m.id === editingItem.id
             ? { ...formData, id: editingItem.id, no: editingItem.no, lastUpdate: new Date().toISOString(), userUpdate: 'System', ipAddress: '127.0.0.1' } as Material
             : m
         );
-        await storageService.set('materials', updated);
-        setMaterials(updated.map((m, idx) => ({ ...m, no: idx + 1 })));
       } else {
         const newMaterial: Material = {
           id: Date.now().toString(),
@@ -221,10 +245,16 @@ const Materials = () => {
           ipAddress: '127.0.0.1',
           ...formData,
         } as Material;
-        const updated = [...materials, newMaterial];
-        await storageService.set('materials', updated);
-        setMaterials(updated.map((m, idx) => ({ ...m, no: idx + 1 })));
+        updated = [...materials, newMaterial];
       }
+      // Sort berdasarkan kode sebelum save
+      const sorted = updated.sort((a, b) => {
+        const kodeA = (a.kode || '').toUpperCase();
+        const kodeB = (b.kode || '').toUpperCase();
+        return kodeA.localeCompare(kodeB, undefined, { numeric: true, sensitivity: 'base' });
+      });
+      await storageService.set('materials', sorted);
+      setMaterials(sorted.map((m, idx) => ({ ...m, no: idx + 1 })));
       setShowForm(false);
       setEditingItem(null);
       setSupplierInputValue('');
@@ -253,29 +283,61 @@ const Materials = () => {
   };
 
   const handleDelete = async (item: Material) => {
-    showConfirm(
-      `Are you sure you want to delete material "${item.nama}"? This action cannot be undone.`,
-      async () => {
-        try {
-          // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
-          const deleteResult = await deletePackagingItem('materials', item.id, 'id');
-          
-          if (deleteResult.success) {
-            // Reload data dengan filter active items
-            const dataRaw = await storageService.get<Material[]>('materials') || [];
-            const data = filterActiveItems(dataRaw);
-            setMaterials(data.map((m, idx) => ({ ...m, no: idx + 1 })));
-            showAlert(`Material "${item.nama}" deleted successfully`, 'Success');
-          } else {
-            showAlert(`Error deleting material: ${deleteResult.error || 'Unknown error'}`, 'Error');
+    try {
+      console.log('[Materials] handleDelete called for:', item.nama, item.id);
+      
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[Materials] Item missing ID:', item);
+        showAlert(`❌ Error: Material "${item.nama}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Material: ${item.nama}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            console.log('[Materials] Delete confirmed for:', item.nama, item.id);
+            
+            // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
+            console.log('[Materials] Calling deletePackagingItem...');
+            const deleteResult = await deletePackagingItem('materials', item.id, 'id');
+            console.log('[Materials] Delete result:', deleteResult);
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition) - sama seperti SalesOrders
+              console.log('[Materials] Reloading data...');
+              await reloadPackagingData('materials', setMaterials);
+              
+              // Re-number materials setelah reload dan sort berdasarkan kode
+              const currentMaterials = await storageService.get<Material[]>('materials') || [];
+              const activeMaterials = filterActiveItems(currentMaterials);
+              const sorted = activeMaterials.sort((a, b) => {
+                const kodeA = (a.kode || '').toUpperCase();
+                const kodeB = (b.kode || '').toUpperCase();
+                return kodeA.localeCompare(kodeB, undefined, { numeric: true, sensitivity: 'base' });
+              });
+              setMaterials(sorted.map((m, idx) => ({ ...m, no: idx + 1 })));
+              
+              showAlert(`✅ Material "${item.nama}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[Materials] Delete failed:', deleteResult.error);
+              showAlert(`❌ Error deleting material "${item.nama}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[Materials] Error in delete:', error);
+            showAlert(`❌ Error deleting material: ${error.message}`, 'Error');
           }
-        } catch (error: any) {
-          showAlert(`Error deleting material: ${error.message}`, 'Error');
-        }
-      },
-      undefined,
-      'Confirm Delete'
-    );
+        },
+        () => {
+          console.log('[Materials] Delete cancelled');
+        },
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[Materials] Error in handleDelete:', error);
+      showAlert(`❌ Error: ${error.message}`, 'Error');
+    }
   };
 
   // Download Template Excel
@@ -419,7 +481,13 @@ const Materials = () => {
             }
           });
 
-          const renumbered = updatedMaterials.map((m, idx) => ({ ...m, no: idx + 1 }));
+          // Sort berdasarkan kode sebelum save
+          const sorted = updatedMaterials.sort((a, b) => {
+            const kodeA = (a.kode || '').toUpperCase();
+            const kodeB = (b.kode || '').toUpperCase();
+            return kodeA.localeCompare(kodeB, undefined, { numeric: true, sensitivity: 'base' });
+          });
+          const renumbered = sorted.map((m, idx) => ({ ...m, no: idx + 1 }));
           await storageService.set('materials', renumbered);
           setMaterials(renumbered);
 
@@ -478,7 +546,7 @@ const Materials = () => {
   const filteredMaterials = useMemo(() => {
     // Ensure materials is always an array
     const materialsArray = Array.isArray(materials) ? materials : [];
-    return materialsArray.filter(material => {
+    const filtered = materialsArray.filter(material => {
       if (!material) return false;
       if (!searchQuery) return true;
       const query = searchQuery.toLowerCase();
@@ -489,6 +557,12 @@ const Materials = () => {
         (material.supplier || '').toLowerCase().includes(query) ||
         (material.satuan || '').toLowerCase().includes(query)
       );
+    });
+    // Sort berdasarkan kode (SKU/ID) secara ascending
+    return filtered.sort((a, b) => {
+      const kodeA = (a.kode || '').toUpperCase();
+      const kodeB = (b.kode || '').toUpperCase();
+      return kodeA.localeCompare(kodeB, undefined, { numeric: true, sensitivity: 'base' });
     });
   }, [materials, searchQuery]);
 
@@ -555,23 +629,23 @@ const Materials = () => {
           <Button variant="secondary" onClick={handleDownloadTemplate}>📋 Download Template</Button>
           <Button variant="primary" onClick={handleImportExcel}>📤 Import Excel</Button>
           <Button onClick={() => { 
-            if (showForm) {
               setSupplierInputValue('');
               setStockAmanInputValue('');
               setStockMinimumInputValue('');
               setPriceInputValue('');
               setFormData({ kode: '', nama: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', supplier: '', priceMtr: 0 });
               setEditingItem(null);
-            }
-            setShowForm(!showForm);
+            setShowForm(true);
           }}>
-            {showForm ? 'Cancel' : '+ Add Material'}
+            + Add Material
           </Button>
         </div>
       </div>
 
       {showForm && (
-        <Card title={editingItem ? "Edit Material" : "Add New Material"} className="mb-4">
+        <div className="dialog-overlay" onClick={() => { setShowForm(false); setEditingItem(null); setSupplierInputValue(''); setStockAmanInputValue(''); setStockMinimumInputValue(''); setPriceInputValue(''); setFormData({ kode: '', nama: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', supplier: '', priceMtr: 0 }); }} style={{ zIndex: 10000 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', width: '90%', maxHeight: '90vh', overflowY: 'auto', zIndex: 10001 }}>
+            <Card title={editingItem ? "Edit Material" : "Add New Material"} className="dialog-card">
           <Input
             label="Kode (SKU/ID)"
             value={formData.kode || ''}
@@ -724,28 +798,19 @@ const Materials = () => {
             value={formData.kategori || ''}
             onChange={(v) => setFormData({ ...formData, kategori: v })}
           />
-          <div style={{ marginBottom: '16px' }}>
+          <div style={{ marginBottom: '16px', position: 'relative' }}>
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
               Supplier
             </label>
             <input
               type="text"
-              list={`supplier-list-${editingItem?.id || 'new'}`}
               value={getSupplierInputDisplayValue()}
               onChange={(e) => {
                 handleSupplierInputChange(e.target.value);
               }}
-              onBlur={(e) => {
-                const value = e.target.value;
-                const matchedSupplier = suppliers.find(s => {
-                  const label = `${s.kode || ''}${s.kode ? ' - ' : ''}${s.nama || ''}`;
-                  return label === value;
-                });
-                if (matchedSupplier) {
-                  setFormData({ ...formData, supplier: matchedSupplier.nama });
-                }
-              }}
-              placeholder="-- Pilih Supplier --"
+              onFocus={() => setShowSupplierDropdown(true)}
+              onBlur={() => setTimeout(() => setShowSupplierDropdown(false), 200)}
+              placeholder="Type to search supplier..."
               style={{
                 width: '100%',
                 padding: '8px 12px',
@@ -756,13 +821,51 @@ const Materials = () => {
                 fontSize: '14px',
               }}
             />
-            <datalist id={`supplier-list-${editingItem?.id || 'new'}`}>
-              {suppliers.map(s => (
-                <option key={s.id} value={`${s.kode} - ${s.nama}`}>
-                  {s.kode} - {s.nama}
-                </option>
+            {showSupplierDropdown && filteredSuppliers.length > 0 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  backgroundColor: 'var(--bg-primary)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                  zIndex: 10002,
+                  maxHeight: '300px',
+                  overflowY: 'auto',
+                  marginTop: '4px',
+                }}
+              >
+                {filteredSuppliers.map(s => (
+                  <div
+                    key={s.id}
+                    onClick={() => {
+                      const label = `${s.kode || ''}${s.kode ? ' - ' : ''}${s.nama || ''}`;
+                      setSupplierInputValue(label);
+                      setSupplierSearch('');
+                      setFormData({ ...formData, supplier: s.nama });
+                      setShowSupplierDropdown(false);
+                    }}
+                    style={{
+                      padding: '10px 12px',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid var(--border)',
+                      fontSize: '13px',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--hover-bg)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
+                  >
+                    <div style={{ fontWeight: '500' }}>{s.kode || ''}{s.kode ? ' - ' : ''}{s.nama || ''}</div>
+                  </div>
               ))}
-            </datalist>
+              </div>
+            )}
           </div>
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
@@ -830,7 +933,7 @@ const Materials = () => {
               }}
             />
           </div>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
             <Button onClick={() => { setShowForm(false); setEditingItem(null); setSupplierInputValue(''); setStockAmanInputValue(''); setStockMinimumInputValue(''); setPriceInputValue(''); setFormData({ kode: '', nama: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', supplier: '', priceMtr: 0 }); }} variant="secondary">
               Cancel
             </Button>
@@ -839,6 +942,8 @@ const Materials = () => {
             </Button>
           </div>
         </Card>
+          </div>
+        </div>
       )}
 
       <Card>

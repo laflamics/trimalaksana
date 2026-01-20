@@ -151,30 +151,50 @@ const Suppliers = () => {
   };
 
   const handleDelete = async (item: Supplier) => {
-    showConfirm(
-      `Are you sure you want to delete supplier "${item.nama}"? This action cannot be undone.`,
-      async () => {
-        try {
-          // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
-          const deleteResult = await deleteGTItem('gt_suppliers', item.id, 'id');
-          
-          if (deleteResult.success) {
-            // Reload data dengan helper (handle race condition)
-            const activeSuppliers = await reloadGTData('gt_suppliers', setSuppliers);
-            // Re-number suppliers
-            setSuppliers(activeSuppliers.map((s, idx) => ({ ...s, no: idx + 1 })));
-            showAlert(`✅ Supplier "${item.nama}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
-          } else {
-            showAlert(`❌ Error deleting supplier "${item.nama}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+    try {
+      console.log('[GT Suppliers] handleDelete called for:', item?.nama, item?.id);
+      
+      if (!item || !item.nama) {
+        showAlert('Supplier tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[GT Suppliers] Supplier missing ID:', item);
+        showAlert(`❌ Error: Supplier "${item.nama}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Supplier "${item.nama}"?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deleteGTItem('gt_suppliers', item.id, 'id');
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              const activeSuppliers = await reloadGTData('gt_suppliers', setSuppliers);
+              // Re-number suppliers
+              setSuppliers(activeSuppliers.map((s, idx) => ({ ...s, no: idx + 1 })));
+              showAlert(`✅ Supplier "${item.nama}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[GT Suppliers] Delete failed:', deleteResult.error);
+              showAlert(`❌ Error deleting supplier "${item.nama}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[GT Suppliers] Error deleting supplier:', error);
+            showAlert(`❌ Error deleting supplier: ${error.message}`, 'Error');
           }
-        } catch (error: any) {
-          console.error('[Suppliers] Error in safe delete:', error);
-          showAlert(`❌ Error deleting supplier: ${error.message}`, 'Error');
-        }
-      },
-      undefined,
-      'Confirm Delete'
-    );
+        },
+        undefined,
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[GT Suppliers] Error in handleDelete:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
   };
 
   // Download Template Excel

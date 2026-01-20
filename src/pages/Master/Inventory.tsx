@@ -18,11 +18,14 @@ interface InventoryItem {
   id: string;
   supplierName: string;
   codeItem: string;
+  kodeIpos?: string; // Kode Ipos untuk material
   description: string;
   kategori: string;
   satuan: string;
   price: number;
-  stockPremonth: number;
+  stockP1?: number; // Stock-P1(Premonth)
+  stockP2?: number; // Stock-P2(Premonth)a
+  stockPremonth: number; // Fallback untuk backward compatibility
   receive: number;
   outgoing: number;
   return: number;
@@ -245,7 +248,6 @@ const Inventory = () => {
           clearTimeout(timeoutId);
         }
         timeoutId = setTimeout(() => {
-          console.log(`[Inventory] Storage changed for ${key}, reloading...`);
           loadInventory();
         }, 500); // Debounce 500ms
       }
@@ -290,8 +292,6 @@ const Inventory = () => {
       });
       data = Array.from(seen.values());
       
-      console.log(`[Inventory] Loaded ${data.length} items (after deduplication)`);
-      
       // If empty, just set empty array
       if (data.length === 0) {
         setInventory([]);
@@ -328,19 +328,26 @@ const Inventory = () => {
   };
 
   const categorizeInventory = useMemo(() => {
-    const isProduct = (item: InventoryItem) => {
+    // IMPORTANT: Filter berdasarkan kategori dengan exact match untuk mencegah tercampur
+    const materialItems = inventory.filter(item => {
       const kategori = (item.kategori || '').toLowerCase().trim();
-      if (!kategori) return false;
-      // Cek berbagai variasi kategori product
-      return kategori === 'product' || 
-             kategori === 'produk' ||
-             kategori.includes('product') || 
-             kategori.includes('finished') || 
-             kategori.includes('fg') ||
-             kategori.includes('finished goods');
-    };
-    const materialItems = inventory.filter(item => !isProduct(item));
-    const productItems = inventory.filter(item => isProduct(item));
+      return kategori === 'material';
+    });
+    const productItems = inventory.filter(item => {
+      const kategori = (item.kategori || '').toLowerCase().trim();
+      return kategori === 'product';
+    });
+
+    // Debug: Log untuk troubleshooting
+    const uncategorized = inventory.filter(item => {
+      const kategori = (item.kategori || '').toLowerCase().trim();
+      return kategori !== 'material' && kategori !== 'product';
+    });
+    if (uncategorized.length > 0) {
+      console.warn(`[Inventory] Found ${uncategorized.length} uncategorized items:`, uncategorized.map(i => ({ codeItem: i.codeItem, kategori: i.kategori })));
+    }
+    
+    
     return { materialItems, productItems };
   }, [inventory]);
 
@@ -374,16 +381,81 @@ const Inventory = () => {
   // Download Template Excel
   const handleDownloadTemplate = () => {
     try {
-      const templateData = [
-        { 'SUPPLIER NAME': 'PT Supplier Example', 'CODE item': 'ITEM-001', 'DESCRIPTION': 'Product Example 1', 'Kategori': 'Product', 'Satuan': 'PCS', 'PRICE': '50000', 'STOCK/Premonth': '100', 'receive': '0', 'Outgoing': '0', 'Return': '0' },
-        { 'SUPPLIER NAME': 'PT Supplier Example', 'CODE item': 'ITEM-002', 'DESCRIPTION': 'Product Example 2', 'Kategori': 'Product', 'Satuan': 'BOX', 'PRICE': '75000', 'STOCK/Premonth': '200', 'receive': '0', 'Outgoing': '0', 'Return': '0' },
+      // Template untuk Material dengan header sesuai format user
+      const templateData = activeTab === 'material' ? [
+        { 
+          'Supplier Name': 'PT. CAKRAWALA MEGA INDAH', 
+          'Kode Item': 'MTRL-00026',
+          'Kode Ipos': 'KRT01758',
+          'Description': 'SHEET 244 X 122 CM K125/M125X3/K125 CB/F SCOORE 60.5+61.5',
+          'Kategori': 'Material', 
+          'Satuan': 'Pcs', 
+          'Harga': '17692', 
+          'Stock-P1(Premonth)': '0',
+          'Stock-P2(Premonth)': '186',
+          'Receive': '0', 
+          'Outgoing': '0', 
+          'Return': '0',
+          'Next Stock': '186',
+          'Last Update': new Date().toISOString().split('T')[0]
+        },
+        { 
+          'Supplier Name': 'PT. CAKRAWALA MEGA INDAH', 
+          'Kode Item': 'MTRL-00036',
+          'Kode Ipos': 'LKR00007',
+          'Description': 'SHEET 156 X 63,3 CM K200/M125X3/K150 CB/F SCOORE 23.3+32+8 CM',
+          'Kategori': 'Material', 
+          'Satuan': 'Pcs', 
+          'Harga': '7228', 
+          'Stock-P1(Premonth)': '412',
+          'Stock-P2(Premonth)': '0',
+          'Receive': '0', 
+          'Outgoing': '0', 
+          'Return': '0',
+          'Next Stock': '412',
+          'Last Update': new Date().toISOString().split('T')[0]
+        },
+      ] : [
+        // Template untuk Product dengan header sesuai format user
+        { 
+          'Customer': 'PT. CAC PUTRA PERKASA', 
+          'Code Item': 'FG-CAC-00003',
+          'Kode Ipos': 'KRT01724',
+          'Description': 'CARTON BOX 720X275X160 (BOLONG SAMPING)',
+          'Kategori': 'Product', 
+          'Satuan': 'Pcs', 
+          'Harga': '16000', 
+          'Stock P1': '30',
+          'Stock P2': '0',
+          'Receive': '0', 
+          'Outgoing': '0', 
+          'Return': '0',
+          'Next Stock': '30',
+          'Last Update': new Date().toISOString().split('T')[0]
+        },
+        { 
+          'Customer': 'PT. CAC PUTRA PERKASA', 
+          'Code Item': 'FG-CAC-00005',
+          'Kode Ipos': 'KRT00142',
+          'Description': 'CARTON BOX 620X263X205 MM',
+          'Kategori': 'Product', 
+          'Satuan': 'Pcs', 
+          'Harga': '15900', 
+          'Stock P1': '100',
+          'Stock P2': '0',
+          'Receive': '0', 
+          'Outgoing': '0', 
+          'Return': '0',
+          'Next Stock': '100',
+          'Last Update': new Date().toISOString().split('T')[0]
+        },
       ];
 
       const ws = XLSX.utils.json_to_sheet(templateData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Template');
       
-      const fileName = `Inventory_Template.xlsx`;
+      const fileName = `Inventory_${activeTab === 'material' ? 'Material' : 'Product'}_Template.xlsx`;
       XLSX.writeFile(wb, fileName);
       setSuccessMessage('✅ Template downloaded! Silakan isi data sesuai format dan import kembali.');
       setError('');
@@ -422,45 +494,95 @@ const Inventory = () => {
           return;
         }
 
-        // Auto-map columns (case-insensitive)
+        // Auto-map columns (case-insensitive, handle whitespace)
         const mapColumn = (row: any, possibleNames: string[]): string => {
+          // Normalize key: trim, lowercase, replace multiple spaces with single space
+          const normalizeKey = (key: string) => key.trim().toLowerCase().replace(/\s+/g, ' ');
+          
           for (const name of possibleNames) {
+            const normalizedName = normalizeKey(name);
             const keys = Object.keys(row);
-            const found = keys.find(k => k.toLowerCase() === name.toLowerCase());
-            if (found && row[found]) return String(row[found]).trim();
+            const found = keys.find(k => normalizeKey(k) === normalizedName);
+            if (found) {
+              const value = String(row[found] || '').trim();
+              if (value) return value;
+            }
           }
           return '';
         };
+        
 
         const newItems: InventoryItem[] = [];
         const errors: string[] = [];
 
+        // IMPORTANT: Set kategori berdasarkan activeTab untuk memastikan filtering benar
         const defaultCategory = activeTab === 'product' ? 'Product' : 'Material';
 
         jsonData.forEach((row, index) => {
           try {
-            const supplierName = mapColumn(row, ['SUPPLIER NAME', 'SUPPLIER', 'Supplier Name', 'supplier_name']);
-            const codeItem = mapColumn(row, ['CODE item', 'CODE', 'Code Item', 'code_item', 'Kode']);
-            const description = mapColumn(row, ['DESCRIPTION', 'DESCRIPTION/Nama Item', 'Nama Item', 'Description', 'nama', 'Nama']);
-            const kategori = mapColumn(row, ['Kategori', 'KATEGORI', 'Category', 'category']);
-            const satuan = mapColumn(row, ['Satuan', 'SATUAN', 'UOM', 'Satuan/UOM', 'Unit', 'unit']);
-            const priceStr = mapColumn(row, ['PRICE', 'Price', 'price', 'Harga', 'HARGA']);
-            const stockStr = mapColumn(row, ['STOCK/Premonth', 'STOCK', 'Stock', 'Premonth', 'STOCK/PREMONTH', 'Stock/Premonth']);
-            const receiveStr = mapColumn(row, ['receive', 'Receive', 'RECEIVE', 'penerimaan', 'Penerimaan']);
-            const outgoingStr = mapColumn(row, ['Outgoing', 'OUTGOING', 'outgoing', 'keluar', 'Keluar']);
-            const returnStr = mapColumn(row, ['Return', 'RETURN', 'return']);
+            // Mapping untuk Material (format baru)
+            // NOTE: kategori tidak dibaca dari Excel, akan di-force sesuai activeTab
+            let supplierName, codeItem, kodeIpos, description, satuan, priceStr, stockP1Str, stockP2Str, receiveStr, outgoingStr, returnStr, nextStockStr, lastUpdateStr;
+            
+            if (activeTab === 'material') {
+              // Format untuk Material - support berbagai variasi header (case-insensitive)
+              // Prioritize exact match first, then variations
+              supplierName = mapColumn(row, ['Supplier Name', 'SUPPLIER NAME', 'Supplier Name', 'SUPPLIER', 'supplier_name', 'supplier name']);
+              codeItem = mapColumn(row, ['Kode Item', 'CODE ITEM', 'CODE item', 'CODE', 'Code Item', 'code_item', 'Kode', 'kode item', 'code item']);
+              kodeIpos = mapColumn(row, ['Kode Ipos', 'KODE IPOS', 'Kode IPOS', 'code_ipos', 'IPOS', 'kode ipos', 'code ipos', 'Kode IPOS']);
+              description = mapColumn(row, ['Description', 'DESCRIPTION/NAMA ITEM', 'DESCRIPTION/Nama Item', 'DESCRIPTION', 'Description', 'Nama Item', 'nama', 'Nama']);
+              
+              // kategori tidak dibaca dari Excel, akan di-force sesuai activeTab
+              satuan = mapColumn(row, ['Satuan', 'SATUAN/UOM', 'SATUAN', 'Satuan', 'UOM', 'Unit', 'unit']);
+              priceStr = mapColumn(row, ['Harga', 'PRICE', 'Price', 'price', 'HARGA']);
+              stockP1Str = mapColumn(row, ['Stock-P1(Premonth)', 'Stock-P1(PREMONTH)', 'STOCK-P1(PREMONTH)', 'Stock P1', 'STOCK P1', 'Stock-P1', 'STOCK-P1']);
+              stockP2Str = mapColumn(row, ['Stock-P2(Premonth)', 'Stock-P2(PREMONTH)', 'STOCK-P2(PREMONTH)', 'Stock P2', 'STOCK P2', 'Stock-P2', 'STOCK-P2']);
+              // STOCK/PREMONTH = P1 + P2 (calculated), tidak perlu dibaca dari Excel
+              receiveStr = mapColumn(row, ['Receive', 'RECEIVE (DARI PO/GRN)', 'RECEIVE', 'receive', 'penerimaan', 'Penerimaan']);
+              outgoingStr = mapColumn(row, ['Outgoing', 'OUTGOING (UNTUK PRODUKSI)', 'OUTGOING', 'Outgoing', 'outgoing', 'keluar', 'Keluar']);
+              returnStr = mapColumn(row, ['Return', 'RETURN', 'return']);
+              nextStockStr = mapColumn(row, ['Next Stock', 'NEXT STOCK', 'next_stock', 'NextStock']);
+              lastUpdateStr = mapColumn(row, ['Last Update', 'LAST UPDATE', 'last_update', 'LastUpdate']);
+            } else {
+              // Format untuk Product sesuai header user
+              supplierName = mapColumn(row, ['Customer', 'CUSTOMER', 'Supplier Name', 'SUPPLIER NAME', 'SUPPLIER', 'supplier_name', 'customer']);
+              codeItem = mapColumn(row, ['Code Item', 'CODE ITEM', 'CODE item', 'CODE', 'Code Item', 'code_item', 'Kode', 'code item']);
+              kodeIpos = mapColumn(row, ['Kode Ipos', 'KODE IPOS', 'Kode IPOS', 'code_ipos', 'IPOS', 'kode ipos', 'code ipos']);
+              description = mapColumn(row, ['Description', 'DESCRIPTION', 'DESCRIPTION/Nama Item', 'Nama Item', 'Description', 'nama', 'Nama']);
+              // kategori tidak dibaca dari Excel, akan di-force sesuai activeTab
+              satuan = mapColumn(row, ['Satuan', 'SATUAN', 'Satuan', 'UOM', 'Unit', 'unit']);
+              priceStr = mapColumn(row, ['Harga', 'PRICE', 'Price', 'price', 'HARGA']);
+              stockP1Str = mapColumn(row, ['Stock P1', 'STOCK P1', 'Stock-P1', 'STOCK-P1', 'Stock-P1(Premonth)', 'STOCK-P1(PREMONTH)']);
+              stockP2Str = mapColumn(row, ['Stock P2', 'STOCK P2', 'Stock-P2', 'STOCK-P2', 'Stock-P2(Premonth)', 'STOCK-P2(PREMONTH)']);
+              // stockStr tidak digunakan untuk Product, karena P1 + P2
+              receiveStr = mapColumn(row, ['Receive', 'RECEIVE', 'receive', 'penerimaan', 'Penerimaan']);
+              outgoingStr = mapColumn(row, ['Outgoing', 'OUTGOING', 'outgoing', 'keluar', 'Keluar']);
+              returnStr = mapColumn(row, ['Return', 'RETURN', 'return']);
+              nextStockStr = mapColumn(row, ['Next Stock', 'NEXT STOCK', 'next_stock', 'NextStock']);
+              lastUpdateStr = mapColumn(row, ['Last Update', 'LAST UPDATE', 'last_update', 'LastUpdate']);
+            }
 
             // Skip empty rows
             if (!codeItem && !description) {
               return;
             }
 
-            const price = parseFloat(priceStr) || 0;
-            const stockPremonth = parseFloat(stockStr) || 0;
-            const receive = parseFloat(receiveStr) || 0;
-            const outgoing = parseFloat(outgoingStr) || 0;
-            const returnQty = parseFloat(returnStr) || 0;
-            const nextStock = stockPremonth + receive - outgoing + returnQty;
+            // Parse price (handle "Rp 17.692" format)
+            let price = 0;
+            if (priceStr) {
+              const cleanedPrice = priceStr.replace(/[Rp\s.,]/g, '').replace(/\./g, '');
+              price = parseFloat(cleanedPrice) || 0;
+            }
+            
+            const stockP1 = parseFloat(stockP1Str || '0') || 0;
+            const stockP2 = parseFloat(stockP2Str || '0') || 0;
+            // STOCK/PREMONTH = P1 + P2 (calculated) untuk Material dan Product
+            const stockPremonth = stockP1 + stockP2;
+            const receive = parseFloat(receiveStr || '0') || 0;
+            const outgoing = parseFloat(outgoingStr || '0') || 0;
+            const returnQty = parseFloat(returnStr || '0') || 0;
+            const nextStock = nextStockStr ? parseFloat(nextStockStr) : (stockPremonth + receive - outgoing + returnQty);
+            const lastUpdate = lastUpdateStr || new Date().toISOString();
 
             // Check if item already exists (by codeItem)
             const existingIndex = inventory.findIndex(item => 
@@ -473,16 +595,22 @@ const Inventory = () => {
               newItems.push({
                 ...existing,
                 supplierName: supplierName || existing.supplierName,
+                codeItem: codeItem || existing.codeItem,
+                kodeIpos: kodeIpos || existing.kodeIpos || undefined,
                 description: description || existing.description,
-                kategori: kategori || existing.kategori || defaultCategory,
+                // IMPORTANT: Force kategori sesuai activeTab untuk mencegah tercampur Material dan Product
+                kategori: defaultCategory,
                 satuan: satuan || existing.satuan,
                 price: price || existing.price,
+                // Stock P1 dan P2 untuk Material dan Product
+                stockP1: stockP1 !== undefined && stockP1 !== null ? stockP1 : (existing.stockP1 || 0),
+                stockP2: stockP2 !== undefined && stockP2 !== null ? stockP2 : (existing.stockP2 || 0),
                 stockPremonth: stockPremonth || existing.stockPremonth,
                 receive: receive || existing.receive,
                 outgoing: outgoing || existing.outgoing,
                 return: returnQty || existing.return,
                 nextStock,
-                lastUpdate: new Date().toISOString(),
+                lastUpdate: lastUpdate || existing.lastUpdate || new Date().toISOString(),
               });
             } else {
               // Create new item
@@ -490,16 +618,21 @@ const Inventory = () => {
                 id: Date.now().toString() + index,
                 supplierName: supplierName || '',
                 codeItem: codeItem || '',
+                kodeIpos: kodeIpos || undefined,
                 description: description || '',
-                kategori: kategori || defaultCategory,
+                // IMPORTANT: Force kategori sesuai activeTab untuk mencegah tercampur
+                kategori: defaultCategory,
                 satuan: satuan || 'PCS',
                 price,
+                // Stock P1 dan P2 untuk Material dan Product (sama seperti Material)
+                stockP1: stockP1 || 0,
+                stockP2: stockP2 || 0,
                 stockPremonth,
                 receive,
                 outgoing,
                 return: returnQty,
                 nextStock,
-                lastUpdate: new Date().toISOString(),
+                lastUpdate: lastUpdate || new Date().toISOString(),
               });
             }
           } catch (error: any) {
@@ -569,20 +702,54 @@ const Inventory = () => {
 
   const handleExportExcel = () => {
     try {
-      const dataToExport = filteredInventory.map(item => ({
-        'Supplier Name': item.supplierName || '',
+      const dataToExport = filteredInventory.map(item => {
+        if (activeTab === 'material') {
+          // Format untuk Material sesuai header user
+          const stockP1 = item.stockP1 || 0;
+          const stockP2 = item.stockP2 || 0;
+          const stockPremonth = stockP1 + stockP2; // Calculate dari P1 + P2
+          
+          return {
+            'SUPPLIER NAME': item.supplierName || '',
+            'CODE ITEM': item.codeItem || '',
+            'KODE IPOS': item.kodeIpos || '',
+            'DESCRIPTION/NAMA ITEM': item.description || '',
+            'PAD CODE': item.padCode || '-',
+            'KATEGORI': item.kategori || '',
+            'SATUAN/UOM': item.satuan || '',
+            'PRICE': `Rp ${(item.price || 0).toLocaleString('id-ID')}`,
+            'STOCK P1': stockP1,
+            'STOCK P2': stockP2,
+            'STOCK/PREMONTH': stockPremonth,
+            'RECEIVE (DARI PO/GRN)': item.receive || 0,
+            'OUTGOING (UNTUK PRODUKSI)': item.outgoing || 0,
+            'WARNING': item.anomaly ? '⚠️ ' + item.anomaly : '-',
+            'RETURN': item.return || 0,
+            'NEXT STOCK': item.nextStock || 0,
+          };
+        } else {
+          // Format untuk Product sesuai header user
+          const stockP1 = item.stockP1 || 0;
+          const stockP2 = item.stockP2 || 0;
+          
+          return {
+            'Customer': item.supplierName || '',
         'Code Item': item.codeItem || '',
+            'Kode Ipos': item.kodeIpos || '',
         'Description': item.description || '',
         'Kategori': item.kategori || '',
         'Satuan': item.satuan || '',
-        'Price': item.price || 0,
-        'Stock Premonth': item.stockPremonth || 0,
+            'Harga': item.price || 0,
+            'Stock P1': stockP1,
+            'Stock P2': stockP2,
         'Receive': item.receive || 0,
         'Outgoing': item.outgoing || 0,
         'Return': item.return || 0,
         'Next Stock': item.nextStock || 0,
-        'Last Update': item.lastUpdate ? new Date(item.lastUpdate).toLocaleString('id-ID') : '',
-      }));
+            'Last Update': item.lastUpdate ? new Date(item.lastUpdate).toISOString().split('T')[0] : '',
+          };
+        }
+      });
 
       const ws = XLSX.utils.json_to_sheet(dataToExport);
       const wb = XLSX.utils.book_new();
@@ -823,7 +990,6 @@ const Inventory = () => {
           // Anti-duplicate: cek apakah GRN ini sudah diproses
           if (!item.processedGRNs) item.processedGRNs = [];
           if (item.processedGRNs.includes(grnNo)) {
-            console.log(`⏭️  [GRN Inventory] GRN ${grnNo} sudah pernah diproses untuk material ${originalMaterialId}. Skip.`);
             return;
           }
 
@@ -831,11 +997,6 @@ const Inventory = () => {
           const qtyRounded = Math.round(grn.qtyReceived || 0);
           item.receive = (item.receive || 0) + qtyRounded;
           item.processedGRNs.push(grnNo);
-          
-          console.log(`✅ [GRN Inventory] Material inventory updated (RECEIVE from GRN ${grnNo} - PO tanpa SO):`);
-          console.log(`   Material: ${grn.materialItem} (${originalMaterialId})`);
-          console.log(`   PO: ${poNo} | GRN: ${grnNo}`);
-          console.log(`   Receive: +${qtyRounded} | Price: ${pricePerUnit} (from PO)`);
         });
 
       // 2. MATERIAL OUTGOING: dari productionResults (materials array dengan qtyUsed)
@@ -912,7 +1073,6 @@ const Inventory = () => {
           if (!item.processedPOs) item.processedPOs = [];
           const resultKey = `PR_${result.id}_${originalMaterialId}`;
           if (item.processedPOs.includes(resultKey)) {
-            console.log(`⏭️  Skipping duplicate: Production Result ${result.id}, Material ${originalMaterialId}`);
             return; // Skip kalau production result ini sudah diproses untuk materialId ini
           }
 
@@ -920,8 +1080,6 @@ const Inventory = () => {
           const qtyRounded = Math.round(qtyUsed);
           const oldOutgoing = item.outgoing || 0;
           item.outgoing = oldOutgoing + qtyRounded;
-          
-          console.log(`📤 Outgoing updated: Material ${originalMaterialId}, +${qtyRounded} (from PR ${result.id}), Total: ${item.outgoing}`);
           
           // Mark production result ini sudah diproses untuk materialId ini
           item.processedPOs.push(resultKey);
@@ -1060,7 +1218,6 @@ const Inventory = () => {
           if (!inventoryItem.processedSPKs) inventoryItem.processedSPKs = [];
           const deliveryKey = `DEL_${delivery.id}_${spkNo}`;
           if (inventoryItem.processedSPKs.includes(deliveryKey)) {
-            console.log(`⏭️  Skipping duplicate: Delivery ${delivery.id}, SPK ${spkNo}`);
             return; // Skip kalau delivery item ini sudah diproses
           }
 
@@ -1070,7 +1227,6 @@ const Inventory = () => {
           const oldOutgoing = inventoryItem.outgoing || 0;
           inventoryItem.outgoing = oldOutgoing + qtyRounded;
           
-          console.log(`📤 Outgoing updated: Product ${originalProductId}, +${qtyRounded} (from Delivery ${delivery.id}, SPK ${spkNo}), Total: ${inventoryItem.outgoing}`);
           
           // Mark delivery item ini sudah diproses
           inventoryItem.processedSPKs.push(deliveryKey);
@@ -1120,7 +1276,6 @@ const Inventory = () => {
       });
       const deduplicated = Array.from(deduplicatedMap.values());
       
-      console.log(`[Inventory] Recalculated ${deduplicated.length} items (after deduplication)`);
 
       // Save dan update state
       await storageService.set('inventory', deduplicated);
@@ -1211,44 +1366,71 @@ const Inventory = () => {
   const columns = [
     { 
       key: 'supplierName', 
-      header: activeTab === 'material' ? 'Supplier Name' : 'Customer Name',
+      header: activeTab === 'material' ? 'SUPPLIER NAME' : 'Customer',
     },
-    { key: 'codeItem', header: 'CODE item' },
-    { key: 'description', header: 'DESCRIPTION/Nama Item' },
+    { key: 'codeItem', header: 'CODE ITEM' },
+    {
+      key: 'kodeIpos',
+      header: 'KODE IPOS',
+      render: (item: InventoryItem) => item.kodeIpos || '-',
+    },
+    { key: 'description', header: 'DESCRIPTION/NAMA ITEM' },
     { 
       key: 'padCode', 
-      header: 'Pad Code',
+      header: 'PAD CODE',
       render: (item: InventoryItem) => item.padCode || '-',
     },
-    { key: 'kategori', header: 'Kategori' },
-    { key: 'satuan', header: 'Satuan/UOM' },
+    { key: 'kategori', header: 'KATEGORI' },
+    { key: 'satuan', header: 'SATUAN/UOM' },
     {
       key: 'price',
       header: 'PRICE',
       render: (item: InventoryItem) => `Rp ${(item.price || 0).toLocaleString('id-ID')}`,
     },
-    {
-      key: 'stockPremonth',
-      header: 'STOCK/Premonth',
-      render: (item: InventoryItem) => (item.stockPremonth || 0).toLocaleString('id-ID'),
-    },
+    // Hide STOCK/Premonth di UI untuk Material dan Product (karena calculated dari P1 + P2)
+    // Tidak perlu show stockPremonth karena sudah dihitung dari P1 + P2
+    // Show Stock P1 dan Stock P2 untuk Material
+    ...(activeTab === 'material' ? [
+      {
+        key: 'stockP1',
+        header: 'STOCK P1',
+        render: (item: InventoryItem) => (item.stockP1 || 0).toLocaleString('id-ID'),
+      },
+      {
+        key: 'stockP2',
+        header: 'STOCK P2',
+        render: (item: InventoryItem) => (item.stockP2 || 0).toLocaleString('id-ID'),
+      },
+    ] : [
+      // Show Stock P1 dan Stock P2 untuk Product
+      {
+        key: 'stockP1',
+        header: 'Stock P1',
+        render: (item: InventoryItem) => (item.stockP1 || 0).toLocaleString('id-ID'),
+      },
+      {
+        key: 'stockP2',
+        header: 'Stock P2',
+        render: (item: InventoryItem) => (item.stockP2 || 0).toLocaleString('id-ID'),
+      },
+    ]),
     {
       key: 'receive',
       header: activeTab === 'material' 
-        ? 'Receive (dari PO/GRN)' 
+        ? 'RECEIVE (DARI PO/GRN)' 
         : 'Receive (dari QC PASS)',
       render: (item: InventoryItem) => (item.receive || 0).toLocaleString('id-ID'),
     },
     {
       key: 'outgoing',
       header: activeTab === 'material' 
-        ? 'Outgoing (untuk Produksi)' 
+        ? 'OUTGOING (UNTUK PRODUKSI)' 
         : 'Outgoing (untuk Delivery)',
       render: (item: InventoryItem) => (item.outgoing || 0).toLocaleString('id-ID'),
     },
     {
       key: 'anomaly',
-      header: 'Warning',
+      header: 'WARNING',
       render: (item: InventoryItem) => {
         if (!item.anomaly) return '-';
         return (
@@ -1260,14 +1442,16 @@ const Inventory = () => {
     },
     {
       key: 'return',
-      header: 'Return',
+      header: 'RETURN',
       render: (item: InventoryItem) => (item.return || 0).toLocaleString('id-ID'),
     },
     {
       key: 'nextStock',
-      header: 'Next Stock',
+      header: 'NEXT STOCK',
       render: (item: InventoryItem) => {
-        const nextStock = (item.stockPremonth || 0) + (item.receive || 0) - (item.outgoing || 0) + (item.return || 0);
+        // Gunakan P1 + P2 sebagai stockPremonth untuk Material dan Product
+        const stockPremonth = (item.stockP1 || 0) + (item.stockP2 || 0);
+        const nextStock = stockPremonth + (item.receive || 0) - (item.outgoing || 0) + (item.return || 0);
         return (
           <span style={{ fontWeight: 'bold', color: nextStock < 0 ? '#f44336' : 'var(--text-primary)' }}>
             {nextStock.toLocaleString('id-ID')}
@@ -1599,7 +1783,6 @@ const Inventory = () => {
                 value={addInventoryForm.codeItem}
                 onChange={(value) => setAddInventoryForm({ ...addInventoryForm, codeItem: value })}
                 placeholder="Otomatis dari material (bisa diubah)"
-                required
                 disabled={!!addInventoryForm.selectedMaterialId}
               />
               <Input
@@ -1607,7 +1790,6 @@ const Inventory = () => {
                 value={addInventoryForm.description}
                 onChange={(value) => setAddInventoryForm({ ...addInventoryForm, description: value })}
                 placeholder="Otomatis dari material (bisa diubah)"
-                required
                 disabled={!!addInventoryForm.selectedMaterialId}
               />
               <Input
@@ -1638,7 +1820,6 @@ const Inventory = () => {
                 value={addInventoryForm.stockPremonth}
                 onChange={(value) => setAddInventoryForm({ ...addInventoryForm, stockPremonth: value })}
                 placeholder="Masukkan stock awal"
-                required
               />
 
               <div>

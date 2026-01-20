@@ -133,7 +133,6 @@ const PackagingLayout = ({ children }: LayoutProps) => {
           setUserMenuAccess({});
         }
       } catch (error) {
-        console.error('Error loading user access:', error);
         setUserMenuAccess({});
       }
     };

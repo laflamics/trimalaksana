@@ -344,11 +344,10 @@ export const checkMobileUpdate = async (
 ): Promise<{ available: boolean; version: string | null; message: string }> => {
   try {
     const config = storageService.getConfig();
-    const serverUrl = config.serverUrl || 'vercel-proxy-blond-nine.vercel.app';
-    // Use https for Tailscale funnel and Vercel, http for others
+    const serverUrl = config.serverUrl || 'server-tljp.tail75a421.ts.net';
+    // Use https for Tailscale funnel, http for others
     const isTailscaleFunnel = serverUrl.includes('.ts.net') || serverUrl.includes('tailscale') || serverUrl.includes('tail');
-    const isVercel = serverUrl.includes('vercel.app');
-    const protocol = (isTailscaleFunnel || isVercel) ? 'https' : 'http';
+    const protocol = isTailscaleFunnel ? 'https' : 'http';
     const baseUrl = serverUrl.startsWith('http') ? serverUrl : `${protocol}://${serverUrl}`;
     const baseUrlClean = baseUrl.replace(/:\d+$/, '');
     

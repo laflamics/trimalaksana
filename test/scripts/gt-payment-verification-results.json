@@ -1,0 +1,27 @@
+{
+  "timestamp": "2026-01-10T23:35:39.956Z",
+  "status": "SUCCESS",
+  "data": {
+    "notifications": 1,
+    "purchaseOrders": 1,
+    "grnRecords": 1,
+    "pendingNotifications": 1
+  },
+  "details": {
+    "hasNotifications": true,
+    "hasPO": true,
+    "hasGRN": true,
+    "allDataExists": true,
+    "pendingNotifications": [
+      {
+        "id": "payment-1768087885258-PO-260111-VDEAN-GRN-260111-35B5Y",
+        "poNo": "PO-260111-VDEAN",
+        "supplier": "AGEN BERAS & TELOR RAFFI",
+        "total": 2775000,
+        "status": "PENDING",
+        "grnNo": "GRN-260111-35B5Y"
+      }
+    ]
+  },
+  "conclusion": "GT Payments should show notifications"
+}

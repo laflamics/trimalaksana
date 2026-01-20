@@ -4,7 +4,7 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import Table from '../../../components/Table';
 import { storageService, BusinessType } from '../../../services/storage';
-import { safeDeleteMultipleItems, filterActiveItems } from '../../../utils/data-persistence-helper';
+import { deleteGTItem, deleteGTItems, reloadGTData, filterActiveItems } from '../../../utils/gt-delete-helper';
 import { getCurrentUser, isDefaultAdmin } from '../../../utils/access-control-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
@@ -416,43 +416,43 @@ const UserControl = () => {
     // Migration: Merge data from old business-specific keys if they exist
     const oldGTKey = 'general-trading/userAccessControl';
     const oldTruckingKey = 'trucking/userAccessControl';
-    let currentData = (await storageService.get<UserAccess[]>(storageKey)) || [];
-    let oldGTData = (await storageService.get<UserAccess[]>(oldGTKey)) || [];
-    let oldTruckingData = (await storageService.get<UserAccess[]>(oldTruckingKey)) || [];
+    const rawCurrentData = await storageService.get<UserAccess[]>(storageKey);
+    const rawOldGTData = await storageService.get<UserAccess[]>(oldGTKey);
+    const rawOldTruckingData = await storageService.get<UserAccess[]>(oldTruckingKey);
     
-    // CRITICAL: Extract array from storage wrapper if needed
-    if (currentData && typeof currentData === 'object' && 'value' in currentData) {
-      currentData = (currentData as any).value || [];
-    }
-    if (oldGTData && typeof oldGTData === 'object' && 'value' in oldGTData) {
-      oldGTData = (oldGTData as any).value || [];
-    }
-    if (oldTruckingData && typeof oldTruckingData === 'object' && 'value' in oldTruckingData) {
-      oldTruckingData = (oldTruckingData as any).value || [];
-    }
+    // 🚀 FIX: Extract array from storage wrapper with robust handling (sama seperti Trucking)
+    const extractUserArray = (data: any): UserAccess[] => {
+      if (!data) return [];
+      if (Array.isArray(data)) return data;
+      // Handle wrapped format {value: [...]}
+      if (data && typeof data === 'object' && 'value' in data) {
+        const value = (data as any).value;
+        if (Array.isArray(value)) return value;
+        if (!value || (typeof value === 'object' && Object.keys(value).length === 0)) return [];
+      }
+      // If it's an object but not array, return empty array
+      if (typeof data === 'object' && !Array.isArray(data)) {
+        console.warn('[GT UserControl] Data is object but not array, returning empty array:', data);
+        return [];
+      }
+      return [];
+    };
+    
+    const currentData = extractUserArray(rawCurrentData);
+    const oldGTData = extractUserArray(rawOldGTData);
+    const oldTruckingData = extractUserArray(rawOldTruckingData);
     
     console.log(`[GT UserControl] Debug data loading:`);
     console.log(`- currentData (${storageKey}):`, currentData.length, 'users');
-    console.log(`- oldGTData (${oldGTKey}):`, Array.isArray(oldGTData) ? oldGTData.length : 'not array', 'users');
-    console.log(`- oldTruckingData (${oldTruckingKey}):`, Array.isArray(oldTruckingData) ? oldTruckingData.length : 'not array', 'users');
-    
-    // Safety checks
-    if (!Array.isArray(currentData)) {
-      console.error('[GT UserControl] currentData is not an array:', currentData);
-    }
-    if (!Array.isArray(oldGTData)) {
-      console.error('[GT UserControl] oldGTData is not an array:', oldGTData);
-    }
-    if (!Array.isArray(oldTruckingData)) {
-      console.error('[GT UserControl] oldTruckingData is not an array:', oldTruckingData);
-    }
+    console.log(`- oldGTData (${oldGTKey}):`, oldGTData.length, 'users');
+    console.log(`- oldTruckingData (${oldTruckingKey}):`, oldTruckingData.length, 'users');
     
     // Merge: Combine data from old keys and current key, deduplicate by ID
     // CRITICAL: Use Map to ensure ID uniqueness - last one wins if duplicate
     const mergedUsers = new Map<string, UserAccess>();
     
-    // Add current data first (priority) - ensure it's an array
-    const safeCurrentData = Array.isArray(currentData) ? currentData : [];
+    // Add current data first (priority) - both are guaranteed to be arrays now
+    const safeCurrentData = currentData;
     safeCurrentData.forEach(user => {
       if (user && user.id) {
         // If duplicate ID exists, keep the one with latest updatedAt
@@ -657,7 +657,20 @@ const UserControl = () => {
     const loadCurrentUserBusinessUnits = async () => {
       const currentUser = getCurrentUser();
       if (currentUser) {
-        const users = await storageService.get<UserAccess[]>('userAccessControl') || [];
+        const rawUsers = await storageService.get<UserAccess[]>('userAccessControl');
+        // 🚀 FIX: Extract array with robust handling
+        const extractUserArray = (data: any): UserAccess[] => {
+          if (!data) return [];
+          if (Array.isArray(data)) return data;
+          if (data && typeof data === 'object' && 'value' in data) {
+            const value = (data as any).value;
+            if (Array.isArray(value)) return value;
+            if (!value || (typeof value === 'object' && Object.keys(value).length === 0)) return [];
+          }
+          if (typeof data === 'object' && !Array.isArray(data)) return [];
+          return [];
+        };
+        const users = extractUserArray(rawUsers);
         const userData = users.find((u: UserAccess) => u.id === currentUser.id);
         if (userData) {
           setCurrentUserBusinessUnits(userData.businessUnits || []);
@@ -682,7 +695,20 @@ const UserControl = () => {
     if (isDefaultAdmin(currentUser)) return true;
     
     // Check if user has access to User Control menu in current business unit
-    const users = await storageService.get<UserAccess[]>('userAccessControl') || [];
+    const rawUsers = await storageService.get<UserAccess[]>('userAccessControl');
+    // 🚀 FIX: Extract array with robust handling
+    const extractUserArray = (data: any): UserAccess[] => {
+      if (!data) return [];
+      if (Array.isArray(data)) return data;
+      if (data && typeof data === 'object' && 'value' in data) {
+        const value = (data as any).value;
+        if (Array.isArray(value)) return value;
+        if (!value || (typeof value === 'object' && Object.keys(value).length === 0)) return [];
+      }
+      if (typeof data === 'object' && !Array.isArray(data)) return [];
+      return [];
+    };
+    const users = extractUserArray(rawUsers);
     const userData = users.find(u => u.id === currentUser.id);
     
     if (!userData || !userData.isActive) return false;
@@ -770,45 +796,67 @@ const UserControl = () => {
   };
 
   const handleDeleteUser = async (user: UserAccess) => {
-    showConfirm(
-      `Hapus akses untuk ${user.fullName}?`,
-      async () => {
-        // FIXED: Use unified storage key 'userAccessControl' (without business prefix)
-        const storageKey = 'userAccessControl';
-        
-        // Use safe deletion pattern to prevent resurrection
-        const allUsers = (await storageService.get<UserAccess[]>(storageKey)) || [];
-        const updated = allUsers.map(u => 
-          u.id === user.id 
-            ? { ...u, deleted: true, deletedAt: new Date().toISOString(), deletedTimestamp: Date.now() }
-            : u
-        );
-        
-        await storageService.set(storageKey, updated);
-        
-        // Filter active users for display
-        const activeUsers = filterActiveItems(updated);
-        setUsers(activeUsers);
-        
-        // Remove from selected if was selected
-        setSelectedUserIds(prev => {
-          const next = new Set(prev);
-          next.delete(user.id);
-          return next;
-        });
-        
-        setSelectedUser((prev) => {
-          if (!prev || prev.id === user.id) {
-            return activeUsers[0] || null;
+    try {
+      console.log('[GT Settings UserControl] handleDeleteUser called for:', user?.fullName, user?.id);
+      
+      if (!user || !user.fullName) {
+        showAlert('User tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate user.id exists
+      if (!user.id) {
+        console.error('[GT Settings UserControl] User missing ID:', user);
+        showAlert(`❌ Error: User "${user.fullName}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus akses untuk ${user.fullName}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // FIXED: Use unified storage key 'userAccessControl' (without business prefix)
+            const storageKey = 'userAccessControl';
+            
+            // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deleteGTItem(storageKey, user.id, 'id');
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              const activeUsers = await reloadGTData(storageKey, setUsers);
+              setUsers(activeUsers);
+              
+              // Remove from selected if was selected
+              setSelectedUserIds(prev => {
+                const next = new Set(prev);
+                next.delete(user.id);
+                return next;
+              });
+              
+              setSelectedUser((prev) => {
+                if (!prev || prev.id === user.id) {
+                  return activeUsers[0] || null;
+                }
+                return prev;
+              });
+              
+              showAlert(`✅ User "${user.fullName}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[GT Settings UserControl] Delete failed:', deleteResult.error);
+              showAlert(`❌ Error deleting user "${user.fullName}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[GT Settings UserControl] Error deleting user:', error);
+            showAlert(`❌ Error deleting user: ${error.message}`, 'Error');
           }
-          return prev;
-        });
-        
-        console.log(`[UserControl-GT] Safely deleted user ${user.fullName} (ID: ${user.id}) using tombstone pattern`);
-      },
-      undefined,
-      'Confirm Delete'
-    );
+        },
+        undefined,
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[GT Settings UserControl] Error in handleDeleteUser:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
   };
 
   const handleBusinessToggle = (businessId: BusinessId) => {
@@ -938,7 +986,20 @@ const UserControl = () => {
     try {
       // CRITICAL: Load all users (including deleted) from storage to check for duplicates
       const storageKey = 'userAccessControl';
-      const allStoredUsers = (await storageService.get<UserAccess[]>(storageKey)) || [];
+      const rawAllStoredUsers = await storageService.get<UserAccess[]>(storageKey);
+      // 🚀 FIX: Extract array with robust handling
+      const extractUserArray = (data: any): UserAccess[] => {
+        if (!data) return [];
+        if (Array.isArray(data)) return data;
+        if (data && typeof data === 'object' && 'value' in data) {
+          const value = (data as any).value;
+          if (Array.isArray(value)) return value;
+          if (!value || (typeof value === 'object' && Object.keys(value).length === 0)) return [];
+        }
+        if (typeof data === 'object' && !Array.isArray(data)) return [];
+        return [];
+      };
+      const allStoredUsers = extractUserArray(rawAllStoredUsers);
       
       const timestamp = new Date().toISOString();
       const sanitizedAccess = sanitizeMenuAccess(formState.businessUnits, formState.menuAccess);
@@ -1038,9 +1099,9 @@ const UserControl = () => {
       async () => {
         const storageKey = 'userAccessControl';
         
-        // Use safeDeleteMultipleItems for bulk delete with tombstone pattern
+        // Use deleteGTItems for bulk delete with tombstone pattern
         const userIds = Array.from(selectedUserIds);
-        const result = await safeDeleteMultipleItems(storageKey, userIds, 'id');
+        const result = await deleteGTItems(storageKey, userIds, 'id');
         
         if (result.failed > 0) {
           showAlert(`Gagal menghapus ${result.failed} user. ${result.success} user berhasil dihapus.`, 'Warning');

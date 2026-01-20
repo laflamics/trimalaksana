@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-01-20T05:59:19.292Z",
+  "action": "force-bom-reload",
+  "bomItemCount": 62,
+  "reason": "Fix BOM indicator loading issue - simulate manual edit behavior",
+  "instructions": [
+    "Clear browser cache (Ctrl+Shift+Delete)",
+    "Hard refresh (Ctrl+F5)",
+    "Check console for [Products] logs",
+    "Verify BOM indicators appear"
+  ]
+}

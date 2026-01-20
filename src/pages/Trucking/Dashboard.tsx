@@ -38,7 +38,7 @@ const StatCard = ({ title, value, subtitle, icon, color }: StatCardProps) => {
   );
 };
 
-const TrackingDashboard = () => {
+const TruckingDashboard = () => {
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -134,7 +134,7 @@ const TrackingDashboard = () => {
   return (
     <div>
       <div className="page-header">
-        <h1>Tracking Dashboard</h1>
+        <h1>Trucking Dashboard</h1>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '24px' }}>
@@ -241,4 +241,4 @@ const TrackingDashboard = () => {
   );
 };
 
-export default TrackingDashboard;
+export default TruckingDashboard;

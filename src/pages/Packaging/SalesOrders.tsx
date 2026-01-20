@@ -59,6 +59,9 @@ interface SalesOrder {
   signatureName?: string; // Nama penandatangan
   signatureTitle?: string; // Jabatan/title penandatangan
   matchedSoNo?: string; // SO No yang di-match dengan quotation (jika sudah di-match)
+  lastUpdate?: string; // Last update timestamp
+  timestamp?: number; // Timestamp untuk sync ke server
+  _timestamp?: number; // Alternative timestamp field untuk sync
 }
 
 interface Customer {
@@ -76,6 +79,7 @@ interface Product {
   hargaFg?: number;
   hargaSales?: number;
   padCode?: string; // PAD Code untuk product
+  kodeIpos?: string; // Kode Ipos untuk product (khusus packaging)
   kategori?: string; // Kategori product
   customer?: string; // Customer untuk product
   lastUpdate?: string; // Last update timestamp
@@ -305,6 +309,7 @@ const SalesOrders = () => {
     items: [],
     globalSpecNote: '',
     category: 'packaging',
+    created: '', // Add created date field
   });
   
   // Quotation form state (untuk tab Quotation)
@@ -413,7 +418,6 @@ const SalesOrders = () => {
       
       // Reload products if products data changed
       if (key === storageKey || key === 'products') {
-        console.log('🔄 [SalesOrders] Products data changed, reloading...');
         loadProducts();
       }
     };
@@ -426,11 +430,100 @@ const SalesOrders = () => {
     };
   }, []);
 
-  // Auto-generate quotation no saat dialog dibuka
+  // Load default signature (TTD Pak Ali) dari public folder
+  const loadDefaultSignature = async (): Promise<{ signatureBase64: string; signatureName: string; signatureTitle: string } | null> => {
+    const DEFAULT_SIGNATURE_NAME = 'M. Ali Audah';
+    const DEFAULT_SIGNATURE_TITLE = 'Direktur';
+    
+    try {
+      const electronAPI = (window as any).electronAPI;
+      
+      // Coba load dari Electron API dulu
+      if (electronAPI && electronAPI.getResourceBase64) {
+        try {
+          const base64Ttd = await electronAPI.getResourceBase64('ttdPakAli.png');
+          if (base64Ttd && base64Ttd.startsWith('data:')) {
+            return {
+              signatureBase64: base64Ttd,
+              signatureName: DEFAULT_SIGNATURE_NAME,
+              signatureTitle: DEFAULT_SIGNATURE_TITLE,
+            };
+          }
+        } catch (error) {
+          // Continue to fallback
+        }
+      }
+
+      // Fallback: coba load dari berbagai path (prioritaskan public folder)
+      const ttdPaths = [
+        '/ttdPakAli.png',           // Public folder (prioritas tertinggi)
+        './ttdPakAli.png',          // Relative path
+        '/data/ttdPakAli.png',      // Data folder
+        './data/ttdPakAli.png',     // Data folder relative
+        '../data/ttdPakAli.png',    // Data folder parent
+        'data/ttdPakAli.png',       // Data folder direct
+      ];
+
+      for (const ttdPath of ttdPaths) {
+        try {
+          const response = await fetch(ttdPath, {
+            method: 'GET',
+            cache: 'no-cache',
+          });
+
+          if (response.ok) {
+            const blob = await response.blob();
+            if (blob.type.startsWith('image/')) {
+              const base64Ttd = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                  const result = reader.result as string;
+                  if (result && result.startsWith('data:')) {
+                    resolve(result);
+                  } else {
+                    reject(new Error('Invalid base64 result'));
+                  }
+                };
+                reader.onerror = () => reject(new Error('FileReader error'));
+                reader.readAsDataURL(blob);
+              });
+
+              return {
+                signatureBase64: base64Ttd,
+                signatureName: DEFAULT_SIGNATURE_NAME,
+                signatureTitle: DEFAULT_SIGNATURE_TITLE,
+              };
+            }
+          }
+        } catch (error) {
+          // Continue to next path
+          continue;
+        }
+      }
+    } catch (error) {
+      // Silent fail
+    }
+    
+    return null;
+  };
+
+  // Auto-generate quotation no dan load default signature saat dialog dibuka
   useEffect(() => {
     if (showQuotationFormDialog && !editingQuotation) {
       const autoNo = generateQuotationNo(quotations);
       setQuotationFormData(prev => ({ ...prev, soNo: autoNo }));
+      
+      // Load default signature jika belum ada
+      loadDefaultSignature().then(defaultSig => {
+        if (defaultSig) {
+          setQuotationFormData(prev => ({
+            ...prev,
+            signatureBase64: prev.signatureBase64 || defaultSig.signatureBase64,
+            signatureName: prev.signatureName || defaultSig.signatureName,
+            signatureTitle: prev.signatureTitle || defaultSig.signatureTitle,
+          }));
+        }
+      });
     } else if (!showQuotationFormDialog) {
       // Reset form saat dialog ditutup
       setQuotationFormData({
@@ -624,17 +717,10 @@ const SalesOrders = () => {
     
     setOrders(ordersWithUpdatedPadCode);
     
-    // Log tombstone info for debugging
-    const deletedCount = data.length - activeOrders.length;
-    if (deletedCount > 0) {
-      console.log(`[SalesOrders] Loaded ${activeOrders.length} active orders, ${deletedCount} tombstones hidden`);
-    }
   };
 
   const loadQuotations = async () => {
-    console.log('[SalesOrders] Loading quotations...');
     const dataRaw = await storageService.get<SalesOrder[]>('quotations') || [];
-    console.log('[SalesOrders] Raw quotations data:', dataRaw);
     
     // CRITICAL: Extract arrays from storage wrapper if needed
     const extractArray = (data: any): SalesOrder[] => {
@@ -647,11 +733,9 @@ const SalesOrders = () => {
     };
     
     const data = extractArray(dataRaw);
-    console.log('[SalesOrders] Extracted quotations array length:', data.length);
     
     // CRITICAL: Filter deleted items using helper function
     const activeQuotations = filterActiveItems(data);
-    console.log('[SalesOrders] Active quotations:', activeQuotations.length);
     
     setQuotations(activeQuotations);
   };
@@ -667,7 +751,6 @@ const SalesOrders = () => {
   };
 
   const loadCustomers = async () => {
-    console.log('[SalesOrders] Loading customers...');
     const dataRaw = await storageService.get<Customer[]>('customers') || [];
     
     // CRITICAL: Extract arrays from storage wrapper if needed
@@ -794,8 +877,35 @@ const SalesOrders = () => {
   const bomProductIds = useMemo(() => {
     const ids = new Set<string>();
     bomData.forEach(b => {
-      const bomProductId = (b.product_id || b.kode || '').toString().trim();
-      if (bomProductId) ids.add(bomProductId);
+      const bomProductId = String(b.product_id || b.kode || '').trim().toLowerCase();
+      if (bomProductId) {
+        ids.add(bomProductId);
+        // Cross-reference: Tambahkan juga kode/kodeIpos/product_id/padCode dari produk yang match
+        const matchingProduct = products.find(p => {
+          if (!p) return false;
+          const pKode = String(p.kode || '').trim().toLowerCase();
+          const pKodeIpos = String(p.kodeIpos || '').trim().toLowerCase();
+          const pProductId = String(p.product_id || '').trim().toLowerCase();
+          const pPadCode = String(p.padCode || '').trim().toLowerCase();
+          
+          return (pKode && pKode === bomProductId) ||
+                 (pKodeIpos && pKodeIpos === bomProductId) ||
+                 (pProductId && pProductId === bomProductId) ||
+                 (pPadCode && pPadCode === bomProductId);
+        });
+        
+        if (matchingProduct) {
+          const pKode = String(matchingProduct.kode || '').trim().toLowerCase();
+          const pKodeIpos = String(matchingProduct.kodeIpos || '').trim().toLowerCase();
+          const pProductId = String(matchingProduct.product_id || '').trim().toLowerCase();
+          const pPadCode = String(matchingProduct.padCode || '').trim().toLowerCase();
+          
+          if (pKode) ids.add(pKode);
+          if (pKodeIpos) ids.add(pKodeIpos);
+          if (pProductId) ids.add(pProductId);
+          if (pPadCode) ids.add(pPadCode);
+        }
+      }
     });
     return ids;
   }, [bomData]);
@@ -856,19 +966,38 @@ const SalesOrders = () => {
       // CRITICAL: Ensure products is always an array
       const productsArray = Array.isArray(products) ? products : [];
       
-      const search = (quotationProductSearch && quotationProductSearch[lineIndex]) || '';
-      if (!search) return productsArray;
+      // CRITICAL: Gunakan quotationProductDialogSearch untuk filter di dialog
+      // Jika dialog terbuka, gunakan search dari dialog, jika tidak gunakan dari autocomplete
+      const search = showQuotationProductDialog !== null 
+        ? quotationProductDialogSearch 
+        : (quotationProductSearch && quotationProductSearch[lineIndex]) || '';
+      
+      if (!search) {
+        // Limit to 200 items for performance jika tidak ada search
+        return productsArray.slice(0, 200);
+      }
+      
       const query = search.toLowerCase();
-      return productsArray
+      const filtered = productsArray
         .filter(p => {
           if (!p) return false;
-          return p.nama.toLowerCase().includes(query) ||
-                 p.kode.toLowerCase().includes(query) ||
-                 (p.product_id || '').toLowerCase().includes(query) ||
-                 (p.customer || '').toLowerCase().includes(query);
+          const code = (p.kode || p.product_id || '').toLowerCase();
+          const name = (p.nama || '').toLowerCase();
+          const productId = (p.product_id || '').toLowerCase();
+          const customer = (p.customer || '').toLowerCase();
+          const label = `${code}${code ? ' - ' : ''}${name}`.toLowerCase();
+          
+          return code.includes(query) ||
+                 name.includes(query) ||
+                 productId.includes(query) ||
+                 customer.includes(query) ||
+                 label.includes(query);
         });
+      
+      // Limit to 200 items for performance (user can search to narrow down)
+      return filtered.slice(0, 200);
     };
-  }, [quotationProductSearch, products]);
+  }, [quotationProductSearch, quotationProductDialogSearch, showQuotationProductDialog, products]);
 
   // Add item line
   const handleAddItem = () => {
@@ -978,16 +1107,44 @@ const SalesOrders = () => {
         setProductInputValue(prev => ({ ...prev, [index]: '' }));
       } else {
         const product = products.find(p => {
-          const pId = String(p.product_id || p.kode || '').trim();
+          if (!p) return false;
+          const pId = String(p.product_id || p.kode || p.id || '').trim();
           const pName = String(p.nama || '').trim();
+          const pIdOnly = String(p.id || '').trim();
+          const pKodeIpos = String(p.kodeIpos || '').trim();
+          const pPadCode = String(p.padCode || '').trim();
           const searchValue = String(value || '').trim();
-          return pId === searchValue || pId.toLowerCase() === searchValue.toLowerCase() || pName.toLowerCase() === searchValue.toLowerCase();
+          const searchValueLower = searchValue.toLowerCase();
+          
+          // Match by product_id/kode/id, or by name, or by id field
+          // CRITICAL: Juga match jika kodeIpos produk ini sama dengan kode produk lain (cross-reference)
+          return (pId && (pId === searchValue || pId.toLowerCase() === searchValueLower)) ||
+                 (pKodeIpos && (pKodeIpos === searchValue || pKodeIpos.toLowerCase() === searchValueLower)) ||
+                 (pPadCode && (pPadCode === searchValue || pPadCode.toLowerCase() === searchValueLower)) ||
+                 (pName && pName.toLowerCase() === searchValueLower) ||
+                 (pIdOnly && pIdOnly === searchValue) ||
+                 // Cross-reference: Jika kodeIpos produk ini sama dengan searchValue, atau sebaliknya
+                 (pKodeIpos && products.some(otherP => {
+                   const otherKode = String(otherP.kode || '').trim().toLowerCase();
+                   return otherKode === searchValueLower && otherKode === pKodeIpos.toLowerCase();
+                 })) ||
+                 (pId && products.some(otherP => {
+                   const otherKodeIpos = String(otherP.kodeIpos || '').trim().toLowerCase();
+                   return otherKodeIpos === searchValueLower && otherKodeIpos === pId.toLowerCase();
+                 }));
         });
         if (product) {
-          const productIdValue = String(product.product_id || product.kode || '').trim();
+          // Gunakan product_id atau kode, jika keduanya kosong gunakan id sebagai fallback
+          const productIdValue = String(product.product_id || product.kode || product.id || '').trim();
+          // Jika masih kosong, gunakan nama sebagai last resort (untuk validasi)
+          if (!productIdValue && product.nama) {
+            item.productId = product.nama;
+            item.productKode = product.nama;
+          } else {
           item.productId = productIdValue;
           item.productKode = productIdValue;
-          item.productName = product.nama;
+          }
+          item.productName = product.nama || '';
           item.unit = product.satuan || 'PCS';
           const hargaFromMaster = product.hargaSales || product.hargaFg || (product as any).harga || 0;
           item.price = Number(hargaFromMaster) || 0;
@@ -1000,8 +1157,42 @@ const SalesOrders = () => {
           const bomDataArray = Array.isArray(bomData) ? bomData : [];
           const productBOM = bomDataArray.filter(b => {
             if (!b) return false;
-            const bomProductId = String(b.product_id || b.kode || '').trim();
-            return bomProductId === productIdValue && bomProductId !== '';
+            const bomProductId = String(b.product_id || b.kode || '').trim().toLowerCase();
+            const itemProductId = String(item.productId || '').trim().toLowerCase();
+            
+            // Direct match
+            if (bomProductId && itemProductId && bomProductId === itemProductId) {
+              return true;
+            }
+            
+            // Cross-reference: Cari produk yang punya kode/kodeIpos/product_id/padCode sama dengan bomProductId
+            const matchingProduct = products.find(p => {
+              if (!p) return false;
+              const pKode = String(p.kode || '').trim().toLowerCase();
+              const pKodeIpos = String(p.kodeIpos || '').trim().toLowerCase();
+              const pProductId = String(p.product_id || '').trim().toLowerCase();
+              const pPadCode = String(p.padCode || '').trim().toLowerCase();
+              
+              return (pKode && pKode === bomProductId) ||
+                     (pKodeIpos && pKodeIpos === bomProductId) ||
+                     (pProductId && pProductId === bomProductId) ||
+                     (pPadCode && pPadCode === bomProductId);
+            });
+            
+            // Jika ada produk yang match dengan bomProductId, cek apakah produk itu match dengan itemProductId
+            if (matchingProduct) {
+              const pKode = String(matchingProduct.kode || '').trim().toLowerCase();
+              const pKodeIpos = String(matchingProduct.kodeIpos || '').trim().toLowerCase();
+              const pProductId = String(matchingProduct.product_id || '').trim().toLowerCase();
+              const pPadCode = String(matchingProduct.padCode || '').trim().toLowerCase();
+              
+              return (pKode && pKode === itemProductId) ||
+                     (pKodeIpos && pKodeIpos === itemProductId) ||
+                     (pProductId && pProductId === itemProductId) ||
+                     (pPadCode && pPadCode === itemProductId);
+            }
+            
+            return false;
           }).map(bom => {
             const bomMaterialId = String(bom.material_id || '').trim();
             const materialsArray = Array.isArray(materials) ? materials : [];
@@ -1020,14 +1211,17 @@ const SalesOrders = () => {
           });
           // Selalu set BOM, meskipun array kosong (untuk product tanpa BOM)
           item.bom = productBOM || [];
-          const label = `${product.product_id || product.kode || ''}${product.product_id || product.kode ? ' - ' : ''}${product.nama || ''}`;
+          const label = `${product.product_id || product.kode || product.id || ''}${(product.product_id || product.kode || product.id) ? ' - ' : ''}${product.nama || ''}`;
           setProductInputValue(prev => ({ ...prev, [index]: label.trim() }));
         } else {
           // Convert ke string untuk konsistensi
           const productIdValue = String(value || '').trim();
+          // Hanya set jika value tidak kosong
+          if (productIdValue) {
           item.productId = productIdValue;
           item.productKode = productIdValue;
           item.productName = String(value || '');
+          }
           // Set BOM kosong untuk product yang tidak ditemukan
           item.bom = [];
           setProductInputValue(prev => ({ ...prev, [index]: value || '' }));
@@ -1085,8 +1279,32 @@ const SalesOrders = () => {
     const matchedProduct = products.find(prod => {
       const label = `${prod.product_id || prod.kode || ''}${prod.product_id || prod.kode ? ' - ' : ''}${prod.nama || ''}`.toLowerCase();
       const code = (prod.product_id || prod.kode || '').toLowerCase();
+      const kodeIpos = (prod.kodeIpos || '').toLowerCase();
+      const padCode = (prod.padCode || '').toLowerCase();
       const name = (prod.nama || '').toLowerCase();
-      return label === normalized || code === normalized || name === normalized;
+      
+      // Direct match
+      if (label === normalized || code === normalized || kodeIpos === normalized || padCode === normalized || name === normalized) {
+        return true;
+      }
+      
+      // Cross-reference: Jika kodeIpos produk ini sama dengan kode produk lain yang match dengan search
+      if (kodeIpos && products.some(otherP => {
+        const otherKode = (otherP.kode || otherP.product_id || '').toLowerCase();
+        return otherKode === normalized && otherKode === kodeIpos;
+      })) {
+        return true;
+      }
+      
+      // Cross-reference: Jika kode produk ini sama dengan kodeIpos produk lain yang match dengan search
+      if (code && products.some(otherP => {
+        const otherKodeIpos = (otherP.kodeIpos || '').toLowerCase();
+        return otherKodeIpos === normalized && otherKodeIpos === code;
+      })) {
+        return true;
+      }
+      
+      return false;
     });
     if (matchedProduct) {
       // Convert ke string untuk konsistensi
@@ -1226,16 +1444,30 @@ const SalesOrders = () => {
           item.total = 0;
           setQuotationProductSearch(prevSearch => ({ ...prevSearch, [index]: '' }));
         } else {
-          // Sama seperti handleUpdateItem di SO
-          const product = products.find(p => 
-            (p.product_id || p.kode) === value || p.nama === value
-          );
+          // Sama seperti handleUpdateItem di SO - improved matching
+          const product = products.find(p => {
+            if (!p) return false;
+            const pId = String(p.product_id || p.kode || p.id || '').trim();
+            const pName = String(p.nama || '').trim();
+            const pIdOnly = String(p.id || '').trim();
+            const searchValue = String(value || '').trim();
+            // Match by product_id/kode/id, or by name, or by id field
+            return (pId && (pId === searchValue || pId.toLowerCase() === searchValue.toLowerCase())) ||
+                   (pName && pName.toLowerCase() === searchValue.toLowerCase()) ||
+                   (pIdOnly && pIdOnly === searchValue);
+          });
           if (product) {
-            // Convert ke string untuk konsistensi
-            const productIdValue = String(product.product_id || product.kode || '').trim();
+            // Gunakan product_id atau kode, jika keduanya kosong gunakan id sebagai fallback
+            const productIdValue = String(product.product_id || product.kode || product.id || '').trim();
+            // Jika masih kosong, gunakan nama sebagai last resort (untuk validasi)
+            if (!productIdValue && product.nama) {
+              item.productId = product.nama;
+              item.productKode = product.nama;
+            } else {
             item.productId = productIdValue;
             item.productKode = productIdValue;
-            item.productName = product.nama;
+            }
+            item.productName = product.nama || '';
             item.unit = product.satuan || 'PCS';
             const hargaFromMaster = product.hargaSales || product.hargaFg || (product as any).harga || 0;
             item.price = Number(hargaFromMaster) || 0;
@@ -1246,18 +1478,21 @@ const SalesOrders = () => {
             const subtotal = qtyNum * priceNum;
             item.total = subtotal * (1 - discountPercent / 100);
             // Update quotationProductSearch untuk display - sama seperti SO
-            const label = `${product.product_id || product.kode || ''}${product.product_id || product.kode ? ' - ' : ''}${product.nama || ''}`;
+            const label = `${product.product_id || product.kode || product.id || ''}${(product.product_id || product.kode || product.id) ? ' - ' : ''}${product.nama || ''}`;
             setQuotationProductSearch(prevSearch => ({ ...prevSearch, [index]: label.trim() }));
           } else {
-            // Validasi: tidak bisa tambah item yang tidak tersedia di master products
-            showAlert(`Product "${value}" tidak tersedia di master products. Silakan pilih product yang ada di master.`, 'Validation Error');
-            // Reset ke kosong
-            item.productId = '';
-            item.productKode = '';
-            item.productName = '';
-            item.unit = 'PCS';
-            item.price = 0;
-            item.total = 0;
+            // Convert ke string untuk konsistensi
+            const productIdValue = String(value || '').trim();
+            // Hanya set jika value tidak kosong
+            if (productIdValue) {
+              item.productId = productIdValue;
+              item.productKode = productIdValue;
+              item.productName = String(value || '');
+            }
+            // Set default values jika product tidak ditemukan
+            item.unit = item.unit || 'PCS';
+            item.price = item.price || 0;
+            item.total = item.total || 0;
             setQuotationProductSearch(prevSearch => ({ ...prevSearch, [index]: '' }));
           }
         }
@@ -1326,8 +1561,28 @@ const SalesOrders = () => {
       showAlert('Please add at least one product', 'Validation Error');
       return;
     }
-    if (quotationFormData.items.some(item => !item.productId || item.qty <= 0)) {
-      showAlert('Please fill all product fields and ensure qty > 0', 'Validation Error');
+    // Validate items: productId harus ada, qty harus > 0
+    const invalidQuotationItems: Array<{ index: number; reason: string }> = [];
+    quotationFormData.items.forEach((item, index) => {
+      const productId = item.productId;
+      const productIdEmpty = !productId || productId === '' || (typeof productId === 'string' && productId.trim() === '');
+      const qtyNum = item.qty || 0;
+      const qtyInvalid = qtyNum <= 0;
+      
+      if (productIdEmpty && qtyInvalid) {
+        invalidQuotationItems.push({ index: index + 1, reason: `Item ${index + 1}: Product belum dipilih dan Qty harus > 0` });
+      } else if (productIdEmpty) {
+        invalidQuotationItems.push({ index: index + 1, reason: `Item ${index + 1}: Product belum dipilih` });
+      } else if (qtyInvalid) {
+        invalidQuotationItems.push({ index: index + 1, reason: `Item ${index + 1}: Qty harus > 0 (saat ini: ${qtyNum})` });
+      }
+    });
+    
+    if (invalidQuotationItems.length > 0) {
+      const errorMsg = invalidQuotationItems.length === 1 
+        ? invalidQuotationItems[0].reason
+        : `Terdapat ${invalidQuotationItems.length} item yang belum lengkap:\n${invalidQuotationItems.map(i => `- ${i.reason}`).join('\n')}`;
+      showAlert(errorMsg, 'Validation Error');
       return;
     }
     
@@ -1377,6 +1632,20 @@ const SalesOrders = () => {
         // Create new quotation - selalu auto generate quotation no dengan format baru
         const quotationNo = generateQuotationNo(quotations);
         
+        // CRITICAL: Load default signature jika user tidak isi
+        let finalSignatureBase64 = quotationFormData.signatureBase64 || '';
+        let finalSignatureName = quotationFormData.signatureName || '';
+        let finalSignatureTitle = quotationFormData.signatureTitle || '';
+        
+        if (!finalSignatureBase64 || !finalSignatureName) {
+          const defaultSig = await loadDefaultSignature();
+          if (defaultSig) {
+            finalSignatureBase64 = finalSignatureBase64 || defaultSig.signatureBase64;
+            finalSignatureName = finalSignatureName || defaultSig.signatureName;
+            finalSignatureTitle = finalSignatureTitle || defaultSig.signatureTitle;
+          }
+        }
+        
         // Generate quotation data
         const quotationData: SalesOrder = {
           id: Date.now().toString(),
@@ -1391,9 +1660,9 @@ const SalesOrders = () => {
           globalSpecNote: quotationFormData.globalSpecNote,
           category: 'packaging',
           discountPercent: quotationFormData.discountPercent || 0,
-          signatureBase64: quotationFormData.signatureBase64,
-          signatureName: quotationFormData.signatureName,
-          signatureTitle: quotationFormData.signatureTitle,
+          signatureBase64: finalSignatureBase64,
+          signatureName: finalSignatureName,
+          signatureTitle: finalSignatureTitle,
         };
         
         // Check duplicate quotation no
@@ -1434,7 +1703,6 @@ const SalesOrders = () => {
       setQuotationDiscountInputValue('');
       setShowQuotationFormDialog(false);
     } catch (error) {
-      console.error('Error saving quotation:', error);
       showAlert('Failed to save quotation. Please try again.', 'Error');
     }
   };
@@ -1480,6 +1748,7 @@ const SalesOrders = () => {
       items: [],
       globalSpecNote: '',
       category: 'packaging',
+      created: new Date().toISOString(),
     });
     setCustomerSearch('');
     setShowForm(true);
@@ -1505,17 +1774,29 @@ const SalesOrders = () => {
       return;
     }
     // Validate items: productId harus ada, qty harus > 0
-    if (formData.items.some(item => {
+    const invalidItems: Array<{ index: number; reason: string }> = [];
+    formData.items.forEach((item, index) => {
       // Check productId - harus ada dan tidak kosong (bisa string atau number, termasuk 0)
       const productId = item.productId;
-      if (productId === undefined || productId === null || productId === '' || (typeof productId === 'string' && productId.trim() === '')) {
-        return true;
-      }
+      const productIdEmpty = productId === undefined || productId === null || productId === '' || (typeof productId === 'string' && productId.trim() === '');
       // Handle qty - sekarang selalu number
       const qtyNum = item.qty || 0;
-      return qtyNum <= 0;
-    })) {
-      showAlert('Please fill all product fields and ensure qty > 0', 'Validation Error');
+      const qtyInvalid = qtyNum <= 0;
+      
+      if (productIdEmpty && qtyInvalid) {
+        invalidItems.push({ index: index + 1, reason: `Item ${index + 1}: Product belum dipilih dan Qty harus > 0` });
+      } else if (productIdEmpty) {
+        invalidItems.push({ index: index + 1, reason: `Item ${index + 1}: Product belum dipilih` });
+      } else if (qtyInvalid) {
+        invalidItems.push({ index: index + 1, reason: `Item ${index + 1}: Qty harus > 0 (saat ini: ${qtyNum})` });
+      }
+    });
+    
+    if (invalidItems.length > 0) {
+      const errorMsg = invalidItems.length === 1 
+        ? invalidItems[0].reason
+        : `Terdapat ${invalidItems.length} item yang belum lengkap:\n${invalidItems.map(i => `- ${i.reason}`).join('\n')}`;
+      showAlert(errorMsg, 'Validation Error');
       return;
     }
     
@@ -1596,7 +1877,7 @@ const SalesOrders = () => {
                 ...formDataWithPadCode,
                 id: editingOrder.id,
                 soNo: formDataWithPadCode.soNo || editingOrder.soNo, // Allow edit SO No
-                created: editingOrder.created,
+                created: formDataWithPadCode.created || editingOrder.created, // Use edited created date
                 bomSnapshot,
                 status: editingOrder.status, // Keep status unless explicitly changed
               } as SalesOrder
@@ -1624,7 +1905,7 @@ const SalesOrders = () => {
           paymentTerms: formDataWithPadCode.paymentTerms || 'TOP',
           topDays: formDataWithPadCode.topDays,
           status: 'OPEN', // Auto OPEN saat SO dibuat (PO customer masuk)
-          created: new Date().toISOString(),
+          created: formDataWithPadCode.created || new Date().toISOString(),
           items: itemsWithPadCode,
           globalSpecNote: formDataWithPadCode.globalSpecNote,
           category: formDataWithPadCode.category || 'packaging',
@@ -1699,7 +1980,7 @@ const SalesOrders = () => {
       }
       setShowForm(false);
       setEditingOrder(null);
-      setFormData({ soNo: '', customer: '', customerKode: '', paymentTerms: 'TOP', topDays: 30, items: [], globalSpecNote: '', category: 'packaging' });
+      setFormData({ soNo: '', customer: '', customerKode: '', paymentTerms: 'TOP', topDays: 30, items: [], globalSpecNote: '', category: 'packaging', created: '' });
       setCustomerSearch('');
       setProductInputValue({});
       setProductSearch({});
@@ -1782,8 +2063,42 @@ const SalesOrders = () => {
       // Load BOM for this product
       const productId = (itm.productId || itm.productKode || '').toString().trim();
       const productBOM = bomData.filter(b => {
-        const bomProductId = (b.product_id || b.kode || '').toString().trim();
-        return bomProductId === productId && bomProductId !== '';
+        const bomProductId = String(b.product_id || b.kode || '').trim().toLowerCase();
+        const searchProductId = String(productId || '').trim().toLowerCase();
+        
+        if (!bomProductId || !searchProductId) return false;
+        
+        // Direct match
+        if (bomProductId === searchProductId) return true;
+        
+        // Cross-reference: Cari produk yang punya kode/kodeIpos/product_id/padCode sama dengan bomProductId
+        const matchingProduct = products.find(p => {
+          if (!p) return false;
+          const pKode = String(p.kode || '').trim().toLowerCase();
+          const pKodeIpos = String(p.kodeIpos || '').trim().toLowerCase();
+          const pProductId = String(p.product_id || '').trim().toLowerCase();
+          const pPadCode = String(p.padCode || '').trim().toLowerCase();
+          
+          return (pKode && pKode === bomProductId) ||
+                 (pKodeIpos && pKodeIpos === bomProductId) ||
+                 (pProductId && pProductId === bomProductId) ||
+                 (pPadCode && pPadCode === bomProductId);
+        });
+        
+        // Jika ada produk yang match dengan bomProductId, cek apakah produk itu match dengan searchProductId
+        if (matchingProduct) {
+          const pKode = String(matchingProduct.kode || '').trim().toLowerCase();
+          const pKodeIpos = String(matchingProduct.kodeIpos || '').trim().toLowerCase();
+          const pProductId = String(matchingProduct.product_id || '').trim().toLowerCase();
+          const pPadCode = String(matchingProduct.padCode || '').trim().toLowerCase();
+          
+          return (pKode && pKode === searchProductId) ||
+                 (pKodeIpos && pKodeIpos === searchProductId) ||
+                 (pProductId && pProductId === searchProductId) ||
+                 (pPadCode && pPadCode === searchProductId);
+        }
+        
+        return false;
       });
       
       if (productBOM.length > 0) {
@@ -1817,6 +2132,7 @@ const SalesOrders = () => {
       items: itemsWithBOM,
       globalSpecNote: item.globalSpecNote,
       category: item.category,
+      created: item.created, // Include created date for editing
     });
     setCustomerSearch(item.customer);
     const inputMap: { [key: number]: string } = {};
@@ -1835,16 +2151,23 @@ const SalesOrders = () => {
 
   // Handle Delete
   const handleDelete = async (item: SalesOrder) => {
+    try {
     // Cek apakah SO sudah punya turunan (SPK/PO/Production)
-    const spkList = await storageService.get<any[]>('spk') || [];
-    const poList = await storageService.get<any[]>('purchaseOrders') || [];
-    const productionList = await storageService.get<any[]>('production') || [];
-    const prList = await storageService.get<any[]>('purchaseRequests') || [];
+      const spkData = await storageService.get<any[]>('spk') || [];
+      const poData = await storageService.get<any[]>('purchaseOrders') || [];
+      const productionData = await storageService.get<any[]>('production') || [];
+      const prData = await storageService.get<any[]>('purchaseRequests') || [];
+      
+      // Ensure all data are arrays before using .some()
+      const spkList = Array.isArray(spkData) ? spkData : [];
+      const poList = Array.isArray(poData) ? poData : [];
+      const productionList = Array.isArray(productionData) ? productionData : [];
+      const prList = Array.isArray(prData) ? prData : [];
     
-    const hasSPK = spkList.some((spk: any) => spk.soNo === item.soNo);
-    const hasPO = poList.some((po: any) => po.soNo === item.soNo);
-    const hasProduction = productionList.some((prod: any) => prod.soNo === item.soNo);
-    const hasPR = prList.some((pr: any) => pr.soNo === item.soNo);
+      const hasSPK = spkList.some((spk: any) => spk && spk.soNo === item.soNo);
+      const hasPO = poList.some((po: any) => po && po.soNo === item.soNo);
+      const hasProduction = productionList.some((prod: any) => prod && prod.soNo === item.soNo);
+      const hasPR = prList.some((pr: any) => pr && pr.soNo === item.soNo);
     
     if (hasSPK || hasPO || hasProduction || hasPR) {
       const relatedItems: string[] = [];
@@ -1870,6 +2193,12 @@ const SalesOrders = () => {
       `Hapus SO: ${item.soNo}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
       async () => {
         try {
+            // Validate item.id exists
+            if (!item.id) {
+              showAlert(`❌ Error: SO ${item.soNo} tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+              return;
+            }
+            
           // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
           const deleteResult = await deletePackagingItem('salesOrders', item.id, 'id');
           
@@ -1881,7 +2210,6 @@ const SalesOrders = () => {
                 customer: item.customer,
               });
             } catch (logError) {
-              // Silent fail
             }
             
             // Reload data dengan helper (handle race condition)
@@ -1893,13 +2221,17 @@ const SalesOrders = () => {
             showAlert(`❌ Error deleting SO ${item.soNo}: ${deleteResult.error || 'Unknown error'}`, 'Error');
           }
         } catch (error: any) {
-          console.error('[SalesOrders] Error in safe delete:', error);
           showAlert(`❌ Error deleting SO: ${error.message}`, 'Error');
         }
       },
-      () => closeDialog(),
+        () => {
+          closeDialog();
+        },
       'Safe Delete Confirmation'
     );
+    } catch (error: any) {
+      showAlert(`❌ Error: ${error.message}`, 'Error');
+    }
   };
 
 
@@ -1948,6 +2280,13 @@ const SalesOrders = () => {
 
   // Handle Delete Quotation
   const handleDeleteQuotation = async (quotation: SalesOrder) => {
+    try {
+      // Validate item.id exists
+      if (!quotation.id) {
+        showAlert(`❌ Error: Quotation ${quotation.soNo} tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
     // Cek apakah quotation sudah di-convert ke SO
     if (quotation.matchedSoNo) {
       showAlert(
@@ -1972,7 +2311,6 @@ const SalesOrders = () => {
                 customer: quotation.customer,
               });
             } catch (logError) {
-              // Silent fail
             }
             
             // Reload quotations dengan helper (handle race condition)
@@ -1983,11 +2321,17 @@ const SalesOrders = () => {
             showAlert(`❌ Error deleting Quotation ${quotation.soNo}: ${deleteResult.error || 'Unknown error'}`, 'Error');
           }
         } catch (error: any) {
-          console.error('[SalesOrders] Error in quotation delete:', error);
           showAlert(`❌ Error deleting Quotation: ${error.message}`, 'Error');
         }
-      }
-    );
+        },
+        () => {
+          // Quotation delete cancelled
+        },
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      showAlert(`❌ Error: ${error.message}`, 'Error');
+    }
   };
 
   // Print Quotation
@@ -2128,6 +2472,301 @@ const SalesOrders = () => {
       return dateB - dateA; // Descending (newest first)
     });
   }, [quotations, searchQuery]);
+
+  // Import Excel untuk Sales Orders
+  const handleImportExcel = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xlsx,.xls,.csv';
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+        if (jsonData.length === 0) {
+          showAlert('Excel file is empty or has no data', 'Error');
+          return;
+        }
+
+        // Helper untuk map column (case-insensitive)
+        const mapColumn = (row: any, possibleNames: string[]): string => {
+          for (const name of possibleNames) {
+            const keys = Object.keys(row);
+            const found = keys.find(k => k.toLowerCase().trim() === name.toLowerCase().trim());
+            if (found && row[found]) return String(row[found]).trim();
+          }
+          return '';
+        };
+
+        // Helper untuk parse harga dari format "Rp 105,400"
+        const parsePrice = (priceStr: string): number => {
+          if (!priceStr) return 0;
+          // Remove "Rp", spaces, and commas
+          const cleaned = priceStr.toString().replace(/Rp\s*/gi, '').replace(/,/g, '').replace(/\s/g, '').trim();
+          return parseFloat(cleaned) || 0;
+        };
+
+        // Helper untuk parse date dari format "02-Jan-26"
+        const parseDate = (dateStr: string): string => {
+          if (!dateStr) return new Date().toISOString();
+          try {
+            // Try to parse various date formats
+            const date = new Date(dateStr);
+            if (!isNaN(date.getTime())) {
+              return date.toISOString();
+            }
+            // Try format "02-Jan-26"
+            const parts = dateStr.split('-');
+            if (parts.length === 3) {
+              const day = parseInt(parts[0], 10);
+              const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+              const month = monthNames.indexOf(parts[1]) + 1;
+              let year = parseInt(parts[2], 10);
+              if (year < 100) year += 2000; // Convert 26 to 2026
+              const date = new Date(year, month - 1, day);
+              if (!isNaN(date.getTime())) {
+                return date.toISOString();
+              }
+            }
+          } catch (e) {
+            // Silent fail
+          }
+          return new Date().toISOString();
+        };
+
+        // Group data by No So
+        const ordersMap = new Map<string, any[]>();
+        const errors: string[] = [];
+
+        jsonData.forEach((row, index) => {
+          try {
+            const noSo = mapColumn(row, ['No So', 'NO SO', 'No SO', 'no so', 'SO No', 'SO NO', 'soNo', 'so_no']);
+            const customerCode = mapColumn(row, ['Customer Code', 'CUSTOMER CODE', 'Customer Code', 'customer code', 'customerCode']);
+            const customer = mapColumn(row, ['CUSTOMER', 'Customer', 'customer']);
+            const kodeItem = mapColumn(row, ['Kd. Item', 'KD. ITEM', 'Kd Item', 'kd item', 'Kode Item', 'KODE ITEM', 'kode item']);
+            const namaItem = mapColumn(row, ['Nama Item', 'NAMA ITEM', 'Nama Item', 'nama item', 'Product Name', 'product name']);
+            const jml = parseFloat(mapColumn(row, ['Jml', 'JML', 'Jumlah', 'jumlah', 'Qty', 'qty', 'Quantity', 'quantity'])) || 0;
+            const hargaStr = mapColumn(row, ['Harga', 'HARGA', 'Price', 'price', 'Harga Satuan', 'harga satuan']);
+            const totalStr = mapColumn(row, ['Total', 'TOTAL', 'total']);
+            const createDateStr = mapColumn(row, ['Create Date', 'CREATE DATE', 'Create Date', 'create date', 'Date', 'date']);
+
+            if (!noSo || !customer || !namaItem) {
+              errors.push(`Row ${index + 2}: Missing required fields (No So, Customer, or Nama Item)`);
+              return;
+            }
+
+            if (jml <= 0) {
+              errors.push(`Row ${index + 2}: Jml must be greater than 0`);
+              return;
+            }
+
+            const harga = parsePrice(hargaStr || totalStr);
+            const total = parsePrice(totalStr || '0');
+            const calculatedPrice = total > 0 && jml > 0 ? total / jml : harga;
+
+            if (!ordersMap.has(noSo)) {
+              ordersMap.set(noSo, []);
+            }
+
+            ordersMap.get(noSo)!.push({
+              customerCode,
+              customer,
+              kodeItem,
+              namaItem,
+              jml,
+              harga: calculatedPrice,
+              total: total || (calculatedPrice * jml),
+              createDate: createDateStr,
+            });
+          } catch (error: any) {
+            errors.push(`Row ${index + 2}: ${error.message}`);
+          }
+        });
+
+        if (ordersMap.size === 0) {
+          showAlert('No valid data found in Excel file', 'Error');
+          return;
+        }
+
+        // Convert to Sales Orders
+        const newOrders: SalesOrder[] = [];
+        ordersMap.forEach((items, noSo) => {
+          try {
+            const firstItem = items[0];
+            const createDate = parseDate(firstItem.createDate);
+
+            // Find customer
+            const customerData = customers.find(c => 
+              c.nama.toLowerCase().trim() === firstItem.customer.toLowerCase().trim() ||
+              (firstItem.customerCode && c.kode.toLowerCase().trim() === firstItem.customerCode.toLowerCase().trim())
+            );
+
+            if (!customerData) {
+              errors.push(`SO ${noSo}: Customer "${firstItem.customer}" not found in master`);
+              return;
+            }
+
+            // Convert items
+            const soItems: SOItem[] = items.map((item, idx) => {
+              // Find product by kodeIpos, padCode, kode, atau nama (prioritas: kodeIpos > padCode > kode > nama)
+              let product = products.find(p => {
+                const pKodeIpos = (p.kodeIpos || '').toLowerCase().trim();
+                const pPadCode = (p.padCode || '').toLowerCase().trim();
+                const pKode = (p.kode || '').toLowerCase().trim();
+                const pProductId = ((p.product_id || '')).toLowerCase().trim();
+                const itemKode = (item.kodeItem || '').toLowerCase().trim();
+                return (pKodeIpos && pKodeIpos === itemKode) ||
+                       (pPadCode && pPadCode === itemKode) ||
+                       (pKode && pKode === itemKode) ||
+                       (pProductId && pProductId === itemKode);
+              });
+
+              // If not found by code, try by nama
+              if (!product) {
+                product = products.find(p => 
+                  (p.nama && p.nama.toLowerCase().trim() === item.namaItem.toLowerCase().trim())
+                );
+              }
+
+              // Determine productId dan productKode untuk BOM lookup
+              const productId = product ? (product.product_id || product.kode || product.kodeIpos || product.padCode || '') : item.kodeItem || '';
+              const productKode = product ? (product.kode || product.product_id || product.kodeIpos || product.padCode || '') : item.kodeItem || '';
+              const productName = item.namaItem;
+
+              // Load BOM dari master berdasarkan product_id/kode/kodeIpos/padCode
+              // BOM di master disimpan dengan product_id atau kode, tapi bisa di-link dengan kodeIpos/padCode juga
+              const bomDataArray = Array.isArray(bomData) ? bomData : [];
+              const productBOM = bomDataArray.filter(b => {
+                if (!b) return false;
+                // BOM di master punya product_id atau kode
+                const bomProductId = String(b.product_id || b.kode || '').trim().toLowerCase();
+                
+                if (!bomProductId) return false;
+                
+                // Match dengan berbagai identifier dari product
+                if (product) {
+                  const pProductId = String(product.product_id || '').trim().toLowerCase();
+                  const pKode = String(product.kode || '').trim().toLowerCase();
+                  const pKodeIpos = String(product.kodeIpos || '').trim().toLowerCase();
+                  const pPadCode = String(product.padCode || '').trim().toLowerCase();
+                  
+                  // Match jika BOM product_id/kode sama dengan product.product_id/kode/kodeIpos/padCode
+                  return (pProductId && bomProductId === pProductId) ||
+                         (pKode && bomProductId === pKode) ||
+                         (pKodeIpos && bomProductId === pKodeIpos) ||
+                         (pPadCode && bomProductId === pPadCode);
+                }
+                
+                // Jika product tidak ditemukan, match dengan productId/productKode dari item
+                const itemProductId = String(productId || '').trim().toLowerCase();
+                const itemProductKode = String(productKode || '').trim().toLowerCase();
+                return (itemProductId && bomProductId === itemProductId) ||
+                       (itemProductKode && bomProductId === itemProductKode);
+              }).map(bom => {
+                const bomMaterialId = String(bom.material_id || '').trim();
+                const materialsArray = Array.isArray(materials) ? materials : [];
+                const material = materialsArray.find(m => {
+                  const mId = String(m.material_id || m.kode || '').trim();
+                  return mId === bomMaterialId && mId !== '';
+                });
+                return {
+                  materialId: bomMaterialId,
+                  materialName: (material?.nama || bom.material_id || bomMaterialId || '').toString(),
+                  unit: material?.satuan || 'PCS',
+                  qty: item.jml * (bom.ratio || 1),
+                  ratio: bom.ratio || 1,
+                };
+              });
+
+              return {
+                id: `${Date.now()}-${idx}`,
+                productId: productId,
+                productKode: productKode,
+                productName: productName,
+                qty: item.jml,
+                unit: product?.satuan || 'PCS',
+                price: item.harga,
+                total: item.total || (item.harga * item.jml),
+                padCode: product?.padCode || '',
+                inventoryQty: 0,
+                bom: productBOM || [], // Auto-link BOM dari master
+              };
+            });
+
+            // Check if SO already exists
+            const existingOrder = orders.find(o => o.soNo.toLowerCase().trim() === noSo.toLowerCase().trim());
+            if (existingOrder) {
+              errors.push(`SO ${noSo}: Already exists, skipping...`);
+              return;
+            }
+
+            const now = new Date();
+            const timestamp = now.getTime();
+            newOrders.push({
+              id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+              soNo: noSo,
+              customer: customerData.nama,
+              customerKode: customerData.kode,
+              paymentTerms: 'TOP',
+              topDays: 30,
+              status: 'OPEN',
+              created: createDate,
+              items: soItems,
+              globalSpecNote: '',
+              category: 'packaging',
+              lastUpdate: now.toISOString(),
+              timestamp: timestamp,
+              _timestamp: timestamp,
+            });
+          } catch (error: any) {
+            errors.push(`SO ${noSo}: ${error.message}`);
+          }
+        });
+
+        if (newOrders.length === 0) {
+          showAlert(`No valid orders to import. Errors: ${errors.slice(0, 5).join('; ')}${errors.length > 5 ? '...' : ''}`, 'Error');
+          return;
+        }
+
+        showConfirm(
+          `Import ${newOrders.length} Sales Order(s) from Excel?${errors.length > 0 ? `\n\n${errors.length} errors occurred.` : ''}`,
+          async () => {
+            // 🚀 FIX: Load current data dari storage (termasuk deleted items untuk merge)
+            const currentData = await storageService.get<SalesOrder[]>('salesOrders') || [];
+            const currentDataArray = Array.isArray(currentData) ? currentData : [];
+            const activeCurrentData = filterActiveItems(currentDataArray);
+            
+            // Merge dengan data baru
+            const allOrders = [...activeCurrentData, ...newOrders];
+            await storageService.set('salesOrders', allOrders);
+            
+            // Update state dengan data yang sudah di-filter
+            const activeOrders = filterActiveItems(allOrders);
+            setOrders(activeOrders);
+            
+            // Log activity
+            newOrders.forEach(order => {
+              logCreate('Sales Order', order.soNo, `Imported from Excel: ${order.soNo}`);
+            });
+
+            showAlert(`✅ Successfully imported ${newOrders.length} Sales Order(s)${errors.length > 0 ? `. ${errors.length} errors occurred.` : ''}`, 'Success');
+            loadOrders();
+          },
+          undefined,
+          'Confirm Import'
+        );
+      } catch (error: any) {
+        showAlert(`Error importing Excel: ${error.message}\n\nMake sure the file is a valid Excel file (.xlsx or .xls)`, 'Error');
+      }
+    };
+    input.click();
+  };
 
   const handleExportExcel = () => {
     try {
@@ -2648,80 +3287,80 @@ const SalesOrders = () => {
                   borderLeft: `4px solid ${accentColor}`,
                 }}
               >
-              <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-                <div style={{ minWidth: '200px' }}>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>SO No</div>
-                  <div style={{ fontSize: '20px', fontWeight: 600 }}>{order.soNo || '-'}</div>
-                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{order.customer || '-'}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ minWidth: '150px' }}>
+                  <div style={{ fontSize: '10px', color: 'var(--text-secondary)', marginBottom: '2px' }}>SO No</div>
+                  <div style={{ fontSize: '16px', fontWeight: 600 }}>{order.soNo || '-'}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{order.customer || '-'}</div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '200px' }}>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                    <span className={`status-badge status-${order.status.toLowerCase()}`} style={{ fontSize: '11px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '150px' }}>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <span className={`status-badge status-${order.status.toLowerCase()}`} style={{ fontSize: '10px', padding: '2px 6px' }}>
                       {order.status}
                     </span>
                     {order.confirmed && (
-                      <span className="status-badge status-success" style={{ fontSize: '11px' }}>
+                      <span className="status-badge status-success" style={{ fontSize: '10px', padding: '2px 6px' }}>
                         PPIC Confirmed
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
                     Payment:&nbsp;
                     <strong>{order.paymentTerms}</strong>
-                    {order.paymentTerms === 'TOP' && order.topDays ? ` (${order.topDays} days)` : ''}
+                    {order.paymentTerms === 'TOP' && order.topDays ? ` (${order.topDays}d)` : ''}
                   </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
                     Created:&nbsp;
                     <strong>{date}</strong>
                     {time && ` · ${time}`}
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '180px' }}>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    Total Items:&nbsp;
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '140px' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                    Items:&nbsp;
                     <strong>{(order.items || []).length}</strong>
                   </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    Total Qty:&nbsp;
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                    Qty:&nbsp;
                     <strong>{totalQty.toLocaleString('id-ID')}</strong>
                   </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    Total Value:&nbsp;
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                    Value:&nbsp;
                     <strong>Rp {Math.round(totalValue).toLocaleString('id-ID')}</strong>
                   </div>
                 </div>
               </div>
 
               {order.globalSpecNote && (
-                <div style={{ marginTop: '12px', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-secondary)', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                <div style={{ marginTop: '8px', padding: '6px 8px', borderRadius: '4px', backgroundColor: 'var(--bg-secondary)', fontSize: '11px', color: 'var(--text-secondary)' }}>
                   <strong>Global Spec Note:</strong> {order.globalSpecNote}
                 </div>
               )}
 
-              <div style={{ marginTop: '16px' }}>
-                <div style={{ marginBottom: '6px', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600 }}>Items</div>
-                <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '12px', backgroundColor: 'var(--bg-primary)' }}>
+              <div style={{ marginTop: '10px' }}>
+                <div style={{ marginBottom: '4px', fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600 }}>Items</div>
+                <div style={{ border: '1px solid var(--border-color)', borderRadius: '6px', padding: '8px', backgroundColor: 'var(--bg-primary)' }}>
                   {renderOrderItemsHeader()}
-                  <div style={{ marginTop: '8px' }}>
+                  <div style={{ marginTop: '6px' }}>
                     {renderOrderItemsGrid(order)}
                   </div>
                 </div>
               </div>
 
               {order.status === 'OPEN' && (
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end', marginTop: '16px' }}>
-                  <Button variant="secondary" onClick={() => handleEdit(order)} style={{ fontSize: '12px', padding: '6px 12px' }}>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end', marginTop: '10px' }}>
+                  <Button variant="secondary" onClick={() => handleEdit(order)} style={{ fontSize: '11px', padding: '4px 10px' }}>
                     Edit
                   </Button>
-                  <Button variant="secondary" onClick={() => handleGenerateQuotation(order)} style={{ fontSize: '12px', padding: '6px 12px' }}>
+                  <Button variant="secondary" onClick={() => handleGenerateQuotation(order)} style={{ fontSize: '11px', padding: '4px 10px' }}>
                     📄 View Quotation
                   </Button>
                   {!order.confirmed && (
-                    <Button variant="primary" onClick={() => handleConfirm(order)} style={{ fontSize: '12px', padding: '6px 12px' }}>
+                    <Button variant="primary" onClick={() => handleConfirm(order)} style={{ fontSize: '11px', padding: '4px 10px' }}>
                       Confirm
                     </Button>
                   )}
-                  <Button variant="danger" onClick={() => handleDelete(order)} style={{ fontSize: '12px', padding: '6px 12px' }}>
+                  <Button variant="danger" onClick={() => handleDelete(order)} style={{ fontSize: '11px', padding: '4px 10px' }}>
                     Delete
                   </Button>
                 </div>
@@ -2907,7 +3546,17 @@ const SalesOrders = () => {
       key: 'soNo', 
       header: 'SO No',
       render: (item: any) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         <strong style={{ color: '#2e7d32', fontSize: '13px' }}>{item.soNo}</strong>
+          <span className={`status-badge status-${item.status?.toLowerCase()}`} style={{ fontSize: '11px' }}>
+            {item.status}
+          </span>
+          {item.confirmed && (
+            <span className="status-badge status-success" style={{ fontSize: '10px', padding: '2px 6px' }}>
+              PPIC Confirmed
+            </span>
+          )}
+        </div>
       ),
     },
     { 
@@ -2978,15 +3627,6 @@ const SalesOrders = () => {
         <span style={{ fontSize: '12px' }}>
           {item.paymentTerms}
           {item.paymentTerms === 'TOP' && item.topDays && ` (${item.topDays}d)`}
-        </span>
-      ),
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      render: (item: any) => (
-        <span className={`status-badge status-${item.status?.toLowerCase()}`} style={{ fontSize: '11px' }}>
-          {item.status}
         </span>
       ),
     },
@@ -3106,14 +3746,6 @@ const SalesOrders = () => {
 
   return (
     <div className="module-compact">
-      <div className="page-header">
-        <h1>Sales Orders</h1>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {renderOrderViewToggle()}
-          <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
-        </div>
-        <Button onClick={handleCreate}>+ Create SO</Button>
-      </div>
 
 
       {/* Create/Edit Form Dialog */}
@@ -3121,7 +3753,7 @@ const SalesOrders = () => {
         <div className="dialog-overlay" onClick={() => {
           setShowForm(false);
           setEditingOrder(null);
-          setFormData({ soNo: '', customer: '', customerKode: '', paymentTerms: 'TOP', topDays: 30, items: [], globalSpecNote: '', category: 'packaging' });
+          setFormData({ soNo: '', customer: '', customerKode: '', paymentTerms: 'TOP', topDays: 30, items: [], globalSpecNote: '', category: 'packaging', created: '' });
           setCustomerSearch('');
           setProductInputValue({});
           setShowBOMPreview(false);
@@ -3137,7 +3769,7 @@ const SalesOrders = () => {
                   onClick={() => {
                     setShowForm(false);
                     setEditingOrder(null);
-                    setFormData({ soNo: '', customer: '', customerKode: '', paymentTerms: 'TOP', topDays: 30, items: [], globalSpecNote: '', category: 'packaging' });
+                    setFormData({ soNo: '', customer: '', customerKode: '', paymentTerms: 'TOP', topDays: 30, items: [], globalSpecNote: '', category: 'packaging', created: '' });
                     setCustomerSearch('');
                     setProductInputValue({});
                     setShowBOMPreview(false);
@@ -3152,6 +3784,16 @@ const SalesOrders = () => {
             value={formData.soNo || ''}
             onChange={(v) => setFormData(prev => ({ ...prev, soNo: v }))}
             placeholder="Masukkan nomor PO dari customer..."
+          />
+
+          <Input
+            label="Created Date *"
+            type="datetime-local"
+            value={formData.created ? new Date(formData.created).toISOString().slice(0, 16) : ''}
+            onChange={(v) => {
+              const dateValue = v ? new Date(v).toISOString() : new Date().toISOString();
+              setFormData(prev => ({ ...prev, created: dateValue }));
+            }}
           />
           
           <div style={{ marginBottom: '16px' }}>
@@ -3777,7 +4419,7 @@ const SalesOrders = () => {
               onClick={() => {
                 setShowForm(false);
                 setEditingOrder(null);
-                setFormData({ soNo: '', customer: '', customerKode: '', paymentTerms: 'TOP', topDays: 30, items: [], globalSpecNote: '', category: 'packaging' });
+                setFormData({ soNo: '', customer: '', customerKode: '', paymentTerms: 'TOP', topDays: 30, items: [], globalSpecNote: '', category: 'packaging', created: '' });
                 setCustomerSearch('');
                 setProductInputValue({});
                 setShowBOMPreview(false);
@@ -3857,9 +4499,15 @@ const SalesOrders = () => {
                             const index = showProductDialog;
                             
                             // Pastikan productId tidak undefined/null - convert ke string untuk konsistensi
-                            const productIdToSet = String(prod.kode || prod.product_id || '').trim();
+                            // Gunakan product_id atau kode, jika keduanya kosong gunakan id atau nama sebagai fallback
+                            const productIdToSet = String(prod.product_id || prod.kode || prod.id || prod.nama || '').trim();
                             if (productIdToSet) {
                               handleUpdateItem(index, 'productId', productIdToSet);
+                            } else {
+                              // Jika masih kosong, coba gunakan nama produk sebagai fallback
+                              if (prod.nama) {
+                                handleUpdateItem(index, 'productName', prod.nama);
+                              }
                             }
                             // Also update padCode from master product
                             if (prod.padCode) {
@@ -4153,8 +4801,25 @@ const SalesOrders = () => {
       )}
 
       {/* Orders Table / Quotation Tab */}
-      <Card>
-        <div className="tab-container">
+      <Card style={{ position: orderViewMode === 'cards' ? 'sticky' : 'relative', top: orderViewMode === 'cards' ? 0 : 'auto', zIndex: orderViewMode === 'cards' ? 100 : 'auto', marginBottom: orderViewMode === 'cards' ? '12px' : '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+          <h1 style={{ margin: 0 }}>Sales Orders</h1>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
+            <Button variant="secondary" onClick={handleImportExcel}>📤 Import Excel</Button>
+            <Button onClick={handleCreate}>+ Create SO</Button>
+          </div>
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '12px',
+            alignItems: 'center',
+            justifyContent: 'flex-start',
+          }}
+        >
+          <div className="tab-container" style={{ marginBottom: 0, flex: '1 1 auto' }}>
           <button
             className={`tab-button ${activeTab === 'all' ? 'active' : ''}`}
             onClick={() => {
@@ -4183,7 +4848,7 @@ const SalesOrders = () => {
         </div>
         
         {/* Filter & Search - Compact di dalam card */}
-        <div style={{ marginBottom: '12px', marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', flexWrap: 'wrap', flex: '0 0 auto' }}>
           <div style={{ flex: 1, minWidth: '180px' }}>
             <input
               type="text"
@@ -4261,46 +4926,48 @@ const SalesOrders = () => {
             />
           </div>
           {activeTab !== 'quotation' && (
-            <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-              <button
-                onClick={() => setOrderViewMode('table')}
+              <div
                 style={{
-                  padding: '8px 12px',
-                  fontSize: '12px',
-                  fontWeight: orderViewMode === 'table' ? '600' : '400',
-                  backgroundColor: orderViewMode === 'table' ? 'var(--primary-color)' : 'transparent',
-                  color: orderViewMode === 'table' 
-                    ? (document.documentElement.getAttribute('data-theme') === 'light' ? '#1a1a1a' : '#fff')
-                    : 'var(--text-primary)',
-                  border: `1px solid ${orderViewMode === 'table' ? 'var(--primary-color)' : 'var(--border-color)'}`,
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
+                  display: 'inline-flex',
+                  borderRadius: '999px',
+                  overflow: 'hidden',
+                  border: '1px solid',
+                  borderColor: (document.documentElement.getAttribute('data-theme') || 'dark') === 'light' ? '#000' : '#fff',
                 }}
               >
-                📊 Table
-              </button>
+                {(['cards', 'table'] as const).map(mode => {
+                  const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+                  const isActive = orderViewMode === mode;
+                  const isLight = theme === 'light';
+
+                  const activeBg = isLight ? '#000' : '#fff';
+                  const inactiveBg = 'transparent';
+                  const activeColor = isLight ? '#fff' : '#000';
+                  const inactiveColor = isLight ? '#000' : '#fff';
+
+                  return (
               <button
-                onClick={() => setOrderViewMode('cards')}
+                      key={mode}
+                      onClick={() => setOrderViewMode(mode)}
                 style={{
-                  padding: '8px 12px',
+                        padding: '6px 12px',
+                        border: 'none',
+                        backgroundColor: isActive ? activeBg : inactiveBg,
+                        color: isActive ? activeColor : inactiveColor,
                   fontSize: '12px',
-                  fontWeight: orderViewMode === 'cards' ? '600' : '400',
-                  backgroundColor: orderViewMode === 'cards' ? 'var(--primary-color)' : 'transparent',
-                  color: orderViewMode === 'cards' 
-                    ? (document.documentElement.getAttribute('data-theme') === 'light' ? '#1a1a1a' : '#fff')
-                    : 'var(--text-primary)',
-                  border: `1px solid ${orderViewMode === 'cards' ? 'var(--primary-color)' : 'var(--border-color)'}`,
-                  borderRadius: '6px',
                   cursor: 'pointer',
-                  transition: 'all 0.2s ease',
+                        fontWeight: 600,
                 }}
               >
-                🃏 Cards
+                      {mode === 'cards' ? 'Cards' : 'Table'}
               </button>
+                  );
+                })}
             </div>
           )}
         </div>
+        </div>
+      </Card>
         
         <div className="tab-content">
           {activeTab === 'quotation' ? (
@@ -4342,7 +5009,6 @@ const SalesOrders = () => {
               )
           )}
         </div>
-      </Card>
 
       {/* Hidden Popup untuk trigger re-render saat edit */}
       {showHiddenPopup && (
@@ -4384,12 +5050,12 @@ const SalesOrders = () => {
       {/* Quotation Form Dialog */}
       {showQuotationFormDialog && (
         <div className="dialog-overlay" onClick={() => setShowQuotationFormDialog(false)} style={{ zIndex: 10000 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1200px', width: '90%', maxHeight: '90vh', overflowY: 'auto', zIndex: 10001 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1000px', width: '95%', maxHeight: '95vh', overflowY: 'auto', zIndex: 10001 }}>
             <Card
               title={editingQuotation ? `Edit Quotation - ${editingQuotation.soNo}` : "Create Quotation"}
               className="dialog-card"
             >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <Input
                   label="Quotation No"
                   value={quotationFormData.soNo || ''}
@@ -4681,14 +5347,13 @@ const SalesOrders = () => {
                     </p>
                   ) : (
                     <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                         <thead>
                           <tr style={{ backgroundColor: 'var(--bg-tertiary)', borderBottom: '2px solid var(--border)' }}>
                             <th style={{ padding: '8px', textAlign: 'left' }}>Product</th>
                             <th style={{ padding: '8px', textAlign: 'left' }}>Qty</th>
                             <th style={{ padding: '8px', textAlign: 'left' }}>Unit</th>
                             <th style={{ padding: '8px', textAlign: 'left' }}>Price</th>
-                            <th style={{ padding: '8px', textAlign: 'left' }}>Discount %</th>
                             <th style={{ padding: '8px', textAlign: 'left' }}>Total</th>
                             <th style={{ padding: '8px', textAlign: 'left' }}>Spec Note</th>
                             <th style={{ padding: '8px', textAlign: 'center' }}>Actions</th>
@@ -4905,60 +5570,6 @@ const SalesOrders = () => {
                                   }}
                                 />
                               </td>
-                              <td style={{ padding: '8px' }}>
-                                <input
-                                  type="text"
-                                  value={quotationItemDiscountInputValue[index] !== undefined ? quotationItemDiscountInputValue[index] : (item.discountPercent !== undefined && item.discountPercent !== null && item.discountPercent !== 0 ? String(item.discountPercent) : '')}
-                                  onFocus={(e) => {
-                                    e.stopPropagation();
-                                    const input = e.target as HTMLInputElement;
-                                    const currentDiscount = item.discountPercent || 0;
-                                    if (currentDiscount === 0 || currentDiscount === null || currentDiscount === undefined || String(currentDiscount) === '0') {
-                                      setQuotationItemDiscountInputValue(prev => ({ ...prev, [index]: '' }));
-                                      input.value = '';
-                                    }
-                                  }}
-                                  onChange={(e) => {
-                                    e.stopPropagation();
-                                    let val = e.target.value;
-                                    val = val.replace(/[^\d.,]/g, '');
-                                    const cleaned = removeLeadingZero(val);
-                                    setQuotationItemDiscountInputValue(prev => ({ ...prev, [index]: cleaned }));
-                                    handleQuotationUpdateItem(index, 'discountPercent', cleaned === '' ? '' : cleaned);
-                                  }}
-                                  onBlur={(e) => {
-                                    e.stopPropagation();
-                                    const val = e.target.value;
-                                    if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
-                                      handleQuotationUpdateItem(index, 'discountPercent', 0);
-                                      setQuotationItemDiscountInputValue(prev => {
-                                        const newVal = { ...prev };
-                                        delete newVal[index];
-                                        return newVal;
-                                      });
-                                    } else {
-                                      const numVal = Number(val);
-                                      const clampedVal = Math.max(0, Math.min(100, numVal));
-                                      handleQuotationUpdateItem(index, 'discountPercent', clampedVal);
-                                      setQuotationItemDiscountInputValue(prev => {
-                                        const newVal = { ...prev };
-                                        delete newVal[index];
-                                        return newVal;
-                                      });
-                                    }
-                                  }}
-                                  placeholder="0"
-                                  style={{
-                                    width: '80px',
-                                    padding: '6px 8px',
-                                    border: '1px solid var(--border)',
-                                    borderRadius: '4px',
-                                    backgroundColor: 'var(--bg-primary)',
-                                    color: 'var(--text-primary)',
-                                    fontSize: '13px',
-                                  }}
-                                />
-                              </td>
                               <td style={{ padding: '8px', fontWeight: 'bold' }}>
                                 Rp {item.total.toLocaleString('id-ID')}
                               </td>
@@ -4993,7 +5604,7 @@ const SalesOrders = () => {
                         </tbody>
                         <tfoot>
                           <tr>
-                            <td colSpan={4} style={{ padding: '8px', textAlign: 'right' }}>Sub Total:</td>
+                            <td colSpan={3} style={{ padding: '8px', textAlign: 'right' }}>Sub Total:</td>
                             <td style={{ padding: '8px', textAlign: 'right' }}>
                               Rp {((quotationFormData.items || []).reduce((sum, i) => sum + i.total, 0)).toLocaleString('id-ID')}
                             </td>
@@ -5001,7 +5612,7 @@ const SalesOrders = () => {
                           </tr>
                           {(quotationFormData.discountPercent || 0) > 0 && (
                             <tr>
-                              <td colSpan={4} style={{ padding: '8px', textAlign: 'right' }}>
+                              <td colSpan={3} style={{ padding: '8px', textAlign: 'right' }}>
                                 Discount ({quotationFormData.discountPercent}%):
                               </td>
                               <td style={{ padding: '8px', textAlign: 'right', color: '#ff9800' }}>
@@ -5011,7 +5622,7 @@ const SalesOrders = () => {
                             </tr>
                           )}
                           <tr style={{ borderTop: '2px solid var(--border)', fontWeight: 'bold' }}>
-                            <td colSpan={4} style={{ padding: '8px', textAlign: 'right' }}>Total:</td>
+                            <td colSpan={3} style={{ padding: '8px', textAlign: 'right' }}>Total:</td>
                             <td style={{ padding: '8px', textAlign: 'right' }}>
                               Rp {(((quotationFormData.items || []).reduce((sum, i) => sum + i.total, 0)) * (1 - (quotationFormData.discountPercent || 0) / 100)).toLocaleString('id-ID')}
                             </td>

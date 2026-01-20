@@ -308,7 +308,6 @@ const DeliveryNote = () => {
         return activeDeliveries;
       });
     } catch (error) {
-      console.error('[DeliveryNote] Error loading deliveries:', error);
     }
   }, []);
 
@@ -322,7 +321,6 @@ const DeliveryNote = () => {
         return data;
       });
     } catch (error) {
-      console.error('[DeliveryNote] Error loading customers:', error);
     }
   }, []);
 
@@ -336,7 +334,6 @@ const DeliveryNote = () => {
         return data;
       });
     } catch (error) {
-      console.error('[DeliveryNote] Error loading products:', error);
     }
   }, []);
 
@@ -353,7 +350,6 @@ const DeliveryNote = () => {
         return filteredData;
       });
     } catch (error) {
-      console.error('[DeliveryNote] Error loading sales orders:', error);
     }
   }, []);
 
@@ -378,7 +374,6 @@ const DeliveryNote = () => {
         return spk;
       });
     } catch (error) {
-      console.error('[DeliveryNote] Error loading schedule data:', error);
     }
   }, []);
 
@@ -474,7 +469,6 @@ const DeliveryNote = () => {
       });
 
     } catch (error) {
-      console.error('[DeliveryNote] Error loading notifications:', error);
     } finally {
       isLoadingRef.current = false;
     }

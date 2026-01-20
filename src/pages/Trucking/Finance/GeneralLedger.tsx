@@ -4,8 +4,9 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService } from '../../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
+import { storageService, extractStorageValue } from '../../../services/storage';
+import { deleteTruckingItem, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { useDialog } from '../../../hooks/useDialog';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -47,58 +48,16 @@ const GeneralLedger = () => {
     description: '',
   });
 
-  // Custom Dialog state
-  const [dialogState, setDialogState] = useState<{
-    show: boolean;
-    type: 'alert' | 'confirm';
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-  }>({
-    show: false,
-    type: 'alert',
-    title: '',
-    message: '',
-  });
-
-  // Helper functions untuk dialog
+  // Custom Dialog - menggunakan hook terpusat
+  const { showAlert: showAlertBase, showConfirm: showConfirmBase, DialogComponent } = useDialog();
+  
+  // Wrapper untuk kompatibilitas dengan urutan parameter yang berbeda
   const showAlert = (message: string, title: string = 'Information') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'alert',
-      title,
-      message,
-    });
+    showAlertBase(message, title);
   };
-
+  
   const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'confirm',
-      title,
-      message,
-      onConfirm,
-      onCancel,
-    });
-  };
-
-  const closeDialog = () => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(false);
-    }
-    setDialogState({
-      show: false,
-      type: 'alert',
-      title: '',
-      message: '',
-    });
+    showConfirmBase(message, onConfirm, onCancel, title);
   };
 
   useEffect(() => {
@@ -343,7 +302,9 @@ const GeneralLedger = () => {
   };
 
   const loadAccounts = async () => {
-    const data = await storageService.get<Account[]>('trucking_accounts') || [];
+    const rawData = await storageService.get<Account[]>('trucking_accounts');
+    const extractedData = extractStorageValue(rawData);
+    const data = filterActiveItems(extractedData);
     if (!data || data.length === 0) {
       const defaultAccounts: Account[] = [
         { code: '1000', name: 'Cash', type: 'Asset', balance: 0 },
@@ -364,7 +325,9 @@ const GeneralLedger = () => {
       await storageService.set('trucking_accounts', defaultAccounts);
       setAccounts(defaultAccounts);
     } else {
-      setAccounts(data);
+      // Ensure data is always an array
+      const dataArray = Array.isArray(data) ? data : [];
+      setAccounts(dataArray);
     }
   };
 
@@ -375,7 +338,9 @@ const GeneralLedger = () => {
         return;
       }
 
-      const selectedAccount = accounts.find(a => a.code === formData.account);
+      // Ensure accounts is always an array
+      const accountsArray = Array.isArray(accounts) ? accounts : [];
+      const selectedAccount = accountsArray.find(a => a.code === formData.account);
       if (!selectedAccount) {
         showAlert('Account not found', 'Error');
         return;
@@ -441,8 +406,10 @@ const GeneralLedger = () => {
       balances[entry.account].credit += entry.credit || 0;
     });
     
+    // Ensure accounts is always an array
+    const accountsArray = Array.isArray(accounts) ? accounts : [];
     Object.keys(balances).forEach(accCode => {
-      const account = accounts.find(a => a.code === accCode);
+      const account = accountsArray.find(a => a.code === accCode);
       if (account) {
         if (account.type === 'Asset' || account.type === 'Expense') {
           balances[accCode].balance = balances[accCode].debit - balances[accCode].credit;
@@ -525,7 +492,9 @@ const GeneralLedger = () => {
       XLSX.utils.book_append_sheet(wb, ws, 'Template');
       
       // Tambahkan sheet dengan daftar account codes
-      const accountList = accounts.map(acc => ({
+      // Ensure accounts is always an array
+      const accountsArray = Array.isArray(accounts) ? accounts : [];
+      const accountList = accountsArray.map(acc => ({
         'Account Code': acc.code,
         'Account Name': acc.name,
         'Type': acc.type,
@@ -554,7 +523,6 @@ const GeneralLedger = () => {
       showConfirm(
         `📋 Format Excel untuk Import General Ledger\n\nPastikan file Excel Anda memiliki header berikut:\n\n${exampleHeaders.join(' | ')}\n\nContoh data:\n${exampleData.map((row, idx) => `${idx + 1}. ${exampleHeaders.map(h => String(row[h as keyof typeof row] || '')).join(' | ')}`).join('\n')}\n\n⚠️ Catatan:\n- Header harus ada di baris pertama\n- Date format: YYYY-MM-DD\n- Account Code harus ada di COA\n- Debit atau Credit harus diisi\n\nKlik "Download Template" untuk mendapatkan file Excel template, atau "Lanjutkan" untuk memilih file Excel yang sudah Anda siapkan.`,
         () => {
-          closeDialog();
           const input = document.createElement('input');
           input.type = 'file';
           input.accept = '.xlsx,.xls,.csv';
@@ -595,7 +563,9 @@ const GeneralLedger = () => {
                         return;
                       }
 
-                      const account = accounts.find(a => a.code === accountCode);
+                      // Ensure accounts is always an array
+                      const accountsArray = Array.isArray(accounts) ? accounts : [];
+                      const account = accountsArray.find(a => a.code === accountCode);
                       if (!account) {
                         errors.push(`Row ${index + 2}: Account code ${accountCode} not found`);
                         return;
@@ -628,9 +598,8 @@ const GeneralLedger = () => {
                   } else {
                     showAlert('⚠️ No valid entries to import', 'Warning');
                   }
-                  closeDialog();
                 },
-                () => closeDialog(),
+                undefined,
                 'Import Confirmation'
               );
             } catch (error: any) {
@@ -639,7 +608,7 @@ const GeneralLedger = () => {
           };
           input.click();
         },
-        () => closeDialog(),
+        undefined,
         'Format Excel Preview'
       );
     };
@@ -659,27 +628,43 @@ const GeneralLedger = () => {
     { key: 'actions', header: 'Actions', render: (item: JournalEntry) => (
       <div style={{ display: 'flex', gap: '8px' }}>
         <Button onClick={() => { setEditingEntry(item); setFormData(item); setShowForm(true); }} style={{ fontSize: '12px', padding: '4px 8px' }}>Edit</Button>
-        <Button variant="danger" onClick={() => {
-          showConfirm(
-            'Delete this entry?',
-            async () => {
-              // Pakai helper function untuk safe delete (tombstone pattern)
-              const success = await safeDeleteItem('trucking_journalEntries', item.id, 'id');
-              
-              if (success) {
-                // Reload data dengan filter active items
-                const updatedEntries = await storageService.get<any[]>('trucking_journalEntries') || [];
-                const activeEntries = filterActiveItems(updatedEntries);
-                setEntries(activeEntries.map((e, idx) => ({ ...e, no: idx + 1 })));
-                closeDialog();
-              } else {
-                closeDialog();
-                showAlert('Error deleting entry. Please try again.', 'Error');
-              }
-            },
-            () => closeDialog(),
-            'Delete Confirmation'
-          );
+        <Button variant="danger" onClick={async () => {
+          try {
+            console.log('[Trucking GeneralLedger] handleDelete called for:', item?.id, item?.reference);
+            
+            if (!item || !item.id) {
+              showAlert('Journal Entry tidak valid. Mohon coba lagi.', 'Error');
+              return;
+            }
+            
+            showConfirm(
+              `Hapus Journal Entry "${item.reference}"?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+              async () => {
+                try {
+                  // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
+                  const deleteResult = await deleteTruckingItem('trucking_journalEntries', item.id, 'id');
+                  
+                  if (deleteResult.success) {
+                    // Reload data dengan helper (handle race condition)
+                    const activeEntries = await reloadTruckingData('trucking_journalEntries', setEntries);
+                    setEntries(activeEntries.map((e, idx) => ({ ...e, no: idx + 1 })));
+                    showAlert(`✅ Journal Entry "${item.reference}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+                  } else {
+                    console.error('[Trucking GeneralLedger] Delete failed:', deleteResult.error);
+                    showAlert(`❌ Error deleting entry "${item.reference}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+                  }
+                } catch (error: any) {
+                  console.error('[Trucking GeneralLedger] Error deleting entry:', error);
+                  showAlert(`❌ Error deleting entry: ${error.message}`, 'Error');
+                }
+              },
+              undefined,
+              'Safe Delete Confirmation'
+            );
+          } catch (error: any) {
+            console.error('[Trucking GeneralLedger] Error in handleDelete:', error);
+            showAlert(`Error: ${error.message}`, 'Error');
+          }
         }} style={{ fontSize: '12px', padding: '4px 8px' }}>Delete</Button>
       </div>
     ) },
@@ -715,7 +700,7 @@ const GeneralLedger = () => {
               style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)' }}
             >
               <option value="all">All Accounts</option>
-              {accounts.map(acc => (
+              {(Array.isArray(accounts) ? accounts : []).map(acc => (
                 <option key={acc.code} value={acc.code}>{acc.code} - {acc.name}</option>
               ))}
             </select>
@@ -755,7 +740,7 @@ const GeneralLedger = () => {
               { key: 'credit', header: 'Total Credit' },
               { key: 'balance', header: 'Balance' },
             ]}
-            data={accounts.map((acc) => ({
+            data={(Array.isArray(accounts) ? accounts : []).map((acc) => ({
               id: acc.code,
               code: acc.code,
               name: acc.name,
@@ -805,13 +790,15 @@ const GeneralLedger = () => {
                 <select
                   value={formData.account || ''}
                   onChange={(e) => {
-                    const selected = accounts.find(a => a.code === e.target.value);
+                    // Ensure accounts is always an array
+                    const accountsArray = Array.isArray(accounts) ? accounts : [];
+                    const selected = accountsArray.find(a => a.code === e.target.value);
                     setFormData({ ...formData, account: e.target.value, accountName: selected?.name || '' });
                   }}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)' }}
                 >
                   <option value="">Select Account...</option>
-                  {accounts.map(acc => (
+                  {(Array.isArray(accounts) ? accounts : []).map(acc => (
                     <option key={acc.code} value={acc.code}>{acc.code} - {acc.name}</option>
                   ))}
                 </select>
@@ -853,46 +840,8 @@ const GeneralLedger = () => {
       )}
 
       {/* Custom Dialog untuk Alert/Confirm */}
-      {dialogState.show && (
-        <div className="dialog-overlay" onClick={dialogState.type === 'alert' ? closeDialog : undefined} style={{ zIndex: 10000 }}>
-          <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
-            <div style={{ marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)' }}>
-                {dialogState.title}
-              </h3>
-            </div>
-            
-            <div style={{ marginBottom: '24px', fontSize: '14px', color: 'var(--text-primary)', whiteSpace: 'pre-line' }}>
-              {dialogState.message}
-            </div>
-            
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-              {dialogState.type === 'confirm' && dialogState.title && dialogState.title.includes('Format Excel') && (
-                <Button variant="secondary" onClick={() => {
-                  handleDownloadTemplate();
-                  closeDialog();
-                }} style={{ marginRight: 'auto' }}>
-                  📥 Download Template
-                </Button>
-              )}
-              {dialogState.type === 'confirm' && (
-                <Button variant="secondary" onClick={() => {
-                  if (dialogState.onCancel) dialogState.onCancel();
-                  closeDialog();
-                }}>
-                  Cancel
-                </Button>
-              )}
-              <Button variant="primary" onClick={() => {
-                if (dialogState.onConfirm) dialogState.onConfirm();
-                if (dialogState.type === 'alert') closeDialog();
-              }}>
-                {dialogState.type === 'alert' ? 'OK' : 'Confirm'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Custom Dialog - menggunakan hook terpusat */}
+      <DialogComponent />
     </div>
   );
 };

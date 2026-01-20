@@ -6,7 +6,7 @@ import Button from '../../components/Button';
 import Input from '../../components/Input';
 import { storageService } from '../../services/storage';
 import { filterActiveItems } from '../../utils/data-persistence-helper';
-import { deletePackagingItem } from '../../utils/packaging-delete-helper';
+import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import * as XLSX from 'xlsx';
 import '../../styles/common.css';
 import './Master.css';
@@ -99,13 +99,10 @@ const Customers = () => {
   }, []);
 
   const loadCustomers = async () => {
-    console.log('[Customers] Loading customers...');
     const dataRaw = await storageService.get<Customer[]>('customers') || [];
-    console.log('[Customers] Raw data length:', dataRaw.length);
     
     // Filter out deleted items menggunakan helper function
     const data = filterActiveItems(dataRaw);
-    console.log('[Customers] Filtered data length:', data.length);
     
     // CRITICAL: Remove duplicates by kode before setting state
     const seen = new Set<string>();
@@ -117,22 +114,16 @@ const Customers = () => {
         if (!seen.has(key)) {
           seen.add(key);
           uniqueData.push(customer);
-        } else {
-          console.log('[Customers] Removed duplicate:', customer.kode, '-', customer.nama);
         }
       }
     });
     
-    console.log('[Customers] Unique data length:', uniqueData.length);
-    
     const numberedData = uniqueData.map((c, idx) => ({ ...c, no: idx + 1 }));
-    console.log('[Customers] Final data length:', numberedData.length);
     
     setCustomers(numberedData);
     
     // Save cleaned data back to storage if duplicates were removed
     if (uniqueData.length < data.length) {
-      console.log('[Customers] Saving cleaned data to storage...');
       await storageService.set('customers', numberedData);
     }
   };
@@ -191,29 +182,49 @@ const Customers = () => {
   };
 
   const handleDelete = async (item: Customer) => {
-    showConfirm(
-      `Are you sure you want to delete customer "${item.nama}"? This action cannot be undone.`,
-      async () => {
-        try {
-          // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
-          const deleteResult = await deletePackagingItem('customers', item.id, 'id');
-          
-          if (deleteResult.success) {
-            // Reload data dengan filter active items
-            const dataRaw = await storageService.get<Customer[]>('customers') || [];
-            const data = filterActiveItems(dataRaw);
-            setCustomers(data.map((c, idx) => ({ ...c, no: idx + 1 })));
-            showAlert(`Customer "${item.nama}" deleted successfully`, 'Success');
-          } else {
-            showAlert(`Error deleting customer: ${deleteResult.error || 'Unknown error'}`, 'Error');
+    try {
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[Customers] Item missing ID:', item);
+        showAlert(`❌ Error: Customer "${item.nama}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Customer: ${item.nama}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deletePackagingItem('customers', item.id, 'id');
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition) - sama seperti SalesOrders
+              await reloadPackagingData('customers', setCustomers);
+              
+              // Re-number customers setelah reload
+              const currentCustomers = await storageService.get<Customer[]>('customers') || [];
+              const activeCustomers = filterActiveItems(currentCustomers);
+              setCustomers(activeCustomers.map((c, idx) => ({ ...c, no: idx + 1 })));
+              
+              showAlert(`✅ Customer "${item.nama}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[Customers] Delete failed:', deleteResult.error);
+              showAlert(`❌ Error deleting customer "${item.nama}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[Customers] Error in delete:', error);
+            showAlert(`❌ Error deleting customer: ${error.message}`, 'Error');
           }
-        } catch (error: any) {
-          showAlert(`Error deleting customer: ${error.message}`, 'Error');
-        }
-      },
-      undefined,
-      'Confirm Delete'
-    );
+        },
+        () => {
+          // Delete cancelled
+        },
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[Customers] Error in handleDelete:', error);
+      showAlert(`❌ Error: ${error.message}`, 'Error');
+    }
   };
 
   // Download Template Excel
@@ -466,7 +477,7 @@ const Customers = () => {
         { key: 'kode', header: 'Kode (ID)' },
         { key: 'nama', header: 'Nama (Company Name)' },
         { key: 'alamat', header: 'Alamat (Address)' },
-        { key: 'kategori', header: 'Kategori' },
+        { key: 'telepon', header: 'Telepon' },
         {
           key: 'actions',
           header: 'Actions',
@@ -517,7 +528,7 @@ const Customers = () => {
     // Add remaining columns
     baseColumns.push(
       { key: 'alamat', header: 'Alamat (Address)' },
-      { key: 'kategori', header: 'Kategori' },
+      { key: 'telepon', header: 'Telepon' },
       {
         key: 'actions',
         header: 'Actions',
@@ -541,14 +552,20 @@ const Customers = () => {
           <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
           <Button variant="secondary" onClick={handleDownloadTemplate}>📋 Download Template</Button>
           <Button variant="primary" onClick={handleImportExcel}>📤 Import Excel</Button>
-          <Button onClick={() => setShowForm(!showForm)}>
-            {showForm ? 'Cancel' : '+ Add Customer'}
+          <Button onClick={() => {
+            setFormData({ kode: '', nama: '', kontak: '', npwp: '', email: '', telepon: '', alamat: '', kategori: '' });
+            setEditingItem(null);
+            setShowForm(true);
+          }}>
+            + Add Customer
           </Button>
         </div>
       </div>
 
       {showForm && (
-        <Card title={editingItem ? "Edit Customer" : "Add New Customer"} className="mb-4">
+        <div className="dialog-overlay" onClick={() => { setShowForm(false); setEditingItem(null); setFormData({ kode: '', nama: '', kontak: '', npwp: '', email: '', telepon: '', alamat: '', kategori: '' }); }} style={{ zIndex: 10000 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', width: '90%', maxHeight: '90vh', overflowY: 'auto', zIndex: 10001 }}>
+            <Card title={editingItem ? "Edit Customer" : "Add New Customer"} className="dialog-card">
           <Input
             label="Kode *"
             value={formData.kode || ''}
@@ -594,7 +611,7 @@ const Customers = () => {
           <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '8px' }}>
             Documents: NIB, KTP, Others (upload functionality)
           </p>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
             <Button onClick={() => { setShowForm(false); setEditingItem(null); setFormData({ kode: '', nama: '', kontak: '', npwp: '', email: '', telepon: '', alamat: '', kategori: '' }); }} variant="secondary">
               Cancel
             </Button>
@@ -602,7 +619,9 @@ const Customers = () => {
               {editingItem ? 'Update Customer' : 'Save Customer'}
             </Button>
           </div>
-        </Card>
+            </Card>
+          </div>
+        </div>
       )}
 
       <Card>

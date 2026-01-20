@@ -22,7 +22,9 @@ const Realtime = () => {
 
   useEffect(() => {
     loadVehicles();
-    const interval = setInterval(loadVehicles, 3000); // Refresh setiap 3 detik
+    // Optimasi: Refresh setiap 15 detik untuk real-time tracking (sebelumnya 3 detik)
+    // Masih cukup real-time untuk vehicle tracking
+    const interval = setInterval(loadVehicles, 15000); // 15 detik - balance antara real-time dan bandwidth
     return () => clearInterval(interval);
   }, []);
 

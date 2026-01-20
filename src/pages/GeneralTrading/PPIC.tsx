@@ -13,6 +13,48 @@ import '../../styles/common.css';
 import '../../styles/compact.css';
 import './PPIC.css';
 
+// CRITICAL: Safe .some() helper to prevent TypeError
+const safeSome = (array: any, predicate: (item: any) => boolean): boolean => {
+  if (!Array.isArray(array)) {
+    console.error('[GT PPIC] safeSome: array is not an array:', typeof array);
+    return false;
+  }
+  try {
+    return array.some(predicate);
+  } catch (error) {
+    console.error('[GT PPIC] safeSome: error in .some() operation:', error);
+    return false;
+  }
+};
+
+// CRITICAL: Safe .every() helper to prevent TypeError
+const safeEvery = (array: any, predicate: (item: any) => boolean): boolean => {
+  if (!Array.isArray(array)) {
+    console.error('[GT PPIC] safeEvery: array is not an array:', typeof array);
+    return false;
+  }
+  try {
+    return array.every(predicate);
+  } catch (error) {
+    console.error('[GT PPIC] safeEvery: error in .every() operation:', error);
+    return false;
+  }
+};
+
+// CRITICAL: Safe .map() helper to prevent TypeError
+const safeMap = <T, R>(array: any, mapper: (item: T, index: number) => R): R[] => {
+  if (!Array.isArray(array)) {
+    console.error('[GT PPIC] safeMap: array is not an array:', typeof array);
+    return [];
+  }
+  try {
+    return array.map(mapper);
+  } catch (error) {
+    console.error('[GT PPIC] safeMap: error in .map() operation:', error);
+    return [];
+  }
+};
+
 // SPK Action Menu component untuk dropdown 3 titik
 const SPKActionMenu = ({
   onCheckCreatePR,
@@ -205,8 +247,19 @@ const PPIC = () => {
   const [deliveryNotes, setDeliveryNotes] = useState<any[]>([]);
   const [purchaseRequests, setPurchaseRequests] = useState<any[]>([]);
   const [creatingPR, setCreatingPR] = useState<{ [spkNo: string]: boolean }>({});
-  const [pendingSONotifications, setPendingSONotifications] = useState<any[]>([]);
   const [selectedItemsForSPK, setSelectedItemsForSPK] = useState<{ [itemId: string]: boolean }>({});
+  
+  // CRITICAL: Flag untuk skip event listener setelah create SPK lokal
+  // Ini mencegah loadData() trigger setelah create SPK yang menyebabkan SO hilang dari table list
+  const skipReloadRef = useRef<{ skipUntil: number; reason: string }>({ skipUntil: 0, reason: '' });
+  
+  // CRITICAL: Ensure all state variables used with .some() are always arrays
+  // Handle nested objects from server by using extractStorageValue
+  const safePurchaseRequests = Array.isArray(purchaseRequests) ? purchaseRequests : (purchaseRequests ? extractStorageValue(purchaseRequests) : []);
+  const safeSpkData = Array.isArray(spkData) ? spkData : (spkData ? extractStorageValue(spkData) : []);
+  const safeScheduleData = Array.isArray(scheduleData) ? scheduleData : (scheduleData ? extractStorageValue(scheduleData) : []);
+  const safeDeliveryNotes = Array.isArray(deliveryNotes) ? deliveryNotes : (deliveryNotes ? extractStorageValue(deliveryNotes) : []);
+  const safeSalesOrders = Array.isArray(salesOrders) ? salesOrders : (salesOrders ? extractStorageValue(salesOrders) : []);
   
   // Auto-select all items yang belum punya SPK ketika dialog dibuka
   useEffect(() => {
@@ -230,22 +283,60 @@ const PPIC = () => {
     }
   }, [viewingSO, spkData]);
   
-  // Format notifications untuk NotificationBell
-  const soNotifications = useMemo(() => {
-    return pendingSONotifications.map((notif: any) => {
-      const so = salesOrders.find((s: any) => s.soNo === notif.soNo);
-      return {
-        id: notif.id,
-        title: `SO ${notif.soNo || 'N/A'}`,
-        message: `Customer: ${notif.customer || 'N/A'} | Items: ${notif.items?.length || 0} product(s)`,
-        timestamp: notif.created || notif.timestamp,
-        so: so || notif, // Keep original data
-      };
+  // SIMPLE: Filter SO yang sudah ppicNotified tapi belum dibuat SPK
+  const confirmedSOsPending = useMemo(() => {
+    if (!Array.isArray(safeSalesOrders) || !Array.isArray(safeSpkData)) return [];
+    
+    return safeSalesOrders.filter((so: any) => {
+      if (!so || !so.ppicNotified) return false;
+      const hasSPK = safeSpkData.some((spk: any) => spk && spk.soNo === so.soNo);
+      return !hasSPK;
     });
-  }, [pendingSONotifications, salesOrders]);
+  }, [safeSalesOrders, safeSpkData]);
+
+  // Format confirmedSOsPending menjadi notifications untuk NotificationBell (sama seperti Packaging)
+  const soNotifications = useMemo(() => {
+    // CRITICAL: Ensure confirmedSOsPending is always an array to prevent .map() error
+    if (!Array.isArray(confirmedSOsPending)) {
+      return [];
+    }
+    return confirmedSOsPending.map((so: any) => ({
+      id: so.id,
+      title: `SO ${so.soNo} - ${so.customer}`,
+      message: `Products: ${(so.items || []).length} | Confirmed: ${so.ppicNotifiedAt ? new Date(so.ppicNotifiedAt).toLocaleDateString('id-ID') : '-'}`,
+      timestamp: so.ppicNotifiedAt || so.created,
+      so: so, // Keep original data
+    }));
+  }, [confirmedSOsPending]);
   
   // Custom Dialog - menggunakan hook terpusat
-  const { showAlert, showConfirm: showConfirmBase, closeDialog, DialogComponent } = useDialog();
+  const { showAlert: showAlertBase, showConfirm: showConfirmBase, closeDialog, DialogComponent } = useDialog();
+  
+  // Guard untuk prevent dialog spam (sama seperti Packaging DeliveryNote)
+  const dialogGuardRef = useRef<{ lastCall: number; callCount: number; lastMessage: string }>({ 
+    lastCall: 0, 
+    callCount: 0,
+    lastMessage: ''
+  });
+  
+  // Wrapper untuk showAlert dengan guard untuk prevent multiple calls
+  const showAlert = (message: string, title: string = 'Information') => {
+    // Prevent spam: max 1 call per 1000ms untuk message yang sama, max 2 calls total
+    const now = Date.now();
+    const isSameMessage = message === dialogGuardRef.current.lastMessage;
+    
+    if (isSameMessage && now - dialogGuardRef.current.lastCall < 1000) {
+      dialogGuardRef.current.callCount++;
+      if (dialogGuardRef.current.callCount >= 2) {
+        return; // Skip jika terlalu banyak calls untuk message yang sama
+      }
+    } else {
+      dialogGuardRef.current.callCount = 0;
+      dialogGuardRef.current.lastMessage = message;
+    }
+    dialogGuardRef.current.lastCall = now;
+    showAlertBase(message, title);
+  };
   
   // Wrapper untuk kompatibilitas dengan urutan parameter yang berbeda
   const showConfirm = (title: string, message: string, onConfirm: () => void, onCancel?: () => void) => {
@@ -254,104 +345,249 @@ const PPIC = () => {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(() => {
-      loadData();
-    }, 10000); // Refresh data every 10 seconds (reduced frequency to prevent excessive re-renders)
-    return () => clearInterval(interval);
+    // CRITICAL: Tidak perlu interval refresh - sudah ada listener untuk gt_salesOrders
+    // Interval refresh akan overwrite spkData dengan data lama dari server
+    // Sync akan terjadi via app-storage-changed listener untuk gt_salesOrders
   }, []);
 
-  const loadData = async () => {
-    // Initialize empty arrays in local storage first to prevent 404 errors
-    // Check localStorage directly dengan key yang benar untuk GT
-    const storageKeySpk = 'general-trading/gt_spk';
-    const storageKeySchedule = 'general-trading/gt_schedule';
-    const storageKeyPpicNotifications = 'general-trading/gt_ppicNotifications';
-    
-    // Check localStorage directly - jika belum ada, initialize empty array SEBELUM get
-    if (typeof window !== 'undefined' && window.localStorage) {
-      try {
-        const localSpk = window.localStorage.getItem(storageKeySpk);
-        if (!localSpk || localSpk === 'null') {
-          // Initialize empty array di local storage langsung (tidak via storageService.set untuk avoid double fetch)
-          window.localStorage.setItem(storageKeySpk, JSON.stringify({
-            value: [],
-            timestamp: Date.now(),
-            _timestamp: Date.now(),
-          }));
+  // Listen storage changes (SPK/schedule/purchaseRequests/salesOrders) biar abis klik notif langsung kebaca tanpa refresh manual
+  // Sama seperti Packaging PPIC yang listen untuk spk, schedule, production, salesOrders
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    let debounceTimer: NodeJS.Timeout | null = null;
+    let isLoading = false; // Guard untuk prevent loop
+
+    const handleStorageChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ key?: string }>;
+      const key = customEvent.detail?.key || '';
+
+      // Listen untuk perubahan yang relevan (sama seperti Packaging)
+      if (
+        key === 'general-trading/gt_spk' ||
+        key === 'gt_spk' ||
+        key === 'general-trading/gt_schedule' ||
+        key === 'gt_schedule' ||
+        key === 'general-trading/gt_purchaseRequests' ||
+        key === 'gt_purchaseRequests' ||
+        key === 'general-trading/gt_salesOrders' ||
+        key === 'gt_salesOrders'
+      ) {
+        // CRITICAL: Skip reload jika baru saja create SPK lokal (untuk prevent SO hilang dari table list)
+        const now = Date.now();
+        if (now < skipReloadRef.current.skipUntil) {
+          return; // Skip reload untuk perubahan lokal
         }
-        const localSchedule = window.localStorage.getItem(storageKeySchedule);
-        if (!localSchedule || localSchedule === 'null') {
-          window.localStorage.setItem(storageKeySchedule, JSON.stringify({
-            value: [],
-            timestamp: Date.now(),
-            _timestamp: Date.now(),
-          }));
+        
+        // Skip jika sedang loading untuk prevent loop
+        if (isLoading) return;
+        
+        // Debounce: tunggu 300ms sebelum reload, kalau ada perubahan lagi dalam 300ms, cancel yang sebelumnya
+        if (debounceTimer) {
+          clearTimeout(debounceTimer);
         }
-        const localPpicNotif = window.localStorage.getItem(storageKeyPpicNotifications);
-        if (!localPpicNotif || localPpicNotif === 'null') {
-          window.localStorage.setItem(storageKeyPpicNotifications, JSON.stringify({
-            value: [],
-            timestamp: Date.now(),
-            _timestamp: Date.now(),
-          }));
-        }
-      } catch (e) {
-        // Silent fail
+        debounceTimer = setTimeout(async () => {
+          isLoading = true;
+          try {
+            await loadData();
+          } finally {
+            isLoading = false;
+            debounceTimer = null;
+          }
+        }, 300);
       }
+    };
+
+    window.addEventListener('app-storage-changed', handleStorageChange as EventListener);
+    return () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      window.removeEventListener('app-storage-changed', handleStorageChange as EventListener);
+    };
+  }, []);
+
+  // Helper function to load from localStorage directly (non-blocking) - sama seperti Packaging
+  const loadFromLocalStorage = (key: string): any[] => {
+    try {
+      // GT uses general-trading/ prefix
+      const storageKey = `general-trading/${key}`;
+      let valueStr = localStorage.getItem(storageKey);
+      if (!valueStr) {
+        // Try without prefix as fallback
+        valueStr = localStorage.getItem(key);
+      }
+      if (valueStr) {
+        const parsed = JSON.parse(valueStr);
+        const extracted = extractStorageValue(parsed);
+        return extracted;
+      }
+    } catch (e) {
     }
+    return [];
+  };
+
+  const loadData = async () => {
+    // OPTIMIZATION: Load from localStorage FIRST (instant, non-blocking) - sama seperti Packaging
+    // Then sync from server in background if needed
+    // Ini mencegah background sync overwrite data dengan data lama
+    const spkRaw = loadFromLocalStorage('gt_spk');
+    const scheduleRaw = loadFromLocalStorage('gt_schedule');
+    const customersDataRaw = loadFromLocalStorage('gt_customers');
+    const productsDataRaw = loadFromLocalStorage('gt_products');
+    let salesOrdersDataRaw = loadFromLocalStorage('gt_salesOrders');
+    const inventoryDataRaw = loadFromLocalStorage('gt_inventory');
+    const purchaseOrdersDataRaw = loadFromLocalStorage('gt_purchaseOrders');
+    const deliveryNotesDataRaw = loadFromLocalStorage('gt_delivery');
+    const purchaseRequestsDataRaw = loadFromLocalStorage('gt_purchaseRequests');
     
-    const spkRaw = extractStorageValue(await storageService.get<any[]>('gt_spk')) || [];
-    const scheduleRaw = extractStorageValue(await storageService.get<any[]>('gt_schedule')) || [];
-    let customersDataRaw = extractStorageValue(await storageService.get<any[]>('gt_customers')) || [];
-    let productsDataRaw = extractStorageValue(await storageService.get<any[]>('gt_products')) || [];
-    let salesOrdersDataRaw = extractStorageValue(await storageService.get<any[]>('gt_salesOrders')) || [];
-    const inventoryDataRaw = extractStorageValue(await storageService.get<any[]>('gt_inventory')) || [];
-    const purchaseOrdersDataRaw = extractStorageValue(await storageService.get<any[]>('gt_purchaseOrders')) || [];
-    const deliveryNotesDataRaw = extractStorageValue(await storageService.get<any[]>('gt_delivery')) || [];
-    const purchaseRequestsDataRaw = extractStorageValue(await storageService.get<any[]>('gt_purchaseRequests')) || [];
-    
-    // Force reload key data if very few items detected
+    // Force reload key data if very few items detected (sama seperti Packaging)
     if (customersDataRaw.length <= 1) {
-      console.log('[GT PPIC] Few customers detected, trying force reload from file...');
       const fileData = await storageService.forceReloadFromFile<any[]>('gt_customers');
       if (fileData && Array.isArray(fileData) && fileData.length > customersDataRaw.length) {
-        console.log(`[GT PPIC] Force reload successful: ${fileData.length} customers from file`);
-        customersDataRaw = fileData;
+        // Update localStorage dengan data dari file
+        const storageKey = 'general-trading/gt_customers';
+        localStorage.setItem(storageKey, JSON.stringify({
+          value: fileData,
+          timestamp: Date.now(),
+          _timestamp: Date.now(),
+        }));
       }
     }
     
     if (productsDataRaw.length <= 1) {
-      console.log('[GT PPIC] Few products detected, trying force reload from file...');
       const fileData = await storageService.forceReloadFromFile<any[]>('gt_products');
       if (fileData && Array.isArray(fileData) && fileData.length > productsDataRaw.length) {
-        console.log(`[GT PPIC] Force reload successful: ${fileData.length} products from file`);
-        productsDataRaw = fileData;
+        const storageKey = 'general-trading/gt_products';
+        localStorage.setItem(storageKey, JSON.stringify({
+          value: fileData,
+          timestamp: Date.now(),
+          _timestamp: Date.now(),
+        }));
       }
     }
     
+    // CRITICAL: Force reload dari server jika data sedikit atau tidak ada
+    // Ini memastikan data terbaru dari server (termasuk flag ppicNotified) selalu di-load
     if (salesOrdersDataRaw.length <= 1) {
-      console.log('[GT PPIC] Few sales orders detected, trying force reload from file...');
-      const fileData = await storageService.forceReloadFromFile<any[]>('gt_salesOrders');
-      if (fileData && Array.isArray(fileData) && fileData.length > salesOrdersDataRaw.length) {
-        console.log(`[GT PPIC] Force reload successful: ${fileData.length} sales orders from file`);
-        salesOrdersDataRaw = fileData;
+      // Coba load dari server via storageService.get() yang akan sync dari server
+      try {
+        const serverData = await storageService.get<any[]>('gt_salesOrders');
+        if (serverData && Array.isArray(serverData)) {
+          const extracted = extractStorageValue(serverData) || [];
+          if (extracted.length > salesOrdersDataRaw.length) {
+            salesOrdersDataRaw = extracted;
+            // Update localStorage dengan data dari server
+            const storageKey = 'general-trading/gt_salesOrders';
+            localStorage.setItem(storageKey, JSON.stringify({
+              value: extracted,
+              timestamp: Date.now(),
+              _timestamp: Date.now(),
+            }));
+          }
+        }
+      } catch (error) {
+        // Fallback ke force reload dari file jika server sync gagal
+        const fileData = await storageService.forceReloadFromFile<any[]>('gt_salesOrders');
+        if (fileData && Array.isArray(fileData) && fileData.length > salesOrdersDataRaw.length) {
+          const storageKey = 'general-trading/gt_salesOrders';
+          localStorage.setItem(storageKey, JSON.stringify({
+            value: fileData,
+            timestamp: Date.now(),
+            _timestamp: Date.now(),
+          }));
+          salesOrdersDataRaw = fileData;
+        }
       }
     }
+    
+    // Reload dari localStorage setelah force reload (jika ada)
+    const finalCustomersData = loadFromLocalStorage('gt_customers');
+    const finalProductsData = loadFromLocalStorage('gt_products');
+    const finalSalesOrdersData = loadFromLocalStorage('gt_salesOrders');
     
     // Filter out deleted items menggunakan helper function
     let spk = filterActiveItems(spkRaw);
     let schedule = filterActiveItems(scheduleRaw);
-    const customersData = filterActiveItems(customersDataRaw);
-    const productsData = filterActiveItems(productsDataRaw);
-    const salesOrdersData = filterActiveItems(salesOrdersDataRaw);
+    const customersData = filterActiveItems(finalCustomersData.length > 0 ? finalCustomersData : customersDataRaw);
+    const productsData = filterActiveItems(finalProductsData.length > 0 ? finalProductsData : productsDataRaw);
+    let salesOrdersData = filterActiveItems(finalSalesOrdersData.length > 0 ? finalSalesOrdersData : salesOrdersDataRaw);
     const inventoryData = filterActiveItems(inventoryDataRaw);
     const purchaseOrdersData = filterActiveItems(purchaseOrdersDataRaw);
     const deliveryNotesData = filterActiveItems(deliveryNotesDataRaw);
     const purchaseRequestsData = filterActiveItems(purchaseRequestsDataRaw);
     
+    // CRITICAL: Preserve SPK data dari state yang sudah ada saat reload
+    // Ini mencegah SO hilang dari table list setelah create SPK karena event listener trigger loadData()
+    // Race condition: localStorage mungkin belum ter-update dengan SPK baru, jadi preserve dari state
+    const currentSpkData = Array.isArray(spkData) ? spkData : [];
+    if (currentSpkData.length > 0 && spk.length >= 0) {
+      // Merge SPK dari state yang sudah ada ke data yang di-reload
+      // Prioritaskan SPK dari state jika lebih baru (ada SPK yang belum ada di localStorage)
+      const spkFromState = currentSpkData.filter((stateSpk: any) => {
+        // Cek apakah SPK ini sudah ada di data yang di-reload
+        const existsInReloaded = spk.some((reloadedSpk: any) => 
+          reloadedSpk.id === stateSpk.id || reloadedSpk.spkNo === stateSpk.spkNo
+        );
+        // Jika tidak ada di reloaded data, berarti SPK baru yang belum ter-sync ke localStorage
+        return !existsInReloaded;
+      });
+      // Gabungkan: SPK dari localStorage + SPK baru dari state
+      spk = [...spk, ...spkFromState];
+    }
+    
+    // CRITICAL: Preserve ppicNotified flag dari state yang sudah ada saat reload
+    // Ini mencegah SO hilang dari table list setelah create SPK/PR/schedule karena event listener trigger loadData()
+    // Sama seperti Packaging yang preserve confirmed flag
+    const currentSalesOrders = Array.isArray(salesOrders) ? salesOrders : [];
+    
+    // CRITICAL: Juga preserve dari localStorage jika state kosong (saat refresh)
+    // Ini memastikan flag ppicNotified tidak hilang saat refresh
+    let preservedSalesOrders = currentSalesOrders;
+    if (currentSalesOrders.length === 0) {
+      // Saat refresh, coba preserve dari localStorage yang mungkin lebih up-to-date
+      const preservedFromStorage = loadFromLocalStorage('gt_salesOrders');
+      preservedSalesOrders = Array.isArray(preservedFromStorage) ? preservedFromStorage : [];
+    }
+    
+    if (preservedSalesOrders.length > 0 && salesOrdersData.length > 0) {
+      // Merge ppicNotified flag dari state/localStorage yang sudah ada ke data yang di-reload
+      salesOrdersData = salesOrdersData.map((so: any) => {
+        const existingSO = preservedSalesOrders.find((existing: any) => 
+          existing.id === so.id || existing.soNo === so.soNo
+        );
+        // CRITICAL: Preserve flag jika existing SO memiliki flag = true
+        // Ini handle baik race condition maupun refresh scenario
+        if (existingSO && existingSO.ppicNotified === true) {
+          return {
+            ...so,
+            ppicNotified: true,
+            ppicNotifiedAt: existingSO.ppicNotifiedAt || so.ppicNotifiedAt,
+            ppicNotifiedBy: existingSO.ppicNotifiedBy || so.ppicNotifiedBy,
+          };
+        }
+        // CRITICAL: Juga preserve jika data yang di-reload tidak memiliki flag tapi seharusnya punya
+        // Cek berdasarkan timestamp atau logic lain
+        return so;
+      });
+    }
+    
+    // Set salesOrders state untuk digunakan di confirmedSOsPending
+    setSalesOrders(salesOrdersData);
+    
+    // CRITICAL: Ensure all variables used with .some() are arrays
+    if (!Array.isArray(spk)) {
+      console.error('[GT PPIC] spk is not an array:', typeof spk, spk);
+      spk = [];
+    }
+    if (!Array.isArray(schedule)) {
+      console.error('[GT PPIC] schedule is not an array:', typeof schedule, schedule);
+      schedule = [];
+    }
+    
     // Auto-update SPK status berdasarkan delivery
     let updatedSPK = false;
-    const updatedSpkList = spk.map((s: any) => {
+    const updatedSpkList = safeMap(spk, (s: any) => {
       if (!s.soNo || !s.spkNo) return s;
       
       const spkQty = parseFloat(s.qty || '0') || 0;
@@ -412,78 +648,13 @@ const PPIC = () => {
       spk = updatedSpkList;
     }
     
-    // Process PPIC notifications (from SO and GRN)
-    const ppicNotificationsRaw = await storageService.get<any[]>('gt_ppicNotifications');
-    const ppicNotifications = extractStorageValue(ppicNotificationsRaw) || [];
-    // Removed excessive console.log for better performance
-    let updatedNotifications = false;
-    const processedNotifications: any[] = [];
-    const deliveryNotifications = await storageService.get<any[]>('gt_deliveryNotifications') || [];
+    // Process delivery notifications (untuk GRN stock ready)
+    const deliveryNotificationsRaw = await storageService.get<any[]>('gt_deliveryNotifications') || [];
+    const deliveryNotifications = extractStorageValue(deliveryNotificationsRaw) || [];
     let updatedDeliveryNotifications = [...deliveryNotifications];
     
-    for (const notif of ppicNotifications) {
-      if (notif.status !== 'PENDING') {
-        processedNotifications.push(notif);
-        continue;
-      }
-      
-      if (notif.type === 'SO_CREATED') {
-        // Notification dari SO - jangan langsung PROCESSED, biarkan PENDING untuk ditampilkan di UI
-        // User akan mark sebagai PROCESSED setelah create SPK
-        processedNotifications.push(notif);
-        continue;
-      }
-      
-      if (notif.type === 'STOCK_READY' && notif.spkNo) {
-        // Notification dari GRN - update SPK status dan trigger schedule delivery
-        const spkItem = spk.find((s: any) => (s.spkNo || '').toString().trim() === (notif.spkNo || '').toString().trim());
-        if (spkItem && spkItem.status === 'OPEN') {
-          // Update SPK status to stock fulfilled
-          const spkIndex = spk.findIndex((s: any) => (s.spkNo || '').toString().trim() === (notif.spkNo || '').toString().trim());
-          if (spkIndex >= 0) {
-            spk[spkIndex] = {
-              ...spk[spkIndex],
-              stockFulfilled: true,
-            };
-          }
-          
-          // Create delivery notification if not exists
-          const existingDelNotif = updatedDeliveryNotifications.find((n: any) => 
-            (n.spkNo || '').toString().trim() === (notif.spkNo || '').toString().trim()
-          );
-          
-          if (!existingDelNotif) {
-            const newDeliveryNotif = {
-              id: `delivery-ppic-${Date.now()}-${notif.spkNo}`,
-              type: 'READY_TO_SHIP',
-              soNo: notif.soNo || '',
-              spkNo: notif.spkNo,
-              customer: notif.customer || '',
-              product: notif.product || '',
-              productId: notif.productId || '',
-              qty: notif.qty || 0,
-              status: 'PENDING',
-              stockFulfilled: true,
-              created: new Date().toISOString(),
-            };
-            updatedDeliveryNotifications.push(newDeliveryNotif);
-          }
-          
-          updatedNotifications = true;
-          processedNotifications.push({ ...notif, status: 'PROCESSED' });
-          continue;
-        }
-      }
-      
-      processedNotifications.push(notif);
-    }
-    
-    if (updatedNotifications) {
-      await storageService.set('gt_ppicNotifications', processedNotifications);
-      if (updatedDeliveryNotifications.length > deliveryNotifications.length) {
-        await storageService.set('gt_deliveryNotifications', updatedDeliveryNotifications);
-      }
-    }
+    // Process GRN notifications untuk stock ready (jika ada)
+    // Note: GT tidak pakai gt_ppicNotifications untuk SO, langsung filter dari gt_salesOrders
     
     // Auto-fulfill SPK dari stock jika stock product cukup (langsung ke delivery, tidak ada production)
     let hasAutoFulfilled = false;
@@ -509,7 +680,7 @@ const PPIC = () => {
       return productId;
     };
 
-    const autoFulfilledSpkList = spk.map((s: any) => {
+    const autoFulfilledSpkList = safeMap(spk, (s: any) => {
       if (s.status !== 'OPEN' || s.stockFulfilled) return s;
       
       const spkQty = parseFloat(s.qty || '0') || 0;
@@ -553,7 +724,8 @@ const PPIC = () => {
       spk = autoFulfilledSpkList;
     }
     
-    setSpkData(spk);
+    // SIMPLE: Update state langsung
+    setSpkData(Array.isArray(spk) ? spk : []);
     setScheduleData(schedule);
     setCustomers(customersData);
     setProducts(productsData);
@@ -563,77 +735,28 @@ const PPIC = () => {
     setDeliveryNotes(deliveryNotesData);
     setPurchaseRequests(purchaseRequestsData);
     
+    // CRITICAL: Ensure all state data are arrays
+    if (!Array.isArray(spk)) {
+      console.error('[GT PPIC] Setting non-array spk to state:', typeof spk);
+      setSpkData([]);
+    }
+    if (!Array.isArray(schedule)) {
+      console.error('[GT PPIC] Setting non-array schedule to state:', typeof schedule);
+      setScheduleData([]);
+    }
+    if (!Array.isArray(purchaseRequestsData)) {
+      console.error('[GT PPIC] Setting non-array purchaseRequestsData to state:', typeof purchaseRequestsData);
+      setPurchaseRequests([]);
+    }
+    if (!Array.isArray(deliveryNotesData)) {
+      console.error('[GT PPIC] Setting non-array deliveryNotesData to state:', typeof deliveryNotesData);
+      setDeliveryNotes([]);
+    }
+    
     // Set pending SO notifications untuk ditampilkan di UI
     // IMPORTANT: Tampilkan SO_CREATED notifications yang PENDING ATAU yang belum ada SPK-nya
     
-    // Filter: Tampilkan SO_CREATED yang PENDING, atau yang PROCESSED tapi belum semua items punya SPK
-    // IMPORTANT: Cek per item, bukan per SO (karena 1 SO bisa punya banyak items, dan user bisa create SPK per item)
-    const pendingSO = ppicNotifications.filter((n: any) => {
-      if (n?.type !== 'SO_CREATED') return false;
-      
-      // Jika status PENDING, tampilkan
-      if (n?.status === 'PENDING') {
-        return true;
-      }
-      
-      // Jika status PROCESSED, cek apakah SEMUA items di SO sudah punya SPK
-      // Jika belum semua items punya SPK, tampilkan juga (untuk create SPK untuk items yang belum)
-      if (n?.status === 'PROCESSED') {
-        // Cari SO yang terkait dengan notifikasi ini
-        const relatedSO = salesOrdersData.find((so: any) => 
-          (so.soNo || '').toString().trim() === (n.soNo || '').toString().trim()
-        );
-        
-        if (!relatedSO || !relatedSO.items || relatedSO.items.length === 0) {
-          // SO tidak ditemukan atau tidak punya items, cek apakah ada SPK untuk SO ini
-          const hasSPK = spk.some((s: any) => (s.soNo || '').toString().trim() === (n.soNo || '').toString().trim());
-          if (!hasSPK) {
-            return true; // Tampilkan jika belum ada SPK
-          }
-          return false; // Sudah ada SPK, jangan tampilkan
-        }
-        
-        // Cek apakah semua items di SO sudah punya SPK
-        // IMPORTANT: Cek per item, bukan per SO (karena 1 SO bisa punya banyak items)
-        const allItemsHaveSPK = relatedSO.items.every((item: any) => {
-          const itemProductId = (item.productId || item.productKode || '').toString().trim();
-          const itemProductKode = (item.productKode || item.productId || '').toString().trim();
-          
-          if (!itemProductId && !itemProductKode) {
-            console.warn(`[PPIC] Item ${item.productName} tidak punya productId/productKode, skip dari cek SPK`);
-            return true; // Skip jika tidak punya productId
-          }
-          
-          // Cek apakah ada SPK untuk item ini (match berdasarkan productId/productKode)
-          const hasSPKForItem = spk.some((s: any) => {
-            const spkSoNo = (s.soNo || '').toString().trim();
-            const spkProductId = (s.product_id || s.productId || s.kode || '').toString().trim();
-            const spkKode = (s.kode || s.product_id || s.productId || '').toString().trim();
-            
-            const soNoMatch = spkSoNo === (n.soNo || '').toString().trim();
-            const productMatch = (itemProductId && (spkProductId === itemProductId || spkKode === itemProductId)) ||
-                                 (itemProductKode && (spkProductId === itemProductKode || spkKode === itemProductKode));
-            
-            return soNoMatch && productMatch;
-          });
-          
-          // Removed console.log for better performance
-          
-          return hasSPKForItem;
-        });
-        
-        if (!allItemsHaveSPK) {
-          return true; // Tampilkan jika belum semua items punya SPK
-        }
-        
-        return false; // Semua items sudah punya SPK, jangan tampilkan
-      }
-      
-      return false;
-    });
-    
-    setPendingSONotifications(pendingSO);
-    
+    // Tidak perlu filter dari ppicNotifications lagi - sudah pakai confirmedSOsPending dari useMemo yang filter langsung dari salesOrders
     // Sync notifications dari schedule data (untuk memastikan semua batch punya notifikasi)
     await syncNotificationsFromSchedule(schedule, spk);
   };
@@ -641,7 +764,8 @@ const PPIC = () => {
   // Sync notifications dari schedule data (untuk memastikan semua batch punya notifikasi)
   const syncNotificationsFromSchedule = async (scheduleList: any[], spkDataFromStorage: any[]) => {
     try {
-      const deliveryNotifications = await storageService.get<any[]>('gt_deliveryNotifications') || [];
+      const deliveryNotificationsRaw = await storageService.get<any[]>('gt_deliveryNotifications') || [];
+      const deliveryNotifications = extractStorageValue(deliveryNotificationsRaw) || [];
       const newNotifications: any[] = [];
       
       // Helper function untuk match SPK
@@ -758,21 +882,37 @@ const PPIC = () => {
 
   // Group SPK by SO No
   const groupedSpkData = useMemo(() => {
-    const grouped: { [key: string]: any[] } = {};
-    spkData.forEach((spk: any) => {
-      const soNo = spk.soNo || 'UNKNOWN';
-      if (!grouped[soNo]) {
-        grouped[soNo] = [];
-      }
-      grouped[soNo].push(spk);
-    });
-    return Object.entries(grouped).map(([soNo, spks]) => ({
-      soNo,
-      spks,
-      customer: spks[0]?.customer || '',
-      totalQty: spks.reduce((sum, s) => sum + (parseFloat(s.qty || '0') || 0), 0),
-      status: spks.every((s: any) => s.status === 'CLOSE') ? 'CLOSE' : 'OPEN',
-    }));
+    // CRITICAL: Ensure spkData is array before processing
+    if (!Array.isArray(spkData)) {
+      console.error('[GT PPIC] spkData is not an array in groupedSpkData:', typeof spkData);
+      return [];
+    }
+    
+    try {
+      const grouped: { [key: string]: any[] } = {};
+      spkData.forEach((spk: any) => {
+        const soNo = spk.soNo || 'UNKNOWN';
+        if (!grouped[soNo]) {
+          grouped[soNo] = [];
+        }
+        grouped[soNo].push(spk);
+      });
+      
+      return Object.entries(grouped).map(([soNo, spks]) => {
+        // CRITICAL: Ensure spks is always an array
+        const safeSpks = Array.isArray(spks) ? spks : [];
+        return {
+          soNo,
+          spks: safeSpks,
+          customer: safeSpks.length > 0 ? safeSpks[0].customer || '' : '',
+          totalQty: safeSpks.reduce((sum, s) => sum + (parseFloat(s.qty || '0') || 0), 0),
+          status: safeSpks.length > 0 && safeEvery(safeSpks, (s: any) => s.status === 'CLOSE') ? 'CLOSE' : 'OPEN',
+        };
+      });
+    } catch (error) {
+      console.error('[GT PPIC] Error in groupedSpkData processing:', error);
+      return [];
+    }
   }, [spkData]);
 
   // Filtered SPK data
@@ -784,7 +924,7 @@ const PPIC = () => {
       filtered = filtered.filter((group: any) => 
         group.soNo.toLowerCase().includes(query) ||
         group.customer.toLowerCase().includes(query) ||
-        group.spks.some((s: any) => 
+        safeSome(group.spks || [], (s: any) => 
           (s.spkNo || '').toLowerCase().includes(query) ||
           (s.product || '').toLowerCase().includes(query)
         )
@@ -819,7 +959,13 @@ const PPIC = () => {
         );
         // GT: Cek hasSchedule berdasarkan deliveryBatches (bukan scheduleStartDate)
         const hasSchedule = !!(schedule && schedule.deliveryBatches && Array.isArray(schedule.deliveryBatches) && schedule.deliveryBatches.length > 0);
-        const hasPR = purchaseRequests.some((pr: any) => 
+        
+        // CRITICAL: Ensure purchaseRequests is array before using .some()
+        const safePRForFlattened = Array.isArray(purchaseRequests) ? purchaseRequests : [];
+        if (!Array.isArray(safePRForFlattened)) {
+          console.error('[GT PPIC] purchaseRequests is not an array in flattenedSpkData:', typeof purchaseRequests);
+        }
+        const hasPR = safeSome(safePRForFlattened, (pr: any) => 
           (pr.spkNo || '').toString().trim() === (spk.spkNo || '').toString().trim()
         );
         
@@ -928,7 +1074,13 @@ const PPIC = () => {
         while (!isUnique) {
           const randomCode = generateRandomCode();
           spkNo = `SPK/${year}${month}${day}/${randomCode}`;
-          isUnique = !existingSpk.some((s: any) => s.spkNo === spkNo);
+          // CRITICAL: Ensure existingSpk is array before using .some()
+          if (!Array.isArray(existingSpk)) {
+            console.error('[GT PPIC] existingSpk is not an array in SPK creation:', typeof existingSpk);
+            isUnique = true; // Assume unique if can't check
+          } else {
+            isUnique = !safeSome(existingSpk, (s: any) => s.spkNo === spkNo);
+          }
         }
         
         // Debug: Log SO item data
@@ -964,65 +1116,30 @@ const PPIC = () => {
         return;
       }
       
-      // Save SPKs
-      const currentSPKs = await storageService.get<any[]>('gt_spk') || [];
+      // SIMPLE: Save SPKs - langsung update state dan storage
+      const currentSPKsRaw = await storageService.get<any[]>('gt_spk') || [];
+      const currentSPKs = extractStorageValue(currentSPKsRaw) || [];
       const updatedSPKs = [...currentSPKs, ...newSPKs];
-      await storageService.set('gt_spk', updatedSPKs);
+      
+      // CRITICAL: Skip event listener untuk 2 detik setelah create SPK
+      // Ini mencegah loadData() trigger yang menyebabkan SO hilang dari table list
+      skipReloadRef.current = {
+        skipUntil: Date.now() + 2000, // Skip reload selama 2 detik
+        reason: 'createSPK'
+      };
+      
+      // Update state langsung (confirmedSOsPending akan otomatis update)
       setSpkData(updatedSPKs);
       
-      // Mark notification as PROCESSED hanya jika semua items sudah dibuat SPK
-      // IMPORTANT: Gunakan updatedSPKs (yang sudah include SPK baru) untuk cek apakah semua items punya SPK
-      try {
-        // Gabungkan existing SPK dengan SPK baru untuk cek lengkap
-        const allSPKsForSO = [...existingSpk, ...newSPKs];
-        
-        const allItemsHaveSPK = so.items.every((item: any) => {
-          const itemProductId = (item.productId || item.productKode || '').toString().trim();
-          if (!itemProductId) {
-            console.warn(`[PPIC] Item ${item.productName} tidak punya productId/productKode, skip dari cek SPK`);
-            return true; // Skip jika tidak punya productId
-          }
-          
-          // Cek apakah ada SPK untuk item ini (match berdasarkan productId/productKode)
-          const hasSPKForItem = allSPKsForSO.some((s: any) => {
-            const spkSoNo = (s.soNo || '').toString().trim();
-            const spkProductId = (s.product_id || s.productId || s.kode || '').toString().trim();
-            const soNoMatch = spkSoNo === (so.soNo || '').toString().trim();
-            const productMatch = spkProductId === itemProductId || 
-                                 spkProductId === (item.productKode || '').toString().trim() ||
-                                 (s.kode || '').toString().trim() === (item.productKode || '').toString().trim();
-            return soNoMatch && productMatch;
-          });
-          
-          if (!hasSPKForItem) {
-            // Removed console.log for better performance
-          }
-          
-          return hasSPKForItem;
-        });
-        
-        // Removed console.log for better performance
-        
-        if (allItemsHaveSPK) {
-          const ppicNotifications = await storageService.get<any[]>('gt_ppicNotifications') || [];
-          const updatedNotifications = ppicNotifications.map((n: any) => 
-            n.soNo === so.soNo && n.type === 'SO_CREATED' && n.status === 'PENDING'
-              ? { ...n, status: 'PROCESSED', processedAt: new Date().toISOString() }
-              : n
-          );
-          await storageService.set('gt_ppicNotifications', updatedNotifications);
-          // Removed console.log for better performance
-        } else {
-          // Removed console.log for better performance
-        }
-      } catch (error: any) {
-      }
+      // CRITICAL: Force immediate sync ke server untuk create SPK
+      // Ini memastikan data langsung tersedia di device lain
+      await storageService.set('gt_spk', updatedSPKs, true);
       
-      // Reset selected items
+      // Reset dan close
       setSelectedItemsForSPK({});
-      showAlert(`SPK berhasil dibuat untuk SO ${so.soNo}:\n\n${newSPKs.map(s => `• ${s.spkNo} - ${s.product} (${s.qty} ${s.unit})`).join('\n')}`, 'Success');
       setViewingSO(null);
-      loadData();
+      
+      showAlert(`SPK berhasil dibuat untuk SO ${so.soNo}:\n\n${newSPKs.map(s => `• ${s.spkNo} - ${s.product} (${s.qty} ${s.unit})`).join('\n')}`, 'Success');
     } catch (error: any) {
       showAlert(`Error creating SPK: ${error.message}`, 'Error');
     }
@@ -1094,7 +1211,7 @@ const PPIC = () => {
       
       if (availableStock >= requiredQty) {
         // Update SPK stockFulfilled status
-        const updatedSpkData = spkData.map((s: any) => {
+        const updatedSpkData = safeMap(spkData, (s: any) => {
           if ((s.spkNo || '').toString().trim() === spkNo) {
             return { ...s, stockFulfilled: true };
           }
@@ -1134,13 +1251,20 @@ const PPIC = () => {
         return code;
       };
       
-      const existingPRs = await storageService.get<any[]>('gt_purchaseRequests') || [];
+      const existingPRsRaw = await storageService.get<any[]>('gt_purchaseRequests') || [];
+      const existingPRs = extractStorageValue(existingPRsRaw) || [];
       let prNo = '';
       let isUnique = false;
       while (!isUnique) {
         const randomCode = generateRandomCode();
         prNo = `PR/${year}${month}${day}/${randomCode}`;
-        isUnique = !existingPRs.some((pr: any) => pr.prNo === prNo);
+        // CRITICAL: Ensure existingPRs is array before using .some()
+        if (!Array.isArray(existingPRs)) {
+          console.error('[GT PPIC] existingPRs is not an array in PR creation:', typeof existingPRs);
+          isUnique = true; // Assume unique if can't check
+        } else {
+          isUnique = !safeSome(existingPRs, (pr: any) => pr.prNo === prNo);
+        }
       }
       
       const product = products.find((p: any) => 
@@ -1196,13 +1320,28 @@ const PPIC = () => {
       // Removed console.log for better performance
       
       const updatedPRs = [...purchaseRequests, newPR];
-      await storageService.set('gt_purchaseRequests', updatedPRs);
+      // CRITICAL: Force immediate sync ke server untuk create PR
+      // Ini memastikan PR langsung muncul di Purchasing di device lain
+      console.log(`[GT PPIC] 📤 Creating PR and POST to server: ${prNo}`);
+      await storageService.set('gt_purchaseRequests', updatedPRs, true);
+      console.log(`[GT PPIC] ✅ PR created and synced to server: ${prNo}`);
       setPurchaseRequests(updatedPRs);
       
-      // Send notification to Purchasing
+      // CRITICAL: Send notification to Purchasing IMMEDIATELY after PR creation
+      // Ini harus POST ke server, bukan hanya local
+      let notificationSent = false;
       try {
-        const purchasingNotifications = await storageService.get<any[]>('gt_purchasingNotifications') || [];
-        const existingNotif = purchasingNotifications.find((n: any) => n.prNo === prNo);
+        // CRITICAL: Get current notifications dengan proper extraction
+        const purchasingNotificationsRaw = await storageService.get<any[]>('gt_purchasingNotifications');
+        let purchasingNotifications = extractStorageValue(purchasingNotificationsRaw) || [];
+        
+        // CRITICAL: Ensure array format
+        if (!Array.isArray(purchasingNotifications)) {
+          console.warn('[GT PPIC] purchasingNotifications is not an array, resetting to empty array');
+          purchasingNotifications = [];
+        }
+        
+        const existingNotif = purchasingNotifications.find((n: any) => n && n.prNo === prNo);
         
         if (!existingNotif) {
           const newPurchasingNotification = {
@@ -1218,14 +1357,83 @@ const PPIC = () => {
             unit: spk.unit || 'PCS',
             status: 'PENDING',
             created: new Date().toISOString(),
+            pr: newPR, // Include full PR object for Purchasing
           };
-          await storageService.set('gt_purchasingNotifications', [...purchasingNotifications, newPurchasingNotification]);
+          
+          // CRITICAL: Ensure we're saving array format
+          const updatedNotifications = [...purchasingNotifications, newPurchasingNotification];
+          
+          // CRITICAL: Save dengan await dan verify
+          // CRITICAL: Force immediate sync ke server untuk purchasing notifications
+          // Ini memastikan notifikasi langsung muncul di Purchasing di device lain
+          // MUST POST TO SERVER, NOT LOCAL ONLY
+          console.log(`[GT PPIC] 📤 POST purchasing notification to SERVER: ${prNo}`);
+          console.log(`[GT PPIC] Notification data:`, {
+            prNo,
+            spkNo,
+            soNo: spk.soNo,
+            customer: spk.customer,
+            product: spk.product,
+            qty: shortageQty,
+            totalNotifications: updatedNotifications.length
+          });
+          
+          // CRITICAL: immediateSync = true untuk POST ke server
+          await storageService.set('gt_purchasingNotifications', updatedNotifications, true);
+          
+          console.log(`[GT PPIC] ✅ Purchasing notification POSTED to server: ${prNo} (${updatedNotifications.length} total notifications)`);
+          
+          // CRITICAL: Verify save dengan read back dari server
+          // Wait a bit for server sync to complete
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          const verifyRaw = await storageService.get<any[]>('gt_purchasingNotifications');
+          const verifyNotifications = extractStorageValue(verifyRaw) || [];
+          const verifyNotif = verifyNotifications.find((n: any) => n && n.prNo === prNo);
+          
+          if (verifyNotif) {
+            notificationSent = true;
+            console.log(`[GT PPIC] ✅ Verified: Purchasing notification found after POST: ${prNo}`);
+          } else {
+            console.error('[GT PPIC] ❌ Notification not found after POST - server sync may have failed!');
+            console.error('[GT PPIC] Verify data:', {
+              prNo,
+              totalNotifications: verifyNotifications.length,
+              notifications: verifyNotifications.map((n: any) => ({ prNo: n.prNo, type: n.type }))
+            });
+          }
+        } else {
+          notificationSent = true; // Already exists
+          console.log(`[GT PPIC] ℹ️ Notification already exists for PR: ${prNo}`);
         }
       } catch (error: any) {
+        // Log error but don't fail the PR creation
+        console.error('[GT PPIC] ❌ Error POST notification to Purchasing:', error);
+        console.error('[GT PPIC] Error details:', {
+          message: error.message,
+          stack: error.stack,
+          prNo,
+          spkNo,
+        });
       }
       
       setCreatingPR(prev => ({ ...prev, [spkNo]: false }));
-      showAlert(`PR berhasil dibuat untuk SPK ${spkNo}!\n\nPR No: ${prNo}\nProduct: ${spk.product}\nShortage Qty: ${shortageQty} ${spk.unit}\n\n📧 Notification sent to Purchasing`, 'Success');
+      
+      // Sama seperti Packaging PPIC: panggil loadData() setelah create PR
+      // loadData() akan reload semua data dari storage termasuk salesOrders dan purchaseRequests
+      // Event listener akan handle debounce untuk prevent multiple reloads
+        // CRITICAL: Skip event listener untuk 2 detik setelah create PR
+        // Ini mencegah loadData() trigger yang menyebabkan SO hilang dari table list
+        skipReloadRef.current = {
+          skipUntil: Date.now() + 2000, // Skip reload selama 2 detik
+          reason: 'createPR'
+        };
+        
+        const notificationMessage = notificationSent 
+          ? `PR berhasil dibuat untuk SPK ${spkNo}!\n\nPR No: ${prNo}\nProduct: ${spk.product}\nShortage Qty: ${shortageQty} ${spk.unit}\n\n📧 Notification sent to Purchasing`
+          : `PR berhasil dibuat untuk SPK ${spkNo}!\n\nPR No: ${prNo}\nProduct: ${spk.product}\nShortage Qty: ${shortageQty} ${spk.unit}\n\n⚠️ Warning: Notification to Purchasing may not have been sent. Please check.`;
+        
+        showAlert(notificationMessage, 'Success');
       loadData();
     } catch (error: any) {
       setCreatingPR(prev => ({ ...prev, [spk.spkNo]: false }));
@@ -1285,7 +1493,8 @@ const PPIC = () => {
   // Helper function untuk proceed save delivery schedule
   const proceedSaveDeliverySchedule = async (data: { spkDeliveries: { spkNo: string; deliveryBatches: any[] }[] }) => {
     let updated = [...scheduleData];
-    const deliveryNotifications = await storageService.get<any[]>('gt_deliveryNotifications') || [];
+    const deliveryNotificationsRaw = await storageService.get<any[]>('gt_deliveryNotifications') || [];
+    const deliveryNotifications = extractStorageValue(deliveryNotificationsRaw) || [];
     let newNotifications: any[] = [];
     
     for (const spkDelivery of data.spkDeliveries) {
@@ -1392,7 +1601,7 @@ const PPIC = () => {
         
         // Update SPK stockFulfilled status (hanya sekali, untuk semua batch)
         if (stockFulfilled && batchIndex === 0) {
-          const updatedSpkData = spkData.map((s: any) => {
+          const updatedSpkData = safeMap(spkData, (s: any) => {
             if ((s.spkNo || '').toString().trim() === spkNo) {
               return { ...s, stockFulfilled: true };
             }
@@ -1429,18 +1638,31 @@ const PPIC = () => {
       }
     }
     
-    await storageService.set('gt_schedule', updated);
+    // CRITICAL: Force immediate sync ke server untuk save delivery schedule
+    // Ini memastikan data langsung tersedia di device lain
+    await storageService.set('gt_schedule', updated, true);
     setScheduleData(updated);
     
+    // CRITICAL: Skip event listener untuk 2 detik setelah save delivery schedule
+    // Ini mencegah loadData() trigger yang menyebabkan SO hilang dari table list
+    skipReloadRef.current = {
+      skipUntil: Date.now() + 2000, // Skip reload selama 2 detik
+      reason: 'saveDeliverySchedule'
+    };
+    
     if (newNotifications.length > 0) {
-      await storageService.set('gt_deliveryNotifications', [...deliveryNotifications, ...newNotifications]);
+      // CRITICAL: Force immediate sync ke server untuk delivery notifications
+      // Ini memastikan notifikasi langsung muncul di Delivery Note di device lain
+      await storageService.set('gt_deliveryNotifications', [...deliveryNotifications, ...newNotifications], true);
       showAlert(`Delivery schedule saved successfully untuk ${data.spkDeliveries.length} SPK(s)\n\n📧 ${newNotifications.length} notification(s) sent to Delivery Note\n\n💡 Stock akan dicek saat create Delivery Note.`, 'Success');
     } else {
       showAlert(`Delivery schedule saved untuk ${data.spkDeliveries.length} SPK(s)`, 'Success');
     }
     
     setSelectedDeliveryItem(null);
-    loadData();
+    
+    // Jangan panggil loadData() karena akan reload salesOrders dan bisa kehilangan flag ppicNotified
+    // Event listener akan handle update jika ada perubahan dari device lain
   };
 
   const handleDeleteSPK = async (spk: any) => {
@@ -1461,9 +1683,17 @@ const PPIC = () => {
       const scheduleList = scheduleListRaw || [];
       const deliveryList = deliveryListRaw || [];
 
-      const hasSchedule = scheduleList.some((s: any) => s.spkNo === spkNo);
-      const hasDelivery = deliveryList.some((dn: any) => 
-        dn.spkNo === spkNo || (dn.items || []).some((itm: any) => itm.spkNo === spkNo)
+      // CRITICAL: Ensure arrays before using .some()
+      if (!Array.isArray(scheduleList)) {
+        console.error('[GT PPIC] scheduleList is not an array in handleDeleteSPK:', typeof scheduleList);
+      }
+      if (!Array.isArray(deliveryList)) {
+        console.error('[GT PPIC] deliveryList is not an array in handleDeleteSPK:', typeof deliveryList);
+      }
+
+      const hasSchedule = safeSome(scheduleList, (s: any) => s.spkNo === spkNo);
+      const hasDelivery = safeSome(deliveryList, (dn: any) => 
+        dn.spkNo === spkNo || safeSome(dn.items || [], (itm: any) => itm.spkNo === spkNo)
       );
 
       if (hasSchedule || hasDelivery) {
@@ -1480,26 +1710,33 @@ const PPIC = () => {
 
       // Show confirmation dialog
       showConfirm(
-        'Delete SPK',
-        `Hapus SPK ${spkNo}?\n\nTindakan ini akan:\n• Menghapus SPK dari daftar\n• Menghapus notifikasi terkait\n\nPastikan tidak ada proses lanjutan untuk SPK ini.`,
+        'Safe Delete Confirmation',
+        `Hapus SPK ${spkNo}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini akan:\n• Menghapus SPK dari daftar\n• Menghapus notifikasi terkait\n\nPastikan tidak ada proses lanjutan untuk SPK ini.\n\nTindakan ini tidak bisa dibatalkan.`,
         async () => {
           try {
+            console.log('[GT PPIC] handleDeleteSPK called for:', spkNo, spk.id);
+            
             // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
             const deleteResult = await deleteGTItem('gt_spk', spk.id, 'id');
             if (!deleteResult.success) {
+              console.error('[GT PPIC] Delete failed:', deleteResult.error);
               showAlert(`❌ Error deleting SPK ${spkNo}: ${deleteResult.error || 'Unknown error'}`, 'Error');
               return;
             }
             
             // Reload SPK data dengan helper (handle race condition)
+            const activeSpkData = await reloadGTData('gt_spk', setSpkData);
+            setSpkData(activeSpkData);
+            
+            // Reload all data untuk refresh UI
             await loadData();
             
             showAlert(`✅ SPK ${spkNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
           } catch (error: any) {
-            console.error('[PPIC] Error in safe delete:', error);
+            console.error('[GT PPIC] Error deleting SPK:', error);
             showAlert(`❌ Error deleting SPK: ${error.message}`, 'Error');
           }
-        },
+        }
       );
     } catch (error: any) {
       showAlert(`Error checking SPK dependencies: ${error.message}`, 'Error');
@@ -1539,7 +1776,7 @@ const PPIC = () => {
       header: 'SPKs & Actions',
       render: (group: any) => (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          {group.spks.map((spk: any, idx: number) => {
+          {safeMap(group.spks || [], (spk: any, idx: number) => {
             // Cek apakah delivery schedule sudah dibuat untuk SPK ini
             // GT: Cek hasSchedule berdasarkan deliveryBatches (bukan hanya existence)
             const schedule = scheduleData.find((s: any) => 
@@ -1547,15 +1784,20 @@ const PPIC = () => {
             );
             const hasSchedule = !!(schedule && schedule.deliveryBatches && Array.isArray(schedule.deliveryBatches) && schedule.deliveryBatches.length > 0);
             
-            // Cek apakah PR sudah dibuat untuk SPK ini
-            const hasPR = purchaseRequests.some((pr: any) => 
-              (pr.spkNo || '').toString().trim() === (spk.spkNo || '').toString().trim()
-            );
+        // CRITICAL: Ensure purchaseRequests is array before using .some()
+        const safePRForCheck = Array.isArray(safePurchaseRequests) ? safePurchaseRequests : [];
+        if (!Array.isArray(safePRForCheck)) {
+          console.error('[GT PPIC] safePRForCheck is not an array:', typeof safePRForCheck);
+        }
+        const hasPR = safeSome(safePRForCheck, (pr: any) => 
+          (pr.spkNo || '').toString().trim() === (spk.spkNo || '').toString().trim()
+        );
             
             // Cek apakah sudah ada delivery note untuk SPK ini
-            const relatedDelivery = deliveryNotes.find((dn: any) => {
+            const safeDeliveryNotesForCheck = Array.isArray(safeDeliveryNotes) ? safeDeliveryNotes : [];
+            const relatedDelivery = safeDeliveryNotesForCheck.find((dn: any) => {
               if (!dn.items || !Array.isArray(dn.items)) return false;
-              return dn.items.some((item: any) => 
+              return safeSome(dn.items, (item: any) => 
                 (item.spkNo || '').toString().trim() === (spk.spkNo || '').toString().trim()
               );
             });
@@ -1872,15 +2114,49 @@ const PPIC = () => {
       <div className="page-header">
         <h1>PPIC - Production Planning & Inventory Control</h1>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {pendingSONotifications.length > 0 && (
+          {confirmedSOsPending.length > 0 && (
             <NotificationBell
               notifications={soNotifications}
-              onNotificationClick={(notification) => {
+              onNotificationClick={async (notification) => {
+                // CRITICAL: Saat user klik notifikasi, langsung update state dan pastikan SO muncul di table list
                 if (notification.so) {
+                  // Pastikan SO ada di salesOrders state
+                  const existingSO = salesOrders.find((s: any) => s.id === notification.so.id || s.soNo === notification.so.soNo);
+                  if (!existingSO) {
+                    // Jika SO belum ada di state, tambahkan langsung
+                    const updatedSalesOrders = [...salesOrders, notification.so];
+                    setSalesOrders(updatedSalesOrders);
+                    // CRITICAL: Force immediate sync ke server untuk confirm notifikasi
+                    // Ini memastikan data langsung tersedia di device lain
+                    await storageService.set('gt_salesOrders', updatedSalesOrders, true);
+                  } else {
+                    // Pastikan flag ppicNotified tetap true
+                    if (!existingSO.ppicNotified) {
+                      const updatedSalesOrders = salesOrders.map((s: any) => 
+                        s.id === notification.so.id || s.soNo === notification.so.soNo
+                          ? { ...s, ppicNotified: true, ppicNotifiedAt: notification.so.ppicNotifiedAt || new Date().toISOString() }
+                          : s
+                      );
+                      setSalesOrders(updatedSalesOrders);
+                      // CRITICAL: Force immediate sync ke server untuk confirm notifikasi
+                      await storageService.set('gt_salesOrders', updatedSalesOrders, true);
+                    }
+                  }
                   setViewingSO(notification.so);
                 } else {
                   const so = salesOrders.find((s: any) => s.soNo === notification.title.replace('SO ', ''));
                   if (so) {
+                    // Pastikan flag ppicNotified true
+                    if (!so.ppicNotified) {
+                      const updatedSalesOrders = salesOrders.map((s: any) => 
+                        s.soNo === so.soNo
+                          ? { ...s, ppicNotified: true, ppicNotifiedAt: new Date().toISOString() }
+                          : s
+                      );
+                      setSalesOrders(updatedSalesOrders);
+                      // CRITICAL: Force immediate sync ke server untuk confirm notifikasi
+                      await storageService.set('gt_salesOrders', updatedSalesOrders, true);
+                    }
                     setViewingSO(so);
                   } else {
                     showAlert(`SO tidak ditemukan.`, 'Error');

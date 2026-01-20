@@ -394,6 +394,7 @@ const SalesOrders = () => {
   const [quotations, setQuotations] = useState<SalesOrder[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [deliveries, setDeliveries] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState<SalesOrder | null>(null);
   const [showQuotationPreview, setShowQuotationPreview] = useState(false);
@@ -586,24 +587,24 @@ const SalesOrders = () => {
     loadQuotations();
     loadCustomers();
     loadProducts();
+    loadDeliveries();
 
     // Listen for storage changes (including server sync)
     const handleStorageChange = (event: Event) => {
       const detail = (event as CustomEvent<{ key?: string; action?: string }>).detail;
       if (detail?.key === 'general-trading/gt_salesOrders') {
-        console.log('[GT SalesOrders] Storage changed, reloading orders...');
         loadOrders();
       }
       if (detail?.key === 'general-trading/gt_quotations') {
-        console.log('[GT SalesOrders] Quotations changed, reloading...');
         loadQuotations();
       }
+      if (detail?.key === 'general-trading/gt_delivery' || detail?.key?.endsWith('/gt_delivery')) {
+        loadDeliveries();
+      }
       if (detail?.key === 'general-trading/gt_customers' || detail?.key?.endsWith('/gt_customers')) {
-        console.log('[GT SalesOrders] Customers changed, reloading...');
         loadCustomers();
       }
       if (detail?.key === 'general-trading/gt_products' || detail?.key?.endsWith('/gt_products')) {
-        console.log('[GT SalesOrders] Products changed, reloading...');
         loadProducts();
       }
     };
@@ -912,9 +913,7 @@ const SalesOrders = () => {
   }, [showHiddenPopup]);
 
   const loadOrders = async () => {
-    console.log('[GT SalesOrders] Loading orders...');
     let data = await storageService.get<SalesOrder[]>('gt_salesOrders') || [];
-    console.log(`[GT SalesOrders] Raw data from storage: ${data.length} items`);
     
     // If we have very few orders, try force reload from file
     if (data.length <= 1) {
@@ -928,7 +927,6 @@ const SalesOrders = () => {
     
     // Filter out deleted items menggunakan helper function
     const activeOrders = filterActiveItems(data);
-    console.log(`[GT SalesOrders] Active orders after filtering: ${activeOrders.length} items`);
     
     // Filter hanya SO (bukan quotation - quotation punya soNo yang link ke SO atau null)
     // Quotation disimpan terpisah di gt_quotations
@@ -939,7 +937,7 @@ const SalesOrders = () => {
       console.log('[GT SalesOrders] Sample orders:');
       activeOrders.slice(0, 3).forEach((order, index) => {
         const dateValue = order.created || order.timestamp || Date.now();
-        const date = new Date(dateValue).toLocaleDateString();
+        const date = new Date(dateValue || Date.now()).toLocaleDateString();
         console.log(`   ${index + 1}. ${order.soNo} - ${order.customer} (${date})`);
       });
     }
@@ -950,6 +948,13 @@ const SalesOrders = () => {
     // CRITICAL: Filter deleted items using helper function
     const activeQuotations = filterActiveItems(data);
     setQuotations(activeQuotations);
+  };
+
+  const loadDeliveries = async () => {
+    const data = await storageService.get<any[]>('gt_delivery') || [];
+    // Filter out deleted items menggunakan helper function
+    const activeDeliveries = filterActiveItems(data);
+    setDeliveries(activeDeliveries);
   };
 
   // Generate nomor Quotation dengan format: 00001/QUO/TLJP/XII/2025 (nomor random)
@@ -1019,9 +1024,7 @@ const SalesOrders = () => {
   };
 
   const loadCustomers = async () => {
-    console.log('[GT SalesOrders] Loading customers...');
     let data = await storageService.get<Customer[]>('gt_customers') || [];
-    console.log(`[GT SalesOrders] Raw customers from storage: ${data.length} items`);
     
     // If we have very few customers, try force reload from file
     if (data.length <= 1) {
@@ -1035,14 +1038,11 @@ const SalesOrders = () => {
     
     // CRITICAL: Filter deleted items using helper function
     const activeCustomers = filterActiveItems(data);
-    console.log(`[GT SalesOrders] Active customers after filtering: ${activeCustomers.length} items`);
     setCustomers(activeCustomers);
   };
 
   const loadProducts = async () => {
-    console.log('[GT SalesOrders] Loading products...');
     let dataRaw = await storageService.get<Product[]>('gt_products') || [];
-    console.log(`[GT SalesOrders] Raw products from storage: ${dataRaw.length} items`);
     
     // If we have very few products, try force reload from file
     if (dataRaw.length <= 1) {
@@ -1056,7 +1056,6 @@ const SalesOrders = () => {
     
     // Filter out deleted items menggunakan helper function
     const data = filterActiveItems(dataRaw);
-    console.log(`[GT SalesOrders] Active products after filtering: ${data.length} items`);
     setProducts(data);
   };
 
@@ -2293,38 +2292,7 @@ const SalesOrders = () => {
           // Silent fail
         }
         
-        // Send notification to PPIC to create SPK
-        try {
-          const ppicNotifications = await storageService.get<any[]>('gt_ppicNotifications') || [];
-          const existingNotif = ppicNotifications.find((n: any) => n.soNo === newOrder.soNo);
-          
-          if (!existingNotif) {
-            const newPPICNotification = {
-              id: `ppic-${Date.now()}-${newOrder.soNo}`,
-              type: 'SO_CREATED',
-              soNo: newOrder.soNo,
-              customer: newOrder.customer || '',
-              customerKode: newOrder.customerKode || '',
-              items: newOrder.items.map((item: any) => ({
-                product: item.productName || '',
-                productId: item.productId || item.productKode || '',
-                productKode: item.productKode || '',
-                qty: item.qty || 0,
-                unit: item.unit || 'PCS',
-              })),
-              status: 'PENDING',
-              created: new Date().toISOString(),
-            };
-            await storageService.set('gt_ppicNotifications', [...ppicNotifications, newPPICNotification]);
-            console.log(`✅ [SO] Created PPIC notification for SO ${newOrder.soNo}`);
-            showAlert(`SO ${formData.soNo} created successfully.\n\n📧 Notification sent to PPIC to create SPK.`, 'Success');
-          } else {
-            showAlert(`SO ${formData.soNo} created successfully`, 'Success');
-          }
-        } catch (error: any) {
-          console.error('Error creating PPIC notification:', error);
-          showAlert(`SO ${formData.soNo} created successfully`, 'Success');
-        }
+        showAlert(`SO ${formData.soNo} created successfully.\n\n⚠️ Silakan confirm SO untuk mengirim notifikasi ke PPIC.`, 'Success');
       }
       setShowForm(false);
       setEditingOrder(null);
@@ -2417,129 +2385,138 @@ const SalesOrders = () => {
 
   // Handle Delete
   const handleDelete = async (item: SalesOrder) => {
-    // Cek apakah SO sudah punya turunan (PO/Delivery)
-    const poListRaw = await storageService.get<any[]>('gt_purchaseOrders') || [];
-    const deliveryListRaw = await storageService.get<any[]>('gt_delivery') || [];
-    const prListRaw = await storageService.get<any[]>('gt_purchaseRequests') || [];
-    
-    // Filter active items untuk cek turunan
-    const poList = filterActiveItems(poListRaw);
-    const deliveryList = filterActiveItems(deliveryListRaw);
-    const prList = filterActiveItems(prListRaw);
-    
-    const hasPO = poList.some((po: any) => po.soNo === item.soNo);
-    const hasDelivery = deliveryList.some((del: any) => del.soNo === item.soNo);
-    const hasPR = prList.some((pr: any) => pr.soNo === item.soNo);
-    
-    if (hasPO || hasDelivery || hasPR) {
-      const relatedItems: string[] = [];
-      if (hasPO) relatedItems.push('PO');
-      if (hasDelivery) relatedItems.push('Delivery Note');
-      if (hasPR) relatedItems.push('PR');
+    try {
       
-      showAlert(
-        `Tidak bisa menghapus SO ${item.soNo}!\n\nSO ini sudah memiliki turunan:\n${relatedItems.map(i => `• ${i}`).join('\n')}\n\nJika ingin membatalkan, tutup SO melalui workflow normal (CLOSE).`,
-        'Cannot Delete'
-      );
-      return;
-    }
-    
-    // Cek apakah SO sudah CLOSE
-    if (item.status === 'CLOSE') {
-      showAlert(`Tidak bisa menghapus SO ${item.soNo} yang sudah CLOSE.`, 'Cannot Delete');
-      return;
-    }
-    
-    showConfirm(
-      `Hapus SO: ${item.soNo}?\n\nTindakan ini tidak bisa dibatalkan.`,
-      async () => {
-        try {
-          // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
-          const deleteResult = await deleteGTItem('gt_salesOrders', item.id, 'id');
-          
-          if (deleteResult.success) {
-            // Reload data dengan helper (handle race condition)
-            await reloadGTData('gt_salesOrders', setOrders);
+      if (!item || !item.soNo) {
+        showAlert('Sales Order tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[GT SalesOrders] Item missing ID:', item);
+        showAlert(`❌ Error: SO ${item.soNo} tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      // Cek apakah SO sudah punya turunan (PO/Delivery)
+      const poListRaw = await storageService.get<any[]>('gt_purchaseOrders') || [];
+      const deliveryListRaw = await storageService.get<any[]>('gt_delivery') || [];
+      const prListRaw = await storageService.get<any[]>('gt_purchaseRequests') || [];
+      
+      // Ensure all data are arrays before using filterActiveItems
+      const poList = Array.isArray(poListRaw) ? filterActiveItems(poListRaw) : [];
+      const deliveryList = Array.isArray(deliveryListRaw) ? filterActiveItems(deliveryListRaw) : [];
+      const prList = Array.isArray(prListRaw) ? filterActiveItems(prListRaw) : [];
+      
+      const hasPO = poList.some((po: any) => po && po.soNo === item.soNo);
+      const hasDelivery = deliveryList.some((del: any) => del && del.soNo === item.soNo);
+      const hasPR = prList.some((pr: any) => pr && pr.soNo === item.soNo);
+      
+      if (hasPO || hasDelivery || hasPR) {
+        const relatedItems: string[] = [];
+        if (hasPO) relatedItems.push('PO');
+        if (hasDelivery) relatedItems.push('Delivery Note');
+        if (hasPR) relatedItems.push('PR');
+        
+        showAlert(
+          `Tidak bisa menghapus SO ${item.soNo}!\n\nSO ini sudah memiliki turunan:\n${relatedItems.map(i => `• ${i}`).join('\n')}\n\nJika ingin membatalkan, tutup SO melalui workflow normal (CLOSE).`,
+          'Cannot Delete'
+        );
+        return;
+      }
+      
+      // Cek apakah SO sudah CLOSE
+      if (item.status === 'CLOSE') {
+        showAlert(`Tidak bisa menghapus SO ${item.soNo} yang sudah CLOSE.`, 'Cannot Delete');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus SO: ${item.soNo}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            console.log('[GT SalesOrders] Delete confirmed for:', item.soNo, item.id);
             
-            // Log activity
-            try {
-              await logDelete('SALES_ORDER', item.id, '/general-trading/sales-orders', {
-                soNo: item.soNo,
-                customer: item.customer,
-              });
-            } catch (logError) {
-              // Silent fail
+            // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deleteGTItem('gt_salesOrders', item.id, 'id');
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              await reloadGTData('gt_salesOrders', setOrders);
+              
+              // Log activity
+              try {
+                await logDelete('SALES_ORDER', item.id, '/general-trading/sales-orders', {
+                  soNo: item.soNo,
+                  customer: item.customer,
+                });
+              } catch (logError) {
+                console.warn('[GT SalesOrders] Log delete error:', logError);
+              }
+              closeDialog();
+              showAlert(`✅ SO ${item.soNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[GT SalesOrders] Delete failed:', deleteResult.error);
+              showAlert(`❌ Error deleting SO ${item.soNo}: ${deleteResult.error || 'Unknown error'}`, 'Error');
             }
-            closeDialog();
-            showAlert(`✅ SO ${item.soNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
-          } else {
-            showAlert(`❌ Error deleting SO ${item.soNo}: ${deleteResult.error || 'Unknown error'}`, 'Error');
+          } catch (error: any) {
+            console.error('[GT SalesOrders] Error deleting SO:', error);
+            showAlert(`❌ Error deleting SO: ${error.message}`, 'Error');
           }
-        } catch (error: any) {
-          console.error('[SalesOrders] Error in safe delete:', error);
-          showAlert(`❌ Error deleting SO: ${error.message}`, 'Error');
-        }
-      },
-      () => closeDialog(),
-      'Delete Confirmation'
-    );
+        },
+        () => closeDialog(),
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[GT SalesOrders] Error in handleDelete:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
   };
 
-  // Handle Confirm SO - Trigger notification to PPIC
+  // Handle Confirm SO - Sama seperti Packaging: hanya update flag confirmed
   const handleConfirmSO = async (item: SalesOrder) => {
+    if (item.status === 'CLOSE') {
+      showAlert(`Cannot confirm SO ${item.soNo}. SO dengan status CLOSE tidak bisa dikonfirmasi.`, 'Cannot Confirm');
+      return;
+    }
+
     if (!item.items || item.items.length === 0) {
       showAlert(`SO ${item.soNo} tidak memiliki items. Silakan tambahkan items terlebih dahulu.`, 'Validation Error');
       return;
     }
 
-    try {
-      // Cek apakah sudah ada notifikasi untuk SO ini
-      const ppicNotifications = await storageService.get<any[]>('gt_ppicNotifications') || [];
-      const existingNotif = ppicNotifications.find((n: any) => n.soNo === item.soNo && n.type === 'SO_CREATED');
-      
-      if (existingNotif) {
-        showAlert(`SO ${item.soNo} sudah pernah dikirim notifikasi ke PPIC.\n\nNotifikasi ID: ${existingNotif.id}\nStatus: ${existingNotif.status}`, 'Already Notified');
-        return;
-      }
-
-      // Kirim notifikasi ke PPIC
-      const newPPICNotification = {
-        id: `ppic-${Date.now()}-${item.soNo}`,
-        type: 'SO_CREATED',
-        soNo: item.soNo,
-        customer: item.customer || '',
-        customerKode: item.customerKode || '',
-        items: item.items.map((item: any) => ({
-          product: item.productName || '',
-          productId: item.productId || item.productKode || '',
-          productKode: item.productKode || '',
-          qty: item.qty || 0,
-          unit: item.unit || 'PCS',
-        })),
-        status: 'PENDING',
-        created: new Date().toISOString(),
-      };
-      
-      await storageService.set('gt_ppicNotifications', [...ppicNotifications, newPPICNotification]);
-      console.log(`✅ [SO] Saved PPIC notification:`, newPPICNotification);
-      console.log(`✅ [SO] Total PPIC notifications now:`, [...ppicNotifications, newPPICNotification].length);
-      
-      // Update SO dengan flag ppicNotified
-      const ordersArray = Array.isArray(orders) ? orders : [];
-      const updated = ordersArray.map(o => 
-        o.id === item.id 
-          ? { ...o, ppicNotified: true, ppicNotifiedAt: new Date().toISOString() }
-          : o
-      );
-      await storageService.set('gt_salesOrders', updated);
-      setOrders(updated);
-      
-      console.log(`✅ [SO] Confirmed and sent PPIC notification for SO ${item.soNo}`);
-      showAlert(`SO ${item.soNo} berhasil di-confirm!\n\n📧 Notifikasi telah dikirim ke PPIC untuk membuat SPK.`, 'Success');
-    } catch (error: any) {
-      console.error('Error confirming SO:', error);
-      showAlert(`Error confirming SO: ${error.message}`, 'Error');
-    }
+    showConfirm(
+      `Confirm SO ${item.soNo}?\n\nSO akan dikirim ke PPIC untuk diproses (buat SPK).`,
+      async () => {
+        try {
+          // Update SO dengan flag ppicNotified (sama seperti Packaging dengan confirmed)
+          const ordersArray = Array.isArray(orders) ? orders : [];
+          const updated = ordersArray.map(o => {
+            if (o.id === item.id) {
+              return {
+                ...o,
+                ppicNotified: true,
+                ppicNotifiedAt: new Date().toISOString(),
+                ppicNotifiedBy: 'Sales',
+              };
+            }
+            return o;
+          });
+          
+          // CRITICAL: Force immediate sync ke server untuk confirm SO
+          // Ini memastikan notifikasi langsung muncul di PPIC di device lain
+          await storageService.set('gt_salesOrders', updated, true);
+          setOrders(updated);
+          closeDialog();
+          showAlert(`SO ${item.soNo} telah dikonfirmasi dan dikirim ke PPIC untuk diproses.`, 'Success');
+        } catch (error: any) {
+          showAlert(`Error confirming SO: ${error.message}`, 'Error');
+        }
+      },
+      () => closeDialog(),
+      'Confirm SO'
+    );
   };
 
   // Handle Generate Quotation
@@ -3017,6 +2994,30 @@ const SalesOrders = () => {
     );
   };
 
+  // Helper function untuk hitung qty terkirim per SO item
+  const calculateDeliveredQty = (soNo: string, productId: string, productName: string): number => {
+    const soDeliveries = deliveries.filter((d: any) => d.soNo === soNo);
+    let totalDelivered = 0;
+    
+    soDeliveries.forEach((delivery: any) => {
+      if (delivery.items && Array.isArray(delivery.items)) {
+        delivery.items.forEach((item: any) => {
+          // Match by productId atau productKode atau productName
+          const itemProductId = (item.productId || item.productKode || '').toString().trim();
+          const itemProductName = (item.product || item.productName || '').toString().trim();
+          const matchProductId = productId && itemProductId && itemProductId === productId;
+          const matchProductName = productName && itemProductName && itemProductName.toLowerCase() === productName.toLowerCase();
+          
+          if (matchProductId || matchProductName) {
+            totalDelivered += parseFloat(item.qty || '0') || 0;
+          }
+        });
+      }
+    });
+    
+    return totalDelivered;
+  };
+
   // Flatten SO data untuk table view (Excel-like) - setiap item jadi row terpisah
   const flattenedSOData = useMemo(() => {
     if (orderViewMode !== 'table') return [];
@@ -3039,11 +3040,19 @@ const SalesOrders = () => {
           unit: '-',
           price: 0,
           total: 0,
+          qtyDelivered: 0,
+          qtyOutstanding: 0,
           _order: order, // Keep reference untuk actions
         });
       } else {
         // Flatten setiap item menjadi row terpisah
         order.items.forEach((item: SOItem, idx: number) => {
+          const productId = item.productKode || item.productId || '';
+          const productName = item.productName || '';
+          const qtyOrdered = item.qty || 0;
+          const qtyDelivered = calculateDeliveredQty(order.soNo, productId, productName);
+          const qtyOutstanding = Math.max(0, qtyOrdered - qtyDelivered);
+          
           flattened.push({
             id: `${order.id}-item-${item.id || idx}`,
             soNo: order.soNo,
@@ -3052,20 +3061,22 @@ const SalesOrders = () => {
             topDays: order.topDays,
             status: order.status,
             created: order.created,
-            productCode: item.productKode || item.productId || '-',
-            productName: item.productName || '-',
-            qty: item.qty || 0,
+            productCode: productId || '-',
+            productName: productName || '-',
+            qty: qtyOrdered,
             unit: item.unit || 'PCS',
             price: item.price || 0,
             total: item.total || 0,
             specNote: item.specNote,
+            qtyDelivered: qtyDelivered,
+            qtyOutstanding: qtyOutstanding,
             _order: order, // Keep reference untuk actions
           });
         });
       }
     });
     return flattened;
-  }, [filteredOrders, orderViewMode]);
+  }, [filteredOrders, orderViewMode, deliveries]);
 
   const renderOrderViewToggle = () => (
     <div
@@ -3312,12 +3323,51 @@ const SalesOrders = () => {
     },
     {
       key: 'qty',
-      header: 'Qty',
+      header: 'Qty Ordered',
       render: (item: any) => (
         <span style={{ fontSize: '13px', textAlign: 'right', display: 'block' }}>
           {Number(item.qty || 0).toLocaleString('id-ID')} {item.unit}
         </span>
       ),
+    },
+    {
+      key: 'qtyDelivered',
+      header: 'Qty Delivered',
+      render: (item: any) => {
+        const qtyDelivered = item.qtyDelivered || 0;
+        const qtyOrdered = item.qty || 0;
+        const isComplete = qtyDelivered >= qtyOrdered && qtyOrdered > 0;
+        return (
+          <span style={{ 
+            fontSize: '13px', 
+            textAlign: 'right', 
+            display: 'block',
+            color: isComplete ? '#4caf50' : '#ff9800',
+            fontWeight: isComplete ? '600' : '400'
+          }}>
+            {qtyDelivered.toLocaleString('id-ID')} {item.unit}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'qtyOutstanding',
+      header: 'Outstanding',
+      render: (item: any) => {
+        const qtyOutstanding = item.qtyOutstanding || 0;
+        const hasOutstanding = qtyOutstanding > 0;
+        return (
+          <span style={{ 
+            fontSize: '13px', 
+            textAlign: 'right', 
+            display: 'block',
+            color: hasOutstanding ? '#ff9800' : '#4caf50',
+            fontWeight: hasOutstanding ? '600' : '400'
+          }}>
+            {qtyOutstanding.toLocaleString('id-ID')} {item.unit}
+          </span>
+        );
+      },
     },
     {
       key: 'price',

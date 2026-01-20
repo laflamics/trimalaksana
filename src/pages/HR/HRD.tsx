@@ -4,6 +4,7 @@ import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import { storageService } from '../../services/storage';
+import { deletePackagingItem, reloadPackagingData, filterActiveItems } from '../../utils/packaging-delete-helper';
 import { fingerprintService, AttendanceRecord, FingerprintConfig } from '../../services/fingerprint';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
@@ -281,21 +282,50 @@ const HRD = () => {
   };
 
   const handleDeleteStaff = async (item: Staff) => {
-    showConfirm(
-      `Are you sure you want to delete staff "${item.namaLengkap}"? This action cannot be undone.`,
-      async () => {
-        try {
-          const updated = staff.filter(s => s.id !== item.id);
-          await storageService.set('staff', updated);
-          setStaff(updated.map((s, idx) => ({ ...s, no: idx + 1 })));
-          showAlert(`Staff "${item.namaLengkap}" deleted successfully`, 'Success');
-        } catch (error: any) {
-          showAlert(`Error deleting staff: ${error.message}`, 'Error');
-        }
-      },
-      undefined,
-      'Confirm Delete'
-    );
+    try {
+      console.log('[HRD] handleDeleteStaff called for:', item?.namaLengkap, item?.id);
+      
+      if (!item || !item.namaLengkap) {
+        showAlert('Staff tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[HRD] Staff missing ID:', item);
+        showAlert(`❌ Error: Staff ${item.namaLengkap} tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Staff "${item.namaLengkap}"?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
+            const deleteResult = await deletePackagingItem('staff', item.id, 'id');
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              await reloadPackagingData('staff', setStaff);
+              // Update no field setelah reload
+              const updatedStaff = await storageService.get<Staff[]>('staff') || [];
+              const activeStaff = filterActiveItems(updatedStaff);
+              setStaff(activeStaff.map((s, idx) => ({ ...s, no: idx + 1 })));
+              showAlert(`Staff "${item.namaLengkap}" deleted successfully`, 'Success');
+            } else {
+              showAlert(`Error deleting staff: ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[HRD] Error deleting staff:', error);
+            showAlert(`Error deleting staff: ${error.message}`, 'Error');
+          }
+        },
+        undefined,
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[HRD] Error in handleDeleteStaff:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
   };
 
   const handleEditAttendance = (item: any) => {

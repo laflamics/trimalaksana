@@ -5,8 +5,8 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
+import { deleteGTItem, reloadGTData, filterActiveItems } from '../../../utils/gt-delete-helper';
 import { loadGTDataFromLocalStorage } from '../../../utils/gtStorageHelper';
-import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 
 interface Account {
@@ -398,22 +398,44 @@ const COA = () => {
   };
 
   const handleDelete = async (item: Account) => {
-    showConfirm(
-      'Delete Account',
-      `Delete Account: ${item.code} - ${item.name}?`,
-      async () => {
-        try {
-          // Ensure accounts is always an array
-          const accountsArray = Array.isArray(accounts) ? accounts : [];
-          const updated = accountsArray.filter(a => a.code !== item.code);
-          await storageService.set('gt_accounts', updated);
-          setAccounts(updated);
-          await loadData(); // Reload untuk update balances
-        } catch (error: any) {
-          showAlert('Error', `Error deleting account: ${error.message}`);
-        }
+    try {
+      console.log('[GT Finance COA] handleDelete called for:', item?.code, item?.name);
+      
+      if (!item || !item.code) {
+        showAlert('Account tidak valid. Mohon coba lagi.', 'Error');
+        return;
       }
-    );
+      
+      showConfirm(
+        `Hapus Account "${item.code} - ${item.name}"?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
+            // COA menggunakan 'code' sebagai ID field
+            const deleteResult = await deleteGTItem('gt_accounts', item.code, 'code');
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              const activeAccounts = await reloadGTData('gt_accounts', setAccounts);
+              setAccounts(activeAccounts);
+              await loadData(); // Reload untuk update balances
+              showAlert(`✅ Account "${item.code} - ${item.name}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[GT Finance COA] Delete failed:', deleteResult.error);
+              showAlert(`❌ Error deleting account "${item.code}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[GT Finance COA] Error deleting account:', error);
+            showAlert(`❌ Error deleting account: ${error.message}`, 'Error');
+          }
+        },
+        undefined,
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[GT Finance COA] Error in handleDelete:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
   };
 
   // Calculate account balances from journal entries

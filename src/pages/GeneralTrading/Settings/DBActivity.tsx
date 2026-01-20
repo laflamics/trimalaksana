@@ -909,11 +909,15 @@ const DBActivity = () => {
         // Clear from localStorage (all formats)
         for (const storageKey of possibleKeys) {
           try {
-            // Remove directly from localStorage
+            // CRITICAL: Set to empty array dengan immediateSync untuk POST ke server
+            // Ini memastikan server tahu data sudah di-clear
+            await storageService.set(key, [], true); // immediateSync = true untuk POST ke server
+            
+            // Remove directly from localStorage (backup)
             localStorage.removeItem(storageKey);
             console.log(`[Clear] Removed from localStorage: ${storageKey}`);
             
-            // Also use storageService.remove for consistency
+            // Also use storageService.remove for consistency (akan DELETE dari server)
             await storageService.remove(storageKey);
             
             if (!electronAPI || !electronAPI.deleteStorage) {

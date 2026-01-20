@@ -299,7 +299,6 @@ const Payments = () => {
     // Update notifications di storage (cleanup yang sudah tidak relevan)
     if (financeNotifDataArray.length > 0 && JSON.stringify(cleanedNotifs) !== JSON.stringify(financeNotifDataArray)) {
       await storageService.set('financeNotifications', cleanedNotifs);
-      console.log(`🧹 Cleaned up ${financeNotifDataArray.length - cleanedNotifs.length} obsolete finance notifications`);
     }
     
     const pending = cleanedNotifs.filter((notif: any) =>
@@ -531,13 +530,9 @@ const Payments = () => {
                 no: baseLength + idx + 1,
               }));
               await storageService.set('journalEntries', [...journalEntriesArray, ...entriesWithNo]);
-              console.log(`✅ Created journal entries for ${formData.type || 'Payment'} ${newPayment.paymentNo}`);
             }
-          } else {
-            console.warn(`⚠️ Cannot create journal entries: debitAccount=${debitAccountCode}, creditAccount=${creditAccountCode}, amount=${amount}`);
           }
         } catch (error: any) {
-          console.error('Error creating journal entries:', error);
         }
 
         if (formData.poNo) {
@@ -560,7 +555,6 @@ const Payments = () => {
             );
             await storageService.set('purchaseOrders', updatedPOs);
           } catch (error) {
-            console.error('Error updating finance notifications after payment:', error);
           }
         }
         
@@ -744,9 +738,6 @@ const Payments = () => {
               await storageService.set('payments', updated);
               setPayments(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
               showAlert(`✅ Imported ${newPayments.length} payments${errors.length > 0 ? `\n⚠️ ${errors.length} errors` : ''}`, 'Success');
-              if (errors.length > 0) {
-                console.error('Import errors:', errors);
-              }
             } else {
               showAlert('⚠️ No valid payments to import', 'Warning');
             }

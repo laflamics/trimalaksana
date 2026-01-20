@@ -1,46 +1,5 @@
 {
-  "value": [
-    {
-      "id": "1767603214615vmzafv71w",
-      "type": "DELIVERY_SCHEDULE",
-      "soNo": "PO0000010938",
-      "customer": "PT. INDONESIA KOITO",
-      "spkNo": "SPK/260105/E648O-SJ1",
-      "spkNos": [
-        "SPK/260105/E648O-SJ1"
-      ],
-      "originalSpkNos": [
-        "SPK/260105/E648O"
-      ],
-      "sjGroupId": "PO0000010938|||sj-group-1",
-      "product": "BOX X + COVER LIPAT MAGNET UK 780X470X385 mm",
-      "products": [
-        {
-          "spkNo": "SPK/260105/E648O-SJ1",
-          "originalSpkNo": "SPK/260105/E648O",
-          "product": "BOX X + COVER LIPAT MAGNET UK 780X470X385 mm",
-          "productId": "FG-CTM-00002",
-          "qty": 56
-        }
-      ],
-      "productId": "FG-CTM-00002",
-      "qty": 56,
-      "deliveryBatches": [
-        {
-          "id": "1767603210537ezojsbtkl",
-          "batchNo": "A",
-          "qty": 56,
-          "deliveryDate": "2026-01-12T00:00:00.000Z",
-          "productId": "FG-CTM-00002",
-          "createSJ": true,
-          "sjGroupId": "sj-group-1"
-        }
-      ],
-      "status": "READY_TO_SHIP",
-      "created": "2026-01-05T08:53:34.615Z",
-      "padCode": ""
-    }
-  ],
-  "timestamp": 1767945724254,
-  "_timestamp": 1767945724254
+  "value": [],
+  "timestamp": 1768895993956,
+  "_timestamp": 1768895993956
 }

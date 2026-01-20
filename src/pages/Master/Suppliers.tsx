@@ -5,7 +5,7 @@ import Button from '../../components/Button';
 import Input from '../../components/Input';
 import { storageService } from '../../services/storage';
 import { filterActiveItems } from '../../utils/data-persistence-helper';
-import { deletePackagingItem } from '../../utils/packaging-delete-helper';
+import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import * as XLSX from 'xlsx';
 import '../../styles/common.css';
 import './Master.css';
@@ -188,29 +188,56 @@ const Suppliers = () => {
   };
 
   const handleDelete = async (item: Supplier) => {
-    showConfirm(
-      `Are you sure you want to delete supplier "${item.nama}"? This action cannot be undone.`,
-      async () => {
-        try {
-          // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
-          const deleteResult = await deletePackagingItem('suppliers', item.id, 'id');
-          
-          if (deleteResult.success) {
-            // Reload data dengan filter active items
-            const dataRaw = await storageService.get<Supplier[]>('suppliers') || [];
-            const data = filterActiveItems(dataRaw);
-            setSuppliers(data.map((s, idx) => ({ ...s, no: idx + 1 })));
-            showAlert(`Supplier "${item.nama}" deleted successfully`, 'Success');
-          } else {
-            showAlert(`Error deleting supplier: ${deleteResult.error || 'Unknown error'}`, 'Error');
+    try {
+      console.log('[Suppliers] handleDelete called for:', item.nama, item.id);
+      
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[Suppliers] Item missing ID:', item);
+        showAlert(`❌ Error: Supplier "${item.nama}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Supplier: ${item.nama}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            console.log('[Suppliers] Delete confirmed for:', item.nama, item.id);
+            
+            // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
+            console.log('[Suppliers] Calling deletePackagingItem...');
+            const deleteResult = await deletePackagingItem('suppliers', item.id, 'id');
+            console.log('[Suppliers] Delete result:', deleteResult);
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition) - sama seperti SalesOrders
+              console.log('[Suppliers] Reloading data...');
+              await reloadPackagingData('suppliers', setSuppliers);
+              
+              // Re-number suppliers setelah reload
+              const currentSuppliers = await storageService.get<Supplier[]>('suppliers') || [];
+              const activeSuppliers = filterActiveItems(currentSuppliers);
+              setSuppliers(activeSuppliers.map((s, idx) => ({ ...s, no: idx + 1 })));
+              
+              showAlert(`✅ Supplier "${item.nama}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[Suppliers] Delete failed:', deleteResult.error);
+              showAlert(`❌ Error deleting supplier "${item.nama}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[Suppliers] Error in delete:', error);
+            showAlert(`❌ Error deleting supplier: ${error.message}`, 'Error');
           }
-        } catch (error: any) {
-          showAlert(`Error deleting supplier: ${error.message}`, 'Error');
-        }
-      },
-      undefined,
-      'Confirm Delete'
-    );
+        },
+        () => {
+          console.log('[Suppliers] Delete cancelled');
+        },
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[Suppliers] Error in handleDelete:', error);
+      showAlert(`❌ Error: ${error.message}`, 'Error');
+    }
   };
 
   // Download Template Excel
@@ -538,14 +565,20 @@ const Suppliers = () => {
           <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
           <Button variant="secondary" onClick={handleDownloadTemplate}>📋 Download Template</Button>
           <Button variant="primary" onClick={handleImportExcel}>📤 Import Excel</Button>
-          <Button onClick={() => setShowForm(!showForm)}>
-            {showForm ? 'Cancel' : '+ Add Supplier'}
+          <Button onClick={() => {
+            setFormData({ kode: '', nama: '', kontak: '', npwp: '', email: '', telepon: '', alamat: '', kategori: '' });
+            setEditingItem(null);
+            setShowForm(true);
+          }}>
+            + Add Supplier
           </Button>
         </div>
       </div>
 
       {showForm && (
-        <Card title={editingItem ? "Edit Supplier" : "Add New Supplier"} className="mb-4">
+        <div className="dialog-overlay" onClick={() => { setShowForm(false); setEditingItem(null); setFormData({ kode: '', nama: '', kontak: '', npwp: '', email: '', telepon: '', alamat: '', kategori: '' }); }} style={{ zIndex: 10000 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', width: '90%', maxHeight: '90vh', overflowY: 'auto', zIndex: 10001 }}>
+            <Card title={editingItem ? "Edit Supplier" : "Add New Supplier"} className="dialog-card">
           <Input
             label="Kode *"
             value={formData.kode || ''}
@@ -591,7 +624,7 @@ const Suppliers = () => {
           <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '8px' }}>
             Documents: NIB, KTP, NPWP, Others (upload functionality)
           </p>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
             <Button onClick={() => { setShowForm(false); setEditingItem(null); setFormData({ kode: '', nama: '', kontak: '', npwp: '', email: '', telepon: '', alamat: '', kategori: '' }); }} variant="secondary">
               Cancel
             </Button>
@@ -600,6 +633,8 @@ const Suppliers = () => {
             </Button>
           </div>
         </Card>
+          </div>
+        </div>
       )}
 
       <Card>

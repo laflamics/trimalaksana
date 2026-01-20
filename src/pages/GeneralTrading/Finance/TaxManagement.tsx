@@ -5,8 +5,8 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
+import { deleteGTItem, reloadGTData, filterActiveItems } from '../../../utils/gt-delete-helper';
 import { loadGTDataFromLocalStorage } from '../../../utils/gtStorageHelper';
-import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -142,6 +142,29 @@ const TaxManagement = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Enable semua input di dalam dialog saat dialog terbuka
+  useEffect(() => {
+    if (showForm) {
+      const enableDialogInputs = () => {
+        const dialogInputs = document.querySelectorAll('.dialog-card input, .dialog-card textarea, .dialog-card select');
+        dialogInputs.forEach((input: Element) => {
+          if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement || input instanceof HTMLSelectElement) {
+            input.removeAttribute('readonly');
+            input.removeAttribute('disabled');
+            (input as any).readOnly = false;
+            (input as any).disabled = false;
+          }
+        });
+      };
+      
+      // Enable inputs multiple times untuk memastikan
+      enableDialogInputs();
+      setTimeout(enableDialogInputs, 50);
+      setTimeout(enableDialogInputs, 100);
+      setTimeout(enableDialogInputs, 200);
+    }
+  }, [showForm]);
 
   const loadData = async () => {
     // Load accounts
@@ -399,26 +422,53 @@ const TaxManagement = () => {
     setShowForm(true);
   };
 
-  const handleDelete = (record: TaxRecord) => {
-    showConfirm(
-      'Delete this tax record?',
-      async () => {
-        try {
-          // Ensure taxRecords is always an array
-          const taxRecordsArray = Array.isArray(taxRecords) ? taxRecords : [];
-          const updated = taxRecordsArray.filter(r => r.id !== record.id);
-          await storageService.set('gt_taxRecords', updated);
-          setTaxRecords(updated);
-          closeDialog();
-          showAlert('Tax record deleted successfully', 'Success');
-        } catch (error: any) {
-          closeDialog();
-          showAlert(`Error deleting tax record: ${error.message}`, 'Error');
-        }
-      },
-      () => closeDialog(),
-      'Delete Confirmation'
-    );
+  const handleDelete = async (record: TaxRecord) => {
+    try {
+      console.log('[GT Finance TaxManagement] handleDelete called for:', record?.reference, record?.id);
+      
+      if (!record || !record.reference) {
+        showAlert('Tax record tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate record.id exists
+      if (!record.id) {
+        console.error('[GT Finance TaxManagement] Tax record missing ID:', record);
+        showAlert(`❌ Error: Tax record "${record.reference}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Tax Record "${record.reference}"?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deleteGTItem('gt_taxRecords', record.id, 'id');
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              const activeTaxRecords = await reloadGTData('gt_taxRecords', setTaxRecords);
+              setTaxRecords(activeTaxRecords);
+              closeDialog();
+              showAlert(`✅ Tax record "${record.reference}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[GT Finance TaxManagement] Delete failed:', deleteResult.error);
+              closeDialog();
+              showAlert(`❌ Error deleting tax record "${record.reference}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[GT Finance TaxManagement] Error deleting tax record:', error);
+            closeDialog();
+            showAlert(`❌ Error deleting tax record: ${error.message}`, 'Error');
+          }
+        },
+        () => closeDialog(),
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[GT Finance TaxManagement] Error in handleDelete:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
   };
 
   const handleExportExcel = () => {

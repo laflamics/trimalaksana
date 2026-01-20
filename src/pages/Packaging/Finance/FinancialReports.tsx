@@ -118,7 +118,6 @@ const FinancialReports = () => {
       // Load inventory data dan deduplicate berdasarkan codeItem
       const inventoryArray = Array.isArray(inv) ? inv : [];
       const uniqueInventory = deduplicateInventory(inventoryArray);
-      console.log(`[FinancialReports] Loaded ${inventoryArray.length} items, ${uniqueInventory.length} unique items (after deduplication)`);
       setInventory(uniqueInventory);
     } catch (error) {
       showAlert('Error loading financial data. Please refresh the page.', 'Error');

@@ -115,14 +115,12 @@ const GeneralLedger = () => {
     
     // Jika journal entries kosong (setelah filter), generate dari transaksi yang sudah ada
     if (activeDataArray.length === 0) {
-      console.log('📝 Journal entries kosong, mulai generate dari transaksi...');
       await generateJournalEntriesFromTransactions();
       // Reload setelah generate
       data = await storageService.get<JournalEntry[]>('journalEntries') || [];
       // Filter lagi setelah generate
       const reloadedDataArray = Array.isArray(data) ? data : [];
       const reloadedActiveData = filterActiveItems(reloadedDataArray);
-      console.log(`✅ Generated ${reloadedActiveData.length} journal entries`);
       setEntries(reloadedActiveData.map((e, idx) => ({ ...e, no: idx + 1 })));
     } else {
       setEntries(activeDataArray.map((e, idx) => ({ ...e, no: idx + 1 })));
@@ -145,11 +143,8 @@ const GeneralLedger = () => {
       const purchaseOrdersData = filterActiveItems(Array.isArray(purchaseOrders) ? purchaseOrders : []);
       const existingEntriesData = filterActiveItems(Array.isArray(existingEntries) ? existingEntries : []);
 
-      console.log(`📊 Data ditemukan: ${invoicesData.length} invoices, ${paymentsData.length} payments, ${purchaseOrdersData.length} POs`);
-
       // Jika sudah ada entries, skip generate
       if (existingEntriesData.length > 0) {
-        console.log('✅ Journal entries sudah ada, skip generate');
         return;
       }
 
@@ -329,15 +324,12 @@ const GeneralLedger = () => {
 
       if (newEntries.length > 0) {
         await storageService.set('journalEntries', newEntries);
-        console.log(`✅ Generated ${newEntries.length} journal entries from existing transactions`);
         // Alert user
         showAlert(`✅ Generated ${newEntries.length} journal entries from existing transactions!\n\n- ${invoicesData.length} Invoices\n- ${paymentsData.length} Payments\n- ${purchaseOrdersData.length} Purchase Orders`, 'Success');
       } else {
-        console.log('⚠️ Tidak ada transaksi untuk di-generate');
         showAlert('⚠️ Tidak ada transaksi yang dapat di-generate ke journal entries.\n\nPastikan ada:\n- Invoices\n- Payments\n- Purchase Orders (CLOSE/RECEIVED)', 'Warning');
       }
     } catch (error: any) {
-      console.error('❌ Error generating journal entries:', error);
       showAlert(`❌ Error generating journal entries: ${error.message}`, 'Error');
     }
   };
@@ -621,9 +613,6 @@ const GeneralLedger = () => {
               await storageService.set('journalEntries', updated);
               setEntries(updated.map((e, idx) => ({ ...e, no: idx + 1 })));
               showAlert(`✅ Imported ${newEntries.length} entries${errors.length > 0 ? `\n⚠️ ${errors.length} errors` : ''}`, 'Success');
-              if (errors.length > 0) {
-                console.error('Import errors:', errors);
-              }
             } else {
               showAlert('⚠️ No valid entries to import', 'Warning');
             }

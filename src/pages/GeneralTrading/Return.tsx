@@ -4,7 +4,7 @@ import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import { storageService, extractStorageValue } from '../../services/storage';
-import { filterActiveItems } from '../../utils/data-persistence-helper';
+import { deleteGTItem, reloadGTData, filterActiveItems } from '../../utils/gt-delete-helper';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
 import { generateBacHtml } from '../../pdf/bac-pdf-template';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
@@ -128,6 +128,29 @@ const Return = () => {
     const timeout = setTimeout(() => setToast(null), 4000);
     return () => clearTimeout(timeout);
   }, [toast]);
+
+  // Enable semua input di dalam dialog saat dialog terbuka
+  useEffect(() => {
+    if (showForm) {
+      const enableDialogInputs = () => {
+        const dialogInputs = document.querySelectorAll('.dialog-card input, .dialog-card textarea, .dialog-card select');
+        dialogInputs.forEach((input: Element) => {
+          if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement || input instanceof HTMLSelectElement) {
+            input.removeAttribute('readonly');
+            input.removeAttribute('disabled');
+            (input as any).readOnly = false;
+            (input as any).disabled = false;
+          }
+        });
+      };
+      
+      // Enable inputs multiple times untuk memastikan
+      enableDialogInputs();
+      setTimeout(enableDialogInputs, 50);
+      setTimeout(enableDialogInputs, 100);
+      setTimeout(enableDialogInputs, 200);
+    }
+  }, [showForm]);
 
   const showToast = (message: string, variant: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message, variant });
@@ -400,16 +423,72 @@ const Return = () => {
       key: 'actions',
       header: 'Actions',
       render: (item: ReturnItem) => (
-        <Button
-          variant="secondary"
-          onClick={() => handleViewBac(item)}
-          style={{ fontSize: '12px', padding: '6px 12px' }}
-        >
-          📄 View BAC
-        </Button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Button
+            variant="secondary"
+            onClick={() => handleViewBac(item)}
+            style={{ fontSize: '12px', padding: '6px 12px' }}
+          >
+            📄 View BAC
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => handleDelete(item)}
+            style={{ fontSize: '12px', padding: '6px 12px', backgroundColor: '#f44336', color: 'white' }}
+          >
+            Delete
+          </Button>
+        </div>
       ),
     },
   ];
+
+  const handleDelete = async (item: ReturnItem) => {
+    try {
+      console.log('[GT Return] handleDelete called for:', item?.returnNo, item?.id);
+      
+      if (!item || !item.returnNo) {
+        showAlert('Return tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[GT Return] Return missing ID:', item);
+        showAlert(`❌ Error: Return "${item.returnNo}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Return ${item.returnNo}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deleteGTItem('gt_returns', item.id, 'id');
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              const activeReturns = await reloadGTData('gt_returns', setReturns);
+              setReturns(activeReturns);
+              
+              showAlert(`✅ Return ${item.returnNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[GT Return] Delete failed:', deleteResult.error);
+              showAlert(`❌ Error deleting return "${item.returnNo}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[GT Return] Error deleting return:', error);
+            showAlert(`❌ Error deleting return: ${error.message}`, 'Error');
+          }
+        },
+        undefined,
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[GT Return] Error in handleDelete:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
+  };
 
   const handleViewBac = async (item: ReturnItem) => {
     try {

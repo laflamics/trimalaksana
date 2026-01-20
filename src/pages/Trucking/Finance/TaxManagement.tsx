@@ -5,7 +5,8 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
-import { safeDeleteItem, filterActiveItems } from '../../../utils/data-persistence-helper';
+import { deleteTruckingItem, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { useDialog } from '../../../hooks/useDialog';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -68,58 +69,16 @@ const TaxManagement = () => {
     status: 'Open',
   });
 
-  // Custom Dialog state
-  const [dialogState, setDialogState] = useState<{
-    show: boolean;
-    type: 'alert' | 'confirm';
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-  }>({
-    show: false,
-    type: 'alert',
-    title: '',
-    message: '',
-  });
-
-  // Helper functions untuk dialog
+  // Custom Dialog - menggunakan hook terpusat
+  const { showAlert: showAlertBase, showConfirm: showConfirmBase, DialogComponent } = useDialog();
+  
+  // Wrapper untuk kompatibilitas dengan urutan parameter yang berbeda
   const showAlert = (message: string, title: string = 'Information') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'alert',
-      title,
-      message,
-    });
+    showAlertBase(message, title);
   };
-
+  
   const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'confirm',
-      title,
-      message,
-      onConfirm,
-      onCancel,
-    });
-  };
-
-  const closeDialog = () => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(false);
-    }
-    setDialogState({
-      show: false,
-      type: 'alert',
-      title: '',
-      message: '',
-    });
+    showConfirmBase(message, onConfirm, onCancel, title);
   };
 
   // Helper function untuk remove leading zero dari input angka
@@ -391,32 +350,43 @@ const TaxManagement = () => {
     setShowForm(true);
   };
 
-  const handleDelete = (record: TaxRecord) => {
-    showConfirm(
-      'Delete this tax record?',
-      async () => {
-        try {
-          // Pakai helper function untuk safe delete (tombstone pattern)
-          const success = await safeDeleteItem('trucking_taxRecords', record.id, 'id');
-          
-          if (success) {
-            // Reload data dengan filter active items
-            const updatedTaxRecords = await storageService.get<TaxRecord[]>('trucking_taxRecords') || [];
-            setTaxRecords(filterActiveItems(updatedTaxRecords));
-            closeDialog();
-            showAlert('Tax record deleted successfully', 'Success');
-          } else {
-            closeDialog();
-            showAlert('Error deleting tax record. Please try again.', 'Error');
+  const handleDelete = async (record: TaxRecord) => {
+    try {
+      console.log('[Trucking TaxManagement] handleDelete called for:', record?.id, record?.reference);
+      
+      if (!record || !record.id) {
+        showAlert('Tax Record tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Tax Record "${record.reference}"?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deleteTruckingItem('trucking_taxRecords', record.id, 'id');
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              const activeTaxRecords = await reloadTruckingData('trucking_taxRecords', setTaxRecords);
+              setTaxRecords(activeTaxRecords);
+              showAlert(`✅ Tax Record "${record.reference}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[Trucking TaxManagement] Delete failed:', deleteResult.error);
+              showAlert(`❌ Error deleting tax record "${record.reference}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[Trucking TaxManagement] Error deleting tax record:', error);
+            showAlert(`❌ Error deleting tax record: ${error.message}`, 'Error');
           }
-        } catch (error: any) {
-          closeDialog();
-          showAlert(`Error deleting tax record: ${error.message}`, 'Error');
-        }
-      },
-      () => closeDialog(),
-      'Delete Confirmation'
-    );
+        },
+        undefined,
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[Trucking TaxManagement] Error in handleDelete:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
   };
 
   const handleExportExcel = () => {
@@ -996,54 +966,8 @@ const TaxManagement = () => {
           </div>
         )}
 
-        {/* Custom Dialog */}
-        {dialogState.show && (() => {
-          const titleLower = dialogState.title.toLowerCase();
-          let iconType = 'info';
-          let iconChar = 'ℹ️';
-          if (titleLower.includes('success') || titleLower.includes('berhasil')) {
-            iconType = 'success';
-            iconChar = '✓';
-          } else if (titleLower.includes('error') || titleLower.includes('gagal') || titleLower.includes('cannot')) {
-            iconType = 'error';
-            iconChar = '✕';
-          } else if (titleLower.includes('warning') || titleLower.includes('peringatan') || titleLower.includes('validation')) {
-            iconType = 'warning';
-            iconChar = '⚠';
-          }
-          
-          return (
-            <div className="dialog-overlay" onClick={dialogState.type === 'alert' ? closeDialog : undefined}>
-              <div className="dialog-card" onClick={(e) => e.stopPropagation()}>
-                <div className={`dialog-icon ${iconType}`}>
-                  {iconChar}
-                </div>
-                <h3 className="dialog-title">
-                  {dialogState.title}
-                </h3>
-                <div className="dialog-message">
-                  {dialogState.message}
-                </div>
-                <div className="dialog-actions">
-                  {dialogState.type === 'confirm' && (
-                    <Button variant="secondary" onClick={() => {
-                      if (dialogState.onCancel) dialogState.onCancel();
-                      closeDialog();
-                    }}>
-                      Cancel
-                    </Button>
-                  )}
-                  <Button variant="primary" onClick={() => {
-                    if (dialogState.onConfirm) dialogState.onConfirm();
-                    if (dialogState.type === 'alert') closeDialog();
-                  }}>
-                    {dialogState.type === 'alert' ? 'OK' : 'Confirm'}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
+        {/* Custom Dialog - menggunakan hook terpusat */}
+        <DialogComponent />
       </Card>
     </div>
   );

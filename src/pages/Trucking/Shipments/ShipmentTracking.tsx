@@ -82,7 +82,9 @@ const Shipmenttrucking = () => {
 
   useEffect(() => {
     loadtruckings();
-    const interval = setInterval(loadtruckings, 5000); // Refresh setiap 5 detik
+    // Optimasi: Refresh setiap 15 detik untuk tracking (sebelumnya 5 detik)
+    // Balance antara real-time tracking dan bandwidth
+    const interval = setInterval(loadtruckings, 15000); // 15 detik - cukup untuk shipment tracking
     return () => clearInterval(interval);
   }, []);
 

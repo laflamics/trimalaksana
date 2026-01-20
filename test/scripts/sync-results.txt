@@ -1,0 +1,35 @@
+🔄 Force GT Payment Sync
+==================================================
+
+📋 Loading GT Data...
+✅ Read data/localStorage/general-trading/gt_grn.json
+✅ Read data/localStorage/general-trading/gt_purchaseOrders.json
+✅ Read data/localStorage/general-trading/gt_financeNotifications.json
+📊 GRN Records: 1
+📊 PO Records: 1
+📊 Finance Notifications: 1
+📋 Latest GRN: GRN-260111-35B5Y (2026-01-10T23:14:07.262Z)
+
+📋 Checking Missing Notifications...
+✅ Notification exists for GRN GRN-260111-35B5Y
+
+✅ All GRNs have finance notifications
+✅ Read data/localStorage/general-trading/gt_financeNotifications.json
+
+📊 Final State:
+   Total notifications: 1
+   Pending notifications: 1
+
+📋 Pending Notifications for GT Payments:
+   1. PO: PO-260111-VDEAN, GRN: GRN-260111-35B5Y
+      Supplier: AGEN BERAS & TELOR RAFFI
+      Amount: Rp 2.775.000
+
+🎉 SUCCESS: GT Payments should now show notifications!
+
+🎯 Next Steps:
+1. Go to GT Payments module
+2. Look for notification bell (💰) in header
+3. Should show red badge with notification count
+4. Click bell to see notifications
+5. Click notification to load payment form

@@ -1,39 +1,5 @@
 {
-  "value": [
-    {
-      "id": "ppic-1767587764632-PO-000010643",
-      "type": "SO_CREATED",
-      "soNo": "PO-000010643",
-      "customer": "PT. ESSILORLUXOTICA PROFESSIONAL SOLUTION INDONESIA",
-      "customerKode": "PTES-0042",
-      "items": [
-        {
-          "product": "PLASTIK WRAP DAIMARU",
-          "productId": "TRM2753",
-          "productKode": "TRM2753",
-          "qty": 6,
-          "unit": "ROL"
-        },
-        {
-          "product": "ISOLASI 2.5",
-          "productId": "TRM1801",
-          "productKode": "TRM1801",
-          "qty": 100,
-          "unit": "ROL"
-        },
-        {
-          "product": "KERTAS HVS 70Gr PINK",
-          "productId": "TRM1555",
-          "productKode": "TRM1555",
-          "qty": 10,
-          "unit": "RIM"
-        }
-      ],
-      "status": "PROCESSED",
-      "created": "2026-01-05T04:36:04.632Z",
-      "processedAt": "2026-01-05T08:22:42.534Z"
-    }
-  ],
-  "timestamp": 1767601362534,
-  "_timestamp": 1767601362534
+  "value": [],
+  "timestamp": 1768264257335,
+  "_timestamp": 1768264257335
 }

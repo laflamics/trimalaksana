@@ -54,6 +54,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    icon: iconPath, // Set icon untuk window
     webPreferences: {
       preload: preloadPath,
       nodeIntegration: false,
@@ -65,7 +66,6 @@ function createWindow() {
     titleBarStyle: 'default',
     backgroundColor: '#0a0a0a',
     show: true,
-    icon: iconPath, // Set app icon (will be undefined if not found, using default)
   });
   
   // CRITICAL FIX: Also set app icon for taskbar (Windows) and dock (macOS)
@@ -1263,13 +1263,15 @@ if (app.isPackaged) {
   // Default server URL (akan di-override saat check-for-updates dengan server dari config)
   const defaultServerUrl = process.env.UPDATE_SERVER_URL || 
     process.env.SERVER_URL || 
-    'https://server-tljp.tail75a421.ts.net';
+    'https://vercel-proxy-blond-nine.vercel.app';  // Vercel Proxy untuk update check (lebih cepat)
   
-  // Remove port from Tailscale URLs
-  const cleanUrl = defaultServerUrl.replace(/:\d+$/, '');
-  const isTailscale = cleanUrl.includes('.ts.net');
-  const protocol = isTailscale ? 'https' : 'http';
-  const baseUrl = cleanUrl.startsWith('http') ? cleanUrl : `${protocol}://${cleanUrl}`;
+  // 🚀 FIX: Always use Vercel proxy for update check (lebih cepat dan stabil)
+  // Normalize URL: remove port, handle protocol
+  const cleanUrl = defaultServerUrl.replace(/:\d+$/, '').replace(/^https?:\/\//, '');
+  // Pastikan selalu pakai https untuk Vercel proxy
+  const isVercelProxy = cleanUrl.includes('vercel.app') || cleanUrl.includes('vercel-proxy');
+  const protocol = isVercelProxy ? 'https' : (cleanUrl.includes('.ts.net') ? 'https' : 'http');
+  const baseUrl = defaultServerUrl.startsWith('http') ? defaultServerUrl : `${protocol}://${cleanUrl}`;
   
   // electron-updater will append /latest.yml to the feed URL
   // So we set it to /api/updates/ (without latest) so it becomes /api/updates/latest.yml
@@ -1286,10 +1288,17 @@ if (app.isPackaged) {
   console.log(`[Auto-Updater] Will use server from storage config when checking for updates`);
   console.log(`[Auto-Updater] Certificate verification disabled for Tailscale funnel`);
   
-  // Suppress local app-update.yml errors (file is on server, not local)
+  // Suppress local app-update.yml/app-updates.yml errors (file is on server, not local)
   autoUpdater.on('error', (error) => {
-    if (error.message && (error.message.includes('app-update.yml') || error.message.includes('ENOENT'))) {
-      console.log('[Auto-Updater] Ignoring local app-update.yml error (file is on server, this is normal)');
+    if (error.message && (
+      error.message.includes('app-update.yml') || 
+      error.message.includes('app-updates.yml') ||
+      error.message.includes('ENOENT') ||
+      (error.message.includes('no such file') && error.message.includes('app-update')) ||
+      (error.message.includes('no such file') && error.message.includes('resources'))
+    )) {
+      console.log('[Auto-Updater] Ignoring local app-update.yml/app-updates.yml error (file is on server, this is normal)');
+      console.log('[Auto-Updater] Error details (suppressed):', error.message);
       return; // Suppress this error - it's expected behavior
     }
     // Log other errors normally
@@ -1331,8 +1340,16 @@ autoUpdater.on('update-not-available', (info) => {
 
 autoUpdater.on('error', (err) => {
   // Suppress app-update.yml ENOENT errors (file is on server, not local - this is normal)
-  if (err.message && (err.message.includes('app-update.yml') || err.message.includes('ENOENT'))) {
-    console.log('[Auto-Updater] Ignoring app-update.yml local file error (file is on server, this is normal)');
+  // Juga suppress error untuk app-updates.yml (Windows) dan resources/app-updates.yml
+  if (err.message && (
+    err.message.includes('app-update.yml') || 
+    err.message.includes('app-updates.yml') ||
+    err.message.includes('ENOENT') ||
+    (err.message.includes('no such file') && err.message.includes('app-update')) ||
+    (err.message.includes('no such file') && err.message.includes('resources'))
+  )) {
+    console.log('[Auto-Updater] Ignoring local app-update.yml/app-updates.yml error (file is on server, this is normal)');
+    console.log('[Auto-Updater] Error details (suppressed):', err.message);
     return; // Don't send error to UI - this is expected behavior
   }
   
@@ -1469,20 +1486,30 @@ ipcMain.handle('check-for-updates', async () => {
     console.log(`[Auto-Updater] Current app version: ${fullVersion}`);
     console.log(`[Auto-Updater] app.getVersion(): ${app.getVersion()}`);
     
-    // Try to get server URL from storage config first, then fallback to env/default
-    let updateServerUrl = await getServerUrlFromConfig();
+    // 🚀 FIX: Always use Vercel proxy for update check (lebih cepat dan stabil)
+    // Jangan pakai URL dari config karena mungkin masih Tailscale langsung
+    // Vercel proxy akan forward ke server Tailscale di backend
+    let updateServerUrl = process.env.UPDATE_SERVER_URL || 
+      process.env.SERVER_URL || 
+      'https://vercel-proxy-blond-nine.vercel.app';  // Vercel Proxy untuk update check (lebih cepat)
     
-    if (!updateServerUrl) {
-      updateServerUrl = process.env.UPDATE_SERVER_URL || 
-        process.env.SERVER_URL || 
-        'https://server-tljp.tail75a421.ts.net';
+    // 🚀 CRITICAL: Jika URL dari config masih Tailscale, ganti ke Vercel proxy
+    const configUrl = await getServerUrlFromConfig();
+    if (configUrl && configUrl.includes('.ts.net')) {
+      console.log(`[Auto-Updater] Config URL masih Tailscale (${configUrl}), menggunakan Vercel proxy untuk update check`);
+      // Tetap pakai Vercel proxy, jangan pakai config URL untuk update
+    } else if (configUrl && !configUrl.includes('.ts.net')) {
+      // Jika config URL bukan Tailscale (misalnya sudah Vercel proxy), pakai itu
+      updateServerUrl = configUrl;
+      console.log(`[Auto-Updater] Menggunakan URL dari config: ${updateServerUrl}`);
     }
     
     // Normalize URL: remove port, handle protocol
     let cleanUrl = updateServerUrl.replace(/:\d+$/, '').replace(/^https?:\/\//, '');
-    const isTailscale = cleanUrl.includes('.ts.net');
-    const protocol = isTailscale ? 'https' : 'http';
-    const baseUrl = `${protocol}://${cleanUrl}`;
+    // Pastikan selalu pakai https untuk Vercel proxy
+    const isVercelProxy = cleanUrl.includes('vercel.app') || cleanUrl.includes('vercel-proxy');
+    const protocol = isVercelProxy ? 'https' : (cleanUrl.includes('.ts.net') ? 'https' : 'http');
+    const baseUrl = cleanUrl.startsWith('http') ? updateServerUrl : `${protocol}://${cleanUrl}`;
     
     // electron-updater akan append /latest.yml ke feed URL
     // Jadi kita set ke /api/updates/ supaya jadi /api/updates/latest.yml
@@ -1511,9 +1538,15 @@ ipcMain.handle('check-for-updates', async () => {
     return { success: true, message: 'Checking for updates...' };
   } catch (error: any) {
     console.error('Error checking for updates:', error);
-    // Ignore ENOENT errors for app-update.yml (it's normal, file is on server)
-    if (error.message && (error.message.includes('app-update.yml') || error.message.includes('ENOENT'))) {
-      console.log('[Auto-Updater] Ignoring app-update.yml local file error (file is on server, this is normal)');
+    // Ignore ENOENT errors for app-update.yml/app-updates.yml (it's normal, file is on server)
+    if (error.message && (
+      error.message.includes('app-update.yml') || 
+      error.message.includes('app-updates.yml') ||
+      error.message.includes('ENOENT') ||
+      (error.message.includes('no such file') && error.message.includes('app-update')) ||
+      (error.message.includes('no such file') && error.message.includes('resources'))
+    )) {
+      console.log('[Auto-Updater] Ignoring app-update.yml/app-updates.yml local file error (file is on server, this is normal)');
       // Error handler sudah suppress error ini, jadi kita anggap success
       // electron-updater akan tetap check dari server meskipun ada error ini
       return { success: true, message: 'Checking for updates from server...' };
@@ -1524,10 +1557,55 @@ ipcMain.handle('check-for-updates', async () => {
 
 ipcMain.handle('download-update', async () => {
   try {
+    // 🚀 FIX: Pastikan feed URL sudah benar sebelum download
+    // Re-set feed URL untuk memastikan menggunakan server URL yang benar
+    const defaultServerUrl = process.env.UPDATE_SERVER_URL || 
+      process.env.SERVER_URL || 
+      'https://vercel-proxy-blond-nine.vercel.app';
+    
+    const configUrl = await getServerUrlFromConfig();
+    let updateServerUrl = defaultServerUrl;
+    
+    if (configUrl && !configUrl.includes('.ts.net')) {
+      updateServerUrl = configUrl;
+    }
+    
+    const cleanUrl = updateServerUrl.replace(/:\d+$/, '').replace(/^https?:\/\//, '');
+    const isVercelProxy = cleanUrl.includes('vercel.app') || cleanUrl.includes('vercel-proxy');
+    const protocol = isVercelProxy ? 'https' : (cleanUrl.includes('.ts.net') ? 'https' : 'http');
+    const baseUrl = updateServerUrl.startsWith('http') ? updateServerUrl : `${protocol}://${cleanUrl}`;
+    const feedUrl = `${baseUrl}/api/updates/`;
+    
+    // Re-set feed URL sebelum download
+    autoUpdater.setFeedURL({ 
+      provider: 'generic',
+      url: feedUrl,
+      channel: 'latest'
+    });
+    
+    console.log(`[Auto-Updater] Downloading update from: ${feedUrl}latest.yml`);
+    
     await autoUpdater.downloadUpdate();
     return { success: true, message: 'Downloading update...' };
   } catch (error: any) {
     console.error('Error downloading update:', error);
+    // Suppress ENOENT errors untuk app-updates.yml (file ada di server, bukan lokal)
+    if (error.message && (
+      error.message.includes('app-update.yml') || 
+      error.message.includes('app-updates.yml') ||
+      error.message.includes('ENOENT') ||
+      (error.message.includes('no such file') && error.message.includes('app-update')) ||
+      (error.message.includes('no such file') && error.message.includes('resources'))
+    )) {
+      console.log('[Auto-Updater] Ignoring app-updates.yml ENOENT error during download (file is on server)');
+      // Coba download lagi (mungkin error ini hanya warning)
+      try {
+        await autoUpdater.downloadUpdate();
+        return { success: true, message: 'Downloading update...' };
+      } catch (retryError: any) {
+        return { success: false, message: retryError.message };
+      }
+    }
     return { success: false, message: error.message };
   }
 });

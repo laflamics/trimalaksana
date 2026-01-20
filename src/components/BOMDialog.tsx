@@ -127,22 +127,106 @@ const BOMDialog = ({ productId, productName, productKode, onClose, onSave }: BOM
 
       // Load existing BOM for this product
       const bomData = await storageService.get<any[]>('bom') || [];
-      const targetId = (productKodeRef.current || productIdRef.current || '').toString().trim();
+      const targetId = (productKodeRef.current || productIdRef.current || '').toString().trim().toLowerCase();
+      
+      if (!targetId) {
+        console.warn('[BOMDialog] No targetId provided, cannot load BOM');
+        setBomItems([]);
+        return;
+      }
+      
+      // Load products untuk cross-reference kodeIpos
+      const productsData = await storageService.get<any[]>('products') || [];
+      
+      // Build lookup map untuk performa lebih baik
+      const productsByKode = new Map<string, any>();
+      const productsByKodeIpos = new Map<string, any>();
+      const productsByProductId = new Map<string, any>();
+      const productsByPadCode = new Map<string, any>();
+      
+      productsData.forEach(p => {
+        if (!p) return;
+        const pKode = String(p.kode || '').trim().toLowerCase();
+        const pKodeIpos = String(p.kodeIpos || '').trim().toLowerCase();
+        const pProductId = String(p.product_id || '').trim().toLowerCase();
+        const pPadCode = String(p.padCode || '').trim().toLowerCase();
+        
+        if (pKode) productsByKode.set(pKode, p);
+        if (pKodeIpos) productsByKodeIpos.set(pKodeIpos, p);
+        if (pProductId) productsByProductId.set(pProductId, p);
+        if (pPadCode) productsByPadCode.set(pPadCode, p);
+      });
+      
+      // Cari produk yang sedang di-edit untuk mendapatkan semua identifier-nya
+      const targetProduct = productsByKode.get(targetId) || 
+                           productsByKodeIpos.get(targetId) || 
+                           productsByProductId.get(targetId) || 
+                           productsByPadCode.get(targetId);
+      
+      // Build set of all possible identifiers untuk produk ini
+      const targetIdentifiers = new Set<string>();
+      targetIdentifiers.add(targetId);
+      
+      if (targetProduct) {
+        const pKode = String(targetProduct.kode || '').trim().toLowerCase();
+        const pKodeIpos = String(targetProduct.kodeIpos || '').trim().toLowerCase();
+        const pProductId = String(targetProduct.product_id || '').trim().toLowerCase();
+        const pPadCode = String(targetProduct.padCode || '').trim().toLowerCase();
+        
+        if (pKode) targetIdentifiers.add(pKode);
+        if (pKodeIpos) targetIdentifiers.add(pKodeIpos);
+        if (pProductId) targetIdentifiers.add(pProductId);
+        if (pPadCode) targetIdentifiers.add(pPadCode);
+      }
+      
+      // Filter BOM: BOM product_id harus match dengan salah satu identifier dari produk ini
       const productBOM = bomData.filter(b => {
-        // Fallback: product_id -> padCode -> kode
-        const bomProductId = (b.product_id || b.padCode || b.kode || '').toString().trim();
-        return bomProductId === targetId;
+        if (!b) return false;
+        
+        // BOM product_id bisa dari b.product_id, b.padCode, atau b.kode
+        const bomProductId = String(b.product_id || b.padCode || b.kode || '').trim().toLowerCase();
+        
+        // Skip jika BOM tidak punya product_id
+        if (!bomProductId) return false;
+        
+        // Direct match: BOM product_id langsung match dengan salah satu identifier produk ini
+        if (targetIdentifiers.has(bomProductId)) {
+          return true;
+        }
+        
+        // Cross-reference: Cari produk yang punya kode/kodeIpos/product_id/padCode sama dengan bomProductId
+        const bomMatchingProduct = productsByKode.get(bomProductId) || 
+                                   productsByKodeIpos.get(bomProductId) || 
+                                   productsByProductId.get(bomProductId) || 
+                                   productsByPadCode.get(bomProductId);
+        
+        // Jika ada produk yang match dengan bomProductId, cek apakah produk itu sama dengan produk target
+        if (bomMatchingProduct && targetProduct) {
+          return bomMatchingProduct.id === targetProduct.id;
+        }
+        
+        return false;
+      });
+      
+      console.log(`[BOMDialog] Loaded ${productBOM.length} BOM items for product ${targetId}`, {
+        targetId,
+        targetIdentifiers: Array.from(targetIdentifiers),
+        bomCount: productBOM.length,
+        bomProductIds: productBOM.map(b => b.product_id)
       });
 
       // Map BOM items with material names
-      // Jangan ganggu yang duplicate dari sheet - ambil yang pertama saja untuk setiap material_id
-      // Sesuai dengan sheet, ada duplicate material di BOM yang sama, tapi kita hanya tampilkan 1 per material_id
+      // IMPORTANT: Deduplicate berdasarkan material_id (jika ada duplicate material_id untuk product yang sama)
+      // Tapi tetap load semua BOM entries yang match dengan product
       const bomMap = new Map<string, any>();
       productBOM.forEach(bom => {
         // Support both snake_case (dari storage) dan camelCase (backward compatibility)
         const materialId = (bom.material_id || bom.materialId || '').toString().trim();
-        if (materialId && !bomMap.has(materialId)) {
-          // Ambil yang pertama untuk setiap material_id (sesuai sheet, ada duplicate)
+        if (!materialId) return; // Skip jika tidak ada material_id
+        
+        // Jika material_id sudah ada, keep yang pertama (deduplicate)
+        // Tapi pastikan semua BOM entries di-iterasi, bukan hanya yang terakhir
+        if (!bomMap.has(materialId)) {
           const material = materialsData.find(m => 
             (m.material_id || m.kode) === materialId
           );
@@ -155,7 +239,9 @@ const BOMDialog = ({ productId, productName, productKode, onClose, onSave }: BOM
         }
       });
 
-      setBomItems(Array.from(bomMap.values()));
+      const finalBomItems = Array.from(bomMap.values());
+      console.log(`[BOMDialog] Final BOM items: ${finalBomItems.length}`, finalBomItems.map(b => ({ materialId: b.materialId, ratio: b.ratio })));
+      setBomItems(finalBomItems);
     } catch (error) {
       console.error('Error loading BOM data:', error);
     } finally {

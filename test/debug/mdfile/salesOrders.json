@@ -1,0 +1,2263 @@
+{
+  "value": [
+    {
+      "id": "1767593131701",
+      "soNo": "testerr",
+      "customer": "PT. DWIKARYA SEJAHTERA",
+      "customerKode": "CTM-006",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-05T06:05:31.701Z",
+      "items": [
+        {
+          "id": "1767593081083nf68ijtdr",
+          "productId": "FG-AMM-00025",
+          "productKode": "FG-AMM-00025",
+          "productName": "BOX PANJANG UK.180",
+          "qty": 200,
+          "unit": "PCS",
+          "price": 15790,
+          "total": 3158000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": [],
+      "deleted": true,
+      "deletedAt": "2026-01-05T06:42:12.045Z",
+      "deletedTimestamp": 1767595332045,
+      "padCode": ""
+    },
+    {
+      "id": "1767593999389",
+      "soNo": "test 1111",
+      "customer": "PT. CAC PUTRA PERKASA",
+      "customerKode": "CTM-026",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-05T06:19:59.389Z",
+      "items": [
+        {
+          "id": "1767593898702q9zc1mwo2",
+          "productId": "FG-DHW-00033",
+          "productKode": "FG-DHW-00033",
+          "productName": "CARTON BOX DH 8",
+          "qty": 100,
+          "unit": "PCS",
+          "price": 5971,
+          "total": 597100,
+          "specNote": "urgent",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 175 X 94,8 CM K150/M125X3/K125 CB/F 30,9 + 33 + 30,9",
+              "materialId": "MTRL-00167",
+              "unit": "PCS",
+              "qty": 100,
+              "ratio": 1,
+              "pricePerUnit": 10189
+            }
+          ]
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": [
+        {
+          "materialId": "MTRL-00167",
+          "materialName": "SHEET 175 X 94,8 CM K150/M125X3/K125 CB/F 30,9 + 33 + 30,9",
+          "unit": "PCS",
+          "qty": 100,
+          "ratio": 1,
+          "pricePerUnit": 10189,
+          "totalPrice": 1018900
+        }
+      ],
+      "deleted": true,
+      "deletedAt": "2026-01-05T07:48:08.917Z",
+      "deletedTimestamp": 1767599288917
+    },
+    {
+      "id": "1767595965505",
+      "soNo": "001/PO/CAC/I/2026",
+      "customer": "PT. CAC PUTRA PERKASA",
+      "customerKode": "CTM-026",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-05T06:52:45.505Z",
+      "items": [
+        {
+          "id": "176759584730773c06mnoe",
+          "productId": "FG-CAC-00002",
+          "productKode": "FG-CAC-00002",
+          "productName": "CARTON BOX 387X277X125",
+          "qty": 1500,
+          "unit": "PCS",
+          "price": 6000,
+          "total": 9000000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 128 X 37,3 CM K200/M125X3/K150 CB/F SCOORE 11,8+13,7+11,8",
+              "materialId": "MTRL-00024",
+              "unit": "Pcs",
+              "qty": 951,
+              "ratio": 0.634,
+              "pricePerUnit": 3178
+            }
+          ]
+        }
+      ],
+      "globalSpecNote": "DELIVERY TGL 9 JANUARI 2026",
+      "category": "packaging",
+      "bomSnapshot": [
+        {
+          "materialId": "MTRL-00024",
+          "materialName": "SHEET 128 X 37,3 CM K200/M125X3/K150 CB/F SCOORE 11,8+13,7+11,8",
+          "unit": "Pcs",
+          "qty": 951,
+          "ratio": 0.634,
+          "pricePerUnit": 3178,
+          "totalPrice": 3022278
+        }
+      ],
+      "confirmed": true,
+      "confirmedAt": "2026-01-05T06:53:00.367Z",
+      "confirmedBy": "Sales"
+    },
+    {
+      "id": "1767602426840",
+      "soNo": "PO0000010938",
+      "customer": "PT. INDONESIA KOITO",
+      "customerKode": "CTM-084",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-05T08:40:26.841Z",
+      "items": [
+        {
+          "id": "1767602384168akdu7tucq",
+          "productId": "FG-CTM-00002",
+          "productKode": "FG-CTM-00002",
+          "productName": "BOX X + COVER LIPAT MAGNET UK 780X470X385 mm",
+          "qty": 56,
+          "unit": "PCS",
+          "price": 157900,
+          "total": 8842400,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": [],
+      "confirmed": true,
+      "confirmedAt": "2026-01-05T08:41:45.184Z",
+      "confirmedBy": "Sales"
+    },
+    {
+      "id": "1767749587853",
+      "soNo": "3700183162",
+      "customer": "PT. WIRYAMANTA SADINA",
+      "customerKode": "CTM-070",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-07T01:33:07.853Z",
+      "items": [
+        {
+          "id": "1767749536789fkyzlr24a",
+          "productId": "FG-WIRS-00008",
+          "productKode": "FG-WIRS-00008",
+          "productName": "PARTY BOX ACTIVITY (1 X 50 SET)",
+          "qty": 54,
+          "unit": "PCS",
+          "price": 473000,
+          "total": 25542000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": [],
+      "confirmed": true,
+      "confirmedAt": "2026-01-07T01:33:20.314Z",
+      "confirmedBy": "Sales"
+    },
+    {
+      "id": "1767749651494",
+      "soNo": "3700183161",
+      "customer": "PT. WIRYAMANTA SADINA",
+      "customerKode": "CTM-070",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-07T01:34:11.494Z",
+      "items": [
+        {
+          "id": "1767749624903xfyojuil6",
+          "productId": "FG-WIRS-00008",
+          "productKode": "FG-WIRS-00008",
+          "productName": "PARTY BOX ACTIVITY (1 X 50 SET)",
+          "qty": 54,
+          "unit": "PCS",
+          "price": 473000,
+          "total": 25542000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": [],
+      "confirmed": true,
+      "confirmedAt": "2026-01-07T01:34:15.057Z",
+      "confirmedBy": "Sales"
+    },
+    {
+      "soNo": "PO/KBP26-00006",
+      "customer": "PT. KARYA BUMIMAS PERSADA",
+      "customerKode": "CTM-035",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "items": [
+        {
+          "id": "1767749706969dikr0psir",
+          "productId": "FG-KBP-00003",
+          "productKode": "FG-KBP-00003",
+          "productName": "BOX WASTAFEL",
+          "qty": 500,
+          "unit": "PCS",
+          "price": 14090,
+          "total": 7045000,
+          "specNote": "",
+          "padCode": "BBP-BOX-WST",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 134 X 109 CM K200/M125X3/K200 CB/F NETTO",
+              "materialId": "MTRL-00606",
+              "unit": "PCS",
+              "qty": 625,
+              "ratio": 1.25,
+              "pricePerUnit": 11562
+            }
+          ]
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "id": "1767749751933",
+      "created": "2026-01-07T01:35:51.933Z",
+      "bomSnapshot": [
+        {
+          "materialId": "MTRL-00606",
+          "materialName": "SHEET 134 X 109 CM K200/M125X3/K200 CB/F NETTO",
+          "unit": "PCS",
+          "qty": 625,
+          "ratio": 1.25,
+          "pricePerUnit": 11562,
+          "totalPrice": 7226250
+        }
+      ],
+      "status": "OPEN",
+      "confirmed": true,
+      "confirmedAt": "2026-01-07T01:41:33.899Z",
+      "confirmedBy": "Sales"
+    },
+    {
+      "id": "1767761569400",
+      "soNo": "PO2601-010",
+      "customer": "PT. EHWA INDONESIA",
+      "customerKode": "CTM-029",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-07T04:52:49.400Z",
+      "items": [
+        {
+          "id": "1767761484660mjqhuqwhn",
+          "productId": "FG-EHW-00022",
+          "productKode": "FG-EHW-00022",
+          "productName": "OUT BOX 4.5 INCH (10PK)- DW4724 (PM2156)",
+          "qty": 4000,
+          "unit": "PCS",
+          "price": 2221,
+          "total": 8884000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 176 X 180 CM K150/M125/K125 B/F BRUTO",
+              "materialId": "MTRL-00072",
+              "unit": "PCS",
+              "qty": 5000,
+              "ratio": 1.25,
+              "pricePerUnit": 11647
+            },
+            {
+              "materialName": "SHEET 179 X 66,2 CM K150/M125X3/K150 CB/F SCOORE 17.5+31.2+17.5",
+              "materialId": "MTRL-00002",
+              "unit": "Pcs",
+              "qty": 1016.83332,
+              "ratio": 0.25420833,
+              "pricePerUnit": 7291
+            }
+          ]
+        },
+        {
+          "id": "1767761545647lmtx8dtm6",
+          "productId": "FG-EHW-00094",
+          "productKode": "FG-EHW-00094",
+          "productName": "OUTBOX SGA 4,5 INCH MP 100PCS (PM2218)",
+          "qty": 500,
+          "unit": "PCS",
+          "price": 6208,
+          "total": 3104000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": [
+        {
+          "materialId": "MTRL-00072",
+          "materialName": "SHEET 176 X 180 CM K150/M125/K125 B/F BRUTO",
+          "unit": "PCS",
+          "qty": 5000,
+          "ratio": 1.25,
+          "pricePerUnit": 11647,
+          "totalPrice": 58235000
+        },
+        {
+          "materialId": "MTRL-00002",
+          "materialName": "SHEET 179 X 66,2 CM K150/M125X3/K150 CB/F SCOORE 17.5+31.2+17.5",
+          "unit": "Pcs",
+          "qty": 1016.83332,
+          "ratio": 0.25420833,
+          "pricePerUnit": 7291,
+          "totalPrice": 7413731.73612
+        }
+      ],
+      "confirmed": true,
+      "confirmedAt": "2026-01-07T04:53:00.393Z",
+      "confirmedBy": "Sales"
+    },
+    {
+      "id": "1767767210803",
+      "soNo": "MRO/29016/PC/2026",
+      "customer": "PT. PANASONIC MANUFACTURING INDONESIA",
+      "customerKode": "CTM-014",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-07T06:26:50.803Z",
+      "items": [
+        {
+          "id": "17677671575447f8z87d21",
+          "productId": "FG-PMI-00052",
+          "productKode": "FG-PMI-00052",
+          "productName": "CARTON BOX EVAPORATOR REGULER 72X26.5X22.5 K275/M125/K275 BF 2 LAYER",
+          "qty": 330,
+          "unit": "PCS",
+          "price": 14800,
+          "total": 4884000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": [],
+      "confirmed": true,
+      "confirmedAt": "2026-01-07T06:26:56.480Z",
+      "confirmedBy": "Sales"
+    },
+    {
+      "id": "1767843787491",
+      "soNo": "001/F/I/2026",
+      "customer": "FURINDAH FURNITUR",
+      "customerKode": "CTM-002",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-08T03:43:07.491Z",
+      "items": [
+        {
+          "id": "176784367315506o1yd7c8",
+          "productId": "FG-FF-00002",
+          "productKode": "FG-FF-00002",
+          "productName": "KARDUS BOX KING KOIL UK 200X11X145 CM K200/M125X3/K200",
+          "qty": 100,
+          "unit": "PCS",
+          "price": 95540,
+          "total": 9554000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": [],
+      "confirmed": true,
+      "confirmedAt": "2026-01-08T03:43:43.370Z",
+      "confirmedBy": "Sales"
+    },
+    {
+      "soNo": "test-00009999",
+      "customer": "PT.TEST 1",
+      "customerKode": "CTM-097",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "items": [
+        {
+          "id": "1768211628228hofpfvn3l",
+          "productId": "FG-CTM-00008",
+          "productKode": "FG-CTM-00008",
+          "productName": "testA",
+          "qty": 250,
+          "unit": "PCS",
+          "price": 2090,
+          "total": 522500,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "created": "2026-01-12T09:53:34.860Z",
+      "id": "1768211645849",
+      "bomSnapshot": [],
+      "status": "OPEN",
+      "confirmed": true,
+      "confirmedAt": "2026-01-12T10:15:10.295Z",
+      "confirmedBy": "Sales",
+      "deleted": true,
+      "deletedAt": "2026-01-12T10:23:33.495Z",
+      "deletedTimestamp": 1768213413495
+    },
+    {
+      "id": "1768211965197",
+      "soNo": "002/PO/CAC/I/2026",
+      "customer": "PT. CAC PUTRA PERKASA",
+      "customerKode": "CTM-026",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-06T02:55:00.000Z",
+      "items": [
+        {
+          "id": "1768211790130xxuf592zi",
+          "productId": "FG-CAC-00017",
+          "productKode": "FG-CAC-00017",
+          "productName": "TUTUP 113X110X12.5 CM 4 WALL KMK 275 CCB/F",
+          "qty": 100,
+          "unit": "PCS",
+          "price": 68500,
+          "total": 6850000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "soNo": "test-87878",
+      "customer": "PT.TEST 1",
+      "customerKode": "CTM-097",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "items": [
+        {
+          "id": "17682122097005ni0trsh9",
+          "productId": "FG-CTM-00008",
+          "productKode": "FG-CTM-00008",
+          "productName": "testA",
+          "qty": 20,
+          "unit": "PCS",
+          "price": 2000,
+          "total": 40000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "created": "2026-01-12T10:03:18.116Z",
+      "id": "1768212250650",
+      "bomSnapshot": [],
+      "status": "OPEN",
+      "deleted": true,
+      "deletedAt": "2026-01-12T10:23:28.868Z",
+      "deletedTimestamp": 1768213408868
+    },
+    {
+      "id": "1768223568612",
+      "soNo": "WASION2601-PO002",
+      "customer": "PT. WASION",
+      "customerKode": "CTM-097",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-06T06:11:00.000Z",
+      "items": [
+        {
+          "id": "1768223536854dkm3ktcja",
+          "productId": "FG-CTM-00007",
+          "productKode": "FG-CTM-00007",
+          "productName": "BOX UK. 160X100X315 MM K125/M125/K125 C/FLUTE",
+          "qty": 700,
+          "unit": "PCS",
+          "price": 4519,
+          "total": 3163300,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "id": "1768224366975",
+      "soNo": "SPG-PO/001/I-2026",
+      "customer": "PT. SIGMA PACK GEMILANG",
+      "customerKode": "CTM-074",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-06T06:19:00.000Z",
+      "items": [
+        {
+          "id": "17682241246643p4wnpnmr",
+          "productId": "FG-SIG-00032",
+          "productKode": "FG-SIG-00032",
+          "productName": "CB. PANORAMIC/WINDSHIELD BYD UK 1550X160X1040 K150/M125X3/K150 CB/F",
+          "qty": 20,
+          "unit": "PCS",
+          "price": 59500,
+          "total": 1190000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768224140825kvozmja83",
+          "productId": "FG-SIG-00033",
+          "productKode": "FG-SIG-00033",
+          "productName": "CB. RWS BYD UK 1390X240X535 K150/M125X3/K150 CB/F",
+          "qty": 20,
+          "unit": "PCS",
+          "price": 43000,
+          "total": 860000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "176822420563247x0ko6n7",
+          "productId": "FG-CTM-00002",
+          "productKode": "FG-CTM-00002",
+          "productName": "CB. FR/RR DOOR BYD UK 1065X160X615 K150/M125X3/K150 CB/F",
+          "qty": 35,
+          "unit": "PCS",
+          "price": 29000,
+          "total": 1015000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768224276208iwsfxtoq4",
+          "productId": "FG-CTM-00003",
+          "productKode": "FG-CTM-00003",
+          "productName": "CB. FR SUBROOF BYD UK 1310X100X350 K150/M125X3/K150 CB/F",
+          "qty": 10,
+          "unit": "PCS",
+          "price": 22000,
+          "total": 220000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768224312053i0zmv670z",
+          "productId": "FG-CTM-00004",
+          "productKode": "FG-CTM-00004",
+          "productName": "CB. FV BYD UK 640X100X340 K150/M125X3/K150 CB/F",
+          "qty": 20,
+          "unit": "PCS",
+          "price": 11500,
+          "total": 230000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "17682243438936csgv3oue",
+          "productId": "FG-CTM-00005",
+          "productKode": "FG-CTM-00005",
+          "productName": "CB. SW BYD UK 750X100X480 K150/M125X3/K150 CB/F",
+          "qty": 20,
+          "unit": "PCS",
+          "price": 15500,
+          "total": 310000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "id": "1768224633174",
+      "soNo": "PO/STP/I/2026/006",
+      "customer": "PT. STAR TEC PACIFIC",
+      "customerKode": "CTM-019",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-07T06:28:00.000Z",
+      "items": [
+        {
+          "id": "1768224560273yfxggxw5w",
+          "productId": "FG-STP-00011",
+          "productKode": "FG-STP-00011",
+          "productName": "SIDE REEL 10 STP",
+          "qty": 5900,
+          "unit": "PCS",
+          "price": 5900,
+          "total": 34810000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 112 X 145 CM K200/M125/K200 B/F BRUTO",
+              "materialId": "MTRL-00261",
+              "unit": "Pcs",
+              "qty": 1180,
+              "ratio": 0.2,
+              "pricePerUnit": 7415
+            }
+          ]
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": [
+        {
+          "materialId": "MTRL-00261",
+          "materialName": "SHEET 112 X 145 CM K200/M125/K200 B/F BRUTO",
+          "unit": "Pcs",
+          "qty": 1180,
+          "ratio": 0.2,
+          "pricePerUnit": 7415,
+          "totalPrice": 8749700
+        }
+      ]
+    },
+    {
+      "id": "1768225592622",
+      "soNo": "PUR-PO/0126/0029",
+      "customer": "PT. ASAHI INDONESIA",
+      "customerKode": "CTM-023",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-07T06:31:00.000Z",
+      "items": [
+        {
+          "id": "17682255574758cpm09omv",
+          "productId": "FG-AI-00001",
+          "productKode": "FG-AI-00001",
+          "productName": "CARTON LAYER 950X770",
+          "qty": 500,
+          "unit": "PCS",
+          "price": 5600,
+          "total": 2800000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "id": "1768225887474",
+      "soNo": "003/PO/CAC/I/2026",
+      "customer": "PT. CAC PUTRA PERKASA",
+      "customerKode": "CTM-026",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-07T06:48:00.000Z",
+      "items": [
+        {
+          "id": "1768225714067re6amvirc",
+          "productId": "FG-CAC-00007",
+          "productKode": "FG-CAC-00007",
+          "productName": "CARTON BOX PARTISI 270X277X145",
+          "qty": 200,
+          "unit": "PCS",
+          "price": 5700,
+          "total": 1140000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "176822574120549bhjqaub",
+          "productId": "FG-CAC-00008",
+          "productKode": "FG-CAC-00008",
+          "productName": "PARTISI 265X265",
+          "qty": 400,
+          "unit": "PCS",
+          "price": 2500,
+          "total": 1000000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "17682258583016do0hzqcz",
+          "productId": "FG-CAC-00008",
+          "productKode": "FG-CAC-00008",
+          "productName": "PARTISI 265X265",
+          "qty": 200,
+          "unit": "PCS",
+          "price": 2500,
+          "total": 500000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "id": "1768225994405",
+      "soNo": "PA26010087",
+      "customer": "PT. KAWASAKI MOTOR INDONESIA",
+      "customerKode": "CTM-034",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-07T06:52:00.000Z",
+      "items": [
+        {
+          "id": "1768225972247j3zge88c7",
+          "productId": "FG-KMI-00020",
+          "productKode": "FG-KMI-00020",
+          "productName": "CARTON BOX K-79 (BROWN) (K8120-0058)",
+          "qty": 60,
+          "unit": "PCS",
+          "price": 5800,
+          "total": 348000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "id": "1768226061789",
+      "soNo": "C90792",
+      "customer": "PT. KAWASAKI MOTOR INDONESIA",
+      "customerKode": "CTM-034",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-07T06:53:00.000Z",
+      "items": [
+        {
+          "id": "1768226037185gk1wu4435",
+          "productId": "FG-KMI-00087",
+          "productKode": "FG-KMI-00087",
+          "productName": "CARTON BOX A-87 (NEW COMMUNICATION SYMBOL) (K3110-0100)",
+          "qty": 3070,
+          "unit": "PCS",
+          "price": 0,
+          "total": 0,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "id": "1768227207881",
+      "soNo": "WP2601001",
+      "customer": "PT. PANASONIC MANUFACTURING INDONESIA",
+      "customerKode": "CTM-014",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-08T07:12:00.000Z",
+      "items": [
+        {
+          "id": "1768227159157sjqudnvse",
+          "productId": "FG-PMI-00035",
+          "productKode": "FG-PMI-00035",
+          "productName": "MASTER BOX 23 X 18 X 9 CM (PC 27)",
+          "qty": 200,
+          "unit": "PCS",
+          "price": 4161,
+          "total": 832200,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "17682271784080nv8w7bxv",
+          "productId": "FG-PMI-00036",
+          "productKode": "FG-PMI-00036",
+          "productName": "MASTER BOX 14 X 14 X 13 CM (PC 28)",
+          "qty": 300,
+          "unit": "PCS",
+          "price": 3150,
+          "total": 945000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "17682271917876xa9sb1on",
+          "productId": "FG-PMI-00045",
+          "productKode": "FG-PMI-00045",
+          "productName": "MASTERBOX 58 X 31 X 25 CM (PC 29)",
+          "qty": 300,
+          "unit": "PCS",
+          "price": 13300,
+          "total": 3990000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "id": "1768227290219",
+      "soNo": "PO20260100032",
+      "customer": "PT. WANG SARIMULTI UTAMA",
+      "customerKode": "CTM-073",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-08T07:14:00.000Z",
+      "items": [
+        {
+          "id": "1768227274412h6yhuqchk",
+          "productId": "FG-WANG-00007",
+          "productKode": "FG-WANG-00007",
+          "productName": "LAYER W6 370X220 - LAYER W6",
+          "qty": 100,
+          "unit": "PCS",
+          "price": 1000,
+          "total": 100000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "id": "1768227429066",
+      "soNo": "GBU/PO/C/01/2026/00005",
+      "customer": "PT. GUNA BAKTI UNGGUL",
+      "customerKode": "CTM-032",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-08T07:16:00.000Z",
+      "items": [
+        {
+          "id": "17682273959297k4ky44iw",
+          "productId": "FG-GBU-00002",
+          "productKode": "FG-GBU-00002",
+          "productName": "DUS NAMPAN FIONA 56X42.5X47 CM",
+          "qty": 75,
+          "unit": "PCS",
+          "price": 18750,
+          "total": 1406250,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 104 X 95 CM K125/M125X2 B/F BRUTO",
+              "materialId": "MTRL-00150",
+              "unit": "Pcs",
+              "qty": 25.764999749999998,
+              "ratio": 0.34353332999999997,
+              "pricePerUnit": 5799
+            }
+          ]
+        },
+        {
+          "id": "1768227413864xvqgcmbnk",
+          "productId": "FG-GBU-00032",
+          "productKode": "FG-GBU-00032",
+          "productName": "DUS SAPU WINNY 125X30X32.5 CM",
+          "qty": 100,
+          "unit": "PCS",
+          "price": 21600,
+          "total": 2160000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 161 X 70 CM K125/M125X4 CB/F BRUTO",
+              "materialId": "MTRL-00149",
+              "unit": "Pcs",
+              "qty": 100,
+              "ratio": 1,
+              "pricePerUnit": 6237
+            }
+          ]
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": [
+        {
+          "materialId": "MTRL-00150",
+          "materialName": "SHEET 104 X 95 CM K125/M125X2 B/F BRUTO",
+          "unit": "Pcs",
+          "qty": 25.764999749999998,
+          "ratio": 0.34353332999999997,
+          "pricePerUnit": 5799,
+          "totalPrice": 149411.23355024998
+        },
+        {
+          "materialId": "MTRL-00149",
+          "materialName": "SHEET 161 X 70 CM K125/M125X4 CB/F BRUTO",
+          "unit": "Pcs",
+          "qty": 100,
+          "ratio": 1,
+          "pricePerUnit": 6237,
+          "totalPrice": 623700
+        }
+      ]
+    },
+    {
+      "id": "1768227560832",
+      "soNo": "TLJ/26-0001",
+      "customer": "PT. DAE HWA INDONESIA",
+      "customerKode": "CTM-005",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-09T07:18:00.000Z",
+      "items": [
+        {
+          "id": "1768227531465on6lfdo78",
+          "productId": "FG-DHW-00012",
+          "productKode": "FG-DHW-00012",
+          "productName": "CARTON BOX DH15 UK 380X280X270 CB/FLUTE",
+          "qty": 600,
+          "unit": "PCS",
+          "price": 7980,
+          "total": 4788000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 136 X 55,6 CM K125/M125X3/K125 CB/F SCOORE 14,3 + 27 + 14,3",
+              "materialId": "MTRL-00098",
+              "unit": "Pcs",
+              "qty": 158.00948400000001,
+              "ratio": 0.26334914000000004,
+              "pricePerUnit": 4307
+            }
+          ]
+        },
+        {
+          "id": "17682275463296snr627ll",
+          "productId": "FG-DHW-00003",
+          "productKode": "FG-DHW-00003",
+          "productName": "CARTON BOX DH5 POLOS 820X450X680 MM K125/M125/K125 C/F",
+          "qty": 40,
+          "unit": "PCS",
+          "price": 22700,
+          "total": 908000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 131 X 113,6 CM K125/M125/K125 C/F SCOORE 22.7+68+22.7",
+              "materialId": "MTRL-00071",
+              "unit": "Pcs",
+              "qty": 40,
+              "ratio": 1,
+              "pricePerUnit": 0
+            }
+          ]
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": [
+        {
+          "materialId": "MTRL-00098",
+          "materialName": "SHEET 136 X 55,6 CM K125/M125X3/K125 CB/F SCOORE 14,3 + 27 + 14,3",
+          "unit": "Pcs",
+          "qty": 158.00948400000001,
+          "ratio": 0.26334914000000004,
+          "pricePerUnit": 4307,
+          "totalPrice": 680546.8475880001
+        },
+        {
+          "materialId": "MTRL-00071",
+          "materialName": "SHEET 131 X 113,6 CM K125/M125/K125 C/F SCOORE 22.7+68+22.7",
+          "unit": "Pcs",
+          "qty": 40,
+          "ratio": 1,
+          "pricePerUnit": 0,
+          "totalPrice": 0
+        }
+      ]
+    },
+    {
+      "id": "1768227717734",
+      "soNo": "SPG-PO/010/I-2026",
+      "customer": "PT. SIGMA PACK GEMILANG",
+      "customerKode": "CTM-074",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-09T07:20:00.000Z",
+      "items": [
+        {
+          "id": "1768227680060n7t4gwkpy",
+          "productId": "FG-SIG-00004",
+          "productKode": "FG-SIG-00004",
+          "productName": "KARTON BOX SUZUKI 14",
+          "qty": 1000,
+          "unit": "PCS",
+          "price": 11700,
+          "total": 11700000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 164 X 60,6 CM K150/M125X3/K150 CB/F SCOORE 20.3 + 20 + 20.3",
+              "materialId": "MTRL-00548",
+              "unit": "PCS",
+              "qty": 1000,
+              "ratio": 1,
+              "pricePerUnit": 5987
+            }
+          ]
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": [
+        {
+          "materialId": "MTRL-00548",
+          "materialName": "SHEET 164 X 60,6 CM K150/M125X3/K150 CB/F SCOORE 20.3 + 20 + 20.3",
+          "unit": "PCS",
+          "qty": 1000,
+          "ratio": 1,
+          "pricePerUnit": 5987,
+          "totalPrice": 5987000
+        }
+      ]
+    },
+    {
+      "id": "1768227848425",
+      "soNo": "120126-0010",
+      "customer": "PT. MAJU TEKNIK UTAMA",
+      "customerKode": "CTM-037",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-09T07:23:00.000Z",
+      "items": [
+        {
+          "id": "1768227815886e1kwxihra",
+          "productId": "FG-MTU-00004",
+          "productKode": "FG-MTU-00004",
+          "productName": "KARTON BOX VALVE 50 KG 220X160X145 KMK 125 BF",
+          "qty": 100,
+          "unit": "PCS",
+          "price": 2500,
+          "total": 250000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "id": "1768227989262",
+      "soNo": "MR0/29057/PC/2026",
+      "customer": "PT. PANASONIC MANUFACTURING INDONESIA",
+      "customerKode": "CTM-014",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-09T07:25:00.000Z",
+      "items": [
+        {
+          "id": "1768227971962qoqbvxw8i",
+          "productId": "FG-PMI-00019",
+          "productKode": "FG-PMI-00019",
+          "productName": "PACKING MOTOR 04-UK 206X126X256 MM",
+          "qty": 100,
+          "unit": "PCS",
+          "price": 23100,
+          "total": 2310000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 229 X 145 CM K275/M125/K275 B/F BRUTO",
+              "materialId": "MTRL-00137",
+              "unit": "Pcs",
+              "qty": 100,
+              "ratio": 1,
+              "pricePerUnit": 21516
+            }
+          ]
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": [
+        {
+          "materialId": "MTRL-00137",
+          "materialName": "SHEET 229 X 145 CM K275/M125/K275 B/F BRUTO",
+          "unit": "Pcs",
+          "qty": 100,
+          "ratio": 1,
+          "pricePerUnit": 21516,
+          "totalPrice": 2151600
+        }
+      ]
+    },
+    {
+      "id": "1768228982293",
+      "soNo": "SPG-PO/460/XII-2025",
+      "customer": "PT. SIGMA PACK GEMILANG",
+      "customerKode": "CTM-074",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-12T14:41:13.759Z",
+      "items": [
+        {
+          "id": "1768228920308tpvlb91mh",
+          "productId": "FG-SIG-00003",
+          "productKode": "FG-SIG-00003",
+          "productName": "CB.DPT-IC0G-M034 UK 570X190X190 K200/M125/K200 B/F",
+          "qty": 2000,
+          "unit": "PCS",
+          "price": 6559,
+          "total": 13118000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 162 X 105 CM K200/M125/K200 B/F BRUTO",
+              "materialId": "MTRL-00541",
+              "unit": "PCS",
+              "qty": 1007.26126,
+              "ratio": 0.50363063,
+              "pricePerUnit": 7766
+            }
+          ]
+        },
+        {
+          "id": "17682289463871khzfagnd",
+          "productId": "FG-SIG-00001",
+          "productKode": "FG-SIG-00001",
+          "productName": "CB.DPT-IC0G-L096 UK 630X130X130 K200/M125/K200 B/F",
+          "qty": 1000,
+          "unit": "PCS",
+          "price": 4300,
+          "total": 4300000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 114 X 100 CM K200/M125/K200 B/F BRUTO",
+              "materialId": "MTRL-00543",
+              "unit": "PCS",
+              "qty": 1250,
+              "ratio": 1.25,
+              "pricePerUnit": 5141
+            }
+          ]
+        },
+        {
+          "id": "1768228964898x5u9iehty",
+          "productId": "FG-SIG-00020",
+          "productKode": "FG-SIG-00020",
+          "productName": "CB.DPT-IC0G-L015 UK 445X190X190 K200/M125/K200 B/F",
+          "qty": 1000,
+          "unit": "PCS",
+          "price": 5513,
+          "total": 5513000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": [
+        {
+          "materialId": "MTRL-00541",
+          "materialName": "SHEET 162 X 105 CM K200/M125/K200 B/F BRUTO",
+          "unit": "PCS",
+          "qty": 1007.26126,
+          "ratio": 0.50363063,
+          "pricePerUnit": 7766,
+          "totalPrice": 7822390.94516
+        },
+        {
+          "materialId": "MTRL-00543",
+          "materialName": "SHEET 114 X 100 CM K200/M125/K200 B/F BRUTO",
+          "unit": "PCS",
+          "qty": 1250,
+          "ratio": 1.25,
+          "pricePerUnit": 5141,
+          "totalPrice": 6426250
+        }
+      ]
+    },
+    {
+      "id": "1768229458631",
+      "soNo": "GBU/PO/C/01/2026/00017",
+      "customer": "PT. GUNA BAKTI UNGGUL",
+      "customerKode": "CTM-032",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-12T14:48:45.214Z",
+      "items": [
+        {
+          "id": "1768229349838amzfat507",
+          "productId": "FG-GBU-00016",
+          "productKode": "FG-GBU-00016",
+          "productName": "DUS BASKOM SEGI RUBY S 12&quot; (BB-004) UK 54,6 X 50 X 33 CM",
+          "qty": 50,
+          "unit": "PCS",
+          "price": 23000,
+          "total": 1150000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768229368778tet9u44of",
+          "productId": "FG-GBU-00084",
+          "productKode": "FG-GBU-00084",
+          "productName": "DUS SEALWARE HAVANA M UK. 55X37X69,5 CM",
+          "qty": 100,
+          "unit": "PCS",
+          "price": 23600,
+          "total": 2360000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768229385594xxkfa7xwm",
+          "productId": "FG-CTM-00012",
+          "productKode": "FG-CTM-00012",
+          "productName": "MASTER BOX SEALWARE SNAPY CONTAINER M (UK, 54X27X39CM)",
+          "qty": 100,
+          "unit": "PCS",
+          "price": 14190,
+          "total": 1419000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768229407750rx3tkm2iv",
+          "productId": "FG-GBU-000108",
+          "productKode": "FG-GBU-000108",
+          "productName": "MASTER BOX SEALWARE BAHAMA L (UK. 78X55X53 CM)",
+          "qty": 75,
+          "unit": "PCS",
+          "price": 30250,
+          "total": 2268750,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "id": "1768229703845",
+      "soNo": "GBU/PO/C/01/2026/00014",
+      "customer": "PT. GUNA BAKTI UNGGUL",
+      "customerKode": "CTM-032",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-12T14:51:22.565Z",
+      "items": [
+        {
+          "id": "1768229637488vb7h1hj7f",
+          "productId": "FG-GBU-00083",
+          "productKode": "FG-GBU-00083",
+          "productName": "MASTER BOX CANARY M (UK. 56X32,4X40 CM)",
+          "qty": 50,
+          "unit": "PCS",
+          "price": 15760,
+          "total": 788000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768229662367daweh13ta",
+          "productId": "FG-GBU-00082",
+          "productKode": "FG-GBU-00082",
+          "productName": "MASTER BOX CANARY L (UK. 73X40X46,5 CM)",
+          "qty": 50,
+          "unit": "PCS",
+          "price": 22200,
+          "total": 1110000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "id": "1768229780142",
+      "soNo": "257-CM-B-1225",
+      "customer": "PT. FUKOKU TOKAI RUBBER INDONESIA",
+      "customerKode": "CTM-031",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-12T14:55:31.426Z",
+      "items": [
+        {
+          "id": "1768229763196hkd4j0lnr",
+          "productId": "FG-FTR-00038",
+          "productKode": "FG-FTR-00038",
+          "productName": "CARTON BOX TRAD 335 X 335 X 260 MM K150/M125X3/K150 BC/F",
+          "qty": 100,
+          "unit": "PCS",
+          "price": 9900,
+          "total": 990000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "id": "1768230573341",
+      "soNo": "238-CM-B-1225",
+      "customer": "PT. FUKOKU TOKAI RUBBER INDONESIA",
+      "customerKode": "CTM-031",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-12T15:08:01.332Z",
+      "items": [
+        {
+          "id": "1768230506543f33t1k6pu",
+          "productId": "FG-CTM-00013",
+          "productKode": "FG-CTM-00013",
+          "productName": " CARTON BOX \"TAM\" 150X150X50mm(K150.M125/K150 BF)",
+          "qty": 350,
+          "unit": "SHEET",
+          "price": 1500,
+          "total": 525000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768230519874pqsro792s",
+          "productId": "FG-FTR-00041",
+          "productKode": "FG-FTR-00041",
+          "productName": "CARTON BOX \"ADM\" 150X150X50 MM K200/M125/K150 B/F",
+          "qty": 1375,
+          "unit": "SHEET",
+          "price": 1550,
+          "total": 2131250,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768230536178ehlo6q4nw",
+          "productId": "FG-FTR-00042",
+          "productKode": "FG-FTR-00042",
+          "productName": "CARTON BOX TAM IMV 150 X 150 X 65 MM K150/M125/K150 B/F",
+          "qty": 500,
+          "unit": "PCS",
+          "price": 1400,
+          "total": 700000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "id": "1768230764656",
+      "soNo": "PO/2025/L/012/RMIP",
+      "customer": "PT. TECHNO INDONESIA",
+      "customerKode": "CTM-083",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-12T15:11:07.320Z",
+      "items": [
+        {
+          "id": "1768230698114trq7e5kqk",
+          "productId": "FG-TECH-00001",
+          "productKode": "FG-TECH-00001",
+          "productName": "LAYER 530X480MM",
+          "qty": 180,
+          "unit": "PCS",
+          "price": 1575,
+          "total": 283500,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768230723902n9o0tabhx",
+          "productId": "FG-TECH-00002",
+          "productKode": "FG-TECH-00002",
+          "productName": "CARTON BOX 540X490X242 MM",
+          "qty": 60,
+          "unit": "PCS",
+          "price": 16500,
+          "total": 990000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768230742162i4zh2v8oa",
+          "productId": "FG-TECH-00005",
+          "productKode": "FG-TECH-00005",
+          "productName": "PARTISI 530X480x110MM",
+          "qty": 150,
+          "unit": "PCS",
+          "price": 3300,
+          "total": 495000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "id": "1768269340990",
+      "soNo": "001/CSI/PO/I/2026",
+      "customer": "PT. CIPTA SYNERGI INDONESIA",
+      "customerKode": "CTM-095",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-13T01:54:52.121Z",
+      "items": [
+        {
+          "id": "1768269322929igw04jwq2",
+          "productId": "FG-CTM-00014",
+          "productKode": "FG-CTM-00014",
+          "productName": "Box PM 550 X 360 X 300mm K125/M125X4/CBF, printing 2 sisi",
+          "qty": 2000,
+          "unit": "PCS",
+          "price": 9500,
+          "total": 19000000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "id": "1768269950939",
+      "soNo": "PO/2026/A/006",
+      "customer": "PT. TECHNO INDONESIA",
+      "customerKode": "CTM-083",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-08T12:00:00.000Z",
+      "items": [
+        {
+          "id": "1768269748695nng56qepb",
+          "productId": "FG-TECH-00006",
+          "productKode": "FG-TECH-00006",
+          "productName": "LAYER CTN 316X206 MM",
+          "qty": 300,
+          "unit": "PCS",
+          "price": 520,
+          "total": 156000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "17682697774176e5eocsmo",
+          "productId": "FG-TECH-00009",
+          "productKode": "FG-TECH-00009",
+          "productName": "LAYER CTN 350X310 MM",
+          "qty": 300,
+          "unit": "PCS",
+          "price": 849,
+          "total": 254700,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768269822938zcbwp7uze",
+          "productId": "FG-TECH-00002",
+          "productKode": "FG-TECH-00002",
+          "productName": "CARTON BOX 540X490X242 MM",
+          "qty": 10,
+          "unit": "PCS",
+          "price": 16500,
+          "total": 165000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768269846798tmv9vj6cg",
+          "productId": "FG-CTM-00015",
+          "productKode": "FG-CTM-00015",
+          "productName": "CARTON BOX 360 X 326 X 212",
+          "qty": 200,
+          "unit": "PCS",
+          "price": 10242,
+          "total": 2048400,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "17682698716495hu4sn8pq",
+          "productId": "FG-TECH-00003",
+          "productKode": "FG-TECH-00003",
+          "productName": "KARTON BOX 326 X 216 X 154 MM",
+          "qty": 200,
+          "unit": "PCS",
+          "price": 4105,
+          "total": 821000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768269898794bvllrf69g",
+          "productId": "FG-TECH-00004",
+          "productKode": "FG-TECH-00004",
+          "productName": "PARTISI CTN 316 X 206 X 135 MM",
+          "qty": 200,
+          "unit": "PCS",
+          "price": 3857,
+          "total": 771400,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "id": "1768270845273",
+      "soNo": "PO202651215000157",
+      "customer": "PT. EVERPRO  INDONESIA TECHNOLOGIES",
+      "customerKode": "CTM-008",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-08T12:19:00.000Z",
+      "items": [
+        {
+          "id": "1768270798379xensf4357",
+          "productId": "FG-EIT-00028",
+          "productKode": "FG-EIT-00028",
+          "productName": "PACKAGING BOX NEUTRAL LOGO UK. 370X370X430 MM (994819000010083)",
+          "qty": 2000,
+          "unit": "PCS",
+          "price": 18000,
+          "total": 36000000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768270823137vvaygb4wb",
+          "productId": "FG-EIT-00031",
+          "productKode": "FG-EIT-00031",
+          "productName": "CARTON 5 LAYERS CORRUGATED PAPER EXTERNAL UK. 375X375X375 MM/HW ONLY (994819000000192)",
+          "qty": 1000,
+          "unit": "PCS",
+          "price": 19500,
+          "total": 19500000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "id": "1768270995518",
+      "soNo": "001/ABM/TLJP/I/26",
+      "customer": "PT. AGRASINDO BERKAH MANDIRI",
+      "customerKode": "CTM-092",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-08T12:21:00.000Z",
+      "items": [
+        {
+          "id": "1768270961663lyrpkzjfd",
+          "productId": "FG-ABM-00006",
+          "productKode": "FG-ABM-00006",
+          "productName": "LAYER COAX",
+          "qty": 2000,
+          "unit": "PCS",
+          "price": 1100,
+          "total": 2200000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "id": "1768276772146",
+      "soNo": "2620037",
+      "customer": "PT. ASTEER THAI SUMMIT",
+      "customerKode": "CTM-025",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-12T06:56:00.000Z",
+      "items": [
+        {
+          "id": "1768276700647thw7anwfe",
+          "productId": "FG-ATS-00001",
+          "productKode": "FG-ATS-00001",
+          "productName": "CARTON BOX NECK FUEL FILLER QX 810X140X320MM (K150/M125/K150 C/F)",
+          "qty": 100,
+          "unit": "PCS",
+          "price": 12650,
+          "total": 1265000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "soNo": "252-CM-B-1225",
+      "customer": "PT. FUKOKU TOKAI RUBBER INDONESIA",
+      "customerKode": "CTM-031",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "items": [
+        {
+          "id": "176827730935852l8biddn",
+          "productId": "FG-FTR-00028",
+          "productKode": "FG-FTR-00028",
+          "productName": "CARTON BOX IND 335X265X100 MM",
+          "qty": 200,
+          "unit": "SHEET",
+          "price": 5800,
+          "total": 1160000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 124 X 37,2 CM K125/M125X3/K125 CB/F SCOORE 13.6+10+13.6",
+              "materialId": "MTRL-00533",
+              "unit": "PCS",
+              "qty": 250,
+              "ratio": 1.25,
+              "pricePerUnit": 2705
+            }
+          ]
+        },
+        {
+          "id": "1768277330143115tpfetx",
+          "productId": "FG-FTR-00024",
+          "productKode": "FG-FTR-00024",
+          "productName": "LAYER POLOS 290X290MM K150/M125/K150 CF",
+          "qty": 900,
+          "unit": "SHEET",
+          "price": 480,
+          "total": 432000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768277353838cntndv1g4",
+          "productId": "FG-FTR-00004",
+          "productKode": "FG-FTR-00004",
+          "productName": "LAYER LUBANG 8 290X290MM (K150/M125/K150 CF)",
+          "qty": 900,
+          "unit": "SHEET",
+          "price": 680,
+          "total": 612000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768277377430s9g5jtlc5",
+          "productId": "FG-FTR-00005",
+          "productKode": "FG-FTR-00005",
+          "productName": "LAYER 150X290MM K150/M125/K150 CF",
+          "qty": 800,
+          "unit": "SHEET",
+          "price": 340,
+          "total": 272000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768277406158c439lll78",
+          "productId": "FG-FTR-00022",
+          "productKode": "FG-FTR-00022",
+          "productName": "LAYER 1050X1050MM K150/M125X3/K150 CB/F",
+          "qty": 200,
+          "unit": "PCS",
+          "price": 12300,
+          "total": 2460000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768277446287p9otjyjbm",
+          "productId": "FG-FTR-00029",
+          "productKode": "FG-FTR-00029",
+          "productName": "CARTON BOX 011 SF 180X275X80 MM",
+          "qty": 400,
+          "unit": "PCS",
+          "price": 1900,
+          "total": 760000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768277468374xv02nzxq9",
+          "productId": "FG-FTR-00006",
+          "productKode": "FG-FTR-00006",
+          "productName": "CARTON BOX HOP TORQUE 305X305X216MM (PRINTING) K150/M125X3/K150 CBF",
+          "qty": 100,
+          "unit": "PCS",
+          "price": 7100,
+          "total": 710000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768277470270s7hovr0pg",
+          "productId": "FG-FTR-00007",
+          "productKode": "FG-FTR-00007",
+          "productName": "CARTON BOX HOP TORQUE (SMALL) 115X115X115MM (PRINTING) K200/M125/K200 CF",
+          "qty": 600,
+          "unit": "PCS",
+          "price": 3600,
+          "total": 2160000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 116 X 145 CM K125/M125/K125 B/F BRUTO",
+              "materialId": "MTRL-00138",
+              "unit": "Pcs",
+              "qty": 303,
+              "ratio": 0.505,
+              "pricePerUnit": 5723
+            }
+          ]
+        },
+        {
+          "id": "17682775555638ut47tc03",
+          "productId": "FG-FTR-00001",
+          "productKode": "FG-FTR-00001",
+          "productName": "CARTON BOX POUNCH STRAPLES (WTB) 135X135X155MM (K150XM125X3/K150 CBF)",
+          "qty": 2000,
+          "unit": "SET",
+          "price": 2100,
+          "total": 4200000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 122 X 130 CM K125/M125X3/K125 CB/F BRUTO",
+              "materialId": "MTRL-00477",
+              "unit": "PCS",
+              "qty": 2000,
+              "ratio": 1,
+              "pricePerUnit": 9200
+            }
+          ]
+        },
+        {
+          "id": "1768277560542myc6jrfoz",
+          "productId": "FG-FTR-00008",
+          "productKode": "FG-FTR-00008",
+          "productName": "CARTON BOX ISUZU P/N. 8974968572 375X280X175MM (K150/M125X3/K150 CF)",
+          "qty": 1200,
+          "unit": "PCS",
+          "price": 13063,
+          "total": 15675600,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 135 X 46,1 CM K125/M125X3/K125 CB/F SCOORE 14.3+17.5+14.3",
+              "materialId": "MTRL-00051",
+              "unit": "Pcs",
+              "qty": 379.41176400000006,
+              "ratio": 0.31617647000000004,
+              "pricePerUnit": 3572
+            }
+          ]
+        },
+        {
+          "id": "1768277561190j3sued3vc",
+          "productId": "FG-FTR-00009",
+          "productKode": "FG-FTR-00009",
+          "productName": "PARTISI BZ060 325X245X120MM (K150/M125/K150 CF)",
+          "qty": 100,
+          "unit": "PCS",
+          "price": 3500,
+          "total": 350000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "17682775616601p57lxayg",
+          "productId": "FG-FTR-00017",
+          "productKode": "FG-FTR-00017",
+          "productName": "BOX DPG-MC16-M100 315X315X235MM K150/M125X3/K150 CBF",
+          "qty": 600,
+          "unit": "SHEET",
+          "price": 7000,
+          "total": 4200000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 130 X 55,7 CM K125/M125X4 CB/F SCOORE 16.1+23.5+16.1",
+              "materialId": "MTRL-00151",
+              "unit": "Pcs",
+              "qty": 547.8258000000001,
+              "ratio": 0.913043,
+              "pricePerUnit": 4046
+            }
+          ]
+        },
+        {
+          "id": "1768277684585eebbmch73",
+          "productId": "FG-FTR-00010",
+          "productKode": "FG-FTR-00010",
+          "productName": "CARTON BOX 1533660451",
+          "qty": 240,
+          "unit": "PCS",
+          "price": 9000,
+          "total": 2160000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "17682776849793mibgipia",
+          "productId": "FG-FTR-00031",
+          "productKode": "FG-FTR-00031",
+          "productName": "CARTON BOX 1533660412 375X280X175 MM (STOPPER 8 HOLE 340X140X60 MM) (STOPPER 4 HOLE 340X140X60 MM)",
+          "qty": 240,
+          "unit": "PCS",
+          "price": 10000,
+          "total": 2400000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768277685370zfyaecvyr",
+          "productId": "FG-FTR-00034",
+          "productKode": "FG-FTR-00034",
+          "productName": "CARTON BOX ME017116 UK 355X355X97 MM (TYPE B PARTISI/LAYER 2 PCS 340X200 MM)",
+          "qty": 300,
+          "unit": "SHEET",
+          "price": 7300,
+          "total": 2190000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": [
+            {
+              "materialName": "SHEET 145 X 45,6 CM K125/M125X3/K125 CB/F 17.8+10+17.8",
+              "materialId": "MTRL-00520",
+              "unit": "PCS",
+              "qty": 300,
+              "ratio": 1,
+              "pricePerUnit": 3755
+            }
+          ]
+        },
+        {
+          "id": "17682776856759e8lqsd7p",
+          "productId": "FG-FTR-00012",
+          "productKode": "FG-FTR-00012",
+          "productName": "PARTISI DC13D (48609-BZ070) 325X245X110MM K150/M125/K150 CF",
+          "qty": 600,
+          "unit": "PCS",
+          "price": 3100,
+          "total": 1860000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "17682780941906hjdhyo5n",
+          "productId": "FG-CTM-00016",
+          "productKode": "FG-CTM-00016",
+          "productName": "PARTISI BZ010 290X233X60mm partisi Pendek [10] 233x60mm Partisi Panjang [9]290x60mm",
+          "qty": 50,
+          "unit": "PCS",
+          "price": 5900,
+          "total": 295000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "created": "2026-01-12T14:07:00.000Z",
+      "id": "1768277880596",
+      "bomSnapshot": [
+        {
+          "materialId": "MTRL-00533",
+          "materialName": "SHEET 124 X 37,2 CM K125/M125X3/K125 CB/F SCOORE 13.6+10+13.6",
+          "unit": "PCS",
+          "qty": 250,
+          "ratio": 1.25,
+          "pricePerUnit": 2705,
+          "totalPrice": 676250
+        },
+        {
+          "materialId": "MTRL-00138",
+          "materialName": "SHEET 116 X 145 CM K125/M125/K125 B/F BRUTO",
+          "unit": "Pcs",
+          "qty": 303,
+          "ratio": 0.505,
+          "pricePerUnit": 5723,
+          "totalPrice": 1734069
+        },
+        {
+          "materialId": "MTRL-00477",
+          "materialName": "SHEET 122 X 130 CM K125/M125X3/K125 CB/F BRUTO",
+          "unit": "PCS",
+          "qty": 2000,
+          "ratio": 1,
+          "pricePerUnit": 9200,
+          "totalPrice": 18400000
+        },
+        {
+          "materialId": "MTRL-00051",
+          "materialName": "SHEET 135 X 46,1 CM K125/M125X3/K125 CB/F SCOORE 14.3+17.5+14.3",
+          "unit": "Pcs",
+          "qty": 379.41176400000006,
+          "ratio": 0.31617647000000004,
+          "pricePerUnit": 3572,
+          "totalPrice": 1355258.8210080003
+        },
+        {
+          "materialId": "MTRL-00151",
+          "materialName": "SHEET 130 X 55,7 CM K125/M125X4 CB/F SCOORE 16.1+23.5+16.1",
+          "unit": "Pcs",
+          "qty": 547.8258000000001,
+          "ratio": 0.913043,
+          "pricePerUnit": 4046,
+          "totalPrice": 2216503.1868000003
+        },
+        {
+          "materialId": "MTRL-00520",
+          "materialName": "SHEET 145 X 45,6 CM K125/M125X3/K125 CB/F 17.8+10+17.8",
+          "unit": "PCS",
+          "qty": 300,
+          "ratio": 1,
+          "pricePerUnit": 3755,
+          "totalPrice": 1126500
+        }
+      ],
+      "status": "OPEN"
+    },
+    {
+      "id": "1768278634519",
+      "soNo": "NST/PO/TLJP/2026-001",
+      "customer": "PT. GESIA CIPTA BUANA",
+      "customerKode": "CTM-098",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-12T00:28:00.000Z",
+      "items": [
+        {
+          "id": "1768278571862iyynroeyi",
+          "productId": "FG-CTM-00017",
+          "productKode": "FG-CTM-00017",
+          "productName": "PAPER REEL 330",
+          "qty": 2000,
+          "unit": "PCS",
+          "price": 1000,
+          "total": 2000000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768278587519iguokhy0u",
+          "productId": "FG-CTM-00018",
+          "productKode": "FG-CTM-00018",
+          "productName": "PAPER REEL 360",
+          "qty": 1000,
+          "unit": "PCS",
+          "price": 1150,
+          "total": 1150000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768278601582gpl61qr2p",
+          "productId": "FG-CTM-00019",
+          "productKode": "FG-CTM-00019",
+          "productName": "PAPER REEL 370",
+          "qty": 2000,
+          "unit": "PCS",
+          "price": 1260,
+          "total": 2520000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        },
+        {
+          "id": "1768278617326onmcj4rr6",
+          "productId": "FG-CTM-00020",
+          "productKode": "FG-CTM-00020",
+          "productName": "PAPER REEL 380",
+          "qty": 2000,
+          "unit": "PCS",
+          "price": 1350,
+          "total": 2700000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    },
+    {
+      "id": "1768296628221",
+      "soNo": "DHT-2026.01.395",
+      "customer": "CV. DAARUL HUDA TEKNIK",
+      "customerKode": "CTM-040",
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "status": "OPEN",
+      "created": "2026-01-13T09:28:21.940Z",
+      "items": [
+        {
+          "id": "1768296548023rhkoviufr",
+          "productId": "FG-DHT-00001",
+          "productKode": "FG-DHT-00001",
+          "productName": "PARTISI B74 GBWT 40 HOLES UK 290 x 290 x 70 MM",
+          "qty": 200,
+          "unit": "PCS",
+          "price": 74000,
+          "total": 14800000,
+          "specNote": "",
+          "padCode": "",
+          "inventoryQty": 0,
+          "bom": []
+        }
+      ],
+      "globalSpecNote": "",
+      "category": "packaging",
+      "bomSnapshot": []
+    }
+  ],
+  "timestamp": 1768298998505,
+  "_timestamp": 1768298998505
+}

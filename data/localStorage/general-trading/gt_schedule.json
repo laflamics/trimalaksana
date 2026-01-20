@@ -1,25 +1,5 @@
 {
-  "value": [
-    {
-      "id": "17671474469718d0bqkn79",
-      "spkNo": "SPK/251231/6ABLB",
-      "soNo": "PO-L-202512000214",
-      "deliveryDate": "2025-12-30T00:00:00.000Z",
-      "deliveryBatches": [
-        {
-          "id": "1767147444588xt61r2sjb",
-          "batchNo": "A",
-          "qty": 8,
-          "deliveryDate": "2025-12-30T00:00:00.000Z",
-          "productId": "TRM3223",
-          "createSJ": true,
-          "sjGroupId": "sj-group-1"
-        }
-      ],
-      "created": "2025-12-31T02:17:26.971Z",
-      "updated": "2025-12-31T02:17:26.971Z"
-    }
-  ],
-  "timestamp": 1767568268129,
-  "_timestamp": 1767568268129
+  "value": [],
+  "timestamp": 1768264266807,
+  "_timestamp": 1768264266807
 }

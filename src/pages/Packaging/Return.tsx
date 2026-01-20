@@ -62,7 +62,7 @@ const Return = () => {
   const [viewPdfData, setViewPdfData] = useState<{ html: string; returnNo: string } | null>(null);
   const [toast, setToast] = useState<{ message: string; variant: 'success' | 'error' | 'info' } | null>(null);
   // Custom Dialog - menggunakan hook terpusat
-  const { showAlert: showAlertBase, closeDialog, DialogComponent } = useDialog();
+  const { showAlert: showAlertBase, showConfirm, closeDialog, DialogComponent } = useDialog();
   
   // Wrapper untuk kompatibilitas dengan urutan parameter yang berbeda
   const showAlert = (title: string, message: string) => {
@@ -116,7 +116,6 @@ const Return = () => {
       setSalesOrders(extractStorageValue(soData) || []);
       setPurchaseOrders(extractStorageValue(poData) || []);
     } catch (error: any) {
-      console.error('Error loading data:', error);
     } finally {
       setLoading(false);
     }
@@ -320,7 +319,6 @@ const Return = () => {
       
       showToast('Return berhasil disimpan dan inventory telah diupdate!', 'success');
     } catch (error: any) {
-      console.error('Error saving return:', error);
       showToast(`Gagal menyimpan return: ${error.message}`, 'error');
     } finally {
       setLoading(false);
@@ -337,6 +335,47 @@ const Return = () => {
       r.productKode.toLowerCase().includes(query)
     );
   }, [returns, searchQuery]);
+
+  const handleDelete = async (item: ReturnItem) => {
+    try {
+      if (!item || !item.returnNo) {
+        showAlert('Return tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        showAlert(`❌ Error: Return "${item.returnNo}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Return ${item.returnNo}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deletePackagingItem('returns', item.id, 'id');
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              const activeReturns = await reloadPackagingData('returns', setReturns);
+              setReturns(activeReturns);
+              
+              showAlert(`✅ Return ${item.returnNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              showAlert(`❌ Error deleting return "${item.returnNo}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            showAlert(`❌ Error deleting return: ${error.message}`, 'Error');
+          }
+        },
+        undefined,
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
+  };
 
   const handleViewBac = async (item: ReturnItem) => {
     try {
@@ -375,7 +414,6 @@ const Return = () => {
       // Set PDF data untuk preview
       setViewPdfData({ html, returnNo: item.returnNo });
     } catch (error: any) {
-      console.error('Error generating BAC PDF:', error);
       showToast(`Gagal generate PDF: ${error.message}`, 'error');
     }
   };
@@ -448,13 +486,22 @@ const Return = () => {
       key: 'actions',
       header: 'Actions',
       render: (item: ReturnItem) => (
-        <Button
-          variant="secondary"
-          onClick={() => handleViewBac(item)}
-          style={{ fontSize: '12px', padding: '6px 12px' }}
-        >
-          📄 View BAC
-        </Button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Button
+            variant="secondary"
+            onClick={() => handleViewBac(item)}
+            style={{ fontSize: '12px', padding: '6px 12px' }}
+          >
+            📄 View BAC
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => handleDelete(item)}
+            style={{ fontSize: '12px', padding: '6px 12px', backgroundColor: '#f44336', color: 'white' }}
+          >
+            Delete
+          </Button>
+        </div>
       ),
     },
   ];

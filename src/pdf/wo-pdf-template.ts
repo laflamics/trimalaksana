@@ -59,6 +59,7 @@ interface WO {
   materials?: Material[];
   docs?: {
     scheduleDate?: string;
+    scheduleEndDate?: string;
   };
 }
 
@@ -140,8 +141,9 @@ export function generateWOHtml({
 
   const woDate = formatDate(wo.createdAt ? new Date(wo.createdAt) : new Date());
   const scheduleDate = wo.docs?.scheduleDate ? new Date(wo.docs.scheduleDate) : null;
+  const scheduleEndDate = wo.docs?.scheduleEndDate ? new Date(wo.docs.scheduleEndDate) : null;
   const startDate = scheduleDate ? formatDate(scheduleDate) : woDate;
-  const endDate = scheduleDate ? formatDate(new Date(scheduleDate.getTime() + 24*60*60*1000)) : ''; // +1 hari
+  const endDate = scheduleEndDate ? formatDate(scheduleEndDate) : ''; // Use scheduleEndDate directly from PPIC data
 
   // Cari product info untuk setiap line
   const soLines = so?.lines || [];
@@ -236,8 +238,8 @@ export function generateWOHtml({
   <title>SPK - ${spkNo}</title>
   <style>
     @page { 
-      size: Letter; 
-      margin: 12mm; 
+      size: A4; 
+      margin: 8mm; 
     }
     
     /* Ensure images load properly for PDF */
@@ -255,25 +257,26 @@ export function generateWOHtml({
       background: #fff; 
     }
     body { 
-      font-family: Arial, sans-serif; 
-      font-size: 12px; 
+      font-family: Arial, Helvetica, sans-serif; 
+      font-size: 11px; 
       color: #000; 
-      padding: 8mm 10mm 14mm 10mm; 
+      padding: 4mm 6mm 8mm 6mm; 
     }
     @media print {
       @page { 
-        size: Letter; 
-        margin: 12mm; 
+        size: A4; 
+        margin: 8mm; 
       }
       body { 
-        padding: 8mm 10mm 14mm 10mm; 
+        padding: 4mm 6mm 8mm 6mm; 
+        font-family: Arial, Helvetica, sans-serif;
       }
       .header-logo {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
         max-width: 100%;
         height: auto;
-        max-height: 90px;
+        max-height: 70px;
         display: block;
       }
       
@@ -287,7 +290,7 @@ export function generateWOHtml({
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      margin-bottom: 4px;
+      margin-bottom: 2px;
     }
 
     .header-left {
@@ -298,7 +301,7 @@ export function generateWOHtml({
     }
 
     .header-logo {
-      height: 90px;
+      height: 70px;
       width: auto;
       max-width: 100%;
       object-fit: contain;
@@ -318,11 +321,11 @@ export function generateWOHtml({
     .header-center-text {
       flex: 1;
       text-align: center;
-      line-height: 1.3;
-      font-size: 12px;
-      padding: 0 20px;
-      padding-bottom: 6px;
-      margin-bottom: 4px;
+      line-height: 1.2;
+      font-size: 11px;
+      padding: 0 15px;
+      padding-bottom: 4px;
+      margin-bottom: 2px;
       position: relative;
     }
 
@@ -339,14 +342,16 @@ export function generateWOHtml({
     .header-center-text .company-name {
       font-weight: 700;
       text-align: center;
-      font-size: 22px;
-      margin-bottom: 2px;
+      font-size: 18px;
+      margin-bottom: 1px;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .header-center-text .company-address {
-      font-size: 11px;
+      font-size: 10px;
       text-align: center;
-      line-height: 1.4;
+      line-height: 1.3;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .header-center-text .company-address-line {
@@ -357,8 +362,9 @@ export function generateWOHtml({
       width: 20%;
       flex-shrink: 0;
       text-align: auto;
-      font-size: 12px;
+      font-size: 11px;
       padding-top: 0;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     /* SPK title di bawah garis header - sejajar dengan header center */
@@ -366,8 +372,8 @@ export function generateWOHtml({
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      margin-top: 4px;
-      margin-bottom: 12px;
+      margin-top: 2px;
+      margin-bottom: 8px;
     }
 
     .spk-title-wrapper .spk-spacer-left {
@@ -378,7 +384,7 @@ export function generateWOHtml({
     .spk-title-section {
       flex: 1;
       text-align: center;
-      padding: 0 20px;
+      padding: 0 15px;
     }
 
     .spk-title-wrapper .spk-spacer-right {
@@ -388,59 +394,65 @@ export function generateWOHtml({
 
     .spk-title-section .spk-title {
       font-weight: 700;
-      font-size: 20px;
-      letter-spacing: 1px;
-      margin-bottom: 4px;
+      font-size: 16px;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
       text-transform: uppercase;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .spk-title-section .spk-number {
       font-weight: 600;
-      font-size: 12px;
+      font-size: 11px;
+      font-family: Arial, Helvetica, sans-serif;
     }
-    .wo-details { width: 100%; border-collapse: collapse; margin: 15px 0; }
-    .wo-details th, .wo-details td { border: 1px solid #000; padding: 8px; text-align: left; font-size: 11px; }
+    .wo-details { width: 100%; border-collapse: collapse; margin: 8px 0; font-family: Arial, Helvetica, sans-serif; }
+    .wo-details th, .wo-details td { border: 1px solid #000; padding: 5px 4px; text-align: left; font-size: 10px; font-family: Arial, Helvetica, sans-serif; }
     .wo-details th { background-color: #f0f0f0; font-weight: bold; }
-    .section-title { font-weight: bold; margin-top: 20px; margin-bottom: 10px; font-size: 12px; }
-    .data-table { width: 100%; border-collapse: collapse; margin: 10px 0; table-layout: fixed; }
-    .data-table th, .data-table td { border: 1px solid #000; padding: 6px; text-align: left; font-size: 10px; }
+    .section-title { font-weight: bold; margin-top: 10px; margin-bottom: 6px; font-size: 11px; font-family: Arial, Helvetica, sans-serif; }
+    .data-table { width: 100%; border-collapse: collapse; margin: 6px 0; table-layout: fixed; font-family: Arial, Helvetica, sans-serif; }
+    .data-table th, .data-table td { border: 1px solid #000; padding: 4px 3px; text-align: left; font-size: 9px; font-family: Arial, Helvetica, sans-serif; }
     .data-table th { background-color: #f0f0f0; font-weight: bold; text-align: center; }
-    .data-table td { text-align: center; min-height: 30px; }
+    .data-table td { text-align: center; min-height: 24px; }
     .data-table .text-left { text-align: left; }
     .data-table tbody tr:empty td,
-    .data-table tbody tr td:empty { min-height: 50px; height: 50px; }
+    .data-table tbody tr td:empty { min-height: 40px; height: 40px; }
     .note-section { 
       margin-top: 0; 
     }
     .note-label { 
       font-weight: 700; 
-      margin-bottom: 4px;
-      font-size: 11px;
+      margin-bottom: 2px;
+      font-size: 10px;
+      font-family: Arial, Helvetica, sans-serif;
     }
     .note-text { 
-      font-size: 11px;
-      line-height: 1.4;
-      margin-bottom: 8px;
-      padding-bottom: 1.4em;
-      min-height: 2.8em;
+      font-size: 10px;
+      line-height: 1.3;
+      margin-bottom: 4px;
+      padding-bottom: 0.8em;
+      min-height: 2em;
+      font-family: Arial, Helvetica, sans-serif;
     }
     .process-table { 
       width: 100%; 
       border-collapse: collapse; 
-      margin: 20px 0; 
+      margin: 10px 0; 
       table-layout: fixed; 
+      font-family: Arial, Helvetica, sans-serif;
     }
     .process-table th, .process-table td { 
       border: 1px solid #000; 
-      padding: 4px; 
+      padding: 3px 2px; 
       text-align: center; 
-      font-size: 10px; 
-      height: 30px; 
+      font-size: 9px; 
+      height: 24px; 
+      font-family: Arial, Helvetica, sans-serif;
     }
     .process-table th { 
       background-color: #f0f0f0; 
       font-weight: bold; 
-      height: 30px;
+      height: 24px;
     }
     .process-table th:nth-child(1) {
       width: 70%;
@@ -449,10 +461,10 @@ export function generateWOHtml({
       width: 30%;
     }
     .process-table tbody tr:nth-child(1) td {
-      height: 50px;
+      height: 40px;
     }
     .process-table tbody tr:nth-child(2) td {
-      height: 30px;
+      height: 24px;
     }
  
   </style>

@@ -471,6 +471,7 @@ const PPIC = () => {
   const [analisaSubTab, setAnalisaSubTab] = useState<'overview' | 'spk' | 'po' | 'so' | 'production' | 'ptp'>('overview');
   const [spkViewMode, setSpkViewMode] = useState<'cards' | 'table'>('cards'); // Default card view
   const [ptpViewMode, setPtpViewMode] = useState<'cards' | 'table'>('cards'); // Default card view
+  const [outstandingViewMode, setOutstandingViewMode] = useState<'cards' | 'table'>('cards'); // Default card view
   const [creatingPR, setCreatingPR] = useState<{ [spkNo: string]: boolean }>({}); // Track PR yang sedang dibuat
   const [viewPdfData, setViewPdfData] = useState<{ html: string; prNo: string } | null>(null);
   const [whatToDoNextDialog, setWhatToDoNextDialog] = useState<{ show: boolean; spk: any; checklist: any }>({
@@ -631,7 +632,6 @@ const PPIC = () => {
         return extracted;
       }
     } catch (e) {
-      console.warn(`[PPIC] Error loading ${key} from localStorage:`, e);
     }
     return [];
   };
@@ -697,7 +697,6 @@ const PPIC = () => {
       // Jika ada batch SPK, hapus SPK utama ini
       if (hasBatchSPKs) {
         hasCleanedSpk = true;
-        console.log(`🧹 Cleanup: Removing main SPK ${spkNo} because it has batch SPKs`);
         return false;
       }
       
@@ -708,7 +707,6 @@ const PPIC = () => {
     if (hasCleanedSpk) {
       await storageService.set('spk', cleanedSpk);
       spk = cleanedSpk;
-      console.log(`✅ Cleaned up SPK list: removed ${spk.length - cleanedSpk.length} main SPK(s) that have batch SPKs`);
     }
     
     // Auto-update SPK status berdasarkan:
@@ -776,13 +774,10 @@ const PPIC = () => {
       if (shouldBeClosed && s.status !== 'CLOSE') {
         // Production sudah selesai ATAU product sudah terkirim, close SPK
         updatedSPK = true;
-        const reason = isProductionComplete ? `Production complete (${productionProgress}/${productionTarget})` : `Product delivered (${totalDeliveredQty}/${spkQty})`;
-        console.log(`✅ Auto-closing SPK ${s.spkNo}: ${reason}`);
         return { ...s, status: 'CLOSE' as const };
       } else if (!shouldBeClosed && s.status === 'CLOSE') {
         // SPK sudah CLOSE tapi production belum selesai DAN product belum terkirim, re-open SPK
         updatedSPK = true;
-        console.log(`⚠️ Auto-reopening SPK ${s.spkNo}: Production not complete (${productionProgress}/${productionTarget}) and product not delivered (${totalDeliveredQty}/${spkQty})`);
         return { ...s, status: 'OPEN' as const };
       }
       
@@ -791,7 +786,6 @@ const PPIC = () => {
     
     if (updatedSPK) {
       await storageService.set('spk', updatedSpkList);
-      console.log('✅ Auto-updated SPK(s) from DRAFT/OPEN to CLOSE (all products in SO have been delivered)');
     }
     
     // Auto-fulfill SPK dari stock jika stock product cukup
@@ -896,7 +890,6 @@ const PPIC = () => {
       // Jangan set stockFulfilled jika inventory kosong atau stock tidak cukup
       if (availableStock > 0 && availableStock >= spkQty) {
         hasAutoFulfilled = true;
-        console.log(`✅ Auto-fulfill SPK ${s.spkNo}: Stock cukup (${availableStock} >= ${spkQty}), skip PR/Schedule/BOM/QC, langsung ke delivery`);
         
         // Update schedule progress jika ada
         const relatedSchedule = schedule.find((sch: any) => sch.spkNo === s.spkNo);
@@ -949,7 +942,6 @@ const PPIC = () => {
       if (production.length > 0) {
         await storageService.set('production', production);
       }
-      console.log('✅ Auto-fulfilled SPK(s) from stock - ready for delivery');
     }
     
     setSpkData(hasAutoFulfilled ? autoFulfilledSpkList : (updatedSPK ? updatedSpkList : cleanedSpk));
@@ -957,22 +949,10 @@ const PPIC = () => {
     // IMPORTANT: Sync notifications dari schedule data yang sudah ada
     // Ini memastikan notifications dibuat untuk semua schedule yang punya deliveryBatches
     if (schedule && Array.isArray(schedule) && schedule.length > 0) {
-      console.log('🔍 [PPIC] Syncing notifications from schedule data on load...');
-      console.log(`🔍 [PPIC] Found ${schedule.length} schedule(s) to sync`);
       schedule.forEach((s: any) => {
         const batches = Array.isArray(s.deliveryBatches) ? s.deliveryBatches : [];
         const batchesForSJ = batches.filter((b: any) => b && b.createSJ !== false);
-        console.log(`  📋 Schedule SPK ${s.spkNo}: ${batchesForSJ.length} batch(es) with createSJ=true`);
       });
-      // DISABLED: Trigger delivery notifications dari schedule
-      // try {
-      //   await createNotificationsFromSchedule(schedule);
-      // } catch (error) {
-      //   console.error('❌ [PPIC] Error syncing notifications from schedule:', error);
-      // }
-      console.log('ℹ️ [PPIC] Delivery notification trigger from schedule is DISABLED');
-    } else {
-      console.log('ℹ️ [PPIC] No schedule data to sync notifications');
     }
     
     // Auto-fulfill PTP dari stock jika stock product cukup
@@ -1027,7 +1007,6 @@ const PPIC = () => {
       // Cek apakah stock cukup untuk fulfill PTP ini
       if (availableStock >= ptpQty) {
         hasAutoFulfilledPTP = true;
-        console.log(`✅ Auto-fulfill PTP ${p.requestNo}: Stock cukup (${availableStock} >= ${ptpQty}), skip PR/Schedule/BOM/QC, langsung ke delivery`);
         
         // Mark PTP sebagai stock-fulfilled
         return {
@@ -1042,8 +1021,8 @@ const PPIC = () => {
     
     // Save jika ada auto-fulfill PTP
     if (hasAutoFulfilledPTP) {
-      await storageService.set('ptp', autoFulfilledPtpList);
-      console.log('✅ Auto-fulfilled PTP(s) from stock - ready for delivery');
+      // CRITICAL: Force immediate sync ke server untuk PTP (PUT)
+      await storageService.set('ptp', autoFulfilledPtpList, true);
     }
     
     setPtpData(hasAutoFulfilledPTP ? autoFulfilledPtpList : ptp);
@@ -1102,7 +1081,6 @@ const PPIC = () => {
       
       // Jika ada batch SPK, skip SPK utama ini
       if (hasBatchSPKs) {
-        console.log(`⚠️ Filtering out main SPK ${spkNo} because it has batch SPKs`);
         return false;
       }
       
@@ -1810,7 +1788,6 @@ const PPIC = () => {
 
       if (newNotifications.length > 0) {
         await storageService.set('productionNotifications', [...productionNotifications, ...newNotifications]);
-        console.log(`✅ Production notifications created: ${newNotifications.length} notifications`);
       }
       
       showAlert(`SPK dan Schedule berhasil dibuat!\n\n${pendingSPKs.length} SPK telah dibuat.\n📧 Notifications sent to Production - Waiting for material receipt from Purchasing`, 'Success');
@@ -2023,9 +2000,41 @@ const PPIC = () => {
               // Cek BOM dan hitung kebutuhan material
               const productId = (spk.product_id || spk.productId || spk.kode || spk.productKode || '').toString().trim();
               const productBOM = bomData.filter((b: any) => {
-                const bomProductId = (b.product_id || b.kode || '').toString().trim();
-                if (!productId || !bomProductId) return false;
-                return bomProductId.toLowerCase() === productId.toLowerCase();
+                const bomProductId = String(b.product_id || b.kode || '').trim().toLowerCase();
+                const searchProductId = String(productId || '').trim().toLowerCase();
+                if (!searchProductId || !bomProductId) return false;
+                
+                // Direct match
+                if (bomProductId === searchProductId) return true;
+                
+                // Cross-reference: Cari produk yang punya kode/kodeIpos/product_id/padCode sama dengan bomProductId
+                const matchingProduct = products.find((p: any) => {
+                  if (!p) return false;
+                  const pKode = String(p.kode || '').trim().toLowerCase();
+                  const pKodeIpos = String(p.kodeIpos || '').trim().toLowerCase();
+                  const pProductId = String(p.product_id || '').trim().toLowerCase();
+                  const pPadCode = String(p.padCode || '').trim().toLowerCase();
+                  
+                  return (pKode && pKode === bomProductId) ||
+                         (pKodeIpos && pKodeIpos === bomProductId) ||
+                         (pProductId && pProductId === bomProductId) ||
+                         (pPadCode && pPadCode === bomProductId);
+                });
+                
+                // Jika ada produk yang match dengan bomProductId, cek apakah produk itu match dengan searchProductId
+                if (matchingProduct) {
+                  const pKode = String(matchingProduct.kode || '').trim().toLowerCase();
+                  const pKodeIpos = String(matchingProduct.kodeIpos || '').trim().toLowerCase();
+                  const pProductId = String(matchingProduct.product_id || '').trim().toLowerCase();
+                  const pPadCode = String(matchingProduct.padCode || '').trim().toLowerCase();
+                  
+                  return (pKode && pKode === searchProductId) ||
+                         (pKodeIpos && pKodeIpos === searchProductId) ||
+                         (pProductId && pProductId === searchProductId) ||
+                         (pPadCode && pPadCode === searchProductId);
+                }
+                
+                return false;
               });
               const hasBOM = productBOM.length > 0; // BOM ada jika data BOM ada, tidak perlu schedule/PR
               
@@ -2486,7 +2495,6 @@ const PPIC = () => {
                           e.preventDefault();
                           e.stopPropagation();
                         }
-                        console.log('🔍 [PPIC] Status button clicked for SPK:', spk.spkNo);
                         handleUpdateStatus(spk);
                       }}
                       style={{ 
@@ -3183,7 +3191,6 @@ const PPIC = () => {
                               e.preventDefault();
                               e.stopPropagation();
                             }
-                            console.log('🔍 [PPIC] Status button clicked for SPK:', spk.spkNo);
                             handleUpdateStatus(spk);
                           }}
                           style={{ 
@@ -3587,7 +3594,12 @@ const PPIC = () => {
       key: 'soNo', 
       header: 'SO No',
       render: (item: any) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         <strong style={{ color: '#2e7d32', fontSize: '13px' }}>{item.soNo}</strong>
+          <span className={`status-badge status-${item.status?.toLowerCase()}`} style={{ fontSize: '11px' }}>
+            {item.status}
+          </span>
+        </div>
       ),
     },
     { 
@@ -3655,15 +3667,6 @@ const PPIC = () => {
           </span>
         );
       },
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      render: (item: any) => (
-        <span className={`status-badge status-${item.status?.toLowerCase()}`} style={{ fontSize: '11px' }}>
-          {item.status}
-        </span>
-      ),
     },
     {
       key: 'hasSchedule',
@@ -3817,7 +3820,12 @@ const PPIC = () => {
       key: 'requestNo',
       header: 'Request No',
       render: (item: any) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         <strong style={{ fontSize: '13px', color: '#2e7d32' }}>{item.requestNo}</strong>
+          <span className={`status-badge status-${item.status?.toLowerCase()}`} style={{ fontSize: '11px' }}>
+            {item.status}
+          </span>
+        </div>
       ),
     },
     {
@@ -3862,15 +3870,6 @@ const PPIC = () => {
           </span>
         );
       },
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      render: (item: any) => (
-        <span className={`status-badge status-${item.status?.toLowerCase()}`} style={{ fontSize: '11px' }}>
-          {item.status}
-        </span>
-      ),
     },
     {
       key: 'hasSPK',
@@ -4105,7 +4104,6 @@ const PPIC = () => {
         // Save notifications
         if (newNotifications.length > 0) {
           await storageService.set('productionNotifications', [...updatedNotifications, ...newNotifications]);
-          console.log(`✅ SPK split into ${newSPKs.length} batch SPKs: ${newSPKs.map(s => s.spkNo).join(', ')}`);
         }
         
         // Jangan tutup dialog jika dipanggil dari GeneralScheduleDialog
@@ -4188,7 +4186,6 @@ const PPIC = () => {
               created: new Date().toISOString(),
             };
             await storageService.set('productionNotifications', [...productionNotifications, newNotification]);
-            console.log(`✅ Production notification created: SPK ${spkNo} - Waiting for material receipt`);
           }
         }
       }
@@ -4342,8 +4339,44 @@ const PPIC = () => {
         return;
       }
 
-      // Filter BOM berdasarkan productId
-      const productBOMRaw = bomData.filter((b: any) => ((b.product_id || b.kode || '').toString().trim()) === productId);
+      // Filter BOM berdasarkan productId dengan cross-reference kode/kodeIpos/product_id/padCode
+      const productIdLower = String(productId || '').trim().toLowerCase();
+      const productBOMRaw = bomData.filter((b: any) => {
+        if (!b) return false;
+        const bomProductId = String(b.product_id || b.kode || '').trim().toLowerCase();
+        
+        // Direct match
+        if (bomProductId === productIdLower) return true;
+        
+        // Cross-reference: Cari produk yang punya kode/kodeIpos/product_id/padCode sama dengan bomProductId
+        const matchingProduct = products.find((p: any) => {
+          if (!p) return false;
+          const pKode = String(p.kode || '').trim().toLowerCase();
+          const pKodeIpos = String(p.kodeIpos || '').trim().toLowerCase();
+          const pProductId = String(p.product_id || '').trim().toLowerCase();
+          const pPadCode = String(p.padCode || '').trim().toLowerCase();
+          
+          return (pKode && pKode === bomProductId) ||
+                 (pKodeIpos && pKodeIpos === bomProductId) ||
+                 (pProductId && pProductId === bomProductId) ||
+                 (pPadCode && pPadCode === bomProductId);
+        });
+        
+        // Jika ada produk yang match dengan bomProductId, cek apakah produk itu match dengan productId
+        if (matchingProduct) {
+          const pKode = String(matchingProduct.kode || '').trim().toLowerCase();
+          const pKodeIpos = String(matchingProduct.kodeIpos || '').trim().toLowerCase();
+          const pProductId = String(matchingProduct.product_id || '').trim().toLowerCase();
+          const pPadCode = String(matchingProduct.padCode || '').trim().toLowerCase();
+          
+          return (pKode && pKode === productIdLower) ||
+                 (pKodeIpos && pKodeIpos === productIdLower) ||
+                 (pProductId && pProductId === productIdLower) ||
+                 (pPadCode && pPadCode === productIdLower);
+        }
+        
+        return false;
+      });
       
       // IMPORTANT: Deduplicate berdasarkan material_id (jika ada duplikasi)
       const bomMap = new Map<string, any>();
@@ -4360,15 +4393,10 @@ const PPIC = () => {
             ratio: bom.ratio || 1,
             unit: material?.satuan || material?.unit || 'PCS',
           });
-        } else {
-          // Jika material sudah ada, keep yang pertama (atau bisa gabungkan ratio jika perlu)
-          console.log(`⚠️ [View BOM] Duplicate BOM entry found for material ${materialId}, keeping first entry`);
         }
       });
       
       const productBOM = Array.from(bomMap.values());
-      
-      console.log(`📋 [View BOM] Product ${productId}: Found ${productBOMRaw.length} BOM entries, ${productBOM.length} unique materials after deduplication`);
 
       if (productBOM.length === 0) {
         showAlert(`BOM belum tersedia untuk product ${spk.product || spk.productName || spk.product_id}.`, 'Information');
@@ -4499,7 +4527,6 @@ const PPIC = () => {
         openPrintWindow(viewPdfData.html);
       }
     } catch (error: any) {
-      console.error('Error saving PDF:', error);
       showAlert(`Error: ${error.message || 'Unknown error'}`, 'Error');
     }
   };
@@ -4510,7 +4537,7 @@ const PPIC = () => {
     try {
       // Load existing BOM
       const existingBOM = extractStorageValue(await storageService.get<any[]>('bom'));
-      const productId = (editingBOM.product_id || editingBOM.kode || '').toString().trim();
+      const productId = String(editingBOM.product_id || editingBOM.kode || '').trim().toLowerCase();
 
       if (!productId) {
         showAlert('Product ID tidak ditemukan. Tidak bisa menyimpan BOM.', 'Error');
@@ -4519,17 +4546,60 @@ const PPIC = () => {
       }
 
       // Remove old BOM items for this product (hapus semua yang product_id sama)
+      // CRITICAL: Juga hapus BOM yang product_id match dengan kode/kodeIpos/padCode produk ini
       const filteredBOM = existingBOM.filter(b => {
-        const bomProductId = (b.product_id || b.kode || '').toString().trim();
-        return bomProductId !== productId;
+        if (!b) return true;
+        const bomProductId = String(b.product_id || b.kode || '').trim().toLowerCase();
+        
+        // Direct match
+        if (bomProductId === productId) return false;
+        
+        // Cross-reference: Cari produk yang punya kode/kodeIpos/product_id/padCode sama dengan bomProductId
+        const matchingProduct = products.find((p: any) => {
+          if (!p) return false;
+          const pKode = String(p.kode || '').trim().toLowerCase();
+          const pKodeIpos = String(p.kodeIpos || '').trim().toLowerCase();
+          const pProductId = String(p.product_id || '').trim().toLowerCase();
+          const pPadCode = String(p.padCode || '').trim().toLowerCase();
+          
+          return (pKode && pKode === bomProductId) ||
+                 (pKodeIpos && pKodeIpos === bomProductId) ||
+                 (pProductId && pProductId === bomProductId) ||
+                 (pPadCode && pPadCode === bomProductId);
+        });
+        
+        // Jika ada produk yang match dengan bomProductId, cek apakah produk itu sama dengan produk yang sedang di-edit
+        if (matchingProduct) {
+          const pKode = String(matchingProduct.kode || '').trim().toLowerCase();
+          const pKodeIpos = String(matchingProduct.kodeIpos || '').trim().toLowerCase();
+          const pProductId = String(matchingProduct.product_id || '').trim().toLowerCase();
+          const pPadCode = String(matchingProduct.padCode || '').trim().toLowerCase();
+          
+          // Cek apakah produk ini sama dengan produk yang sedang di-edit
+          const editingProductKode = String(editingBOM.kode || '').trim().toLowerCase();
+          const editingProductKodeIpos = String(editingBOM.kodeIpos || '').trim().toLowerCase();
+          const editingProductId = String(editingBOM.product_id || '').trim().toLowerCase();
+          const editingProductPadCode = String(editingBOM.padCode || '').trim().toLowerCase();
+          
+          if ((pKode && (pKode === editingProductKode || pKode === productId)) ||
+              (pKodeIpos && (pKodeIpos === editingProductKodeIpos || pKodeIpos === productId)) ||
+              (pProductId && (pProductId === editingProductId || pProductId === productId)) ||
+              (pPadCode && (pPadCode === editingProductPadCode || pPadCode === productId))) {
+            return false; // Hapus BOM ini karena match dengan produk yang sedang di-edit
+          }
+        }
+        
+        return true; // Keep BOM ini
       });
 
       // Add new BOM items - format sesuai sheet: product_id, material_id, ratio
       // Jangan duplicate material_id di BOM yang sama
+      // Support both camelCase (dari BOMDialog) dan snake_case (dari storage)
       const materialIdSet = new Set<string>();
       const newBOMItems = bomItems
         .filter(item => {
-          const materialId = (item.material_id || '').toString().trim();
+          // Support both camelCase (materialId) dan snake_case (material_id)
+          const materialId = (item.material_id || item.materialId || '').toString().trim();
           if (!materialId) return false;
           if (materialIdSet.has(materialId)) {
             // Skip duplicate material_id
@@ -4538,17 +4608,21 @@ const PPIC = () => {
           materialIdSet.add(materialId);
           return true;
         })
-        .map(item => ({
-          id: item.id || `bom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          product_id: productId,
-          material_id: item.material_id,
-          ratio: item.ratio || 1,
-          created: item.id ? undefined : new Date().toISOString(),
-        }));
+        .map(item => {
+          // Support both camelCase (materialId) dan snake_case (material_id)
+          const materialId = (item.material_id || item.materialId || '').toString().trim();
+          return {
+            id: item.id || `bom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            product_id: productId,
+            material_id: materialId,
+            ratio: item.ratio || 1,
+            created: item.id ? undefined : new Date().toISOString(),
+          };
+        });
 
-      // Save to storage
+      // Save to storage dengan immediateSync untuk pastikan langsung tersimpan ke server
       const updatedBOM = [...filteredBOM, ...newBOMItems];
-      await storageService.set('bom', updatedBOM);
+      await storageService.set('bom', updatedBOM, true); // immediateSync = true untuk pastikan langsung sync ke server
 
       // Broadcast event untuk sync ke Master Products dan module lain
       if (typeof window !== 'undefined') {
@@ -4724,17 +4798,13 @@ const PPIC = () => {
     
     // Prevent double click - cek apakah sedang proses
     if (creatingPR[spkNo]) {
-      console.log('[PPIC] Create PR already in progress for', spkNo);
       return;
     }
     
     try {
-      console.log('[PPIC] Creating PR for SPK:', spkNo);
       // Refresh data sebelum cek stock untuk memastikan data ter-update
       await loadData();
-      console.log('[PPIC] Data loaded successfully');
     } catch (error: any) {
-      console.error('[PPIC] Error loading data:', error);
       showAlert(`Error loading data: ${error.message}`, 'Error');
       return;
     }
@@ -4834,11 +4904,6 @@ const PPIC = () => {
           matchingSPKs.push({ spkNo: spk.spkNo, qty: spkQty });
         }
       }
-      
-      console.log(`🔍 [PPIC Stock Check] SPK ${spkNo}, Product ${productId}:`);
-      console.log(`   Stock tersedia: ${productStock}`);
-      console.log(`   Total kebutuhan semua SPK aktif: ${totalRequiredQty}`);
-      console.log(`   SPK yang menggunakan product sama: ${matchingSPKs.map(s => `${s.spkNo} (${s.qty})`).join(', ')}`);
       
       // Jika product stock sudah cukup untuk TOTAL kebutuhan semua SPK aktif, tidak perlu beli material
       // TAPI: hanya jika totalRequiredQty > 0 DAN stock cukup untuk semua kebutuhan
@@ -4950,9 +5015,7 @@ const PPIC = () => {
           await storageService.set('productionNotifications', updatedNotifications);
           await storageService.set('production', updatedProductions);
           
-          console.log(`✅ [PPIC Stock Sufficient] SPK ${item.spkNo}: Stock cukup, production langsung set ke CLOSE (${targetQty}/${targetQty})`);
         } catch (error: any) {
-          console.error('[PPIC] Error creating production for sufficient stock:', error);
         }
         
         showAlert(`SPK: ${item.spkNo}\n\n✅ Product sudah cukup stok!\n\nStok tersedia: ${productStock}\nTotal kebutuhan semua SPK aktif: ${totalRequiredQty} ${item.qty ? `(SPK ini: ${item.qty})` : ''}\n\nSPK yang menggunakan product sama:\n${matchingSPKs.map(s => `• ${s.spkNo}: ${s.qty} PCS`).join('\n')}\n\n✅ Production langsung set ke selesai (${item.qty || 0}/${item.qty || 0}). Work to do: Pengiriman.`, 'Information');
@@ -4960,26 +5023,18 @@ const PPIC = () => {
         return;
       } else if (totalRequiredQty > 0 && productStock < totalRequiredQty) {
         // Stock tidak cukup untuk semua SPK aktif, lanjutkan untuk membuat PR
-        console.log(`⚠️ [PPIC Stock Check] Product ${productId}: Stock tidak cukup untuk semua SPK aktif. Available: ${productStock}, Total Required: ${totalRequiredQty} (SPK ${spkNo}: ${item.qty || 0})`);
-        console.log('[PPIC] ✅ Passed stock check - will show confirm dialog');
       } else {
         // totalRequiredQty = 0 atau tidak ada SPK lain, lanjutkan untuk membuat PR
-        console.log(`ℹ️ [PPIC Stock Check] Product ${productId}: Total required = ${totalRequiredQty}. Lanjutkan create PR untuk material.`);
-        console.log('[PPIC] ✅ No other SPKs - will show confirm dialog');
       }
       
-      console.log('[PPIC] 🚀 About to call showConfirm...');
-      console.log('[PPIC] Showing confirm dialog for PR creation');
       
       try {
         showConfirm(
           `Kirim kebutuhan material ke Purchasing untuk SPK: ${item.spkNo}?\n\nPurchasing akan membuatkan PO untuk material yang stoknya kurang.`,
           async () => {
-            console.log('[PPIC] User confirmed, creating PR...');
             await handleCreatePRContinue(item);
           },
           () => {
-            console.log('[PPIC] User cancelled PR creation');
             setCreatingPR(prev => {
               const newState = { ...prev };
               delete newState[spkNo];
@@ -4989,13 +5044,10 @@ const PPIC = () => {
           },
           'Create Purchase Request'
         );
-        console.log('[PPIC] ✅ showConfirm completed, waiting for user action...');
       } catch (confirmError: any) {
-        console.error('[PPIC] ❌ Error calling showConfirm:', confirmError);
       }
       return;
     } catch (error: any) {
-      console.error('[PPIC] Error in handleCreatePR:', error);
       setCreatingPR(prev => {
         const newState = { ...prev };
         delete newState[spkNo];
@@ -5009,10 +5061,8 @@ const PPIC = () => {
     const spkNo = (item.spkNo || '').toString().trim();
     
     try {
-      console.log('[PPIC] Continue creating PR for SPK:', spkNo);
       // Double check: cek lagi apakah sudah ada PR (prevent race condition)
       const currentPRs = extractStorageValue(await storageService.get<any[]>('purchaseRequests'));
-      console.log('[PPIC] Current PRs count:', currentPRs.length);
       const existingPR = currentPRs.find((pr: any) => {
         const prSpkNo = (pr.spkNo || '').toString().trim();
         return prSpkNo === spkNo && prSpkNo !== '';
@@ -5050,13 +5100,11 @@ const PPIC = () => {
           bomMap.set(materialId, bom);
         } else {
           // Jika material sudah ada, keep yang pertama (skip duplikasi)
-          console.log(`⚠️ [BOM Deduplication] Duplicate BOM entry found for material ${materialId}, keeping first entry`);
         }
       });
       
       const spkBOM = Array.from(bomMap.values());
       
-      console.log(`📋 [BOM] Product ${productId}: Found ${spkBOMRaw.length} BOM entries, ${spkBOM.length} unique materials after deduplication`);
       
       if (spkBOM.length === 0) {
         setCreatingPR(prev => {
@@ -5082,7 +5130,6 @@ const PPIC = () => {
         });
         
         if (!material) {
-          console.warn(`⚠️  Warning: Material not found for BOM material_id: ${bomMaterialId}`);
           materialStatus.push(`❌ ${bomMaterialId} - Material tidak ditemukan di Master`);
           continue;
         }
@@ -5097,11 +5144,9 @@ const PPIC = () => {
         if (spkBOMOverride[bomMaterialId] !== undefined && spkBOMOverride[bomMaterialId] !== null) {
           // Gunakan override qty dari PPIC (tidak mengikuti ratio)
           requiredQty = parseFloat(spkBOMOverride[bomMaterialId]) || 0;
-          console.log(`📊 [BOM Override] Material ${bomMaterialId}: Using override qty=${requiredQty} (not following ratio ${bomRatio})`);
         } else {
           // Gunakan ratio calculation (default)
           requiredQty = spkQty * bomRatio;
-          console.log(`📊 [BOM Calculation] Material ${bomMaterialId}: SPK Qty=${spkQty}, Ratio=${bomRatio}, Required=${requiredQty}`);
         }
         
         // Check stock availability menggunakan fungsi checkMaterialStock
@@ -5181,7 +5226,6 @@ const PPIC = () => {
                     inventoryItem.allocatedSPKs.push(spkNo);
                   }
                   
-                  console.log(`✅ [Stock Allocation] Material ${mat.material.nama} (${mat.bomMaterialId}): Allocated ${mat.requiredQty} for SPK ${spkNo}`);
                 }
               }
               
@@ -5236,7 +5280,6 @@ const PPIC = () => {
           existing.shortageQty += mat.shortageQty;
           // Keep availableStock yang lebih kecil (worst case)
           existing.availableStock = Math.min(existing.availableStock, mat.availableStock);
-          console.log(`🔄 [PPIC PR] Deduplicating material ${materialId}: Combined qty (required: ${existing.requiredQty}, shortage: ${existing.shortageQty})`);
         } else {
           // Pastikan harga selalu diambil dari master material (fallback ke materialPrice jika ada)
           let materialPrice = mat.materialPrice || 
@@ -5262,7 +5305,6 @@ const PPIC = () => {
           
           // Validasi: Jika harga masih 0, log warning
           if (!materialPrice || materialPrice === 0) {
-            console.warn(`⚠️ [PPIC PR] Material ${mat.material.nama} (${materialId}) tidak punya harga di master data. Menggunakan harga 0.`);
           }
           
           materialMap.set(materialId, {
@@ -5420,9 +5462,7 @@ const PPIC = () => {
           await storageService.set('productionNotifications', updatedNotifications);
           await storageService.set('production', updatedProductions);
           
-          console.log(`✅ [PPIC All Materials Sufficient] SPK ${item.spkNo}: Semua material cukup, production langsung set ke CLOSE (${targetQty}/${targetQty})`);
         } catch (error: any) {
-          console.error('[PPIC] Error creating production for sufficient materials:', error);
         }
         
         showAlert(`SPK: ${item.spkNo}\n\n✅ Semua material sudah cukup stok!\n\n📋 Status Material:\n${statusText}\n\n✅ Production langsung set ke selesai (${item.qty || 0}/${item.qty || 0}). Work to do: Pengiriman.`, 'Information');
@@ -5436,7 +5476,6 @@ const PPIC = () => {
         loadData(); // Refresh data
       }
     } catch (error: any) {
-      console.error('[PPIC] Error creating PR:', error);
       // Clear loading state on error
       setCreatingPR(prev => {
         const newState = { ...prev };
@@ -5539,7 +5578,6 @@ const PPIC = () => {
   // IMPORTANT: Cek inventory stock dan group batch dengan sjGroupId sama jadi 1 notification
   const createDeliveryNotificationsFromSchedule = async (spkDeliveries: any[]) => {
     try {
-      console.log('🔍 [Delivery Schedule] Creating notifications from delivery schedule...');
       
       // OPTIMIZATION: Load from localStorage directly (non-blocking)
       const inventory = loadFromLocalStorage('inventory');
@@ -5554,7 +5592,6 @@ const PPIC = () => {
         });
         
         if (!inventoryItem) {
-          console.log(`⚠️ [Stock Check] Product ${productId} not found in inventory`);
           return { available: 0, sufficient: false };
         }
         
@@ -5569,7 +5606,6 @@ const PPIC = () => {
             );
         
         const sufficient = availableStock >= requiredQty;
-        console.log(`🔍 [Stock Check] Product ${productId}: Required ${requiredQty}, Available ${availableStock}, Sufficient: ${sufficient}`);
         
         return { available: availableStock, sufficient };
       };
@@ -5603,7 +5639,6 @@ const PPIC = () => {
       for (const spkDelivery of spkDeliveries) {
         const spkItem = spkData.find((s: any) => s.spkNo === spkDelivery.spkNo);
         if (!spkItem) {
-          console.log(`⚠️ [Delivery Schedule] SPK ${spkDelivery.spkNo} not found in spkData, skipping`);
           continue;
         }
         
@@ -5630,7 +5665,6 @@ const PPIC = () => {
             if (!originalSpkNo.includes(`-${sjNumber}`) && !originalSpkNo.includes(`/${sjNumber}`)) {
               // Tambahkan suffix -SJ{number} di akhir SPK number
               spkNoWithSuffix = `${originalSpkNo}-${sjNumber}`;
-              console.log(`🔍 [Delivery Schedule] SPK ${originalSpkNo} -> ${spkNoWithSuffix} (sjGroupId: ${sjGroupId})`);
             }
           }
           
@@ -5682,7 +5716,6 @@ const PPIC = () => {
               });
             }
           });
-          console.log(`⚠️ [Delivery Schedule] Stock insufficient for sjGroupId ${sjGroupId}, skipping notification creation`);
           continue; // Skip create notification jika stock tidak cukup
         }
         
@@ -5708,7 +5741,6 @@ const PPIC = () => {
             status: 'READY_TO_SHIP', // Stock tersedia, ready untuk dibuat delivery note
             updated: new Date().toISOString(),
           };
-          console.log(`🔄 [Delivery Schedule] Updated notification for sjGroupId ${sjGroupId}`);
         } else {
           // Create new notification
           // IMPORTANT: 1 notification per sjGroupId = 1 surat jalan
@@ -5739,7 +5771,6 @@ const PPIC = () => {
           };
           
           newNotifications.push(notification);
-          console.log(`✅ [Delivery Schedule] Created notification for sjGroupId ${sjGroupId} with ${batches.length} batch(es), total qty: ${notification.qty}`);
         }
       }
       
@@ -5761,12 +5792,10 @@ const PPIC = () => {
         finalNotifications.push(...newNotifications);
         // Set langsung ke localStorage dulu, baru sync ke server di background
         await storageService.set('deliveryNotifications', finalNotifications);
-        console.log(`✅ [Delivery Schedule] Created ${newNotifications.length} notification(s) from delivery schedule`);
       }
       
       return { created: newNotifications.length, insufficient: stockInsufficientBatches.length };
     } catch (error: any) {
-      console.error('❌ [Delivery Schedule] Error creating notifications:', error);
       throw error;
     }
   };
@@ -5774,14 +5803,11 @@ const PPIC = () => {
   // Helper function untuk membuat notifications dari schedule data (DISABLED - tidak digunakan lagi)
   const createNotificationsFromSchedule = async (scheduleList: any[]) => {
     try {
-      console.log('🔍 [Schedule] Creating notifications from schedule data...');
       // Load spkData dari storage untuk memastikan data terbaru
       const spkDataFromStorage = extractStorageValue(await storageService.get<any[]>('spk')) || [];
       const deliveryNotifications = await storageService.get<any[]>('deliveryNotifications') || [];
       const newNotifications: any[] = [];
       
-      console.log(`🔍 [Schedule] Loaded ${spkDataFromStorage.length} SPKs from storage`);
-      console.log(`🔍 [Schedule] Processing ${scheduleList.length} schedule items`);
       
       // Helper function untuk match SPK
       const matchSPK = (spk1: string, spk2: string): boolean => {
@@ -5800,32 +5826,25 @@ const PPIC = () => {
       scheduleList.forEach((scheduleItem: any) => {
         const spkNo = scheduleItem.spkNo;
         if (!spkNo) {
-          console.log(`  ⚠️ [Schedule] Schedule item without spkNo, skipping`);
           return;
         }
         
         const spkItem = spkDataFromStorage.find((s: any) => s.spkNo === spkNo);
         if (!spkItem) {
-          console.log(`  ⚠️ [Schedule] SPK ${spkNo} not found in spkData (total SPKs: ${spkDataFromStorage.length}), skipping`);
-          console.log(`  🔍 [Schedule] Available SPKs:`, spkDataFromStorage.slice(0, 5).map((s: any) => s.spkNo));
           return;
         }
         
-        console.log(`  ✅ [Schedule] Found SPK ${spkNo} in spkData`);
         
         // Iterate setiap deliveryBatch untuk SPK ini
         const deliveryBatches = Array.isArray(scheduleItem.deliveryBatches) ? scheduleItem.deliveryBatches : [];
-        console.log(`🔍 [Schedule] Processing SPK ${spkNo}, total batches: ${deliveryBatches.length}`);
         
         // Filter hanya batch yang createSJ !== false
         const batchesForSJ = deliveryBatches.filter((b: any) => b && b.createSJ !== false);
-        console.log(`🔍 [Schedule] Batches with createSJ=true: ${batchesForSJ.length} out of ${deliveryBatches.length}`);
         
         batchesForSJ.forEach((batch: any, batchIndex: number) => {
           if (!batch) return;
           
           const sjGroupId = batch?.sjGroupId || 'no-group';
-          console.log(`  🔍 [Schedule] Processing batch ${batchIndex} for SPK ${spkNo}, sjGroupId: ${sjGroupId}`);
           
           // Cek apakah notification sudah ada untuk SPK ini DENGAN sjGroupId yang sama
           const existingNotifIndex = deliveryNotifications.findIndex((n: any) => {
@@ -5863,7 +5882,6 @@ const PPIC = () => {
           
           if (existingNotifIndex >= 0) {
             // Update existing notification
-            console.log(`  🔄 [Schedule] Updating existing notification for SPK ${spkNo}, sjGroupId: ${sjGroupId}`);
             deliveryNotifications[existingNotifIndex] = {
               ...deliveryNotifications[existingNotifIndex],
               qty: batch.qty || spkItem.qty || 0,
@@ -5872,7 +5890,6 @@ const PPIC = () => {
             };
           } else if (existingInNew >= 0) {
             // Skip jika sudah dibuat dalam loop ini
-            console.log(`  ⏭️ [Schedule] Skipping duplicate in newNotifications for SPK ${spkNo}, sjGroupId: ${sjGroupId}`);
           } else {
             // Create new notification
             newNotifications.push({
@@ -5889,7 +5906,6 @@ const PPIC = () => {
               status: 'WAITING_PRODUCTION',
               created: new Date().toISOString(),
             });
-            console.log(`  ✅ [Schedule] Created new notification for SPK ${spkNo}, sjGroupId: ${sjGroupId}`);
           }
         });
       });
@@ -5905,28 +5921,21 @@ const PPIC = () => {
       await storageService.set('deliveryNotifications', finalNotifications);
       
       if (newNotifications.length > 0) {
-        console.log(`✅ [Schedule] Created ${newNotifications.length} new notification(s) from schedule`);
         newNotifications.forEach((notif: any) => {
-          console.log(`  📋 New notification: SPK ${notif.spkNo}, sjGroupId: ${notif.sjGroupId || 'null'}, qty: ${notif.qty}`);
         });
       } else {
-        console.log(`ℹ️ [Schedule] No new notifications to create (all already exist)`);
       }
       
       // Verify notifications tersimpan
       const verifyNotifications = await storageService.get<any[]>('deliveryNotifications') || [];
-      console.log(`✅ [Schedule] Verified: ${verifyNotifications.length} notification(s) in storage`);
       verifyNotifications.forEach((n: any) => {
-        console.log(`  📋 Storage notification: SPK ${n.spkNo}, sjGroupId: ${n.sjGroupId || 'null'}, status: ${n.status}`);
       });
     } catch (error) {
-      console.error('❌ [Schedule] Error creating notifications from schedule:', error);
     }
   };
 
   const handleSaveDeliverySchedule = async (data: any) => {
     try {
-      console.log('🔍 [Schedule] handleSaveDeliverySchedule called with data:', JSON.stringify(data, null, 2));
       
       if (!data.spkDeliveries || data.spkDeliveries.length === 0) {
         showAlert('Error: Tidak ada delivery schedule untuk disimpan', 'Error');
@@ -5934,12 +5943,9 @@ const PPIC = () => {
       }
       
       // Log semua spkDeliveries dan deliveryBatches-nya
-      console.log('🔍 [Schedule] Total spkDeliveries:', data.spkDeliveries.length);
       data.spkDeliveries.forEach((spkDelivery: any, idx: number) => {
-        console.log(`  [${idx}] SPK: ${spkDelivery.spkNo}, deliveryBatches: ${spkDelivery.deliveryBatches?.length || 0}`);
         if (spkDelivery.deliveryBatches && Array.isArray(spkDelivery.deliveryBatches)) {
           spkDelivery.deliveryBatches.forEach((batch: any, batchIdx: number) => {
-            console.log(`    Batch ${batchIdx}: batchNo=${batch.batchNo}, qty=${batch.qty}, sjGroupId=${batch.sjGroupId || 'null'}, createSJ=${batch.createSJ}`);
           });
         }
       });
@@ -6013,7 +6019,6 @@ const PPIC = () => {
   };
 
   const handleUpdateStatus = async (item: any) => {
-    console.log('🔍 [PPIC] handleUpdateStatus called with item:', item);
     // Cek status semua checklist
     const spkNoNormalized = (item.spkNo || '').toString().trim();
     const isStockFulfilled = item.stockFulfilled || false;
@@ -6040,21 +6045,6 @@ const PPIC = () => {
       return bomProductId.toLowerCase() === productId.toLowerCase();
     });
     const hasBOM = productBOM.length > 0;
-    
-    // Debug logging untuk troubleshooting
-    if (!hasBOM && productId) {
-      console.log(`[PPIC Checklist] BOM not found for productId: "${productId}"`, {
-        itemProductId: item.product_id,
-        itemProductIdAlt: item.productId,
-        itemKode: item.kode,
-        itemProductKode: item.productKode,
-        bomDataCount: bomData.length,
-        bomProductIds: bomData.slice(0, 5).map((b: any) => ({
-          product_id: b.product_id,
-          kode: b.kode,
-        })),
-      });
-    }
     
     // Cek Schedule
     const schedule = scheduleData.find((s: any) => {
@@ -6091,7 +6081,6 @@ const PPIC = () => {
       return false;
     });
     
-    console.log(`🔍 [PPIC Status Dialog] SPK ${spkNoNormalized} - hasDeliveryNotif: ${hasDeliveryNotif}, Total notifications: ${deliveryNotifications.length}`);
     
     // Prepare checklist
     const checklist = {
@@ -6204,14 +6193,6 @@ const PPIC = () => {
         stockFulfilled: true, // Flag untuk stock fulfilled
       };
 
-      console.log('🚀 [PPIC] Creating delivery notification for stockFulfilled SPK:', {
-        spkNo,
-        status: newNotification.status,
-        stockFulfilled: newNotification.stockFulfilled,
-        product: newNotification.product,
-        qty: newNotification.qty,
-      });
-
       // Pastikan tidak ada duplikasi sebelum push
       const isDuplicate = deliveryNotifications.some((n: any) => {
         const notifSpkNo = (n.spkNo || '').toString().trim();
@@ -6226,7 +6207,6 @@ const PPIC = () => {
       });
       
       if (isDuplicate) {
-        console.log(`⚠️ [PPIC] Duplicate notification found for SPK ${spkNo}, skipping create`);
         showAlert('Delivery notification sudah ada untuk SPK ini', 'Information');
         // Update dialog untuk refresh status
         const updatedNotifications = await storageService.get<any[]>('deliveryNotifications') || [];
@@ -6274,12 +6254,10 @@ const PPIC = () => {
       // });
 
       // showAlert(`✅ Delivery notification berhasil dibuat untuk SPK ${spkNo}\n\n📧 Data sudah dikirim ke Delivery Note`, 'Success');
-      console.log('ℹ️ [PPIC] Delivery notification trigger (handleTriggerDeliveryNotification) is DISABLED');
       showAlert('ℹ️ Delivery notification trigger is currently DISABLED', 'Information');
       
       // Reload deliveryNotifications untuk pastikan data terbaru
       const updatedNotifications = await storageService.get<any[]>('deliveryNotifications') || [];
-      console.log('✅ [PPIC] Reloaded notifications after save:', updatedNotifications.length);
       
       // Update dialog dengan data terbaru
       const hasDeliveryNotifNow = updatedNotifications.some((n: any) => {
@@ -6294,7 +6272,6 @@ const PPIC = () => {
         return false;
       });
       
-      console.log(`✅ [PPIC] After reload, hasDeliveryNotif: ${hasDeliveryNotifNow} for SPK ${spkNo}`);
       
       setWhatToDoNextDialog(prev => ({
         ...prev,
@@ -6312,15 +6289,21 @@ const PPIC = () => {
   };
 
   const handleDeleteSPK = async (spk: any) => {
-    if (!spk || !spk.spkNo) {
-      showAlert('SPK tidak valid. Mohon coba lagi.', 'Error');
-      return;
-    }
-
-    const spkNo = (spk.spkNo || '').toString().trim();
-    const soNo = (spk.soNo || '').toString().trim();
-
     try {
+      
+      if (!spk || !spk.spkNo) {
+        showAlert('SPK tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate item.id exists
+      if (!spk.id) {
+        showAlert(`❌ Error: SPK ${spk.spkNo} tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+
+      const spkNo = (spk.spkNo || '').toString().trim();
+      const soNo = (spk.soNo || '').toString().trim();
       const [
         purchaseRequestsData,
         purchaseOrdersData,
@@ -6443,6 +6426,7 @@ const PPIC = () => {
             // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
             // Remove SPK record using tombstone pattern (soft delete)
             const deleteResult = await deletePackagingItem('spk', spk.id, 'id');
+            
             if (!deleteResult.success) {
               showAlert(`Gagal menghapus SPK: ${deleteResult.error || 'Unknown error'}`, 'Error');
               return;
@@ -6678,19 +6662,16 @@ const PPIC = () => {
                 const reservation = await materialAllocator.reserveMaterials(newSPK.spkNo, materialRequirements);
                 
                 if (reservation.success) {
-                  console.log(`✅ [PPIC] Materials reserved for SPK ${newSPK.spkNo}: ${materialRequirements.length} materials`);
                   if (!materialReservationMessage) {
                     materialReservationMessage = `\n📦 Materials reserved for ${newSPKs.length} SPK(s)`;
                   }
                 } else {
-                  console.warn(`⚠️ [PPIC] Material shortage for SPK ${newSPK.spkNo}:`, reservation.shortages);
                   const shortageList = reservation.shortages.map((s: any) => s.materialName).join(', ');
                   if (!materialReservationMessage) {
                     materialReservationMessage = `\n⚠️ Material shortage: ${shortageList}`;
                   }
                 }
               } catch (error) {
-                console.error(`❌ [PPIC] Error reserving materials for SPK ${newSPK.spkNo}:`, error);
                 if (!materialReservationMessage) {
                   materialReservationMessage = `\n❌ Error reserving materials`;
                 }
@@ -6704,7 +6685,8 @@ const PPIC = () => {
       const updatedPTP = ptpData.map(p => 
         p.id === item.id ? { ...p, status: 'OPEN' } : p
       );
-      await storageService.set('ptp', updatedPTP);
+      // CRITICAL: Force immediate sync ke server untuk PTP (PUT)
+      await storageService.set('ptp', updatedPTP, true);
       setPtpData(updatedPTP);
       
       const spkNos = newSPKs.map((s: any) => s.spkNo).join(', ');
@@ -6713,7 +6695,6 @@ const PPIC = () => {
       closeDialog();
       loadData();
     } catch (error: any) {
-      console.error('Error creating SPK from PTP:', error);
       showAlert(`❌ Error creating SPK: ${error.message || 'Unknown error'}\n\nSilakan coba lagi atau hubungi administrator.`, 'Error');
       closeDialog();
     }
@@ -6771,7 +6752,8 @@ const PPIC = () => {
           ? { ...p, soNo: soNo, status: 'OPEN', linkedSO: soNo } 
           : p
       );
-      await storageService.set('ptp', updatedPTP);
+      // CRITICAL: Force immediate sync ke server untuk PTP (PUT)
+      await storageService.set('ptp', updatedPTP, true);
       setPtpData(updatedPTP);
 
       // Update SPK yang sudah dibuat dari PTP ini untuk update soNo-nya
@@ -6837,7 +6819,6 @@ const PPIC = () => {
           await storageService.set('deliveryNotifications', updatedDelNotif);
         }
         
-        console.log(`✅ Updated SPK, Schedule, and Notifications soNo for PTP ${matchingPTP.requestNo} to SO ${soNo}`);
       }
 
       showAlert(`SO ${soNo} created and linked to PTP ${matchingPTP.requestNo}\n\n✅ SPK terkait juga di-update dengan SO No baru`, 'Success');
@@ -6864,7 +6845,8 @@ const PPIC = () => {
           ? { ...p, soNo: soNo, linkedSO: soNo } 
           : p
       );
-      await storageService.set('ptp', updatedPTP);
+      // CRITICAL: Force immediate sync ke server untuk PTP (PUT)
+      await storageService.set('ptp', updatedPTP, true);
       setPtpData(updatedPTP);
 
       // Update SPK yang sudah dibuat dari PTP ini untuk update soNo-nya
@@ -6930,7 +6912,6 @@ const PPIC = () => {
           await storageService.set('deliveryNotifications', updatedDelNotif);
         }
         
-        console.log(`✅ Updated SPK, Schedule, and Notifications soNo for PTP ${matchingPTP.requestNo} to SO ${soNo}`);
       }
 
       showAlert(`PTP ${matchingPTP.requestNo} linked to SO ${soNo}\n\n✅ SPK terkait juga di-update dengan SO No baru`, 'Success');
@@ -6987,7 +6968,8 @@ const PPIC = () => {
       const updatedPTP = ptpData.map(p => 
         p.id === item.id ? { ...p, status: 'CLOSE', closedAt: new Date().toISOString() } : p
       );
-      await storageService.set('ptp', updatedPTP);
+      // CRITICAL: Force immediate sync ke server untuk PTP (PUT)
+      await storageService.set('ptp', updatedPTP, true);
       setPtpData(updatedPTP);
       showAlert(`PTP ${item.requestNo} closed successfully`, 'Success');
       closeDialog();
@@ -6999,34 +6981,48 @@ const PPIC = () => {
   };
 
   const handleDeletePTP = async (item: any) => {
-    if (!item || !item.requestNo) {
-      showAlert('PTP tidak valid. Mohon coba lagi.', 'Error');
-      return;
-    }
+    try {
+      
+      if (!item || !item.requestNo) {
+        showAlert('PTP tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        showAlert(`❌ Error: PTP ${item.requestNo} tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
 
-    showConfirm(
-      `Hapus PTP ${item.requestNo}?\n\nTindakan ini akan menghapus PTP dari daftar.`,
-      async () => {
-        try {
-          // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
-          const deleteResult = await deletePackagingItem('ptp', item.id, 'id');
-          if (!deleteResult.success) {
-            showAlert(`Gagal menghapus PTP: ${deleteResult.error || 'Unknown error'}`, 'Error');
-            return;
+      showConfirm(
+        `Hapus PTP ${item.requestNo}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            
+            // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deletePackagingItem('ptp', item.id, 'id');
+            
+            if (!deleteResult.success) {
+              showAlert(`❌ Error deleting PTP ${item.requestNo}: ${deleteResult.error || 'Unknown error'}`, 'Error');
+              return;
+            }
+            
+            // Reload PTP data dengan helper (handle race condition)
+            await reloadPackagingData('ptp', setPtpData);
+            
+            showAlert(`✅ PTP ${item.requestNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            loadData();
+          } catch (error: any) {
+            showAlert(`❌ Error deleting PTP: ${error.message}`, 'Error');
           }
-          
-          // Reload PTP data dengan helper (handle race condition)
-          await reloadPackagingData('ptp', setPtpData);
-          
-          showAlert(`PTP ${item.requestNo} berhasil dihapus.`, 'Success');
-          loadData();
-        } catch (error: any) {
-          showAlert(`Error deleting PTP: ${error.message}`, 'Error');
-        }
-      },
-      undefined,
-      'Confirm Delete'
-    );
+        },
+        () => {
+        },
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      showAlert(`❌ Error: ${error.message}`, 'Error');
+    }
   };
 
   const handleCreatePTP = async (formData: any) => {
@@ -7077,7 +7073,8 @@ const PPIC = () => {
       };
 
       const currentPTP = extractStorageValue(await storageService.get<any[]>('ptp'));
-      await storageService.set('ptp', [...currentPTP, newPTP]);
+      // CRITICAL: Force immediate sync ke server untuk PTP (POST)
+      await storageService.set('ptp', [...currentPTP, newPTP], true);
       setPtpData([...currentPTP, newPTP]);
       setShowCreatePTP(false);
       showAlert(`PTP ${newPTP.requestNo} created successfully dengan ${items.length} product(s)`, 'Success');
@@ -7087,10 +7084,16 @@ const PPIC = () => {
     }
   };
 
+  // Determine if any card view is active
+  const isCardViewActive = (activeTab === 'spk' && spkViewMode === 'cards') ||
+                          (activeTab === 'ptp' && ptpViewMode === 'cards') ||
+                          (activeTab === 'outstanding' && outstandingViewMode === 'cards');
+
   return (
     <div className="module-compact">
-      <div className="page-header">
-        <h1>PPIC - Production Planning & Inventory Control</h1>
+      <Card style={{ position: isCardViewActive ? 'sticky' : 'relative', top: isCardViewActive ? 0 : 'auto', zIndex: isCardViewActive ? 100 : 'auto', marginBottom: isCardViewActive ? '12px' : '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+          <h1 style={{ margin: 0 }}>PPIC - Production Planning & Inventory Control</h1>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           {confirmedSOsPending.length > 0 && (
             <NotificationBell
@@ -7107,8 +7110,6 @@ const PPIC = () => {
           <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
         </div>
       </div>
-
-      <Card>
         <div
           style={{
             display: 'flex',
@@ -7116,7 +7117,6 @@ const PPIC = () => {
             gap: '12px',
             alignItems: 'center',
             justifyContent: 'flex-start',
-            marginBottom: '16px',
           }}
         >
           {(activeTab === 'spk' || activeTab === 'ptp' || activeTab === 'outstanding' || activeTab === 'schedule') && (
@@ -7192,6 +7192,7 @@ const PPIC = () => {
             </div>
           )}
         </div>
+      </Card>
 
         <div className="tab-content">
           {activeTab === 'spk' && (
@@ -7269,18 +7270,72 @@ const PPIC = () => {
           )}
           {activeTab === 'outstanding' && (
             <div>
-              <div style={{ marginBottom: '30px' }}>
-                <h3 style={{ marginBottom: '16px', color: 'var(--text-primary)' }}>Outstanding SPK ({filteredSpkData.length})</h3>
-                {renderSpkCardView(
+              <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0, color: 'var(--text-primary)' }}>Outstanding SPK ({filteredSpkData.length})</h3>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <button
+                    onClick={() => setOutstandingViewMode('cards')}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '20px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: outstandingViewMode === 'cards' ? 'var(--accent-color)' : 'transparent',
+                      color: outstandingViewMode === 'cards' ? '#fff' : 'var(--text-secondary)',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Cards
+                  </button>
+                  <button
+                    onClick={() => setOutstandingViewMode('table')}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '20px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: outstandingViewMode === 'table' ? 'var(--accent-color)' : 'transparent',
+                      color: outstandingViewMode === 'table' ? '#fff' : 'var(--text-secondary)',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Table
+                  </button>
+                </div>
+              </div>
+              {outstandingViewMode === 'cards' ? (
+                renderSpkCardView(
                   filteredSpkData,
                   searchQuery ? "No outstanding SPK data found matching your search" : "No outstanding SPK data"
-                )}
+                )
+              ) : (
+                <Table 
+                  columns={spkTableColumns} 
+                  data={flattenedSpkData} 
+                  emptyMessage={searchQuery ? "No outstanding SPK data found matching your search" : "No outstanding SPK data"}
+                  getRowStyle={(item: any) => ({
+                    backgroundColor: getRowColor(item.customer || ''),
+                  })}
+                />
+              )}
+              <div style={{ marginTop: '30px' }}>
+                <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, color: 'var(--text-primary)' }}>Outstanding PTP ({filteredPtpData.filter((item: any) => item.status === 'OPEN').length})</h3>
               </div>
-              <div>
-                <h3 style={{ marginBottom: '16px', color: 'var(--text-primary)' }}>Outstanding PTP ({filteredPtpData.filter((item: any) => item.status === 'OPEN').length})</h3>
-                {renderPtpCardView(
+                {outstandingViewMode === 'cards' ? (
+                  renderPtpCardView(
                   filteredPtpData.filter((item: any) => item.status === 'OPEN'),
                   searchQuery ? "No outstanding PTP data found matching your search" : "No outstanding PTP data"
+                  )
+                ) : (
+                  <Table 
+                    columns={ptpTableColumns} 
+                    data={flattenedPtpData.filter((item: any) => item.status === 'OPEN')} 
+                    emptyMessage={searchQuery ? "No outstanding PTP data found matching your search" : "No outstanding PTP data"}
+                    getRowStyle={(item: any) => ({
+                      backgroundColor: getRowColor(item.customer || ''),
+                    })}
+                  />
                 )}
               </div>
             </div>
@@ -7582,7 +7637,6 @@ const PPIC = () => {
             </div>
           )}
         </div>
-      </Card>
 
       {selectedScheduleItem && (
         <ScheduleDialog
@@ -7693,7 +7747,6 @@ const PPIC = () => {
                     updatedNotifications.push(batchNotification);
                   });
                   
-                  console.log(`✅ SPK ${spkNo} split into ${batches.length} batch SPKs`);
                 } else {
                   // Tidak ada batches, update schedule seperti biasa
                   let existingSchedule = updatedSchedules.find((s: any) => s.spkNo === spkNo);
@@ -7762,7 +7815,6 @@ const PPIC = () => {
               
               if (updatedNotifications.length > 0) {
                 await storageService.set('productionNotifications', updatedNotifications);
-                console.log(`✅ Production notifications created/updated for ${data.spkProductions.length} SPKs - Waiting for material receipt`);
               }
               
               // Jangan tutup dialog jika dipanggil dari GeneralScheduleDialog
@@ -8541,10 +8593,12 @@ const SODetailDialog = ({ so, bomData, materials, inventory, onClose, onBOMUpdat
 
       // Add new BOM items - format sesuai sheet: product_id, material_id, ratio
       // Jangan duplicate material_id di BOM yang sama
+      // Support both camelCase (dari BOMDialog) dan snake_case (dari storage)
       const materialIdSet = new Set<string>();
       const newBOMItems = bomItems
         .filter(item => {
-          const materialId = (item.material_id || '').toString().trim();
+          // Support both camelCase (materialId) dan snake_case (material_id)
+          const materialId = (item.material_id || item.materialId || '').toString().trim();
           if (!materialId) return false;
           if (materialIdSet.has(materialId)) {
             // Skip duplicate material_id
@@ -8553,17 +8607,21 @@ const SODetailDialog = ({ so, bomData, materials, inventory, onClose, onBOMUpdat
           materialIdSet.add(materialId);
           return true;
         })
-        .map(item => ({
-          id: item.id || `bom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          product_id: productId,
-          material_id: item.material_id,
-          ratio: item.ratio || 1,
-          created: item.id ? undefined : new Date().toISOString(),
-        }));
+        .map(item => {
+          // Support both camelCase (materialId) dan snake_case (material_id)
+          const materialId = (item.material_id || item.materialId || '').toString().trim();
+          return {
+            id: item.id || `bom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            product_id: productId,
+            material_id: materialId,
+            ratio: item.ratio || 1,
+            created: item.id ? undefined : new Date().toISOString(),
+          };
+        });
 
-      // Save to storage
+      // Save to storage dengan immediateSync untuk pastikan langsung tersimpan ke server
       const updatedBOM = [...filteredBOM, ...newBOMItems];
-      await storageService.set('bom', updatedBOM);
+      await storageService.set('bom', updatedBOM, true); // immediateSync = true untuk pastikan langsung sync ke server
 
       // Broadcast event untuk sync ke Master Products dan module lain
       if (typeof window !== 'undefined') {
@@ -8601,13 +8659,11 @@ const SODetailDialog = ({ so, bomData, materials, inventory, onClose, onBOMUpdat
     // Defensive check: pastikan so dan so.items ada
     if (!so) {
       showAlert('Error: Sales Order data tidak ditemukan', 'Error');
-      console.error('[PPIC] handleCreateSPKAndSchedule: so is null/undefined');
       return;
     }
     
     if (!so.items || !Array.isArray(so.items) || so.items.length === 0) {
       showAlert('Error: Sales Order tidak memiliki items', 'Error');
-      console.error('[PPIC] handleCreateSPKAndSchedule: so.items is empty or invalid', so);
       return;
     }
     
@@ -8646,7 +8702,6 @@ const SODetailDialog = ({ so, bomData, materials, inventory, onClose, onBOMUpdat
       }
         // Defensive check: pastikan field yang diperlukan ada
         if (!item.productName && !item.productId && !item.productKode) {
-          console.warn('[PPIC] Skipping item without product info:', item);
           continue;
         }
         
@@ -8706,13 +8761,11 @@ const SODetailDialog = ({ so, bomData, materials, inventory, onClose, onBOMUpdat
         const spkQty = toNumber(spk.qty);
         
         if (!productKey || spkQty <= 0) {
-          console.warn(`[PPIC] Skipping material reservation for SPK ${spk.spkNo}: Invalid product or qty`);
           continue;
         }
         
         const bomForProduct = productBomMap[productKey] || [];
         if (bomForProduct.length === 0) {
-          console.warn(`[PPIC] No BOM found for product ${productKey} in SPK ${spk.spkNo}`);
           continue;
         }
         
@@ -8750,12 +8803,9 @@ const SODetailDialog = ({ so, bomData, materials, inventory, onClose, onBOMUpdat
             });
             
             if (reservation.success) {
-              console.log(`✅ [PPIC] Materials reserved for SPK ${spk.spkNo}: ${materialRequirements.length} materials`);
             } else {
-              console.warn(`⚠️ [PPIC] Material shortage for SPK ${spk.spkNo}:`, reservation.shortages);
             }
           } catch (error) {
-            console.error(`❌ [PPIC] Error reserving materials for SPK ${spk.spkNo}:`, error);
             reservationResults.push({
               spkNo: spk.spkNo,
               success: false,
@@ -8773,12 +8823,10 @@ const SODetailDialog = ({ so, bomData, materials, inventory, onClose, onBOMUpdat
           `${r.spkNo}: ${r.shortages.map((s: any) => s.materialName).join(', ')}`
         ).join('\n');
         
-        console.warn(`⚠️ [PPIC] Material shortages detected for ${spksWithShortages.length} SPK(s):\n${shortageDetails}`);
         // Continue with SPK creation but notify about shortages
       }
       
       const successfulReservations = reservationResults.filter(r => r.success);
-      console.log(`✅ [PPIC] Material reservations completed: ${successfulReservations.length}/${newSPKs.length} SPKs have materials reserved`);
       
       // Save schedules
       const currentSchedules = await storageService.get<any[]>('schedule') || [];
@@ -8826,15 +8874,11 @@ const SODetailDialog = ({ so, bomData, materials, inventory, onClose, onBOMUpdat
 
       if (newNotifications.length > 0) {
         await storageService.set('productionNotifications', [...productionNotifications, ...newNotifications]);
-        console.log(`✅ Production notifications created: ${newNotifications.length} notifications for ${newSPKs.length} SPKs`);
       }
       
       showAlert(`SPK dan Schedule berhasil dibuat!\n\n${newSPKs.length} SPK telah dibuat.\n📦 Materials reserved: ${successfulReservations.length}/${newSPKs.length} SPKs\n📧 Notifications sent to Production - ${successfulReservations.length > 0 ? 'Materials ready for production' : 'Waiting for material receipt from Purchasing'}`, 'Success');
       onClose();
     } catch (error: any) {
-      console.error('[PPIC] Error creating SPK and schedule:', error);
-      console.error('[PPIC] Error stack:', error.stack);
-      console.error('[PPIC] SO data:', so);
       const errorMessage = error?.message || error?.toString() || 'Unknown error';
       showAlert(`Error creating SPK and schedule: ${errorMessage}\n\nSilakan coba lagi atau hubungi administrator.`, 'Error');
     }
@@ -9573,6 +9617,8 @@ const CreatePTPDialog = ({ customers, products, onClose, onSave }: any) => {
   interface PTPItem {
     id: string;
     productItem: string;
+    productId?: string; // CRITICAL: Link ke product master (sama seperti Sales Order)
+    productKode?: string; // CRITICAL: Link ke product master (sama seperti Sales Order)
     qty: number;
     unit: string;
     price: number;
@@ -9760,14 +9806,36 @@ const CreatePTPDialog = ({ customers, products, onClose, onSave }: any) => {
           if (field === 'qty' || field === 'price') {
             updated.total = (updated.qty || 0) * (updated.price || 0);
           }
-          // Auto-fill price from product when product is selected
+          // CRITICAL: Auto-fill dari product master saat product dipilih (sama seperti Sales Order)
           if (field === 'productItem' && value) {
-            const selectedProduct = products.find((p: any) => 
-              (p.nama || '') === value || (p.kode || '') === value
-            );
+            const selectedProduct = products.find((p: any) => {
+              if (!p) return false;
+              const pId = String(p.product_id || p.kode || p.id || '').trim();
+              const pName = String(p.nama || '').trim();
+              const pIdOnly = String(p.id || '').trim();
+              const searchValue = String(value || '').trim();
+              // Match by product_id/kode/id, or by name, or by id field
+              return (pId && (pId === searchValue || pId.toLowerCase() === searchValue.toLowerCase())) ||
+                     (pName && pName.toLowerCase() === searchValue.toLowerCase()) ||
+                     (pIdOnly && pIdOnly === searchValue);
+            });
             if (selectedProduct) {
+              // CRITICAL: Link ke product master - sama seperti Sales Order
+              // Set productId dan productKode dari master
+              const productIdValue = String(selectedProduct.product_id || selectedProduct.kode || selectedProduct.id || '').trim();
+              if (!productIdValue && selectedProduct.nama) {
+                updated.productId = selectedProduct.nama;
+                updated.productKode = selectedProduct.nama;
+              } else {
+                updated.productId = productIdValue;
+                updated.productKode = productIdValue;
+              }
+              // Auto-fill unit (UOM) dari master product
+              updated.unit = selectedProduct.satuan || 'PCS';
+              // Auto-fill price dari master product
               const hargaFromMaster = selectedProduct.hargaSales || selectedProduct.hargaFg || (selectedProduct as any).harga || 0;
               updated.price = Number(hargaFromMaster) || 0;
+              // Auto-calculate total
               updated.total = (updated.qty || 0) * updated.price;
             }
           }
@@ -10146,15 +10214,40 @@ const CreatePTPDialog = ({ customers, products, onClose, onSave }: any) => {
                         const handleSelect = () => {
                           if (showProductDialog !== null) {
                             const index = showProductDialog;
-                            const itemId = formData.items[index]?.id;
-                            if (itemId) {
-                              // Update product selection
-                              handleUpdateItem(itemId, 'productItem', prod.nama || prod.kode);
-                              // Update price from master product
-                              const hargaFromMaster = prod.hargaSales || prod.hargaFg || (prod as any).harga || 0;
-                              handleUpdateItem(itemId, 'price', Number(hargaFromMaster) || 0);
-                              // Update unit
-                              handleUpdateItem(itemId, 'unit', prod.satuan || 'PCS');
+                            const item = formData.items[index];
+                            if (item && item.id) {
+                              // CRITICAL: Link ke product master - sama seperti Sales Order
+                              const productIdValue = String(prod.product_id || prod.kode || prod.id || '').trim();
+                              // CRITICAL: Cek semua kemungkinan field harga dari master product
+                              const hargaFromMaster = prod.hargaSales || prod.hargaFg || prod.harga || (prod as any).hargaJual || (prod as any).hargaBeli || 0;
+                              const unitFromMaster = prod.satuan || 'PCS';
+                              
+                              // Debug: Log untuk memastikan harga ter-detect
+                              if (hargaFromMaster > 0) {
+                              }
+                              
+                              // CRITICAL: Update semua field sekaligus dalam satu state update
+                              // Ini memastikan price, unit, productId, dll ter-update bersamaan
+                              setFormData(prev => {
+                                const updatedItems = prev.items.map((it: PTPItem) => {
+                                  if (it.id === item.id) {
+                                    const updatedPrice = Number(hargaFromMaster) || 0;
+                                    const updated: PTPItem = {
+                                      ...it,
+                                      productItem: prod.nama || prod.kode || '',
+                                      productId: productIdValue || prod.nama || '',
+                                      productKode: productIdValue || prod.nama || '',
+                                      unit: unitFromMaster,
+                                      price: updatedPrice,
+                                      total: (it.qty || 0) * updatedPrice,
+                                    };
+                                    return updated;
+                                  }
+                                  return it;
+                                });
+                                return { ...prev, items: updatedItems };
+                              });
+                              
                               // Update input display value
                               setProductInputValue(prev => ({
                                 ...prev,

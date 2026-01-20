@@ -1,21 +1,5 @@
 {
-  "value": [
-    {
-      "id": "1767154074713",
-      "returnNo": "RET-251231-4L2ZC",
-      "sourceType": "PO",
-      "sourceNo": "PO-251231-66N0K",
-      "productId": "MTRL-00828",
-      "productName": "TEST 1",
-      "productKode": "MTRL-00828",
-      "qty": 30,
-      "unit": "PCS",
-      "reason": "Customer rese",
-      "notes": "sumpah",
-      "status": "CONFIRMED",
-      "created": "2025-12-31T04:07:54.713Z"
-    }
-  ],
-  "timestamp": 1767154074716,
-  "_timestamp": 1767154074716
+  "value": [],
+  "timestamp": 1768895996326,
+  "_timestamp": 1768895996326
 }

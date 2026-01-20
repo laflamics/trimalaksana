@@ -3,7 +3,8 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService } from '../../../services/storage';
+import { storageService, extractStorageValue } from '../../../services/storage';
+import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 
 interface RoutePlan {
@@ -110,18 +111,38 @@ const RoutePlanning = () => {
   }, []);
 
   const loadData = async () => {
-    const [plansData, ordersData, routesData, vehiclesData, driversData] = await Promise.all([
-      storageService.get<RoutePlan[]>('Trucking_route_plans') || [],
-      storageService.get<any[]>('Trucking_delivery_orders') || [],
-      storageService.get<any[]>('Trucking_routes') || [],
-      storageService.get<any[]>('Trucking_vehicles') || [],
-      storageService.get<any[]>('Trucking_drivers') || [],
-    ]);
-    setPlans(plansData.map((p, idx) => ({ ...p, no: idx + 1 })));
-    setOrders(ordersData.filter(o => o.status === 'Open'));
-    setRoutes(routesData);
-    setVehicles(vehiclesData);
-    setDrivers(driversData);
+    try {
+      // Load semua data menggunakan storageService untuk membaca dari file storage juga
+      const [plansDataRaw, ordersDataRaw, routesDataRaw, vehiclesDataRaw, driversDataRaw] = await Promise.all([
+        storageService.get<RoutePlan[]>('trucking_route_plans'),
+        storageService.get<any[]>('trucking_delivery_orders'),
+        storageService.get<any[]>('trucking_routes'),
+        storageService.get<any[]>('trucking_vehicles'),
+        storageService.get<any[]>('trucking_drivers'),
+      ]);
+      
+      // CRITICAL: Extract array from storage wrapper if needed
+      const plansData = extractStorageValue(plansDataRaw);
+      const ordersData = extractStorageValue(ordersDataRaw);
+      const routesData = extractStorageValue(routesDataRaw);
+      const vehiclesData = extractStorageValue(vehiclesDataRaw);
+      const driversData = extractStorageValue(driversDataRaw);
+      
+      // Filter out deleted items menggunakan helper function
+      const activePlans = filterActiveItems(plansData);
+      const activeOrders = filterActiveItems(ordersData);
+      const activeRoutes = filterActiveItems(routesData);
+      const activeVehicles = filterActiveItems(vehiclesData);
+      const activeDrivers = filterActiveItems(driversData);
+      
+      setPlans(activePlans.map((p, idx) => ({ ...p, no: idx + 1 })));
+      setOrders(activeOrders.filter(o => o.status === 'Open'));
+      setRoutes(activeRoutes);
+      setVehicles(activeVehicles);
+      setDrivers(activeDrivers);
+    } catch (error: any) {
+      console.error('Error loading route planning data:', error);
+    }
   };
 
   const generatePlanNo = () => {
@@ -164,7 +185,7 @@ const RoutePlanning = () => {
               } as RoutePlan
             : p
         );
-        await storageService.set('Trucking_route_plans', updated);
+        await storageService.set('trucking_route_plans', updated);
         setPlans(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
       } else {
         const newPlan: RoutePlan = {
@@ -182,7 +203,7 @@ const RoutePlanning = () => {
           ...formData,
         } as RoutePlan;
         const updated = [...plans, newPlan];
-        await storageService.set('Trucking_route_plans', updated);
+        await storageService.set('trucking_route_plans', updated);
         setPlans(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
       }
       setShowForm(false);

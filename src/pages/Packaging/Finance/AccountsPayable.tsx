@@ -187,7 +187,6 @@ const AccountsPayable = () => {
       
       if (newEntries.length > 0) {
         await storageService.set('journalEntries', [...entriesArray, ...newEntries]);
-        console.log(`✅ Generated ${newEntries.length} journal entries from ${posToProcess.length} PO`);
         showAlert(
           `✅ Generated ${newEntries.length} journal entries dari ${posToProcess.length} Purchase Orders\n\n` +
           `PO yang diproses:\n${posToProcess.map(po => `- ${po.poNo} (Rp ${(po.total || 0).toLocaleString('id-ID')})`).join('\n')}`,
@@ -199,7 +198,6 @@ const AccountsPayable = () => {
         showAlert('No missing journal entries found. All PO already have journal entries.', 'Information');
       }
     } catch (error: any) {
-      console.error('❌ Error generating journal entries:', error);
       showAlert(`Error generating journal entries: ${error.message}`, 'Error');
     } finally {
       setLoading(false);
@@ -220,17 +218,10 @@ const AccountsPayable = () => {
       const pos = extractStorageValue(posRaw);
       const supp = extractStorageValue(suppRaw);
       
-      console.log(`📦 Loaded data:`, {
-        journalEntries: Array.isArray(entries) ? entries.length : 0,
-        purchaseOrders: Array.isArray(pos) ? pos.length : 0,
-        suppliers: Array.isArray(supp) ? supp.length : 0,
-      });
-      
       setJournalEntries(entries || []);
       setPurchaseOrders(pos || []);
       setSuppliers(supp || []);
     } catch (error: any) {
-      console.error('❌ Error loading data:', error);
       showAlert(`Error loading data: ${error.message}`, 'Error');
     } finally {
       setLoading(false);
@@ -273,8 +264,6 @@ const AccountsPayable = () => {
     // Ambil semua journal entries untuk account 2000 (Accounts Payable)
     const apEntries = journalEntries.filter((entry: JournalEntry) => entry.account === '2000');
     
-    console.log(`📋 Total AP journal entries: ${apEntries.length}`);
-    
     // Group by reference (PO No)
     const apByReference: Record<string, {
       reference: string;
@@ -316,8 +305,6 @@ const AccountsPayable = () => {
         apByReference[ref].descriptions.push(entry.description);
       }
     });
-    
-    console.log(`📋 Total AP references: ${Object.keys(apByReference).length}`);
     
     // Map ke format AP dengan data dari PO untuk supplier info
     return Object.values(apByReference)
@@ -387,8 +374,6 @@ const AccountsPayable = () => {
           status: item.balance > 0 ? 'OPEN' : 'CLOSE',
           description: item.descriptions.join('; '),
         };
-        
-        console.log(`📊 AP ${item.reference}: Credit=${item.totalCredit}, Debit=${item.totalDebit}, Balance=${item.balance}`);
         
         return result;
       })

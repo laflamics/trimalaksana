@@ -6,6 +6,8 @@
 export type SyncPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
 
+import { websocketClient } from './websocket-client';
+
 export interface SyncOperation {
   id: string;
   key: string;
@@ -63,30 +65,47 @@ class PackagingSync {
         this.emitStatusChange('idle');
       }
     } catch (error) {
-      console.error('[PackagingSync] Error checking initial sync status:', error);
     }
   }
 
   private initializeWebSocket() {
-    // WebSocket untuk real-time sync (optional)
+    // WebSocket untuk real-time sync (wajib untuk performa optimal)
     try {
-      const wsUrl = localStorage.getItem('websocket_url') || 'ws://localhost:3001/ws';
+      // Check if WebSocket is explicitly enabled
+      const wsEnabled = localStorage.getItem('websocket_enabled') === 'true';
+      if (!wsEnabled) {
+        // WebSocket disabled - use polling fallback silently
+        return;
+      }
+      
+      // Use fixed WebSocket URL
+      const wsUrl = 'ws://server-tljp.tail75a421.ts.net:8888/ws';
+      
       this.ws = new WebSocket(wsUrl);
       
       this.ws.onopen = () => {
-        console.log('[PackagingSync] WebSocket connected');
       };
       
       this.ws.onmessage = (event) => {
-        const message = JSON.parse(event.data);
-        this.handleWebSocketMessage(message);
+        try {
+          const message = JSON.parse(event.data);
+          this.handleWebSocketMessage(message);
+        } catch (e) {
+        }
       };
       
-      this.ws.onerror = () => {
-        console.warn('[PackagingSync] WebSocket connection failed, using polling fallback');
+      this.ws.onerror = (error) => {
+        // Silently handle WebSocket errors - polling will be used instead
+        this.ws = null;
+      };
+      
+      this.ws.onclose = () => {
+        // WebSocket closed - will use polling
+        this.ws = null;
       };
     } catch (error) {
-      console.warn('[PackagingSync] WebSocket not available, using polling fallback');
+      // Silently fail - polling will be used instead
+      this.ws = null;
     }
   }
 
@@ -148,7 +167,6 @@ class PackagingSync {
       // Handle direct array format (backward compatibility)
       return Array.isArray(parsed) ? parsed : [];
     } catch (error) {
-      console.error(`[PackagingSync] Error reading ${key}:`, error);
       return [];
     }
   }
@@ -188,7 +206,6 @@ class PackagingSync {
       if (!stored) return null;
       return JSON.parse(stored);
     } catch (error) {
-      console.error(`[PackagingSync] Error reading existing data for ${key}:`, error);
       return null;
     }
   }
@@ -213,23 +230,17 @@ class PackagingSync {
     const existingTimestamp = existingData.timestamp || 0;
     const newTimestamp = newData.timestamp || 0;
 
-    console.log(`[PackagingSync] Conflict detected for ${key}:`);
-    console.log(`  Existing: ${existingTimestamp} (${existingData.deviceId})`);
-    console.log(`  New: ${newTimestamp} (${newData.deviceId})`);
-
     // CRITICAL: Check for deletion conflicts
     const existingHasDeletions = this.hasDeletions(existingData.value);
     const newHasDeletions = this.hasDeletions(newData.value);
 
     if (existingHasDeletions || newHasDeletions) {
-      console.log(`[PackagingSync] Deletion conflict detected - applying deletion-aware resolution`);
       return await this.resolveDeletionConflicts(key, existingData, newData);
     }
 
     // Apply normal conflict resolution strategy based on data type
     const resolvedData = await this.applyConflictResolution(key, existingData, newData);
     
-    console.log(`[PackagingSync] Conflict resolved using strategy: ${resolvedData.conflictResolution}`);
     return resolvedData;
   }
 
@@ -248,10 +259,6 @@ class PackagingSync {
   private async resolveDeletionConflicts(key: string, existingData: any, newData: any): Promise<any> {
     const existingItems = Array.isArray(existingData.value) ? existingData.value : [];
     const newItems = Array.isArray(newData.value) ? newData.value : [];
-
-    console.log(`[PackagingSync] Resolving deletion conflicts for ${key}`);
-    console.log(`  Existing items: ${existingItems.length}`);
-    console.log(`  New items: ${newItems.length}`);
 
     // Create a map of all items by ID
     const itemMap = new Map<string, any>();
@@ -330,7 +337,6 @@ class PackagingSync {
 
     // Case 2: Only existing is deleted - deletion wins (tombstone preservation)
     if (existingDeleted && !newDeleted) {
-      console.log(`[PackagingSync] Preserving deletion for item ${this.getItemId(existingItem)}`);
       return {
         ...newItem, // Keep any updates
         deleted: true,
@@ -343,7 +349,6 @@ class PackagingSync {
 
     // Case 3: Only new is deleted - deletion wins
     if (!existingDeleted && newDeleted) {
-      console.log(`[PackagingSync] Applying deletion for item ${this.getItemId(newItem)}`);
       return newItem;
     }
 
@@ -396,7 +401,6 @@ class PackagingSync {
       };
     } else {
       // Keep existing data (it's newer)
-      console.log(`[PackagingSync] Keeping existing data - newer timestamp`);
       return existingData;
     }
   }
@@ -570,8 +574,6 @@ class PackagingSync {
     } else {
       this.syncQueue.splice(insertIndex, 0, operation);
     }
-    
-    console.log(`[PackagingSync] Queued ${priority} priority sync for ${key}`);
   }
 
   /**
@@ -684,8 +686,6 @@ class PackagingSync {
       // If queue is not empty, status will remain 'syncing' and processQueue will be called again
       
     } catch (error) {
-      console.error(`[PackagingSync] Sync failed for ${operation.key}:`, error);
-      
       if (operation.retryCount < this.maxRetries) {
         // Retry with exponential backoff
         operation.retryCount++;
@@ -698,7 +698,6 @@ class PackagingSync {
         
         this.retryTimeouts.set(operation.id, timeoutId);
       } else {
-        console.error(`[PackagingSync] Max retries exceeded for ${operation.key}`);
         this.syncStatus = 'error';
         this.emitStatusChange('error');
       }
@@ -715,52 +714,32 @@ class PackagingSync {
       return; // Skip server sync if not configured
     }
     
-    // Prepare sync payload with conflict resolution info
-    const syncPayload = {
-      data: operation.data,
-      timestamp: operation.timestamp,
-      deviceId: this.getDeviceId(),
-      conflictResolution: operation.metadata?.conflictResolution,
-      version: operation.metadata?.version,
-      previousVersion: operation.metadata?.previousVersion
-    };
-    
-    const response = await fetch(`${storageConfig.serverUrl}/api/storage/${operation.key}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Device-ID': this.getDeviceId(),
-        'X-Conflict-Resolution': operation.metadata?.conflictResolution || 'none'
-      },
-      body: JSON.stringify(syncPayload)
-    });
-    
-    if (!response.ok) {
-      // Check if it's a conflict error from server
-      if (response.status === 409) {
-        const serverData = await response.json();
-        console.log(`[PackagingSync] Server conflict detected for ${operation.key}`);
-        
-        // Handle server-side conflict
-        await this.handleServerConflict(operation, serverData);
-        return;
-      }
-      
-      throw new Error(`Server sync failed: ${response.statusText}`);
+    // Pakai WebSocket saja (lebih cepat, tidak pakai HTTP/Vercel)
+    const ready = await websocketClient.waitUntilReady(10000);
+    if (!ready) {
+      throw new Error('WebSocket not available. Please enable WebSocket in settings.');
     }
     
-    const result = await response.json();
-    console.log(`[PackagingSync] Successfully synced ${operation.key} to server`);
-    
-    // Update local data with server response if needed
-    if (result.resolvedData) {
-      localStorage.setItem(operation.key, JSON.stringify({
-        ...result.resolvedData,
-        synced: true,
-        serverTimestamp: result.serverTimestamp
-      }));
-      
-      this.emitStorageChange(operation.key, result.resolvedData.value);
+    try {
+      await websocketClient.post(operation.key, operation.data, operation.timestamp);
+    } catch (error: any) {
+      // Handle conflict atau error lainnya
+      if (error.message && error.message.includes('conflict')) {
+        // Try to get server data for conflict resolution
+        try {
+          // Wait until ready again for GET request
+          const getReady = await websocketClient.waitUntilReady(10000);
+          if (getReady) {
+            const serverData = await websocketClient.get(operation.key);
+            await this.handleServerConflict(operation, serverData);
+            return;
+          }
+          throw error;
+        } catch (getError) {
+          throw error;
+        }
+      }
+      throw error;
     }
   }
 
@@ -768,7 +747,6 @@ class PackagingSync {
    * Handle server-side conflicts
    */
   private async handleServerConflict(operation: SyncOperation, serverData: any): Promise<void> {
-    console.log(`[PackagingSync] Resolving server conflict for ${operation.key}`);
     
     // Get current local data
     const localData = this.getExistingData(operation.key);
@@ -810,7 +788,6 @@ class PackagingSync {
       try {
         listener(data);
       } catch (error) {
-        console.error('[PackagingSync] Listener error:', error);
       }
     });
     
@@ -829,7 +806,6 @@ class PackagingSync {
       try {
         listener(status);
       } catch (error) {
-        console.error('[PackagingSync] Status listener error:', error);
       }
     });
   }

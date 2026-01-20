@@ -304,11 +304,47 @@ const Payments = () => {
   };
 
   const loadPurchaseOrders = async () => {
-    const [poDataRaw, financeNotifDataRaw, grnDataRaw] = await Promise.all([
+    let [poDataRaw, financeNotifDataRaw, grnDataRaw] = await Promise.all([
       storageService.get<any[]>('gt_purchaseOrders') || [],
       storageService.get<any[]>('gt_financeNotifications') || [],
       storageService.get<any[]>('gt_grn') || [],
     ]);
+    
+    // Force reload finance notifications if undefined or very few detected
+    if (!financeNotifDataRaw || !Array.isArray(financeNotifDataRaw) || financeNotifDataRaw.length <= 1) {
+      const fileData = await storageService.forceReloadFromFile<any[]>('gt_financeNotifications');
+      if (fileData && Array.isArray(fileData)) {
+        financeNotifDataRaw = fileData;
+      } else {
+        // Fallback: try direct file read
+        try {
+          const directRead = await storageService.get<any[]>('gt_financeNotifications');
+          if (directRead && Array.isArray(directRead)) {
+            financeNotifDataRaw = directRead;
+          } else {
+            financeNotifDataRaw = [];
+          }
+        } catch (error) {
+          financeNotifDataRaw = [];
+        }
+      }
+    }
+    
+    // Force reload PO data if very few detected
+    if (Array.isArray(poDataRaw) && poDataRaw.length <= 1) {
+      const fileData = await storageService.forceReloadFromFile<any[]>('gt_purchaseOrders');
+      if (fileData && Array.isArray(fileData) && fileData.length > poDataRaw.length) {
+        poDataRaw = fileData;
+      }
+    }
+    
+    // Force reload GRN data if very few detected
+    if (Array.isArray(grnDataRaw) && grnDataRaw.length <= 1) {
+      const fileData = await storageService.forceReloadFromFile<any[]>('gt_grn');
+      if (fileData && Array.isArray(fileData) && fileData.length > grnDataRaw.length) {
+        grnDataRaw = fileData;
+      }
+    }
     
     // Filter out deleted items menggunakan helper function
     const poData = filterActiveItems(poDataRaw || []);
@@ -374,6 +410,7 @@ const Payments = () => {
     const pending = cleanedNotifs.filter((notif: any) =>
       notif.type === 'SUPPLIER_PAYMENT' && (notif.status || 'PENDING').toUpperCase() !== 'CLOSE'
     );
+    
     setPendingFinanceNotifications(pending);
     // Helper function untuk mendapatkan product name dari berbagai sumber
     const getProductNameFromNotification = async (notif: any, po: any): Promise<string> => {
@@ -622,7 +659,12 @@ const Payments = () => {
               }
               return n;
             });
-            await storageService.set('gt_financeNotifications', updatedNotifications);
+            // CRITICAL: Force immediate sync ke server untuk memastikan notifikasi di-close di device lain
+            await storageService.set('gt_financeNotifications', updatedNotifications, true);
+            
+            // CRITICAL: Reload notifications setelah update untuk refresh UI
+            // loadPurchaseOrders akan auto-cleanup notifications yang sudah CLOSE
+            await loadPurchaseOrders();
 
             // Cek apakah semua GRN untuk PO ini sudah dibayar
             const purchaseOrders = await storageService.get<any[]>('gt_purchaseOrders') || [];
@@ -671,9 +713,10 @@ const Payments = () => {
       setDebitAccountInputValue('');
       setCreditAccountInputValue('');
       setFormData({ paymentDate: new Date().toISOString().split('T')[0], type: 'Receipt', amount: 0, paymentMethod: 'Bank Transfer', debitAccount: '', creditAccount: '' });
+      // CRITICAL: Reload semua data termasuk notifications untuk refresh UI dan hapus notifikasi yang sudah CLOSE
       loadPayments();
       loadInvoices();
-      loadPurchaseOrders();
+      await loadPurchaseOrders(); // CRITICAL: Await untuk memastikan notifications di-reload dan di-cleanup
     } catch (error: any) {
       showAlert(`Error saving payment: ${error.message}`, 'Error');
     }

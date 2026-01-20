@@ -4,7 +4,8 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import Table from '../../../components/Table';
 import { storageService, BusinessType } from '../../../services/storage';
-import { safeDeleteMultipleItems, filterActiveItems } from '../../../utils/data-persistence-helper';
+import { deleteTruckingItem, deleteTruckingItems, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { useDialog } from '../../../hooks/useDialog';
 import { getCurrentUser, isDefaultAdmin } from '../../../utils/access-control-helper';
 import '../../Settings/UserControl.css';
 
@@ -343,6 +344,24 @@ const getMenuCount = (menuAccess: Record<BusinessId, string[]>) =>
 const USER_CONTROL_PIN_KEY = 'userControlPin';
 const DEFAULT_USER_CONTROL_PIN = '7777';
 
+// 🚀 FIX: Helper function to extract array from storage data (handle all formats)
+const extractUserArray = (data: any): UserAccess[] => {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  // Handle wrapped format {value: [...]}
+  if (data && typeof data === 'object' && 'value' in data) {
+    const value = (data as any).value;
+    if (Array.isArray(value)) return value;
+    if (!value || (typeof value === 'object' && Object.keys(value).length === 0)) return [];
+  }
+  // If it's an object but not array, return empty array
+  if (typeof data === 'object' && !Array.isArray(data)) {
+    console.warn('[Trucking UserControl] Data is object but not array, returning empty array:', data);
+    return [];
+  }
+  return [];
+};
+
 const UserControl = () => {
   const [users, setUsers] = useState<UserAccess[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -353,58 +372,16 @@ const UserControl = () => {
   const [currentBusinessUnit, setCurrentBusinessUnit] = useState<string>('');
   const [currentUserBusinessUnits, setCurrentUserBusinessUnits] = useState<BusinessId[]>([]);
   
-  // Custom Dialog state
-  const [dialogState, setDialogState] = useState<{
-    show: boolean;
-    type: 'alert' | 'confirm' | null;
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-  }>({
-    show: false,
-    type: null,
-    title: '',
-    message: '',
-  });
-
-  // Helper functions untuk dialog
+  // Custom Dialog - menggunakan hook terpusat
+  const { showAlert: showAlertBase, showConfirm: showConfirmBase, DialogComponent } = useDialog();
+  
+  // Wrapper untuk kompatibilitas dengan urutan parameter yang berbeda
   const showAlert = (message: string, title: string = 'Information') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'alert',
-      title,
-      message,
-    });
+    showAlertBase(message, title);
   };
-
+  
   const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'confirm',
-      title,
-      message,
-      onConfirm,
-      onCancel,
-    });
-  };
-
-  const closeDialog = () => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(false);
-    }
-    setDialogState({
-      show: false,
-      type: null,
-      title: '',
-      message: '',
-    });
+    showConfirmBase(message, onConfirm, onCancel, title);
   };
 
   const [selectedUser, setSelectedUser] = useState<UserAccess | null>(null);
@@ -419,33 +396,19 @@ const UserControl = () => {
     
     // Migration: Merge data from old business-specific keys if they exist
     const oldTruckingKey = 'trucking/trucking_userAccessControl';
-    let currentData = (await storageService.get<UserAccess[]>(storageKey)) || [];
-    let oldTruckingData = (await storageService.get<UserAccess[]>(oldTruckingKey)) || [];
+    const rawCurrentData = await storageService.get<UserAccess[]>(storageKey);
+    const rawOldTruckingData = await storageService.get<UserAccess[]>(oldTruckingKey);
     
-    // CRITICAL: Extract array from storage wrapper if needed
-    if (currentData && typeof currentData === 'object' && 'value' in currentData) {
-      currentData = (currentData as any).value || [];
-    }
-    if (oldTruckingData && typeof oldTruckingData === 'object' && 'value' in oldTruckingData) {
-      oldTruckingData = (oldTruckingData as any).value || [];
-    }
+    // 🚀 FIX: Extract array from storage wrapper with robust handling
+    const currentData = extractUserArray(rawCurrentData);
+    const oldTruckingData = extractUserArray(rawOldTruckingData);
     
     console.log(`[Trucking UserControl] Debug data loading:`);
     console.log(`- currentData (${storageKey}):`, currentData.length, 'users');
-    console.log(`- oldTruckingData (${oldTruckingKey}):`, Array.isArray(oldTruckingData) ? oldTruckingData.length : 'not array', 'users');
+    console.log(`- oldTruckingData (${oldTruckingKey}):`, oldTruckingData.length, 'users');
     
-    // Safety checks
-    if (!Array.isArray(currentData)) {
-      console.error('[Trucking UserControl] currentData is not an array:', currentData);
-    }
-    if (!Array.isArray(oldTruckingData)) {
-      console.error('[Trucking UserControl] oldTruckingData is not an array:', oldTruckingData);
-    }
-    
-    // CRITICAL: Combine all data sources first - ensure both are arrays
-    const safeCurrentData = Array.isArray(currentData) ? currentData : [];
-    const safeOldTruckingData = Array.isArray(oldTruckingData) ? oldTruckingData : [];
-    const allDataSources = [...safeCurrentData, ...safeOldTruckingData];
+    // CRITICAL: Combine all data sources - both are guaranteed to be arrays now
+    const allDataSources = [...currentData, ...oldTruckingData];
     
     // Merge: Combine data from old key and current key, deduplicate by ID
     // CRITICAL: Use Map to ensure ID uniqueness - last one wins if duplicate
@@ -521,6 +484,12 @@ const UserControl = () => {
       console.log(`[UserControl] Migrated ${oldTruckingData.length} users from ${oldTruckingKey} to ${storageKey}`);
     }
     
+    // CRITICAL: Ensure stored is always an array before filtering
+    if (!Array.isArray(stored)) {
+      console.error('[Trucking UserControl] stored is not an array after merge:', stored);
+      stored = [];
+    }
+    
     // Filter out deleted users for display using filterActiveItems helper
     const activeUsers = filterActiveItems(stored);
     setUsers(activeUsers);
@@ -569,7 +538,8 @@ const UserControl = () => {
       }
       
       // Get current user's business units from storage
-      const allUsers = await storageService.get<UserAccess[]>('userAccessControl') || [];
+      const rawAllUsers = await storageService.get<UserAccess[]>('userAccessControl');
+      const allUsers = extractUserArray(rawAllUsers);
       const currentUserData = allUsers.find(u => u.id === currentUser.id);
       // For Trucking UserControl, get all business units (not filtered) for proper filtering logic
       // Filter akan dilakukan di filteredUsers berdasarkan apakah user punya trucking atau tidak
@@ -705,7 +675,8 @@ const UserControl = () => {
     
     // If no business unit selected, check if user has access to any business unit
     if (!currentBusinessUnit) {
-      const users = await storageService.get<UserAccess[]>('userAccessControl') || [];
+      const rawUsers = await storageService.get<UserAccess[]>('userAccessControl');
+      const users = extractUserArray(rawUsers);
       const userData = users.find(u => u.id === currentUser.id);
       if (!userData || !userData.isActive || userData.deleted) return false;
       // If user has at least one business unit, allow edit (for Super Admin context)
@@ -713,7 +684,8 @@ const UserControl = () => {
     }
     
     // Check if user has access to User Control menu in current business unit
-    const users = await storageService.get<UserAccess[]>('userAccessControl') || [];
+    const rawUsers = await storageService.get<UserAccess[]>('userAccessControl');
+    const users = extractUserArray(rawUsers);
     const userData = users.find(u => u.id === currentUser.id);
     
     if (!userData || !userData.isActive || userData.deleted) return false;
@@ -832,7 +804,8 @@ const UserControl = () => {
         const storageKey = 'userAccessControl';
         
         // Use safe deletion pattern to prevent resurrection
-        const allUsers = (await storageService.get<UserAccess[]>(storageKey)) || [];
+        const rawAllUsers = await storageService.get<UserAccess[]>(storageKey);
+        const allUsers = extractUserArray(rawAllUsers);
         const updated = allUsers.map(u => 
           u.id === user.id 
             ? { ...u, deleted: true, deletedAt: new Date().toISOString(), deletedTimestamp: Date.now() }
@@ -881,14 +854,14 @@ const UserControl = () => {
       async () => {
         const storageKey = 'userAccessControl';
         
-        // Use safeDeleteMultipleItems for bulk delete with tombstone pattern
+        // Use deleteTruckingItems for bulk delete with tombstone pattern
         const userIds = Array.from(selectedUserIds);
-        const result = await safeDeleteMultipleItems(storageKey, userIds, 'id');
+        const result = await deleteTruckingItems(storageKey, userIds, 'id');
         
         if (result.failed > 0) {
-          showAlert(`Gagal menghapus ${result.failed} user. ${result.success} user berhasil dihapus.`, 'Warning');
+          showAlert(`⚠️ Gagal menghapus ${result.failed} user. ${result.success} user berhasil dihapus.\n\nErrors:\n${result.errors.join('\n')}`, 'Warning');
         } else {
-          showAlert(`Berhasil menghapus ${result.success} user.`, 'Success');
+          showAlert(`✅ Berhasil menghapus ${result.success} user dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
         }
         
         // Reload users to refresh display
@@ -897,7 +870,7 @@ const UserControl = () => {
         // Clear selection
         setSelectedUserIds(new Set());
         
-        console.log(`[UserControl] Bulk deleted ${result.success} users using tombstone pattern`);
+        console.log(`[Trucking UserControl] Bulk deleted ${result.success} users using tombstone pattern`);
       },
       undefined,
       'Confirm Bulk Delete'
@@ -1088,7 +1061,8 @@ const UserControl = () => {
     try {
       // CRITICAL: Load all users (including deleted) from storage to check for duplicates
       const storageKey = 'userAccessControl';
-      const allStoredUsers = (await storageService.get<UserAccess[]>(storageKey)) || [];
+      const rawAllStoredUsers = await storageService.get<UserAccess[]>(storageKey);
+      const allStoredUsers = extractUserArray(rawAllStoredUsers);
       
       const timestamp = new Date().toISOString();
       
@@ -1804,33 +1778,8 @@ const UserControl = () => {
         </div>
       )}
       {/* Custom Dialog */}
-      {dialogState.show && (
-        <div className="dialog-overlay" onClick={closeDialog}>
-          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
-            <Card className="dialog-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h2>{dialogState.title}</h2>
-                <Button variant="secondary" onClick={closeDialog} style={{ padding: '6px 12px' }}>✕</Button>
-              </div>
-              <p style={{ marginBottom: '20px', whiteSpace: 'pre-wrap' }}>{dialogState.message}</p>
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                {dialogState.type === 'confirm' && (
-                  <Button variant="secondary" onClick={closeDialog}>Cancel</Button>
-                )}
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    if (dialogState.onConfirm) dialogState.onConfirm();
-                    closeDialog();
-                  }}
-                >
-                  {dialogState.type === 'confirm' ? 'Confirm' : 'OK'}
-                </Button>
-              </div>
-            </Card>
-          </div>
-        </div>
-      )}
+      {/* Custom Dialog - menggunakan hook terpusat */}
+      <DialogComponent />
 
     </div>
   );

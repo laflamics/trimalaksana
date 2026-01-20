@@ -503,38 +503,58 @@ const Products = () => {
   };
 
   const handleDelete = async (item: Product) => {
-    // Cek apakah ada product turunan yang menggunakan product ini sebagai parent
-    const activeProducts = filterActiveItems(products);
-    const turunanProducts = activeProducts.filter(p => p.parentProductId === item.id);
-    if (turunanProducts.length > 0) {
-      showAlert(`Cannot delete product "${item.nama}" because it has ${turunanProducts.length} turunan product(s). Please delete the turunan products first.`, 'Error');
-      return;
-    }
-    
-    showConfirm(
-      `Are you sure you want to delete product "${item.nama}"? This action cannot be undone.`,
-      async () => {
-        try {
-          // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
-          const deleteResult = await deleteGTItem('gt_products', item.id, 'id');
-          
-          if (deleteResult.success) {
-            // Reload data dengan helper (handle race condition)
-            const activeProducts = await reloadGTData('gt_products', setProducts);
-            // Re-number products
-            setProducts(activeProducts.map((p, idx) => ({ ...p, no: idx + 1 })));
-            showAlert(`✅ Product "${item.nama}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
-          } else {
-            showAlert(`❌ Error deleting product "${item.nama}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+    try {
+      console.log('[GT Products] handleDelete called for:', item?.nama, item?.id);
+      
+      if (!item || !item.nama) {
+        showAlert('Product tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[GT Products] Product missing ID:', item);
+        showAlert(`❌ Error: Product "${item.nama}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      // Cek apakah ada product turunan yang menggunakan product ini sebagai parent
+      const activeProducts = filterActiveItems(products);
+      const turunanProducts = activeProducts.filter(p => p.parentProductId === item.id);
+      if (turunanProducts.length > 0) {
+        showAlert(`Cannot delete product "${item.nama}" because it has ${turunanProducts.length} turunan product(s). Please delete the turunan products first.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Product "${item.nama}"?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deleteGTItem('gt_products', item.id, 'id');
+            
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              const activeProducts = await reloadGTData('gt_products', setProducts);
+              // Re-number products
+              setProducts(activeProducts.map((p, idx) => ({ ...p, no: idx + 1 })));
+              showAlert(`✅ Product "${item.nama}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+            } else {
+              console.error('[GT Products] Delete failed:', deleteResult.error);
+              showAlert(`❌ Error deleting product "${item.nama}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[GT Products] Error deleting product:', error);
+            showAlert(`❌ Error deleting product: ${error.message}`, 'Error');
           }
-        } catch (error: any) {
-          console.error('[Products] Error in safe delete:', error);
-          showAlert(`❌ Error deleting product: ${error.message}`, 'Error');
-        }
-      },
-      undefined,
-      'Confirm Delete'
-    );
+        },
+        undefined,
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[GT Products] Error in handleDelete:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
   };
 
   const handleCreateTurunan = (parentProduct: Product) => {

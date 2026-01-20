@@ -71,27 +71,60 @@ const Finance = () => {
 
   useEffect(() => {
     loadData();
-    // Refresh setiap 2 detik untuk cek notifikasi baru
-    const interval = setInterval(loadData, 2000);
+    // Optimasi: Refresh setiap 30 detik untuk mengurangi bandwidth (sebelumnya 2 detik)
+    // Gunakan event-based updates untuk real-time changes
+    const interval = setInterval(loadData, 30000); // 30 detik - cukup untuk notifikasi
     return () => clearInterval(interval);
   }, []);
 
   const loadData = async () => {
-    // Load notifications dari GRN (Purchasing) - hanya yang masih OPEN (belum di-close)
-    const financeNotifications = await storageService.get<any[]>('financeNotifications') || [];
-    const pendingNotifications = financeNotifications.filter((n: any) => 
+    // Load notifications dari semua business context (Packaging, GT, Trucking)
+    const [packagingNotifications, gtNotifications, truckingNotifications] = await Promise.all([
+      storageService.get<any[]>('financeNotifications') || [],
+      storageService.get<any[]>('gt_financeNotifications') || [],
+      storageService.get<any[]>('trucking_financeNotifications') || []
+    ]);
+    
+    // Ensure all arrays are properly handled
+    const packagingArray = Array.isArray(packagingNotifications) ? packagingNotifications : [];
+    const gtArray = Array.isArray(gtNotifications) ? gtNotifications : [];
+    const truckingArray = Array.isArray(truckingNotifications) ? truckingNotifications : [];
+    
+    // Gabungkan semua notifikasi dari semua business context
+    const allNotifications = [
+      ...packagingArray,
+      ...gtArray,
+      ...truckingArray
+    ];
+    
+    const pendingNotifications = allNotifications.filter((n: any) => 
       (n.status === 'PENDING' || n.status === 'OPEN') && n.type === 'SUPPLIER_PAYMENT'
     );
     setNotifications(pendingNotifications);
 
-    // Load semua PO
-    const purchaseOrders = await storageService.get<any[]>('purchaseOrders') || [];
+    // Load semua PO dari semua business context
+    const [packagingPOs, gtPOs, truckingPOs] = await Promise.all([
+      storageService.get<any[]>('purchaseOrders') || [],
+      storageService.get<any[]>('gt_purchaseOrders') || [],
+      storageService.get<any[]>('trucking_purchaseOrders') || []
+    ]);
+    
+    // Ensure all arrays are properly handled
+    const packagingPOArray = Array.isArray(packagingPOs) ? packagingPOs : [];
+    const gtPOArray = Array.isArray(gtPOs) ? gtPOs : [];
+    const truckingPOArray = Array.isArray(truckingPOs) ? truckingPOs : [];
+    
+    const allPurchaseOrders = [
+      ...packagingPOArray,
+      ...gtPOArray,
+      ...truckingPOArray
+    ];
     
     // Gabungkan notifications dengan PO data untuk payment list
-    const allPayments = financeNotifications
+    const allPayments = allNotifications
       .filter((n: any) => n.type === 'SUPPLIER_PAYMENT')
       .map((n: any) => {
-        const po = purchaseOrders.find((p: any) => p.poNo === n.poNo);
+        const po = allPurchaseOrders.find((p: any) => p.poNo === n.poNo);
         const paymentStatus = ((n.status || 'PENDING').toUpperCase() === 'CLOSE') ? 'CLOSE' : 'OPEN';
         return {
           ...n,
@@ -101,17 +134,18 @@ const Finance = () => {
           total: n.total || po?.total || 0,
           status: po?.status || 'OPEN',
           paymentStatus,
-          materialItem: n.materialItem || po?.materialItem || '-',
+          materialItem: n.materialItem || po?.materialItem || po?.productItem || '-',
           qty: n.qty || po?.qty || 0,
           receiptDate: n.receivedDate || po?.receiptDate || '-',
           suratJalan: n.suratJalan,
           suratJalanName: n.suratJalanName,
           grnNo: n.grnNo,
+          businessContext: n.businessContext || (n.poNo?.includes('GT') ? 'GT' : (n.poNo?.includes('TR') ? 'Trucking' : 'Packaging')),
         };
       });
 
     // Jika ada PO yang sudah CLOSE tapi belum ada di notifications, tambahkan juga (untuk backward compatibility)
-    const poWithoutNotification = purchaseOrders
+    const poWithoutNotification = allPurchaseOrders
       .filter((po: any) => po.status === 'CLOSE' && !allPayments.find((p: any) => p.poNo === po.poNo))
       .map((po: any) => ({
         id: po.id,
@@ -121,6 +155,7 @@ const Finance = () => {
         total: po.total,
         status: po.status || 'CLOSE',
         paymentStatus: 'CLOSE',
+        businessContext: po.poNo?.includes('GT') ? 'GT' : (po.poNo?.includes('TR') ? 'Trucking' : 'Packaging'),
       }));
 
     const uniquePayments = [...allPayments, ...poWithoutNotification].filter((p, index, self) =>
@@ -139,8 +174,22 @@ const Finance = () => {
       `Mark payment for PO: ${item.poNo} as CLOSE?\n\nThis will close the PO.`,
       async () => {
         try {
-          // Update notification status to CLOSE (bukan PAID)
-          const financeNotifications = await storageService.get<any[]>('financeNotifications') || [];
+          // Determine business context from item
+          const businessContext = item.businessContext || (item.poNo?.includes('GT') ? 'GT' : (item.poNo?.includes('TR') ? 'Trucking' : 'Packaging'));
+          
+          // Update notification status to CLOSE in the correct business context
+          let financeNotificationsKey = 'financeNotifications';
+          let purchaseOrdersKey = 'purchaseOrders';
+          
+          if (businessContext === 'GT') {
+            financeNotificationsKey = 'gt_financeNotifications';
+            purchaseOrdersKey = 'gt_purchaseOrders';
+          } else if (businessContext === 'Trucking') {
+            financeNotificationsKey = 'trucking_financeNotifications';
+            purchaseOrdersKey = 'trucking_purchaseOrders';
+          }
+          
+          const financeNotifications = await storageService.get<any[]>(financeNotificationsKey) || [];
           // Ensure financeNotifications is always an array
           const financeNotificationsArray = Array.isArray(financeNotifications) ? financeNotifications : [];
           const updatedNotifications = financeNotificationsArray.map((n: any) =>
@@ -148,16 +197,16 @@ const Finance = () => {
               ? { ...n, status: 'CLOSE', paidAt: new Date().toISOString(), paymentProof, paymentProofName }
               : n
           );
-          await storageService.set('financeNotifications', updatedNotifications);
+          await storageService.set(financeNotificationsKey, updatedNotifications);
 
           // Update PO status to CLOSE setelah payment (ini trigger close PO)
-          const purchaseOrders = await storageService.get<any[]>('purchaseOrders') || [];
+          const purchaseOrders = await storageService.get<any[]>(purchaseOrdersKey) || [];
           // Ensure purchaseOrders is always an array
           const purchaseOrdersArray = Array.isArray(purchaseOrders) ? purchaseOrders : [];
           const updatedPOs = purchaseOrdersArray.map((po: any) =>
             po.poNo === item.poNo ? { ...po, status: 'CLOSE' as const } : po
           );
-          await storageService.set('purchaseOrders', updatedPOs);
+          await storageService.set(purchaseOrdersKey, updatedPOs);
 
           // Create payment record untuk AP tracking
           try {
@@ -281,26 +330,46 @@ const Finance = () => {
   };
 
   const handleDeleteExpense = async (item: any) => {
-    showConfirm(
-      `Delete expense: ${item.expenseNo}?`,
-      async () => {
-        try {
-          // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
-          const deleteResult = await deletePackagingItem('expenses', item.id, 'id');
-          if (deleteResult.success) {
-            // Reload data dengan helper (handle race condition)
-            await reloadPackagingData('expenses', setExpenses);
-            showAlert(`Expense ${item.expenseNo} deleted successfully`, 'Success');
-          } else {
-            showAlert(`Error deleting expense: ${deleteResult.error || 'Unknown error'}`, 'Error');
+    try {
+      console.log('[Finance] handleDeleteExpense called for:', item?.expenseNo, item?.id);
+      
+      if (!item || !item.expenseNo) {
+        showAlert('Expense tidak valid. Mohon coba lagi.', 'Error');
+        return;
+      }
+      
+      // Validate item.id exists
+      if (!item.id) {
+        console.error('[Finance] Expense missing ID:', item);
+        showAlert(`❌ Error: Expense ${item.expenseNo} tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
+      showConfirm(
+        `Hapus Expense ${item.expenseNo}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        async () => {
+          try {
+            // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
+            const deleteResult = await deletePackagingItem('expenses', item.id, 'id');
+            if (deleteResult.success) {
+              // Reload data dengan helper (handle race condition)
+              await reloadPackagingData('expenses', setExpenses);
+              showAlert(`Expense ${item.expenseNo} deleted successfully`, 'Success');
+            } else {
+              showAlert(`Error deleting expense: ${deleteResult.error || 'Unknown error'}`, 'Error');
+            }
+          } catch (error: any) {
+            console.error('[Finance] Error deleting expense:', error);
+            showAlert(`Error deleting expense: ${error.message}`, 'Error');
           }
-        } catch (error: any) {
-          showAlert(`Error deleting expense: ${error.message}`, 'Error');
-        }
-      },
-      undefined,
-      'Confirm Delete'
-    );
+        },
+        undefined,
+        'Safe Delete Confirmation'
+      );
+    } catch (error: any) {
+      console.error('[Finance] Error in handleDeleteExpense:', error);
+      showAlert(`Error: ${error.message}`, 'Error');
+    }
   };
 
   const tabs = [
@@ -316,6 +385,27 @@ const Finance = () => {
       render: (item: any) => <span style={{ color: '#ffffff' }}>{item.supplier}</span>
     },
     { key: 'soNo', header: 'SO No' },
+    {
+      key: 'businessContext',
+      header: 'Business',
+      render: (item: any) => {
+        const context = item.businessContext || 'Packaging';
+        const colors = {
+          'Packaging': '#2196F3',
+          'GT': '#4CAF50', 
+          'Trucking': '#FF9800'
+        };
+        return (
+          <span style={{ 
+            color: colors[context as keyof typeof colors] || '#2196F3',
+            fontWeight: '600',
+            fontSize: '11px'
+          }}>
+            {context}
+          </span>
+        );
+      },
+    },
     {
       key: 'total',
       header: 'Total',

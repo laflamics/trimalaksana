@@ -4,9 +4,9 @@ export default async function handler(req, res) {
   const method = req.method;
   console.log(`[${timestamp}] [Vercel Proxy] /api/storage/${key} - Method: ${method}`);
   
-  // Set CORS headers
+  // Set CORS headers - support all common HTTP methods
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
   // Handle preflight
@@ -44,6 +44,35 @@ export default async function handler(req, res) {
     }
   }
   
+  // Handle special operations (FLUSHALL, etc.)
+  if (key === 'FLUSHALL' || key === 'flushall') {
+    if (method === 'POST' || method === 'DELETE') {
+      try {
+        console.log(`[${timestamp}] [Vercel Proxy] FLUSHALL operation requested`);
+        const response = await fetch(`${serverUrl}/api/storage/FLUSHALL`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(req.body || {}),
+        });
+        
+        if (!response.ok) {
+          return res.status(response.status).json({ error: 'Server error' });
+        }
+        
+        const data = await response.json();
+        console.log(`[${timestamp}] [Vercel Proxy] FLUSHALL success`);
+        return res.json(data);
+      } catch (error) {
+        console.error(`[${timestamp}] [Vercel Proxy] FLUSHALL error:`, error.message);
+        return res.status(500).json({ error: error.message });
+      }
+    } else {
+      return res.status(405).json({ error: 'FLUSHALL only supports POST/DELETE' });
+    }
+  }
+  
   // Handle regular storage key operations
   try {
     // CRITICAL FIX: Encode key dengan / menjadi URL encoded untuk Express route
@@ -60,11 +89,23 @@ export default async function handler(req, res) {
           'Accept': 'application/json',
         },
       });
-    } else if (method === 'POST') {
+    } else if (method === 'POST' || method === 'PUT') {
+      // Handle both POST and PUT as POST to backend server
       const bodySize = JSON.stringify(req.body).length;
-      console.log(`[${timestamp}] [Vercel Proxy] POST storage key: ${key} (encoded: ${encodedKey}, ${(bodySize / 1024).toFixed(2)} KB)`);
+      console.log(`[${timestamp}] [Vercel Proxy] ${method} storage key: ${key} (encoded: ${encodedKey}, ${(bodySize / 1024).toFixed(2)} KB)`);
       response = await fetch(`${serverUrl}/api/storage/${encodedKey}`, {
-        method: 'POST',
+        method: 'POST', // Backend server uses POST for create/update
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(req.body),
+      });
+    } else if (method === 'PATCH') {
+      // Handle PATCH for partial updates
+      const bodySize = JSON.stringify(req.body).length;
+      console.log(`[${timestamp}] [Vercel Proxy] PATCH storage key: ${key} (encoded: ${encodedKey}, ${(bodySize / 1024).toFixed(2)} KB)`);
+      response = await fetch(`${serverUrl}/api/storage/${encodedKey}`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -79,7 +120,7 @@ export default async function handler(req, res) {
         },
       });
     } else {
-      return res.status(405).json({ error: 'Method not allowed' });
+      return res.status(405).json({ error: `Method ${method} not allowed. Supported: GET, POST, PUT, PATCH, DELETE` });
     }
     
     if (!response.ok) {
