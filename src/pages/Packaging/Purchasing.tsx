@@ -1718,7 +1718,7 @@ const Purchasing = () => {
           const bomList = extractStorageValue(await storageService.get<any[]>('bom'));
           const materialsList = extractStorageValue(await storageService.get<any[]>('materials'));
           
-          const productKey = normalizeKey(relatedSPK.product_id || relatedSPK.kode || '');
+          const productKey = normalizeKey(relatedSPK.kode || relatedSPK.product_id || '');
           const qtyNeeded = toNumber(relatedSPK.qty || 0);
           
           // Build material requirements dari BOM
@@ -1760,7 +1760,7 @@ const Purchasing = () => {
             soNo: relatedSPK.soNo || item.soNo || '',
             customer: relatedSPK.customer || '',
             product: relatedSPK.product || '',
-            productId: relatedSPK.product_id || relatedSPK.kode || '',
+            productId: relatedSPK.kode || relatedSPK.product_id || '',
             qty: relatedSPK.qty || 0,
             materialStatus: 'RECEIVED',
             status: 'READY_TO_PRODUCE',

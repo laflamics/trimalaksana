@@ -104,8 +104,8 @@ const Products = () => {
     
     console.log('[Products] 📊 Loaded data:', {
       products: data.length,
-      bomItems: bom.length,
-      bomSample: bom.slice(0, 3)
+      bom: bom ? bom.length : 0,
+      bomSample: bom ? bom.slice(0, 3) : []
     });
     
     // Update bomData (simple update, no comparison needed for now)
@@ -115,11 +115,13 @@ const Products = () => {
       firstFewIds: bom.slice(0, 5).map(b => b.product_id)
     });
     
-    // Ensure padCode is always present (even if empty string) for all products
+    // Ensure padCode and kode are always present for all products
     const productsWithPadCode = data.map((p, idx) => ({ 
       ...p, 
       no: idx + 1,
-      padCode: p.padCode !== undefined ? p.padCode : '' // Ensure padCode always exists
+      padCode: p.padCode !== undefined ? p.padCode : '', // Ensure padCode always exists
+      // Ensure kode is always present - use product_id if kode is empty
+      kode: p.kode || p.product_id || ''
     }));
     
     // Update products
@@ -299,55 +301,44 @@ const Products = () => {
   const bomProductIdsSet = useMemo(() => {
     console.log('[Products] 🔄 Creating bomProductIdsSet from bomData:', bomData.length);
     const bomDataArray = Array.isArray(bomData) ? bomData : [];
-    const setId = new Set<string>();
-    
-    // Helper function to normalize BOM product ID
-    const normalizeBomId = (id: string): string => {
-      if (!id) return '';
-      
-      let normalized = String(id).trim().toLowerCase();
-      
-      // Remove FG- prefix if exists
-      if (normalized.startsWith('fg-')) {
-        normalized = normalized.substring(3);
-      }
-      
-      // Remove customer code suffix but keep KRT-style codes intact
-      if (normalized.includes('-') && !normalized.match(/^[a-z]{3}-?\d{4,5}$/)) {
-        const parts = normalized.split('-');
-        if (parts.length > 1 && parts[parts.length - 1].match(/^[a-z]{3}\d{4,5}$/)) {
-          normalized = parts[parts.length - 1];
-        } else if (parts.length > 1 && parts[0].match(/^[a-z]{3}\d{4,5}$/)) {
-          normalized = parts[0];
-        }
-      }
-      
-      // Remove dashes for KRT codes
-      if (normalized.match(/^[a-z]{3}-\d{4,5}$/)) {
-        normalized = normalized.replace('-', '');
-      }
-      
-      return normalized;
-    };
+    const ids = new Set<string>();
     
     bomDataArray.forEach(b => {
-      if (b) {
-        const bomProductId = (b.product_id || b.padCode || b.kode || '').toString().trim();
-        if (bomProductId) {
-          const normalized = normalizeBomId(bomProductId);
-          if (normalized) {
-            setId.add(normalized);
-          }
+      const bomProductId = String(b.product_id || b.kode || '').trim().toLowerCase();
+      if (bomProductId) {
+        ids.add(bomProductId);
+        // Cross-reference: Tambahkan juga kode/kodeIpos/product_id/padCode dari produk yang match
+        const matchingProduct = products.find(p => {
+          if (!p) return false;
+          const pKode = String(p.kode || '').trim().toLowerCase();
+          const pKodeIpos = String(p.kodeIpos || '').trim().toLowerCase();
+          const pProductId = String(p.product_id || '').trim().toLowerCase();
+          const pPadCode = String(p.padCode || '').trim().toLowerCase();
+          
+          return (pKode && pKode === bomProductId) ||
+                 (pKodeIpos && pKodeIpos === bomProductId) ||
+                 (pProductId && pProductId === bomProductId) ||
+                 (pPadCode && pPadCode === bomProductId);
+        });
+        
+        if (matchingProduct) {
+          // Tambahkan semua ID dari produk yang match
+          if (matchingProduct.kode) ids.add(String(matchingProduct.kode).trim().toLowerCase());
+          if (matchingProduct.kodeIpos) ids.add(String(matchingProduct.kodeIpos).trim().toLowerCase());
+          if (matchingProduct.product_id) ids.add(String(matchingProduct.product_id).trim().toLowerCase());
+          if (matchingProduct.padCode) ids.add(String(matchingProduct.padCode).trim().toLowerCase());
         }
       }
     });
     
     console.log('[Products] ✅ bomProductIdsSet created:', {
-      size: setId.size,
-      ids: Array.from(setId).slice(0, 10)
+      size: ids.size,
+      bomDataLength: bomDataArray.length,
+      bomDataSample: bomDataArray.slice(0, 3),
+      ids: Array.from(ids).slice(0, 10)
     });
-    return setId;
-  }, [bomData]);
+    return ids;
+  }, [bomData, products]);
 
   // Helper function to normalize product ID for BOM matching
   const normalizeProductIdForBOM = useCallback((id: string): string => {
@@ -384,28 +375,25 @@ const Products = () => {
 
   // Optimize: Memoized hasBOM function dengan Set lookup (O(1) instead of O(n))
   const hasBOM = useCallback((product: Product): boolean => {
-    const rawProductId = (product.product_id || product.padCode || product.kode || '').toString().trim();
-    if (!rawProductId) return false;
+    const productId = (product.kode || product.product_id || '').toString().trim();
+    const result = bomProductIdsSet.has(productId.toLowerCase());
     
-    // Normalize product ID to handle FG prefix and customer codes
-    const normalizedProductId = normalizeProductIdForBOM(rawProductId);
-    if (!normalizedProductId) return false;
-    
-    const result = bomProductIdsSet.has(normalizedProductId);
-    
-    // Debug log for first few products only to avoid spam
+    // Debug log untuk first few products
     if (product.no <= 5) {
       console.log('[Products] 🔍 hasBOM check:', {
         productName: product.nama,
-        rawProductId: rawProductId,
-        normalizedProductId: normalizedProductId,
-        hasBOM: result,
-        bomSetSize: bomProductIdsSet.size
+        productKode: product.kode,
+        productProductId: product.product_id,
+        checkingId: productId,
+        checkingIdLower: productId.toLowerCase(),
+        bomSetSize: bomProductIdsSet.size,
+        bomSetIds: Array.from(bomProductIdsSet).slice(0, 10),
+        hasBOM: result
       });
     }
     
     return result;
-  }, [bomProductIdsSet, normalizeProductIdForBOM]);
+  }, [bomProductIdsSet]);
 
   // Helper function to check if product has customer and price
   const hasCustomerAndPrice = (product: Product): boolean => {
@@ -559,7 +547,7 @@ const Products = () => {
             const updatedProduct: Product = {
               id: editingItem.id,
               no: editingItem.no,
-              kode: formData.kode !== undefined && formData.kode !== null ? String(formData.kode).trim() : (p.kode || ''),
+              kode: productId || (p.kode || ''),
               nama: formData.nama !== undefined && formData.nama !== null ? String(formData.nama).trim() : (p.nama || ''),
               padCode: padCodeValue, // Always set padCode explicitly
               kodeIpos: kodeIposValue, // Always set kodeIpos explicitly
@@ -595,7 +583,7 @@ const Products = () => {
         const newProduct: Product = {
           id: Date.now().toString(),
           no: products.length + 1,
-          kode: formData.kode || '',
+          kode: productId || '',
           nama: formData.nama || '',
           padCode: padCodeValue, // Explicitly set padCode
           kodeIpos: kodeIposValue, // Explicitly set kodeIpos
@@ -1052,10 +1040,10 @@ Lanjutkan?`,
 
   const handleImportExcel = () => {
     // Show preview dialog dengan contoh header sebelum browse file
-    const exampleHeaders = ['product_id', 'Nama', 'Pad Code', 'Kode Ipos', 'Satuan', 'Kategori', 'Customer', 'Stock Aman', 'Stock Minimum', 'Harga FG'];
+    const exampleHeaders = ['No', 'KODE (SKU/ID)', 'Nama', 'Pad Code', 'Kode Ipos', 'Satuan', 'Kategori', 'Customer', 'Stock Aman', 'Stock Minimum', 'Harga FG', 'Last Update', 'User Update', 'Price Satuan', 'BOM Kode', 'Material Kode', 'Nama Material', 'Ratio'];
     const exampleData = [
-      { 'product_id': 'PRD-001', 'Nama': 'Product Example 1', 'Pad Code': 'PAD001', 'Kode Ipos': 'KRT00123', 'Satuan': 'PCS', 'Kategori': 'Product', 'Customer': 'Customer A', 'Stock Aman': '100', 'Stock Minimum': '50', 'Harga FG': '50000' },
-      { 'product_id': 'PRD-002', 'Nama': 'Product Example 2', 'Pad Code': 'PAD002', 'Kode Ipos': 'KRT00456', 'Satuan': 'BOX', 'Kategori': 'Product', 'Customer': 'Customer B', 'Stock Aman': '200', 'Stock Minimum': '100', 'Harga FG': '75000' },
+      { 'No': '1', 'KODE (SKU/ID)': 'PRD-001', 'Nama': 'Product Example 1', 'Pad Code': 'PAD001', 'Kode Ipos': 'KRT00123', 'Satuan': 'PCS', 'Kategori': 'Product', 'Customer': 'Customer A', 'Stock Aman': '100', 'Stock Minimum': '50', 'Harga FG': '50000', 'Last Update': '01/01/2026 10:00:00', 'User Update': 'System', 'Price Satuan': 'Rp 50.000', 'BOM Kode': 'MTRL-00001', 'Material Kode': 'MTRL-00001', 'Nama Material': 'Material 1', 'Ratio': '1' },
+      { 'No': '2', 'KODE (SKU/ID)': 'PRD-002', 'Nama': 'Product Example 2', 'Pad Code': 'PAD002', 'Kode Ipos': 'KRT00456', 'Satuan': 'BOX', 'Kategori': 'Product', 'Customer': 'Customer B', 'Stock Aman': '200', 'Stock Minimum': '100', 'Harga FG': '75000', 'Last Update': '01/01/2026 10:00:00', 'User Update': 'System', 'Price Satuan': 'Rp 75.000', 'BOM Kode': 'MTRL-00002', 'Material Kode': 'MTRL-00002', 'Nama Material': 'Material 2', 'Ratio': '0.5' },
     ];
     
     const showPreviewDialog = () => {
@@ -1121,7 +1109,7 @@ Klik "Download Template" untuk mendapatkan file Excel template, atau "Lanjutkan"
 
         jsonData.forEach((row, index) => {
           try {
-            const kode = mapColumn(row, ['Kode', 'KODE', 'Code', 'CODE', 'SKU', 'sku', 'Product Code', 'product_code']);
+            const kode = mapColumn(row, ['KODE (SKU/ID)', 'KODE', 'Kode', 'Code', 'CODE', 'SKU', 'sku', 'Product Code', 'product_code']);
             const nama = mapColumn(row, ['Nama', 'NAMA', 'Name', 'NAME', 'Product Name', 'product_name']);
             const padCode = mapColumn(row, ['Pad Code', 'PAD CODE', 'PadCode', 'pad_code', 'PAD', 'pad']);
             const kodeIpos = mapColumn(row, ['Kode Ipos', 'KODE IPOS', 'Kode IPOS', 'code_ipos', 'IPOS', 'kode ipos', 'code ipos']);
@@ -1131,6 +1119,13 @@ Klik "Download Template" untuk mendapatkan file Excel template, atau "Lanjutkan"
             const stockAmanStr = mapColumn(row, ['Stock Aman', 'STOCK AMAN', 'Safe Stock', 'safe_stock']);
             const stockMinimumStr = mapColumn(row, ['Stock Minimum', 'STOCK MINIMUM', 'Min Stock', 'min_stock']);
             const hargaFgStr = mapColumn(row, ['Harga FG', 'HARGA FG', 'Price', 'PRICE', 'Selling Price', 'selling_price']);
+            const lastUpdate = mapColumn(row, ['Last Update', 'LAST UPDATE', 'Update Date', 'update_date']);
+            const userUpdate = mapColumn(row, ['User Update', 'USER UPDATE', 'Updated By', 'updated_by']);
+            const priceSatuanStr = mapColumn(row, ['Price Satuan', 'PRICE SATUAN', 'Price', 'price']);
+            const bomKode = mapColumn(row, ['BOM Kode', 'BOM KODE', 'BOM', 'bom']);
+            const materialKode = mapColumn(row, ['Material Kode', 'MATERIAL KODE', 'Material', 'material']);
+            const namaMaterial = mapColumn(row, ['Nama Material', 'NAMA MATERIAL', 'Material Name', 'material_name']);
+            const ratio = mapColumn(row, ['Ratio', 'RATIO', 'Ratio Value', 'ratio_value']);
 
             // Skip empty rows
             if (!kode && !nama) {
@@ -1194,6 +1189,32 @@ Klik "Download Template" untuk mendapatkan file Excel template, atau "Lanjutkan"
             };
 
             const hargaFg = parseFloat(hargaFgStr) || 0;
+
+            // Parse Price Satuan (remove Rp and format)
+            let priceSatuan = hargaFg; // Default to hargaFg
+            if (priceSatuanStr) {
+              const cleanPrice = priceSatuanStr.replace(/[Rp\s.]/g, '').replace(',', '.');
+              priceSatuan = parseFloat(cleanPrice) || hargaFg;
+            }
+
+            // Parse BOM data
+            const bomItems: any[] = [];
+            if (bomKode && materialKode && namaMaterial && ratio) {
+              const bomKodes = bomKode.split(';').map(k => k.trim()).filter(k => k);
+              const materialKodes = materialKode.split(';').map(k => k.trim()).filter(k => k);
+              const namaMaterials = namaMaterial.split(';').map(n => n.trim()).filter(n => n);
+              const ratios = ratio.split(';').map(r => r.trim()).filter(r => r);
+              
+              // Create BOM items (use the shortest length to avoid index errors)
+              const maxLength = Math.min(bomKodes.length, materialKodes.length, namaMaterials.length, ratios.length);
+              for (let i = 0; i < maxLength; i++) {
+                bomItems.push({
+                  material_id: materialKodes[i] || bomKodes[i],
+                  material_name: namaMaterials[i],
+                  ratio: parseFloat(ratios[i]) || 1,
+                });
+              }
+            }
 
             // Check if product already exists dengan prioritas:
             // 1. Kode (exact match)
@@ -1333,8 +1354,10 @@ Klik "Download Template" untuk mendapatkan file Excel template, atau "Lanjutkan"
                 stockAman: stockAman > 0 ? stockAman : (existingProduct.stockAman || 0),
                 stockMinimum: stockMinimum > 0 ? stockMinimum : (existingProduct.stockMinimum || 0),
                 hargaFg: hargaFg > 0 ? hargaFg : (existingProduct.hargaFg || 0),
+                bom: bomItems.length > 0 ? bomItems : (existingProduct.bom || []),
+                product_id: kode && kode.trim() ? kode.trim() : (existingProduct.product_id || finalKode),
                 lastUpdate: new Date().toISOString(),
-                userUpdate: 'System',
+                userUpdate: userUpdate && userUpdate.trim() ? userUpdate.trim() : 'System',
                 ipAddress: '127.0.0.1',
               };
 
@@ -1368,8 +1391,10 @@ Klik "Download Template" untuk mendapatkan file Excel template, atau "Lanjutkan"
                 stockAman,
                 stockMinimum,
                 hargaFg,
+                bom: bomItems,
+                product_id: finalKode, // Gunakan finalKode untuk product_id juga
                 lastUpdate: new Date().toISOString(),
-                userUpdate: 'System',
+                userUpdate: userUpdate && userUpdate.trim() ? userUpdate.trim() : 'System',
                 ipAddress: '127.0.0.1',
               } as Product;
 
@@ -1662,11 +1687,58 @@ ${errors.slice(0, 5).join('\\n')}
     showPreviewDialog();
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     try {
-      const dataToExport = filteredProducts.map(product => ({
+      // Load materials from storage
+      const materialsData = await storageService.get<any[]>('materials') || [];
+      const materialMap = new Map<string, any>();
+      materialsData.forEach(material => {
+        if (material.material_id) {
+          materialMap.set(material.material_id, material);
+        }
+      });
+      
+      // Build lookup maps for BOM
+      const bomMap = new Map<string, any[]>();
+      
+      // Group BOM by product_id
+      bomData.forEach(bom => {
+        if (bom.product_id) {
+          if (!bomMap.has(bom.product_id)) {
+            bomMap.set(bom.product_id, []);
+          }
+          bomMap.get(bom.product_id)!.push(bom);
+        }
+      });
+      
+      const dataToExport = filteredProducts.map(product => {
+        // Ensure kode uses product_id if available
+        const kodeValue = product.kode || product.product_id || '';
+        
+        // Get BOM info for this product - check both inline BOM and external BOM
+        let productBom: any[] = [];
+        
+        // First check inline BOM (from product.bom)
+        if (product.bom && Array.isArray(product.bom) && product.bom.length > 0) {
+          productBom = product.bom;
+        }
+        // Then check external BOM from bomMap
+        else {
+          productBom = bomMap.get(kodeValue) || [];
+        }
+        
+        // Create separate BOM columns
+        const bomKode = productBom.length > 0 ? productBom.map(bom => bom.material_id).join('; ') : '';
+        const materialKode = productBom.length > 0 ? productBom.map(bom => bom.material_id).join('; ') : '';
+        const namaMaterial = productBom.length > 0 ? productBom.map(bom => {
+          const material = materialMap.get(bom.material_id);
+          return material ? material.nama : bom.material_id;
+        }).join('; ') : '';
+        const ratio = productBom.length > 0 ? productBom.map(bom => bom.ratio).join('; ') : '';
+        
+        return {
         'No': product.no,
-        'Kode': product.kode,
+        'KODE (SKU/ID)': kodeValue,
         'Nama': product.nama,
         'Pad Code': product.padCode || '',
         'Kode Ipos': product.kodeIpos || '',
@@ -1676,8 +1748,15 @@ ${errors.slice(0, 5).join('\\n')}
         'Stock Aman': product.stockAman || 0,
         'Stock Minimum': product.stockMinimum || 0,
         'Harga FG': product.hargaFg || 0,
-        'Last Update': product.lastUpdate ? new Date(product.lastUpdate).toLocaleString('id-ID') : '',
-      }));
+        'Last Update': formatDateTime(product.lastUpdate),
+        'User Update': product.userUpdate || 'System',
+        'Price Satuan': product.hargaFg ? `Rp ${product.hargaFg.toLocaleString('id-ID')}` : 'Rp 0',
+        'BOM Kode': bomKode,
+        'Material Kode': materialKode,
+        'Nama Material': namaMaterial,
+        'Ratio': ratio,
+        };
+      });
 
       const ws = XLSX.utils.json_to_sheet(dataToExport);
       const wb = XLSX.utils.book_new();

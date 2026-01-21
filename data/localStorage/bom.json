@@ -1,0 +1,440 @@
+{
+  "value": [
+    {
+      "id": "bom-1768981731748-v2h4vm1a8",
+      "product_id": "321",
+      "material_id": "MTRL-00828",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.629Z"
+    },
+    {
+      "id": "bom-1768981731748-sp8rt2nk1",
+      "product_id": "KRT04072",
+      "material_id": "MTRL-00003",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.629Z"
+    },
+    {
+      "id": "bom-1768981731748-g5duwj0oa",
+      "product_id": "KRT04072",
+      "material_id": "MTRL-00002",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.629Z"
+    },
+    {
+      "id": "bom-1768981731748-kibk27uqn",
+      "product_id": "KRT04173",
+      "material_id": "MTRL-00002",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.629Z"
+    },
+    {
+      "id": "bom-1768981731748-bk20hyz20",
+      "product_id": "KRT00248",
+      "material_id": "MTRL-00828",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.629Z"
+    },
+    {
+      "id": "bom-1768981731748-owppuc0h0",
+      "product_id": "KRT00199",
+      "material_id": "MTRL-00105",
+      "ratio": 1.25,
+      "created": "2026-01-21T07:41:22.629Z"
+    },
+    {
+      "id": "bom-1768981731748-4jr1ifzqf",
+      "product_id": "KRT02722",
+      "material_id": "MTRL-00167",
+      "ratio": 0.386,
+      "created": "2026-01-21T07:41:22.629Z"
+    },
+    {
+      "id": "bom-1768981731748-jvgkfhxvi",
+      "product_id": "KRT00189",
+      "material_id": "MTRL-00313",
+      "ratio": 0.4446,
+      "created": "2026-01-21T07:41:22.629Z"
+    },
+    {
+      "id": "bom-1768981731749-6dz3v0mna",
+      "product_id": "KRT01997",
+      "material_id": "MTRL-00007",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.629Z"
+    },
+    {
+      "id": "bom-1768981731749-i1au4krit",
+      "product_id": "KRT01844",
+      "material_id": "MTRL-00009",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.629Z"
+    },
+    {
+      "id": "bom-1768981731749-i0i5z0wjk",
+      "product_id": "KRT00273",
+      "material_id": "MTRL-00129",
+      "ratio": 0.342,
+      "created": "2026-01-21T07:41:22.629Z"
+    },
+    {
+      "id": "bom-1768981731749-yw65dhkjp",
+      "product_id": "KRT00273",
+      "material_id": "MTRL-00481",
+      "ratio": 1.08,
+      "created": "2026-01-21T07:41:22.629Z"
+    },
+    {
+      "id": "bom-1768981731749-6xpgntg4k",
+      "product_id": "KRT02567",
+      "material_id": "MTRL-00376",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731749-g01tdg74w",
+      "product_id": "KRT02170",
+      "material_id": "MTRL-00418",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731749-i4br9vrm9",
+      "product_id": "KRT01609",
+      "material_id": "MTRL-00316",
+      "ratio": 0.34083333000000005,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731749-0xgvik9zq",
+      "product_id": "KRT01220",
+      "material_id": "MTRL-00477",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731749-bu36e127b",
+      "product_id": "KRT01219",
+      "material_id": "MTRL-00138",
+      "ratio": 0.505,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731749-zx24fq629",
+      "product_id": "KRT01425",
+      "material_id": "MTRL-00151",
+      "ratio": 0.913043,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731749-7hcwni1ay",
+      "product_id": "KRT04156",
+      "material_id": "MTRL-00810",
+      "ratio": 1.25,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731749-it9ju8sfz",
+      "product_id": "KRT01135",
+      "material_id": "MTRL-00150",
+      "ratio": 0.34353332999999997,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731749-s0n4gdbxv",
+      "product_id": "KRT01212",
+      "material_id": "MTRL-00164",
+      "ratio": 0.961783,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731749-x4wk18nuq",
+      "product_id": "KRT01329",
+      "material_id": "MTRL-00149",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731749-v3lqcficu",
+      "product_id": "KRT03907",
+      "material_id": "MTRL-00566",
+      "ratio": 0.25,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731749-kjh71l501",
+      "product_id": "KRT02798",
+      "material_id": "MTRL-00009",
+      "ratio": 0.54569763,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731749-iz8yvrhzh",
+      "product_id": "KRT02798",
+      "material_id": "MTRL-00011",
+      "ratio": 1.25,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731749-ty8v1wvj4",
+      "product_id": "KRT02798",
+      "material_id": "MTRL-00008",
+      "ratio": 0.28005928999999996,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731749-4w7f94tvi",
+      "product_id": "KRT00023",
+      "material_id": "MTRL-00302",
+      "ratio": 1.25,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731749-on1rw7jtw",
+      "product_id": "KRT00023",
+      "material_id": "MTRL-00301",
+      "ratio": 0.575,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731749-oanjj62tg",
+      "product_id": "KRT00015",
+      "material_id": "MTRL-00010",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731749-jef1ekqvx",
+      "product_id": "KRT00134",
+      "material_id": "MTRL-00009",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731749-ger8sfdfw",
+      "product_id": "KRT00021",
+      "material_id": "MTRL-00303",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731749-i5ri4eumv",
+      "product_id": "KRT02811",
+      "material_id": "MTRL-00704",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731750-5t4fnje64",
+      "product_id": "KRT02657",
+      "material_id": "MTRL-00311",
+      "ratio": 0.763616,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731750-emyomln18",
+      "product_id": "KRT02815",
+      "material_id": "MTRL-00005",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731750-yqf7pzd7g",
+      "product_id": "KRT00137",
+      "material_id": "MTRL-00023",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.630Z"
+    },
+    {
+      "id": "bom-1768981731750-yfs4i86pt",
+      "product_id": "KRT00131",
+      "material_id": "MTRL-00024",
+      "ratio": 0.634,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-b6iaf1t2c",
+      "product_id": "KRT00147",
+      "material_id": "MTRL-00578",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-w8d8ez37x",
+      "product_id": "KRT00142",
+      "material_id": "MTRL-00104",
+      "ratio": 1.125,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-l3f8in97w",
+      "product_id": "KRT00097",
+      "material_id": "MTRL-00577",
+      "ratio": 0.25,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-ivo7adbfw",
+      "product_id": "KRT00179",
+      "material_id": "MTRL-00305",
+      "ratio": 0.5027948099999999,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-xe7qwra99",
+      "product_id": "KRT00180",
+      "material_id": "MTRL-00006",
+      "ratio": 0.504,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-ryul2r3nw",
+      "product_id": "KRT00392",
+      "material_id": "MTRL-00184",
+      "ratio": 1.25,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-6qsoi84py",
+      "product_id": "KRT00436",
+      "material_id": "MTRL-00379",
+      "ratio": 0.53125,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-7ochx35ro",
+      "product_id": "KRT04028",
+      "material_id": "MTRL-00115",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-sm0uku7ji",
+      "product_id": "KRT04028",
+      "material_id": "MTRL-00108",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-u028l7tuo",
+      "product_id": "KRT01732",
+      "material_id": "MTRL-00026",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-5lpsaseoa",
+      "product_id": "KRT01732",
+      "material_id": "MTRL-00202",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-vbfku2558",
+      "product_id": "KRT01733",
+      "material_id": "MTRL-00050",
+      "ratio": 0.67,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-uvwpja22t",
+      "product_id": "KRT01733",
+      "material_id": "MTRL-00049",
+      "ratio": 0.34,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-x6w971cq7",
+      "product_id": "KRT02613",
+      "material_id": "MTRL-00298",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-2yyi65v9u",
+      "product_id": "KRT00449",
+      "material_id": "MTRL-00137",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-b0xp5m3u7",
+      "product_id": "KRT03860",
+      "material_id": "MTRL-00543",
+      "ratio": 1.25,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-50i9qwp0h",
+      "product_id": "KRT00051",
+      "material_id": "MTRL-00065",
+      "ratio": 0.26081044,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-xtab9jzw5",
+      "product_id": "KRT00052",
+      "material_id": "MTRL-00535",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-o42xldc0n",
+      "product_id": "KRT00050",
+      "material_id": "MTRL-00523",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-ds1rxocty",
+      "product_id": "KRT01684",
+      "material_id": "MTRL-00201",
+      "ratio": 0.25940278,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-bfdy23lm1",
+      "product_id": "KRT02913",
+      "material_id": "MTRL-00261",
+      "ratio": 0.2,
+      "created": "2026-01-21T07:41:22.631Z"
+    },
+    {
+      "id": "bom-1768981731750-2fr43iqg1",
+      "product_id": "KRT02220",
+      "material_id": "MTRL-00324",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.632Z"
+    },
+    {
+      "id": "bom-1768981731750-pa63t7f99",
+      "product_id": "KRT00319",
+      "material_id": "MTRL-00319",
+      "ratio": 0.952444,
+      "created": "2026-01-21T07:41:22.632Z"
+    },
+    {
+      "id": "bom-1768981731750-4mtfxztg3",
+      "product_id": "KRT00319",
+      "material_id": "MTRL-00373",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.632Z"
+    },
+    {
+      "id": "bom-1768981731750-cdf48iqnv",
+      "product_id": "KRT00280",
+      "material_id": "MTRL-00090",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.632Z"
+    },
+    {
+      "id": "bom-1768981731750-sxuunol0t",
+      "product_id": "IMP03240",
+      "material_id": "MTRL-00828",
+      "ratio": 1,
+      "created": "2026-01-21T07:41:22.632Z"
+    }
+  ],
+  "timestamp": 1768981731756,
+  "_timestamp": 1768981731756
+}

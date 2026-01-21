@@ -1,6 +1,26 @@
 {
   "value": [
     {
+      "id": "log-1768980246812-l9g303",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/packaging/finance/reports",
+      "timestamp": "2026-01-21T07:24:06.812Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.86 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1768978397001-ew0rlr",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/packaging/finance/reports",
+      "timestamp": "2026-01-21T06:53:17.001Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.86 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
       "id": "log-1768889292551-i8z3lt",
       "userId": "default-admin",
       "username": "admin",
@@ -16379,6 +16399,6 @@
       "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.101 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
     }
   ],
-  "timestamp": 1768889292561,
-  "_timestamp": 1768889292561
+  "timestamp": 1768980246827,
+  "_timestamp": 1768980246827
 }

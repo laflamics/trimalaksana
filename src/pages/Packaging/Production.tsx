@@ -1872,8 +1872,9 @@ const Production = () => {
           if (productQty <= 0) continue;
           
           const productBOM = bomData.filter(b => {
-            const bomProductId = (b.product_id || b.kode || '').toString().trim();
-            return bomProductId === (productId || '').toString().trim();
+            const bomProductId = (b.product_id || b.kode || '').toString().trim().toLowerCase();
+            const searchProductId = (productId || '').toString().trim().toLowerCase();
+            return bomProductId === searchProductId;
           });
 
           productBOM.forEach((bom: any) => {
@@ -2195,8 +2196,9 @@ const Production = () => {
           const itemQty = parseFloat(soItem.qty || '0') || (qtyProduced / (so.items.length || 1));
           const productId = (soItem.productId || soItem.productKode || '').toString().trim();
           const productBOM = bomDataForFix.filter((b: any) => {
-            const bomProductId = (b.product_id || b.kode || '').toString().trim();
-            return bomProductId === productId;
+            const bomProductId = (b.product_id || b.kode || '').toString().trim().toLowerCase();
+            const searchProductId = productId.toLowerCase();
+            return bomProductId === searchProductId;
           });
 
           if (productBOM.length === 0) {
@@ -2748,8 +2750,9 @@ const Production = () => {
         
         // Load BOM untuk product ini
         const prodBOMRaw = bomData.filter((b: any) => {
-          const bomProductId = (b.product_id || b.kode || '').toString().trim();
-          return bomProductId === productId;
+          const bomProductId = (b.product_id || b.kode || '').toString().trim().toLowerCase();
+          const searchProductId = productId.toLowerCase();
+          return bomProductId === searchProductId;
         });
         
         // IMPORTANT: Deduplikasi BOM berdasarkan material_id dan enrich dengan override qty dari SPK
@@ -4302,8 +4305,9 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
 
       // Load BOM untuk product ini
       const spkBOMRaw = bomData.filter((b: any) => {
-        const bomProductId = (b.product_id || b.kode || '').toString().trim();
-        return bomProductId === productId;
+        const bomProductId = (b.product_id || b.kode || '').toString().trim().toLowerCase();
+        const searchProductId = productId.toLowerCase();
+        return bomProductId === searchProductId;
       });
       
       // IMPORTANT: Deduplikasi BOM berdasarkan material_id (jika ada duplikasi)
@@ -4742,8 +4746,9 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
     
     if (productId && !hasActualMaterials) {
       const spkBOM = bomData.filter((b: any) => {
-        const bomProductId = (b.product_id || b.kode || '').toString().trim();
-        return bomProductId === productId;
+        const bomProductId = (b.product_id || b.kode || '').toString().trim().toLowerCase();
+        const searchProductId = productId.toLowerCase();
+        return bomProductId === searchProductId;
       });
       
       // Cek stock untuk setiap material BOM (hanya untuk info, tidak block)

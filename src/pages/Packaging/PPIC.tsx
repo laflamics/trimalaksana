@@ -799,7 +799,7 @@ const PPIC = () => {
       if (spkQty <= 0) return s; // Skip jika qty 0
       
       // Cek product ID dari SPK
-      const spkProductId = (s.product_id || s.productId || s.kode || '').toString().trim();
+      const spkProductId = (s.kode || s.product_id || s.productId || '').toString().trim();
       if (!spkProductId) return s; // Skip jika tidak ada product ID
       
       // Cari product di inventory
@@ -830,7 +830,7 @@ const PPIC = () => {
       // Cek semua SPK lain yang menggunakan product yang sama dan belum di-close
       const otherSPKsWithSameProduct = (updatedSPK ? updatedSpkList : cleanedSpk).filter((otherSpk: any) => {
         const otherSpkNo = (otherSpk.spkNo || '').toString().trim();
-        const otherSpkProductId = (otherSpk.product_id || otherSpk.productId || otherSpk.kode || '').toString().trim();
+        const otherSpkProductId = (otherSpk.kode || otherSpk.product_id || otherSpk.productId || '').toString().trim();
         // Skip SPK ini sendiri
         if (otherSpkNo === currentSpkNo) return false;
         // Skip SPK yang sudah di-close
@@ -984,7 +984,7 @@ const PPIC = () => {
       if (!product) return p; // Skip jika product tidak ditemukan
       
       // Cari product di inventory menggunakan product_id atau kode
-      const productId = (product.product_id || product.kode || '').toString().trim();
+      const productId = (product.kode || product.product_id || '').toString().trim();
       if (!productId) return p; // Skip jika tidak ada product ID
       
       const inventoryItem = inventoryData.find((inv: any) => {
@@ -1535,7 +1535,7 @@ const PPIC = () => {
             soNo: schedule.soNo || assignedSPK?.soNo || '',
             customer: assignedSPK?.customer || '',
             poCustomer: schedule.soNo || assignedSPK?.soNo || '',
-            code: assignedSPK?.product_id || assignedSPK?.kode || '',
+            code: assignedSPK?.kode || assignedSPK?.product_id || '',
             item: assignedSPK?.product || '',
             quantity: batch.qty || 0,
             unit: assignedSPK?.unit || 'PCS',
@@ -1567,7 +1567,7 @@ const PPIC = () => {
             soNo: schedule.soNo || spk?.soNo || '',
             customer: spk?.customer || '',
             poCustomer: schedule.soNo || spk?.soNo || '',
-            code: spk?.product_id || spk?.kode || '',
+            code: spk?.kode || spk?.product_id || '',
             item: spk?.product || '',
             quantity: spk?.qty || 0,
             unit: spk?.unit || 'PCS',
@@ -1998,7 +1998,7 @@ const PPIC = () => {
               const hasSchedule = schedule && schedule.scheduleStartDate;
               
               // Cek BOM dan hitung kebutuhan material
-              const productId = (spk.product_id || spk.productId || spk.kode || spk.productKode || '').toString().trim();
+              const productId = (spk.kode || spk.product_id || spk.productId || spk.productKode || '').toString().trim();
               const productBOM = bomData.filter((b: any) => {
                 const bomProductId = String(b.product_id || b.kode || '').trim().toLowerCase();
                 const searchProductId = String(productId || '').trim().toLowerCase();
@@ -2745,7 +2745,7 @@ const PPIC = () => {
                   const hasSchedule = schedule && schedule.scheduleStartDate;
                   
                   // Cek BOM dan hitung kebutuhan material
-                  const productId = (spk.product_id || spk.productId || spk.kode || spk.productKode || '').toString().trim();
+                  const productId = (spk.kode || spk.product_id || spk.productId || spk.productKode || '').toString().trim();
                   const productBOM = bomData.filter((b: any) => {
                     const bomProductId = (b.product_id || b.kode || '').toString().trim();
                     if (!productId || !bomProductId) return false;
@@ -2799,7 +2799,7 @@ const PPIC = () => {
                     // Bukan batch SPK, hitung dari override jika ada
                     let calculatedOverrideQtyForMaterial: number | undefined = undefined;
                     if (Object.keys(spkBOMOverrideForMaterial).length > 0) {
-                      const productIdForMaterial = (spk.product_id || spk.kode || '').toString().trim();
+                      const productIdForMaterial = (spk.kode || spk.product_id || '').toString().trim();
                       const productBOMForMaterial = bomData.filter((b: any) => {
                         const bomProductId = (b.product_id || b.kode || '').toString().trim();
                         return bomProductId === productIdForMaterial;
@@ -3324,7 +3324,7 @@ const PPIC = () => {
           const hasSchedule = relatedSPK ? scheduleData.some((s: any) => s.spkNo === relatedSPK.spkNo) : false;
           
           // Cek BOM
-          const productId = relatedSPK ? ((relatedSPK.product_id || relatedSPK.productId || relatedSPK.kode || relatedSPK.productKode || '').toString().trim()) : '';
+          const productId = relatedSPK ? ((relatedSPK.kode || relatedSPK.product_id || relatedSPK.productId || relatedSPK.productKode || '').toString().trim()) : '';
           const productBOM = productId ? bomData.filter((b: any) => {
             const bomProductId = (b.product_id || b.kode || '').toString().trim();
             if (!productId || !bomProductId) return false;
@@ -3558,9 +3558,9 @@ const PPIC = () => {
         const prIsApproved = relatedPR && (relatedPR.status === 'APPROVED' || relatedPR.status === 'PO_CREATED');
         
         // Get padCode from product
-        const productId = spk.product_id || spk.kode || '';
+        const productId = spk.kode || spk.product_id || '';
         const masterProduct = products.find(p => 
-          (p.product_id || p.kode) === productId
+          (p.kode || p.product_id) === productId
         );
         const padCode = masterProduct?.padCode || '';
         
@@ -3569,7 +3569,7 @@ const PPIC = () => {
           soNo: group.soNo,
           customer: group.customer,
           spkNo: spk.spkNo || '-',
-          productCode: spk.product_id || spk.kode || '-',
+          productCode: spk.kode || spk.product_id || '-',
           product: spk.product || '-',
           padCode: padCode,
           qty: spk.qty || spk.target || 0,

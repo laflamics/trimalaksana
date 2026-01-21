@@ -793,6 +793,13 @@ const SalesOrders = () => {
   const loadBOM = async () => {
     const dataRaw = await storageService.get<any[]>('bom') || [];
     
+    console.log('[SalesOrders] 🔄 Loading BOM data...');
+    console.log('[SalesOrders] 📊 BOM raw data:', {
+      rawLength: dataRaw ? (Array.isArray(dataRaw) ? dataRaw.length : Object.keys(dataRaw).length) : 0,
+      isArray: Array.isArray(dataRaw),
+      hasValue: dataRaw && typeof dataRaw === 'object' && 'value' in dataRaw
+    });
+    
     // CRITICAL: Extract arrays from storage wrapper if needed
     const extractArray = (data: any): any[] => {
       if (!data) return [];
@@ -805,9 +812,19 @@ const SalesOrders = () => {
     
     const data = extractArray(dataRaw);
     
+    console.log('[SalesOrders] 📊 BOM extracted data:', {
+      extractedLength: data.length,
+      sample: data.slice(0, 3)
+    });
+    
     // CRITICAL: Filter deleted items using helper function
     const activeBOM = filterActiveItems(data);
     setBomData(activeBOM);
+    
+    console.log('[SalesOrders] 💾 BOM data set:', {
+      activeLength: activeBOM.length,
+      sampleIds: activeBOM.slice(0, 5).map(b => b.product_id)
+    });
   };
 
 
@@ -907,14 +924,37 @@ const SalesOrders = () => {
         }
       }
     });
+    
+    console.log('[SalesOrders] ✅ bomProductIds created:', {
+      size: ids.size,
+      bomDataLength: bomData.length,
+      bomDataSample: bomData.slice(0, 3),
+      ids: Array.from(ids).slice(0, 10)
+    });
     return ids;
-  }, [bomData]);
+  }, [bomData, products]);
 
   // TODO: Use this function to show BOM indicator in product lists
   // Check if product has BOM (optimized)
   const hasBOM = (product: Product): boolean => {
     const productId = (product.product_id || product.kode || '').toString().trim();
-    return bomProductIds.has(productId);
+    const result = bomProductIds.has(productId.toLowerCase());
+    
+    // Debug log untuk products dengan BOM yang mungkin
+    if (product.kode === 'KRT04173' || product.kode === 'KRT04072' || product.kode === '321') {
+      console.log('[SalesOrders] 🔍 hasBOM check:', {
+        productName: product.nama,
+        productKode: product.kode,
+        productProductId: product.product_id,
+        checkingId: productId,
+        checkingIdLower: productId.toLowerCase(),
+        bomSetSize: bomProductIds.size,
+        bomSetIds: Array.from(bomProductIds).slice(0, 10),
+        hasBOM: result
+      });
+    }
+    
+    return result;
   };
 
   // Filtered customers for quotation autocomplete
@@ -4493,7 +4533,7 @@ const SalesOrders = () => {
                       {filteredProductsForDialog.map(prod => {
                         const price = prod.hargaSales || prod.hargaFg || (prod as any).harga || 0;
                         const productId = (prod.kode || prod.product_id || '').toString().trim();
-                        const prodHasBOM = bomProductIds.has(productId);
+                        const prodHasBOM = bomProductIds.has(productId.toLowerCase());
                         const handleSelect = () => {
                           if (showProductDialog !== null) {
                             const index = showProductDialog;
