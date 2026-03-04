@@ -11,15 +11,11 @@ import {
   normalizePath,
   getUserAccessData
 } from '../../utils/access-control-helper';
+import { useLanguage } from '../../hooks/useLanguage';
 import '../../components/Layout.css';
 
 interface LayoutProps {
   children: React.ReactNode;
-}
-
-interface UserAccess {
-  id: string;
-  menuAccess?: Record<string, string[]>;
 }
 
 const GeneralTradingLayout = ({ children }: LayoutProps) => {
@@ -31,6 +27,7 @@ const GeneralTradingLayout = ({ children }: LayoutProps) => {
   const [userMenuAccess, setUserMenuAccess] = useState<Record<string, string[]> | null>(null);
   const [iconSrc, setIconSrc] = useState<string>('/noxtiz.ico');
   const [iconError, setIconError] = useState(false);
+  const { t } = useLanguage();
 
   useEffect(() => {
     // Sync theme dengan localStorage
@@ -145,39 +142,39 @@ const GeneralTradingLayout = ({ children }: LayoutProps) => {
     return () => window.removeEventListener('app-storage-changed', handleStorageChange as EventListener);
   }, []);
 
-  const menuItems = [
+  const menuItems = useMemo(() => [
     {
-      title: 'OVERVIEW',
+      title: t('common.info') || 'OVERVIEW',
       type: 'section',
       items: [
-        { title: 'Dashboard', path: '/general-trading/dashboard', icon: '📊' },
+        { title: t('packaging.dashboard') || 'Dashboard', path: '/general-trading/dashboard', icon: '📊' },
       ],
     },
     {
-      title: 'MASTER',
+      title: t('master.title') || 'MASTER',
       type: 'section',
       items: [
-        { title: 'Products', path: '/general-trading/master/products', icon: '📦' },
-        { title: 'Customers', path: '/general-trading/master/customers', icon: '👥' },
-        { title: 'Suppliers', path: '/general-trading/master/suppliers', icon: '🏭' },
-        { title: 'Inventory', path: '/general-trading/master/inventory', icon: '📊' },
+        { title: t('master.products') || 'Products', path: '/general-trading/master/products', icon: '📦' },
+        { title: t('master.customers') || 'Customers', path: '/general-trading/master/customers', icon: '👥' },
+        { title: t('master.suppliers') || 'Suppliers', path: '/general-trading/master/suppliers', icon: '🏭' },
+        { title: t('master.inventory') || 'Inventory', path: '/general-trading/master/inventory', icon: '📊' },
       ],
     },
     {
-      title: 'ORDERS & SALES',
+      title: t('salesOrder.title') || 'ORDERS & SALES',
       type: 'section',
       items: [
-        { title: 'Sales Orders', path: '/general-trading/orders/sales', icon: '📋' },
-        { title: 'PPIC', path: '/general-trading/ppic', icon: '📋' },
+        { title: t('salesOrder.title') || 'Sales Orders', path: '/general-trading/orders/sales', icon: '📋' },
+        { title: t('packaging.ppic') || 'PPIC', path: '/general-trading/ppic', icon: '📋' },
       ],
     },
     {
-      title: 'PURCHASING',
+      title: t('packaging.purchasing') || 'PURCHASING',
       type: 'section',
       items: [
-        { title: 'Purchasing', path: '/general-trading/purchasing', icon: '🛒' },
-        { title: 'Delivery Note', path: '/general-trading/delivery-note', icon: '🚚' },
-        { title: 'Return', path: '/general-trading/return', icon: '↩️' },
+        { title: t('packaging.purchasing') || 'Purchasing', path: '/general-trading/purchasing', icon: '🛒' },
+        { title: t('delivery.title') || 'Delivery Note', path: '/general-trading/delivery-note', icon: '🚚' },
+        { title: t('common.return') || 'Return', path: '/general-trading/return', icon: '↩️' },
       ],
     },
     {
@@ -188,31 +185,33 @@ const GeneralTradingLayout = ({ children }: LayoutProps) => {
       ],
     },
     {
-      title: 'FINANCE',
+      title: t('finance.title') || 'FINANCE',
       type: 'section',
       items: [
-        { title: 'Invoices', path: '/general-trading/finance/invoices', icon: '🧾' },
-        { title: 'Payments', path: '/general-trading/finance/payments', icon: '💳' },
-        { title: 'Accounting', path: '/general-trading/finance/accounting', icon: '💰' },
-        { title: 'General Ledger', path: '/general-trading/finance/ledger', icon: '📚' },
-        { title: 'Financial Reports', path: '/general-trading/finance/reports', icon: '📊' },
-        { title: 'Accounts Receivable', path: '/general-trading/finance/ar', icon: '📈' },
-        { title: 'Accounts Payable', path: '/general-trading/finance/ap', icon: '📉' },
-        { title: 'Tax Management', path: '/general-trading/finance/tax-management', icon: '🧾' },
+        { title: t('finance.invoices') || 'Invoices', path: '/general-trading/finance/invoices', icon: '🧾' },
+        { title: t('finance.payments') || 'Payments', path: '/general-trading/finance/payments', icon: '💳' },
+        { title: t('finance.reports') || 'Financial Reports', path: '/general-trading/finance/reports', icon: '📊' },
+        { title: t('finance.accountsReceivable') || 'Accounts Receivable', path: '/general-trading/finance/ar', icon: '📈' },
+        { title: t('finance.accountsPayable') || 'Accounts Payable', path: '/general-trading/finance/ap', icon: '📉' },
+        { title: t('finance.taxManagement') || 'Tax Management', path: '/general-trading/finance/tax-management', icon: '🧾' },
         { title: 'Cost Analysis', path: '/general-trading/finance/cost-analysis', icon: '💵' },
+        { title: 'Operational Expenses', path: '/general-trading/finance/operational-expenses', icon: '💸' },
+        { title: 'All Reports', path: '/general-trading/finance/all-reports', icon: '📋' },
       ],
     },
     {
-      title: 'SETTINGS',
+      title: t('settings.title') || 'SETTINGS',
       type: 'section',
       items: [
-        { title: 'Settings', path: '/general-trading/settings', icon: '⚙️' },
+        { title: t('settings.title') || 'Settings', path: '/general-trading/settings', icon: '⚙️' },
         { title: 'Report', path: '/general-trading/settings/report', icon: '📄' },
+        { title: 'Full Reports', path: '/general-trading/settings/full-reports', icon: '📊' },
         { title: 'DB Activity', path: '/general-trading/settings/db-activity', icon: '📝' },
         { title: 'User Control', path: '/general-trading/settings/user-control', icon: '👤' },
+        { title: 'Server Data', path: '/general-trading/settings/server-data', icon: '💾' },
       ],
     },
-  ];
+  ], [t]);
 
   // Normalize path for comparison (handle trailing slash and hash router)
   const isActive = (path: string) => {

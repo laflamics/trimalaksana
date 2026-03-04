@@ -3,17 +3,21 @@ import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
+import DateRangeFilter from '../../components/DateRangeFilter';
 import ScheduleTable from '../../components/ScheduleTable';
 import NotificationBell from '../../components/NotificationBell';
-import { storageService, extractStorageValue } from '../../services/storage';
+import { storageService, extractStorageValue, StorageKeys } from '../../services/storage';
 import { deleteGTItem, reloadGTData, filterActiveItems } from '../../utils/gt-delete-helper';
 import { generateSuratJalanHtml, generateGTDeliveryNoteHtml } from '../../pdf/suratjalan-pdf-template';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import { useDialog } from '../../hooks/useDialog';
+import { useLanguage } from '../../hooks/useLanguage';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
+import BlobService from '../../services/blob-service';
 import { PageSizeDialog, PageSize } from '../../components/PageSizeDialog';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
+import { loadProductsCache, getProductNameByCode, getProductByCode } from '../../utils/product-lookup-helper';
 import '../../styles/common.css';
 import '../../styles/compact.css';
 
@@ -39,10 +43,8 @@ export interface DeliveryNote {
   qty?: number; // Deprecated - use items instead
   items?: DeliveryNoteItem[]; // Array of products for this delivery (required for new format)
   status: 'DRAFT' | 'OPEN' | 'CLOSE';
-  signedDocument?: string; // Base64 untuk image, atau file:// path untuk PDF
-  signedDocumentPath?: string; // Path ke file PDF di file system
+  signedDocumentId?: string; // FileId stored on MinIO
   signedDocumentName?: string;
-  signedDocumentType?: 'pdf' | 'image'; // Tipe file: pdf atau image
   receivedDate?: string;
   driver?: string;
   vehicleNo?: string;
@@ -257,7 +259,7 @@ const DeliveryActionMenu = ({
               🖨️ Print
             </button>
           )}
-          {item.sjNo && item.status === 'OPEN' && !item.signedDocument && onUploadSignedDocument && (
+          {item.sjNo && item.status === 'OPEN' && !item.signedDocumentId && onUploadSignedDocument && (
             <button
               onClick={() => { onUploadSignedDocument(); setShowMenu(false); }}
               style={{
@@ -277,7 +279,7 @@ const DeliveryActionMenu = ({
               📎 Upload Signed
             </button>
           )}
-          {item.signedDocument && onViewSignedDocument && (
+          {item.signedDocumentId && onViewSignedDocument && (
             <button
               onClick={() => { onViewSignedDocument(); setShowMenu(false); }}
               style={{
@@ -297,7 +299,7 @@ const DeliveryActionMenu = ({
               👁️ View Signed SJ
             </button>
           )}
-          {item.signedDocument && onDownloadSignedDocument && (
+          {item.signedDocumentId && onDownloadSignedDocument && (
             <button
               onClick={() => { onDownloadSignedDocument(); setShowMenu(false); }}
               style={{
@@ -336,10 +338,19 @@ interface SalesOrder {
   id: string;
   soNo: string;
   customer: string;
+  customerAddress?: string; // Customer address from SO
   status: string;
+  poCustomerNo?: string;
+  customerKode?: string;
+  topDays?: number;
+  paymentTerms?: string;
   items?: Array<{
     itemSku?: string;
     qty?: string | number;
+    productName?: string;
+    productKode?: string;
+    price?: number;
+    unitPrice?: number;
   }>;
   specNote?: string;
   globalSpecNote?: string;
@@ -385,7 +396,7 @@ const DeliveryNote = () => {
   useEffect(() => {
     const loadSPKData = async () => {
       try {
-        const data = await storageService.get<any[]>('gt_spk') || [];
+        const data = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.SPK) || [];
         setSpkData(extractStorageValue(data));
       } catch (error) {
         console.error('Error loading SPK data:', error);
@@ -400,6 +411,8 @@ const DeliveryNote = () => {
   const [templateType, setTemplateType] = useState<'template1' | 'template2'>('template1');
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [deliveryViewMode, setDeliveryViewMode] = useState<'cards' | 'table'>('cards');
   const [customerInputValue, setCustomerInputValue] = useState('');
   const [soInputValue, setSoInputValue] = useState('');
@@ -457,7 +470,7 @@ const DeliveryNote = () => {
       const key = customEvent.detail?.key || '';
       
       // CRITICAL: Listen untuk gt_delivery changes (termasuk signed document upload)
-      if (key === 'gt_delivery' || key === 'general-trading/gt_delivery') {
+      if (key === StorageKeys.GENERAL_TRADING.DELIVERY || key === 'general-trading/' + StorageKeys.GENERAL_TRADING.DELIVERY) {
         // Skip jika sedang loading untuk prevent loop
         if (isLoading) return;
         
@@ -507,7 +520,7 @@ const DeliveryNote = () => {
 
   const loadScheduleData = async () => {
     // Load schedule data dari gt_schedule untuk ditampilkan di tab Schedule
-    const scheduleListRaw = await storageService.get<any[]>('gt_schedule') || [];
+    const scheduleListRaw = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.SCHEDULE) || [];
     // Filter out deleted items menggunakan helper function
     const activeScheduleList = filterActiveItems(scheduleListRaw);
     setScheduleData((prev: any[]) => {
@@ -519,7 +532,7 @@ const DeliveryNote = () => {
     });
     
     // Load SPK data untuk enrich schedule
-    const spkListRaw = await storageService.get<any[]>('gt_spk') || [];
+    const spkListRaw = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.SPK) || [];
     // Filter out deleted items menggunakan helper function
     const activeSpkList = filterActiveItems(spkListRaw);
     setSpkData((prev: any[]) => {
@@ -532,7 +545,7 @@ const DeliveryNote = () => {
   };
 
   const loadCustomers = async () => {
-    const dataRaw = await storageService.get<Customer[]>('gt_customers') || [];
+    const dataRaw = await storageService.get<Customer[]>(StorageKeys.GENERAL_TRADING.CUSTOMERS) || [];
     // Filter out deleted items menggunakan helper function
     const activeCustomers = filterActiveItems(dataRaw);
     setCustomers(activeCustomers);
@@ -659,14 +672,14 @@ const DeliveryNote = () => {
   };
 
   const loadProducts = async () => {
-    const dataRaw = await storageService.get<any[]>('gt_products') || [];
+    const dataRaw = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PRODUCTS) || [];
     // Filter out deleted items menggunakan helper function
     const activeProducts = filterActiveItems(dataRaw);
     setProducts(activeProducts);
   };
 
   const loadSalesOrders = async () => {
-    const dataRaw = await storageService.get<SalesOrder[]>('gt_salesOrders') || [];
+    const dataRaw = await storageService.get<SalesOrder[]>(StorageKeys.GENERAL_TRADING.SALES_ORDERS) || [];
     // Filter out deleted items menggunakan helper function
     const activeSalesOrders = filterActiveItems(dataRaw);
     // Filter by status
@@ -727,7 +740,7 @@ const DeliveryNote = () => {
 
   const loadDeliveries = async () => {
     // CRITICAL: Extract dengan proper extraction untuk handle nested structure
-    const dataRaw = await storageService.get<DeliveryNote[]>('gt_delivery') || [];
+    const dataRaw = await storageService.get<DeliveryNote[]>(StorageKeys.GENERAL_TRADING.DELIVERY) || [];
     let data = extractStorageValue(dataRaw) || [];
     
     // CRITICAL: Ensure data is always an array
@@ -739,21 +752,19 @@ const DeliveryNote = () => {
     const activeData = filterActiveItems(data);
     setDeliveries((prev: DeliveryNote[]) => {
       // Optimize: hanya update jika data benar-benar berubah
-      // CRITICAL: Compare dengan signedDocument dan signedDocumentPath untuk detect changes
+      // CRITICAL: Compare dengan signedDocumentId dan signedDocumentName untuk detect changes
       const prevStr = JSON.stringify(prev.map(d => ({
         id: d.id,
         sjNo: d.sjNo,
         status: d.status,
-        signedDocument: d.signedDocument ? 'hasSignedDoc' : null,
-        signedDocumentPath: d.signedDocumentPath,
+        signedDocumentId: d.signedDocumentId ? 'hasSignedDoc' : null,
         signedDocumentName: d.signedDocumentName
       })));
       const activeStr = JSON.stringify(activeData.map(d => ({
         id: d.id,
         sjNo: d.sjNo,
         status: d.status,
-        signedDocument: d.signedDocument ? 'hasSignedDoc' : null,
-        signedDocumentPath: d.signedDocumentPath,
+        signedDocumentId: d.signedDocumentId ? 'hasSignedDoc' : null,
         signedDocumentName: d.signedDocumentName
       })));
       if (prevStr === activeStr && prev.length === activeData.length) {
@@ -774,10 +785,11 @@ const DeliveryNote = () => {
     try {
       // GT: Load notifications dari Sales Orders (untuk outstanding delivery)
       // IMPORTANT: Hanya load dari gt_deliveryNotifications (GT), jangan dari deliveryNotifications (packaging)
-      const deliveryNotificationsRaw = await storageService.get<any[]>('gt_deliveryNotifications') || [];
+      const deliveryNotificationsRaw = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.DELIVERY_NOTIFICATIONS) || [];
+      console.log(`[DeliveryNote] Loaded ${deliveryNotificationsRaw.length} notifications from storage`);
     
     // Load SPK data untuk validasi notification dari PPIC
-    const currentSpkDataRaw = await storageService.get<any[]>('gt_spk') || [];
+    const currentSpkDataRaw = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.SPK) || [];
     // Filter out deleted items menggunakan helper function
     const currentSpkData = filterActiveItems(currentSpkDataRaw);
     
@@ -860,7 +872,7 @@ const DeliveryNote = () => {
     });
     
     // Load deliveries untuk cek apakah sudah dibuat
-    const currentDeliveriesRaw = await storageService.get<any[]>('gt_delivery') || [];
+    const currentDeliveriesRaw = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.DELIVERY) || [];
     // Filter out deleted items menggunakan helper function
     const currentDeliveries = filterActiveItems(currentDeliveriesRaw);
     
@@ -1013,7 +1025,14 @@ const DeliveryNote = () => {
     const updatedNotificationsWithStatus = updatedNotifications.map((notif: any) => {
       // Helper function untuk cek delivery
       const checkDelivery = (n: any) => {
-        const spkList = n.spkNos || (n.spkNo ? [n.spkNo] : []);
+        // Ensure spkList is always an array
+        let spkList: string[] = [];
+        if (Array.isArray(n.spkNos)) {
+          spkList = n.spkNos;
+        } else if (n.spkNo) {
+          spkList = [n.spkNo];
+        }
+        
         // Filter active deliveries menggunakan helper function
         const activeDeliveries = filterActiveItems(currentDeliveries);
         return activeDeliveries.find((d: any) => {
@@ -1108,7 +1127,7 @@ const DeliveryNote = () => {
       // Non-blocking update untuk mencegah blocking UI dan infinite loop
       // CRITICAL: Force sync ke server untuk update notification (POST/PUT/DELETE)
       setTimeout(async () => {
-        await storageService.set('gt_deliveryNotifications', cleanedNotifications, true);
+        await storageService.set(StorageKeys.GENERAL_TRADING.DELIVERY_NOTIFICATIONS, cleanedNotifications, true);
       }, 1000); // Debounce 1 detik untuk mencegah update terlalu sering
     }
     
@@ -1137,13 +1156,19 @@ const DeliveryNote = () => {
   // IMPORTANT: SPK itu 1 product 1, jadi tidak boleh gabung quantity karena beda produk
   const groupNotificationsByDelivery = async (notifications: any[]) => {
     // Load schedule untuk mendapatkan sjGroupId
-    const scheduleList = await storageService.get<any[]>('gt_schedule') || [];
+    const scheduleList = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.SCHEDULE) || [];
     
     // Note: matchSPK helper function sudah didefinisikan di component scope
     
     // Enrich setiap notification dengan sjGroupId dari schedule
     const enrichedNotifications = notifications.map((notif: any) => {
-      const spkList = notif.spkNos || (notif.spkNo ? [notif.spkNo] : []);
+      // Ensure spkList is always an array
+      let spkList: string[] = [];
+      if (Array.isArray(notif.spkNos)) {
+        spkList = notif.spkNos;
+      } else if (notif.spkNo) {
+        spkList = [notif.spkNo];
+      }
       
       // Cari schedule yang match dengan SPK dari notification
       const relatedSchedule = scheduleList.find((s: any) => {
@@ -1264,8 +1289,8 @@ const DeliveryNote = () => {
   // Update inventory saat delivery note dibuat - TAMBAHKAN OUTGOING untuk product
   const updateInventoryFromDelivery = async (delivery: DeliveryNote) => {
     try {
-      const inventory = await storageService.get<any[]>('gt_inventory') || [];
-      const productsList = await storageService.get<any[]>('gt_products') || [];
+      const inventory = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.INVENTORY) || [];
+      const productsList = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PRODUCTS) || [];
       
       // Process items (new format) atau single product (old format)
       const itemsToProcess = delivery.items && delivery.items.length > 0
@@ -1378,7 +1403,7 @@ const DeliveryNote = () => {
       }
 
       // Save updated inventory
-      await storageService.set('gt_inventory', inventory);
+      await storageService.set(StorageKeys.GENERAL_TRADING.INVENTORY, inventory);
     } catch (error: any) {
       console.error('❌ [Delivery Inventory] Error updating inventory from delivery:', error);
       showAlert('Error', `Error updating inventory: ${error.message}`);
@@ -1625,8 +1650,44 @@ const DeliveryNote = () => {
         deliveryDate: formData.deliveryDate || undefined,
       };
       const updated = [...deliveries, newDelivery];
-      await storageService.set('gt_delivery', updated);
-      setDeliveries(updated);
+      await storageService.set(StorageKeys.GENERAL_TRADING.DELIVERY, updated);
+      
+      // CRITICAL: Jangan panggil setDeliveries() di sini!
+      // storageService.set() akan trigger event listener yang akan call loadDeliveries()
+      // Memanggil setDeliveries() langsung akan menyebabkan double update dan refresh berkali-kali
+
+      // Create invoice notification untuk Accounting - Customer Invoice
+      try {
+        const invoiceNotifications = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.INVOICE_NOTIFICATIONS) || [];
+        const so = salesOrders.find((s: any) => s.soNo === formData.soNo);
+        const poCustomerNo = so?.poCustomerNo || so?.soNo || '-';
+        
+        // Check if notification already exists
+        const invoiceNotificationsArray = Array.isArray(invoiceNotifications) ? invoiceNotifications : [];
+        const existingInvoiceNotif = invoiceNotificationsArray.find((n: any) => 
+          n.sjNo === newDelivery.sjNo && n.type === 'CUSTOMER_INVOICE'
+        );
+        
+        if (!existingInvoiceNotif) {
+          const newInvoiceNotification = {
+            id: `invoice-${Date.now()}-${newDelivery.sjNo}`,
+            type: 'CUSTOMER_INVOICE',
+            sjNo: newDelivery.sjNo,
+            soNo: newDelivery.soNo,
+            poCustomerNo: poCustomerNo,
+            spkNos: deliveryItems.map((item: any) => item.spkNo).filter((spk: string) => spk).join(', '),
+            customer: newDelivery.customer,
+            customerKode: so?.customerKode || '',
+            items: deliveryItems,
+            totalQty: deliveryItems.reduce((sum: number, itm: any) => sum + (itm.qty || 0), 0),
+            status: 'PENDING',
+            created: new Date().toISOString(),
+          };
+          await storageService.set(StorageKeys.GENERAL_TRADING.INVOICE_NOTIFICATIONS, [...invoiceNotifications, newInvoiceNotification], true);
+        }
+      } catch (error: any) {
+        console.error('Error creating invoice notification:', error);
+      }
 
       // Update inventory - TAMBAHKAN OUTGOING untuk product yang dikirim
       try {
@@ -1662,8 +1723,12 @@ const DeliveryNote = () => {
           const updated = deliveries.map(d =>
             d.id === item.id ? { ...d, sjNo: sjNo, status: 'OPEN' as const } : d
           );
-          await storageService.set('gt_delivery', updated);
-          setDeliveries(updated);
+          await storageService.set(StorageKeys.GENERAL_TRADING.DELIVERY, updated);
+          
+          // CRITICAL: Jangan panggil setDeliveries() di sini!
+          // storageService.set() akan trigger event listener yang akan call loadDeliveries()
+          // Memanggil setDeliveries() langsung akan menyebabkan double update dan refresh berkali-kali
+          
           showAlert('Success', 'Surat Jalan generated');
         } catch (error: any) {
           showAlert('Error', `Error generating SJ: ${error.message}`);
@@ -1698,18 +1763,17 @@ const DeliveryNote = () => {
         async () => {
           try {
             // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
-            const deleteResult = await deleteGTItem('gt_delivery', item.id, 'id');
+            const deleteResult = await deleteGTItem(StorageKeys.GENERAL_TRADING.DELIVERY, item.id, 'id');
             
             if (deleteResult.success) {
               // Reload data dengan helper (handle race condition)
-              const activeDeliveries = await reloadGTData('gt_delivery', setDeliveries);
+              const activeDeliveries = await reloadGTData(StorageKeys.GENERAL_TRADING.DELIVERY, setDeliveries);
               setDeliveries(activeDeliveries);
               
-              // Reload deliveries untuk update UI
-              await loadDeliveries();
-              
-              // Reload notifications untuk update status (kembali ke READY_TO_SHIP jika delivery dihapus)
-              await loadNotifications();
+              // CRITICAL: Jangan panggil loadDeliveries() dan loadNotifications() di sini!
+              // setDeliveries() sudah update state
+              // Event listener akan auto-trigger jika ada perubahan dari storage
+              // Memanggil load functions hanya akan reload ulang semua data dan menyebabkan notifikasi flickering
               
               showAlert(`✅ Delivery Note ${item.sjNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
             } else {
@@ -1729,57 +1793,17 @@ const DeliveryNote = () => {
   };
 
   const handleViewSignedDocument = async (item: DeliveryNote) => {
-    if (!item.signedDocument && !item.signedDocumentPath) {
+    if (!item.signedDocumentId) {
       showAlert('Error', 'No signed document available');
       return;
     }
 
     try {
-      const fileName = item.signedDocumentName || '';
-      let signedDocument = item.signedDocument || '';
+      const fileName = item.signedDocumentName || 'document';
+      const isPDF = fileName.toLowerCase().endsWith('.pdf');
       
-      // Jika file disimpan sebagai path (PDF yang besar), load dari file system
-      if (item.signedDocumentPath) {
-        const electronAPI = (window as any).electronAPI;
-        if (electronAPI && typeof electronAPI.loadUploadedFile === 'function') {
-          try {
-            const result = await electronAPI.loadUploadedFile(item.signedDocumentPath);
-            if (result && result.success) {
-              signedDocument = result.data || '';
-            } else {
-              throw new Error(result?.error || 'Failed to load file from file system');
-            }
-          } catch (loadError: any) {
-            showAlert('Error', `Gagal memuat file: ${loadError.message}`);
-            return;
-          }
-        } else {
-          showAlert('Error', 'File disimpan sebagai file system, tetapi Electron API tidak tersedia.');
-          return;
-        }
-      }
-      
-      if (!signedDocument) {
-        showAlert('Error', 'No document data available');
-        return;
-      }
-      
-      // Deteksi tipe file
-      const isPDF = fileName.toLowerCase().endsWith('.pdf') || 
-                    signedDocument.startsWith('data:application/pdf') ||
-                    item.signedDocumentType === 'pdf' ||
-                    (signedDocument.length > 100 && signedDocument.substring(0, 100).includes('JVBERi0')); // PDF magic bytes
-      
-      // Normalize data URI format
-      if (!signedDocument.startsWith('data:')) {
-        // Assume it's base64, need to determine MIME type
-        if (isPDF) {
-          signedDocument = `data:application/pdf;base64,${signedDocument}`;
-        } else {
-          // Assume image
-          signedDocument = `data:image/jpeg;base64,${signedDocument}`;
-        }
-      }
+      // Get download URL from BlobService
+      const url = BlobService.getDownloadUrl(item.signedDocumentId, 'general-trading');
       
       // Untuk PDF, langsung download saja (lebih reliable)
       if (isPDF) {
@@ -1815,8 +1839,8 @@ const DeliveryNote = () => {
               </style>
             </head>
             <body>
-            <img src="${signedDocument}" alt="${item.signedDocumentName || 'Signed Document'}" 
-                 onerror="this.parentElement.innerHTML='<div style=\\'padding:20px;text-align:center;\\'><p>Error loading image</p><p>Document length: ${signedDocument.length} chars</p></div>';" />
+            <img src="${url}" alt="${item.signedDocumentName || 'Signed Document'}" 
+                 onerror="this.parentElement.innerHTML='<div style=\\'padding:20px;text-align:center;\\'><p>Error loading image</p></div>';" />
             </body>
           </html>
         `);
@@ -1828,93 +1852,16 @@ const DeliveryNote = () => {
   };
 
   const handleDownloadSignedDocument = async (item: DeliveryNote) => {
-    if (!item.signedDocument && !item.signedDocumentPath) {
+    if (!item.signedDocumentId) {
       showAlert('Error', 'No signed document available');
       return;
     }
 
     try {
-      // Priority 1: Load dari local file system jika ada
-      let signedDocument = item.signedDocument || '';
+      const fileName = item.signedDocumentName || `SJ-${item.sjNo}-signed`;
       
-      if (item.signedDocumentPath) {
-        const electronAPI = (window as any).electronAPI;
-        if (electronAPI && typeof electronAPI.loadUploadedFile === 'function') {
-          try {
-            const result = await electronAPI.loadUploadedFile(item.signedDocumentPath);
-            if (result && result.success) {
-              signedDocument = result.data || '';
-            } else {
-              throw new Error(result?.error || 'Failed to load file from file system');
-            }
-          } catch (loadError: any) {
-            showAlert('Error', `Gagal memuat file: ${loadError.message}`);
-            return;
-          }
-        } else {
-          showAlert('Error', 'File disimpan sebagai file system, tetapi Electron API tidak tersedia.');
-          return;
-        }
-      }
-      
-      if (!signedDocument) {
-        showAlert('Error', 'No document data available');
-        return;
-      }
-      
-      // Deteksi tipe file
-      const isPDF = item.signedDocumentName?.toLowerCase().endsWith('.pdf') || 
-                    signedDocument.startsWith('data:application/pdf') ||
-                    item.signedDocumentType === 'pdf';
-      
-      // Extract base64 data (remove data URL prefix jika ada)
-      let base64Data = signedDocument;
-      let mimeType = 'image/png';
-      
-      if (base64Data && base64Data.includes(',')) {
-        // Ada data URL prefix (data:image/png;base64,... atau data:application/pdf;base64,...)
-        const parts = base64Data.split(',');
-        base64Data = parts[1] || '';
-        const mimeMatch = parts[0].match(/data:([^;]+)/);
-        if (mimeMatch) {
-          mimeType = mimeMatch[1];
-        }
-      }
-      
-      if (!base64Data) {
-        showAlert('Error', 'No document data available');
-        return;
-      }
-      
-      // Convert base64 to blob
-      const byteCharacters = atob(base64Data);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: mimeType });
-      
-      // Create download link
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      
-      // Determine file extension
-      let extension = 'png';
-      if (isPDF || mimeType.includes('pdf')) {
-        extension = 'pdf';
-      } else if (mimeType.includes('jpeg') || mimeType.includes('jpg')) {
-        extension = 'jpg';
-      } else if (mimeType.includes('png')) {
-        extension = 'png';
-      }
-      
-      link.download = item.signedDocumentName || `SJ-${item.sjNo}-signed.${extension}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      // Use BlobService to download the file
+      await BlobService.downloadFile(item.signedDocumentId, fileName, 'general-trading');
     } catch (error: any) {
       showAlert('Error', `Error downloading document: ${error.message}`);
     }
@@ -1922,198 +1869,121 @@ const DeliveryNote = () => {
 
   const handleUploadSignedDocument = async (item: DeliveryNote, file: File) => {
     try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const base64 = e.target?.result as string;
-        
-        // Deteksi tipe file
-        const isPDF = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
-        const fileType: 'pdf' | 'image' = isPDF ? 'pdf' : 'image';
-        
-        // Untuk PDF, simpan sebagai file di file system (karena terlalu besar untuk localStorage)
-        // Untuk image, tetap simpan sebagai base64 (lebih kecil)
-        let signedDocument: string;
-        let signedDocumentPath: string | undefined;
-        
-        if (isPDF) {
-          // PDF: Simpan sebagai file dan simpan path-nya saja
-          const electronAPI = (window as any).electronAPI;
-          
-          // Cek apakah Electron API tersedia
-          if (!electronAPI) {
-            throw new Error('⚠️ Electron API tidak tersedia.\n\nPastikan aplikasi berjalan di Electron app, bukan di browser.\n\nJika sudah di Electron, silakan:\n1. Tutup aplikasi Electron\n2. Buka kembali aplikasi Electron\n3. Coba upload lagi');
-          }
-          
-          if (typeof electronAPI.saveUploadedFile !== 'function') {
-            throw new Error('⚠️ Fungsi saveUploadedFile tidak tersedia.\n\nSilakan:\n1. Tutup aplikasi Electron\n2. Buka kembali aplikasi Electron\n3. Coba upload lagi');
-          }
-          
-          try {
-            const result = await electronAPI.saveUploadedFile(base64, file.name, 'pdf');
-            if (result && result.success) {
-              signedDocumentPath = result.path;
-              // Simpan path sebagai reference, bukan base64
-              signedDocument = `file://${result.path}`;
-            } else {
-              throw new Error(result?.error || 'Failed to save PDF file');
-            }
-          } catch (fileError: any) {
-            const errorMessage = fileError.message || String(fileError);
-            if (errorMessage.includes('No handler registered') || 
-                errorMessage.includes('handler registered') ||
-                errorMessage.includes('Error invoking remote method')) {
-              throw new Error('⚠️ Handler Electron belum terdaftar.\n\nSilakan:\n1. Tutup aplikasi Electron (tutup semua window)\n2. Buka kembali aplikasi Electron dari shortcut/start menu\n3. Tunggu aplikasi selesai loading\n4. Coba upload PDF lagi\n\nJika masih error, hubungi administrator.');
-            }
-            throw new Error(`❌ Gagal menyimpan PDF ke file system.\n\nError: ${errorMessage}\n\nSilakan:\n1. Restart aplikasi Electron\n2. Pastikan folder data/uploads bisa diakses\n3. Coba upload lagi`);
-          }
-        } else {
-          // Image: Simpan sebagai base64 (biasanya lebih kecil)
-          signedDocument = base64;
-          signedDocumentPath = undefined;
-        }
-        
-        // Update delivery dengan signed document dan status CLOSE
-        const updated = deliveries.map(d =>
-          d.id === item.id 
-            ? { 
-                ...d, 
-                // Jika PDF sudah disimpan di file system, jangan simpan base64 di storage
-                signedDocument: signedDocumentPath ? undefined : signedDocument, 
-                signedDocumentPath: signedDocumentPath, // Simpan path untuk PDF
-                signedDocumentName: file.name,
-                signedDocumentType: fileType, // Simpan tipe file
-                status: 'CLOSE' as const,
-                receivedDate: new Date().toISOString().split('T')[0],
-              } 
-            : d
-        );
-        
-        // Save ke local storage
-        // CRITICAL: Force immediate sync ke server untuk memastikan signed document langsung tersedia di device lain
-        try {
-          await storageService.set('gt_delivery', updated, true);
-        } catch (storageError: any) {
-          // Jika save ke storage gagal karena quota, coba handle khusus
-          if (storageError.message?.includes('quota') || storageError.message?.includes('exceeded')) {
-            // Jika PDF sudah disimpan di file system, kita bisa skip signedDocument di storage
-            if (signedDocumentPath) {
-              // Simpan tanpa signedDocument (hanya path)
-              const updatedWithoutBase64 = deliveries.map(d =>
-                d.id === item.id 
-                  ? { 
-                      ...d, 
-                      signedDocument: undefined, // Hapus base64 jika ada
-                      signedDocumentPath: signedDocumentPath,
-                      signedDocumentName: file.name,
-                      signedDocumentType: fileType,
-                      status: 'CLOSE' as const,
-                      receivedDate: new Date().toISOString().split('T')[0],
-                    } 
-                  : d
-              );
-              await storageService.set('gt_delivery', updatedWithoutBase64);
-              setDeliveries(updatedWithoutBase64);
-              showAlert('Success', `✅ Signed document uploaded successfully!\n\nFile: ${file.name}\n\nTombol "View Signed Doc" sekarang tersedia di action menu.`);
-              return; // Exit early
-            } else {
-              throw new Error('Storage quota exceeded. Silakan hapus beberapa data lama atau hubungi administrator.');
-            }
-          }
-          throw storageError; // Re-throw error lainnya
-        }
-        
-        setDeliveries(updated);
-
-        // Cari PO yang terkait dengan SO ini untuk supplier payment
-        const purchaseOrders = await storageService.get<any[]>('gt_purchaseOrders') || [];
-        const relatedPOs = purchaseOrders.filter((po: any) => po.soNo === item.soNo && po.status === 'CLOSE');
-
-        // Create notification untuk Finance - Supplier Payment untuk setiap PO terkait
-        // IMPORTANT: Hanya pakai gt_financeNotifications (GT), jangan load dari financeNotifications (packaging)
-        // NOTE: Notification untuk supplier payment seharusnya sudah dibuat saat GRN dibuat di Purchasing
-        // Jadi di sini kita hanya update notification yang sudah ada dengan signed document, bukan create baru
-        const financeNotifications = await storageService.get<any[]>('gt_financeNotifications') || [];
-        
-        // Update existing notifications dengan signed document (jangan create baru)
-        // Notification untuk supplier payment seharusnya sudah dibuat saat GRN dibuat di Purchasing
-        const updatedFinanceNotifications = financeNotifications.map((notif: any) => {
-          if (relatedPOs.some((po: any) => po.poNo === notif.poNo) && notif.type === 'SUPPLIER_PAYMENT' && notif.status === 'PENDING') {
-            return {
-              ...notif,
-              sjNo: item.sjNo,
-              signedDocument: base64,
+      // Upload file to MinIO using BlobService
+      const uploadResult = await BlobService.uploadFile(file, 'general-trading');
+      
+      // Update delivery dengan signed document fileId dan status CLOSE
+      const updated = deliveries.map(d =>
+        d.id === item.id 
+          ? { 
+              ...d, 
+              signedDocumentId: uploadResult.fileId,
               signedDocumentName: file.name,
-            };
-          }
-          return notif;
-        });
-        
-        // Hanya update jika ada perubahan
-        if (JSON.stringify(updatedFinanceNotifications) !== JSON.stringify(financeNotifications)) {
-          await storageService.set('gt_financeNotifications', updatedFinanceNotifications);
-        }
+              status: 'CLOSE' as const,
+              receivedDate: new Date().toISOString().split('T')[0],
+            } 
+          : d
+      );
+      
+      // Save ke local storage
+      // CRITICAL: Force immediate sync ke server untuk memastikan signed document langsung tersedia di device lain
+      await storageService.set(StorageKeys.GENERAL_TRADING.DELIVERY, updated, true);
+      
+      // CRITICAL: Jangan panggil setDeliveries() di sini!
+      // storageService.set() akan trigger event listener yang akan call loadDeliveries()
+      // Memanggil setDeliveries() langsung akan menyebabkan double update dan refresh berkali-kali
 
-        // Create notification untuk Accounting - Customer Invoice
-        // IMPORTANT: Ambil SPK hanya dari items di SJ, bukan semua SPK dari SO
-        // Setiap SJ punya items sendiri, jadi SPK juga harus sesuai dengan items di SJ tersebut
-        const itemsInSJ = item.items && Array.isArray(item.items) && item.items.length > 0
-          ? item.items
-          : (item.product ? [{ product: item.product, qty: item.qty || 0, unit: 'PCS', spkNo: item.spkNo }] : []);
-        
-        // Ambil SPK hanya dari items di SJ
-        const spkNosFromSJ = itemsInSJ
-          .map((itm: any) => itm.spkNo)
-          .filter((spk: string) => spk) // Filter yang ada spkNo
-          .join(', ');
-        
-        // Cari SO untuk mendapatkan PO Customer No
-        const salesOrders = await storageService.get<any[]>('gt_salesOrders') || [];
-        const so = salesOrders.find((s: any) => s.soNo === item.soNo);
-        const poCustomerNo = so?.poCustomerNo || so?.soNo || '-';
+      // Cari PO yang terkait dengan SO ini untuk supplier payment
+      const purchaseOrders = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PURCHASE_ORDERS) || [];
+      const relatedPOs = purchaseOrders.filter((po: any) => po.soNo === item.soNo && po.status === 'CLOSE');
 
-        // Create notification untuk Invoice module (setelah surat jalan ditandatangani)
-        const invoiceNotifications = await storageService.get<any[]>('gt_invoiceNotifications') || [];
-        // Check if notification already exists
-        const existingInvoiceNotif = invoiceNotifications.find((n: any) => 
-          n.sjNo === item.sjNo && n.type === 'CUSTOMER_INVOICE'
-        );
-        
-        if (!existingInvoiceNotif) {
-          // CRITICAL: Invoice notification HANYA dibuat saat surat jalan sudah di-upload (signed document)
-          // Ini adalah tempat yang benar untuk create invoice notification
-          const newInvoiceNotification = {
-            id: `invoice-${Date.now()}-${item.sjNo}`,
-            type: 'CUSTOMER_INVOICE',
+      // Create notification untuk Finance - Supplier Payment untuk setiap PO terkait
+      // IMPORTANT: Hanya pakai gt_financeNotifications (GT), jangan load dari financeNotifications (packaging)
+      // NOTE: Notification untuk supplier payment seharusnya sudah dibuat saat GRN dibuat di Purchasing
+      // Jadi di sini kita hanya update notification yang sudah ada dengan signed document, bukan create baru
+      const financeNotifications = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.FINANCE_NOTIFICATIONS) || [];
+      
+      // Update existing notifications dengan signed document (jangan create baru)
+      // Notification untuk supplier payment seharusnya sudah dibuat saat GRN dibuat di Purchasing
+      const updatedFinanceNotifications = financeNotifications.map((notif: any) => {
+        if (relatedPOs.some((po: any) => po.poNo === notif.poNo) && notif.type === 'SUPPLIER_PAYMENT' && notif.status === 'PENDING') {
+          return {
+            ...notif,
             sjNo: item.sjNo,
-            soNo: item.soNo,
-            poCustomerNo: poCustomerNo,
-            spkNos: spkNosFromSJ, // Hanya SPK dari items di SJ, bukan semua SPK dari SO
-            customer: item.customer,
-            customerKode: so?.customerKode || '',
-            items: itemsInSJ, // Items sesuai dengan SJ
-            totalQty: itemsInSJ.reduce((sum: number, itm: any) => sum + (itm.qty || 0), 0),
-            signedDocument: isPDF ? undefined : base64, // Hanya simpan base64 untuk image, PDF disimpan di file system
-            signedDocumentPath: signedDocumentPath, // Path untuk PDF
+            signedDocumentId: uploadResult.fileId,
             signedDocumentName: file.name,
-            signedDocumentType: fileType, // PDF atau image
-            status: 'PENDING',
-            created: new Date().toISOString(),
           };
-          // CRITICAL: Force immediate sync ke server untuk invoice notification
-          await storageService.set('gt_invoiceNotifications', [...invoiceNotifications, newInvoiceNotification], true);
         }
+        return notif;
+      });
+      
+      // Hanya update jika ada perubahan
+      if (JSON.stringify(updatedFinanceNotifications) !== JSON.stringify(financeNotifications)) {
+        await storageService.set(StorageKeys.GENERAL_TRADING.FINANCE_NOTIFICATIONS, updatedFinanceNotifications);
+      }
 
-        // Check if any notifications were updated
-        const hasUpdatedNotifications = JSON.stringify(updatedFinanceNotifications) !== JSON.stringify(financeNotifications);
+      // Create notification untuk Accounting - Customer Invoice
+      // IMPORTANT: Ambil SPK hanya dari items di SJ, bukan semua SPK dari SO
+      // Setiap SJ punya items sendiri, jadi SPK juga harus sesuai dengan items di SJ tersebut
+      const itemsInSJ = item.items && Array.isArray(item.items) && item.items.length > 0
+        ? item.items
+        : (item.product ? [{ product: item.product, qty: item.qty || 0, unit: 'PCS', spkNo: item.spkNo }] : []);
+      
+      // Ambil SPK hanya dari items di SJ
+      const spkNosFromSJ = itemsInSJ
+        .map((itm: any) => itm.spkNo)
+        .filter((spk: string) => spk) // Filter yang ada spkNo
+        .join(', ');
+      
+      // Cari SO untuk mendapatkan PO Customer No
+      const salesOrders = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.SALES_ORDERS) || [];
+      const salesOrdersArray = Array.isArray(salesOrders) ? salesOrders : [];
+      const so = salesOrdersArray.find((s: any) => s.soNo === item.soNo);
+      const poCustomerNo = so?.poCustomerNo || so?.soNo || '-';
 
-        let alertMsg = `✅ Surat Jalan (yang sudah di TTD) uploaded: ${file.name}\n\n✅ Status updated to CLOSE`;
-        if (hasUpdatedNotifications) {
-          alertMsg += `\n📧 Updated supplier payment notifications with signed document`;
-        }
-        alertMsg += `\n📧 Notification sent to Accounting - Customer Invoice tab`;
-        showAlert('Success', alertMsg);
-      };
-      reader.readAsDataURL(file);
+      // Create notification untuk Invoice module (setelah surat jalan ditandatangani)
+      // CRITICAL: Use INVOICE_NOTIFICATIONS (not DELIVERY_NOTIFICATIONS) so Invoices page can see it
+      const invoiceNotifications = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.INVOICE_NOTIFICATIONS) || [];
+      const invoiceNotificationsArray = Array.isArray(invoiceNotifications) ? invoiceNotifications : [];
+      // Check if notification already exists
+      const existingInvoiceNotif = invoiceNotificationsArray.find((n: any) => 
+        n.sjNo === item.sjNo && n.type === 'CUSTOMER_INVOICE'
+      );
+      
+      if (!existingInvoiceNotif) {
+        // CRITICAL: Invoice notification HANYA dibuat saat surat jalan sudah di-upload (signed document)
+        // Ini adalah tempat yang benar untuk create invoice notification
+        const newInvoiceNotification = {
+          id: `invoice-${Date.now()}-${item.sjNo}`,
+          type: 'CUSTOMER_INVOICE',
+          sjNo: item.sjNo,
+          soNo: item.soNo,
+          poCustomerNo: poCustomerNo,
+          spkNos: spkNosFromSJ, // Hanya SPK dari items di SJ, bukan semua SPK dari SO
+          customer: item.customer,
+          customerKode: so?.customerKode || '',
+          items: itemsInSJ, // Items sesuai dengan SJ
+          totalQty: itemsInSJ.reduce((sum: number, itm: any) => sum + (itm.qty || 0), 0),
+          signedDocumentId: uploadResult.fileId,
+          signedDocumentName: file.name,
+          status: 'PENDING',
+          created: new Date().toISOString(),
+        };
+        // CRITICAL: Force immediate sync ke server untuk invoice notification
+        // Use INVOICE_NOTIFICATIONS so Invoices page can read it
+        await storageService.set(StorageKeys.GENERAL_TRADING.INVOICE_NOTIFICATIONS, [...invoiceNotificationsArray, newInvoiceNotification], true);
+        console.log(`✅ Invoice notification created and synced for SJ ${item.sjNo}`);
+      }
+
+      // Check if any notifications were updated
+      const hasUpdatedNotifications = JSON.stringify(updatedFinanceNotifications) !== JSON.stringify(financeNotifications);
+
+      let alertMsg = `✅ Surat Jalan (yang sudah di TTD) uploaded: ${file.name}\n\n✅ Status updated to CLOSE`;
+      if (hasUpdatedNotifications) {
+        alertMsg += `\n📧 Updated supplier payment notifications with signed document`;
+      }
+      alertMsg += `\n📧 Notification sent to Accounting - Customer Invoice tab`;
+      showAlert('Success', alertMsg);
     } catch (error: any) {
       showAlert('Error', `Error uploading document: ${error.message}`);
     }
@@ -2325,7 +2195,7 @@ const DeliveryNote = () => {
     
     // Prioritas 2: dari productId (cari di master products)
     if (n.productId) {
-      const products = await storageService.get<any[]>('gt_products') || [];
+      const products = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PRODUCTS) || [];
       const product = products.find((p: any) => 
         (p.product_id || p.kode || '').toString().trim().toLowerCase() === 
         (n.productId || '').toString().trim().toLowerCase()
@@ -2337,7 +2207,7 @@ const DeliveryNote = () => {
     
     // Prioritas 3: dari GRN
     if (n.grnNo) {
-      const grnList = await storageService.get<any[]>('gt_grn') || [];
+      const grnList = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.GRN) || [];
       const grn = grnList.find((g: any) => g.grnNo === n.grnNo);
       // Format baru: productItem, format lama: materialItem (backward compatibility)
       if (grn && (grn.productItem || grn.materialItem)) {
@@ -2347,7 +2217,7 @@ const DeliveryNote = () => {
     
     // Prioritas 4: dari PO
     if (n.poNo) {
-      const poList = await storageService.get<any[]>('gt_purchaseOrders') || [];
+      const poList = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PURCHASE_ORDERS) || [];
       const po = poList.find((p: any) => p.poNo === n.poNo);
       // Format baru: productItem, format lama: materialItem (backward compatibility)
       if (po && (po.productItem || po.materialItem)) {
@@ -2371,7 +2241,14 @@ const DeliveryNote = () => {
       confirmMsg += `Customer: ${notif.customer}\nSO No: ${notif.soNo}\n\n`;
       confirmMsg += `Products (${notificationsToProcess.length} items):\n`;
       notificationsToProcess.forEach((n: any) => {
-        const spkList = n.spkNos || (n.spkNo ? [n.spkNo] : []);
+        // Ensure spkList is always an array
+        let spkList: string[] = [];
+        if (Array.isArray(n.spkNos)) {
+          spkList = n.spkNos;
+        } else if (n.spkNo) {
+          spkList = [n.spkNo];
+        }
+        
         let productQty = n.qty || 0;
         
         // Ambil quantity dari deliveryBatches yang sesuai dengan SPK ini
@@ -2508,13 +2385,17 @@ const DeliveryNote = () => {
           // QC hanya untuk Packaging yang punya production process
           // Skip QC validation untuk GT
           // VALIDASI STOCK: Cek inventory stock sebelum create Delivery Note
-          const inventoryData = extractStorageValue(await storageService.get<any[]>('gt_inventory')) || [];
-          const stockIssues: string[] = [];
+          // NOTE: Validasi stock DISABLED - allow delivery note creation even if stock insufficient
+          // User dapat create SJ secara manual walau stock tidak cukup
+          // const inventoryData = extractStorageValue(await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.INVENTORY)) || [];
+          // const stockIssues: string[] = [];
           
           // Collect semua products yang akan di-deliver untuk validasi
-          const productsToCheck: { productId: string; productName: string; requiredQty: number; spkNo: string }[] = [];
+          // const productsToCheck: { productId: string; productName: string; requiredQty: number; spkNo: string }[] = [];
           
           // Process notifications untuk collect products
+          // NOTE: Disabled - stock validation is optional now
+          /*
           for (const n of notificationsToProcess) {
             // Handle grouped notification atau single notification
             if (n.products && Array.isArray(n.products) && n.products.length > 0) {
@@ -2572,7 +2453,7 @@ const DeliveryNote = () => {
           }
           
           // Load products untuk cek apakah turunan
-          const productsData = extractStorageValue(await storageService.get<any[]>('gt_products')) || [];
+          const productsData = extractStorageValue(await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PRODUCTS)) || [];
           
           // Helper function untuk mendapatkan inventory product code (parent jika turunan)
           const getInventoryProductCodeForValidation = (productId: string): string => {
@@ -2644,6 +2525,7 @@ const DeliveryNote = () => {
             );
             return; // Stop proses, tidak create delivery note
           }
+          */
           
           // Get delivery date - prioritize from grouped notification, then from first notification, then from schedule
           let deliveryDate = null;
@@ -2665,7 +2547,7 @@ const DeliveryNote = () => {
           
           // Fallback: Try to get from schedule data if not found in notification
           if (!deliveryDate) {
-            const scheduleList = await storageService.get<any[]>('gt_schedule') || [];
+            const scheduleList = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.SCHEDULE) || [];
             const firstNotif = notificationsToProcess[0];
             const firstSPKList = firstNotif?.spkNos || (firstNotif?.spkNo ? [firstNotif.spkNo] : []);
             
@@ -2709,12 +2591,19 @@ const DeliveryNote = () => {
           if (notif.groupedNotifications && Array.isArray(notif.groupedNotifications) && notif.groupedNotifications.length > 0) {
             
             // Load schedule untuk mendapatkan quantity yang tepat dari deliveryBatches
-            const scheduleList = await storageService.get<any[]>('gt_schedule') || [];
+            const scheduleList = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.SCHEDULE) || [];
             
             // Process grouped notifications dengan async
             for (const n of notif.groupedNotifications) {
               // Setiap groupedNotification = 1 SPK = 1 product
-              const spkList = n.spkNos || (n.spkNo ? [n.spkNo] : []);
+              // Ensure spkList is always an array
+              let spkList: string[] = [];
+              if (Array.isArray(n.spkNos)) {
+                spkList = n.spkNos;
+              } else if (n.spkNo) {
+                spkList = [n.spkNo];
+              }
+              
               const productName = await getProductName(n);
               
               // Cari schedule yang match dengan SPK ini
@@ -2889,7 +2778,14 @@ const DeliveryNote = () => {
                 });
               } else {
                 // Old format: single spkNo dan product
-                const spkList = n.spkNos || (n.spkNo ? [n.spkNo] : []);
+                // Ensure spkList is always an array
+                let spkList: string[] = [];
+                if (Array.isArray(n.spkNos)) {
+                  spkList = n.spkNos;
+                } else if (n.spkNo) {
+                  spkList = [n.spkNo];
+                }
+                
                 const productName = await getProductName(n);
                 const qty = n.qty || 0;
                 
@@ -2984,7 +2880,13 @@ const DeliveryNote = () => {
               });
             } else {
               // Old format: single spkNo dan product atau spkNos array
-              const spkList = n.spkNos || (n.spkNo ? [n.spkNo] : []);
+              // Ensure spkList is always an array
+              let spkList: string[] = [];
+              if (Array.isArray(n.spkNos)) {
+                spkList = n.spkNos;
+              } else if (n.spkNo) {
+                spkList = [n.spkNo];
+              }
               
               const productName = await getProductName(n);
               const qty = n.qty || 0;
@@ -3155,8 +3057,11 @@ const DeliveryNote = () => {
           };
           
           const updated = [...deliveries, newDelivery];
-          await storageService.set('gt_delivery', updated);
-          setDeliveries(updated);
+          await storageService.set(StorageKeys.GENERAL_TRADING.DELIVERY, updated);
+          
+          // CRITICAL: Jangan panggil setDeliveries() di sini!
+          // storageService.set() akan trigger event listener yang akan call loadDeliveries()
+          // Memanggil setDeliveries() langsung akan menyebabkan double update dan refresh berkali-kali
 
           // Update inventory - TAMBAHKAN OUTGOING untuk product yang dikirim
           try {
@@ -3168,7 +3073,8 @@ const DeliveryNote = () => {
 
           // Update notification status for all processed notifications
           // IMPORTANT: Hanya update gt_deliveryNotifications (GT), jangan load dari deliveryNotifications (packaging)
-          const deliveryNotifications = await storageService.get<any[]>('gt_deliveryNotifications') || [];
+          // NOTE: DELETE notifications setelah delivery note dibuat (bukan hanya status update)
+          const deliveryNotifications = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.DELIVERY_NOTIFICATIONS) || [];
           const notificationIds = notificationsToProcess.map((n: any) => n.id);
           // Include parent grouped notification ID jika ada
           const parentNotificationId = notif.isGrouped ? notif.id : null;
@@ -3176,24 +3082,14 @@ const DeliveryNote = () => {
             ? [...notificationIds, parentNotificationId]
             : notificationIds;
           
-          const updatedNotifications = deliveryNotifications.map((n: any) => {
-            // Update individual notifications yang diproses
-            if (notificationIds.includes(n.id)) {
-              return { ...n, status: 'DELIVERY_CREATED', updated: new Date().toISOString() };
-            }
-            // Update parent grouped notification jika semua child sudah DELIVERY_CREATED
-            if (parentNotificationId && n.id === parentNotificationId && n.isGrouped && n.groupedNotifications) {
-              const allChildrenDelivered = n.groupedNotifications.every((child: any) => 
-                notificationIds.includes(child.id) || child.status === 'DELIVERY_CREATED'
-              );
-              if (allChildrenDelivered) {
-                return { ...n, status: 'DELIVERY_CREATED', updated: new Date().toISOString() };
-              }
-            }
-            return n;
-          });
-          // CRITICAL: Force immediate sync ke server untuk update notification status (POST/PUT)
-          await storageService.set('gt_deliveryNotifications', updatedNotifications, true);
+          // DELETE notifications yang sudah jadi delivery note (hapus dari array)
+          const updatedNotifications = deliveryNotifications.filter((n: any) => 
+            !allNotificationIds.includes(n.id)
+          );
+          console.log(`[DeliveryNote] Deleting ${allNotificationIds.length} notifications from storage. Before: ${deliveryNotifications.length}, After: ${updatedNotifications.length}`);
+          // CRITICAL: Force immediate sync ke server untuk delete notification (DELETE)
+          await storageService.set(StorageKeys.GENERAL_TRADING.DELIVERY_NOTIFICATIONS, updatedNotifications, true);
+          console.log(`[DeliveryNote] Notifications deleted and synced to server`);
           
           // CRITICAL: Invoice notification HANYA dibuat saat surat jalan sudah di-upload (signed document)
           // Jangan create invoice notification saat delivery note dibuat, karena belum ada signed document
@@ -3203,9 +3099,9 @@ const DeliveryNote = () => {
           const totalQty = deliveryItems.reduce((sum, item) => sum + (item.qty || 0), 0);
           showAlert('Success', `✅ Delivery Note created: ${sjNo}\n\n${itemCount} product(s):\n${deliveryItems.map((item, idx) => `  ${idx + 1}. ${item.product} - ${item.qty} PCS (SPK: ${item.spkNo})`).join('\n')}\n\nTotal Qty: ${totalQty} PCS\n✅ Inventory updated (outgoing)`);
           
-          // Reload deliveries dan notifications untuk update UI
-          await loadDeliveries();
-          await loadNotifications();
+          // CRITICAL: Jangan panggil loadDeliveries() dan loadNotifications() di sini!
+          // Event listener akan auto-trigger jika ada perubahan dari storage
+          // Memanggil load functions hanya akan reload ulang semua data dan menyebabkan notifikasi flickering
         } catch (error: any) {
           showAlert('Error', `Error creating Delivery Note: ${error.message}`);
         }
@@ -3217,7 +3113,7 @@ const DeliveryNote = () => {
     const newStatus = prompt(`Update status for SJ: ${item.sjNo}\n\nCurrent: ${item.status}\n\nEnter new status (DRAFT/OPEN/CLOSE):`, item.status);
     if (newStatus && newStatus !== item.status && ['DRAFT', 'OPEN', 'CLOSE'].includes(newStatus)) {
       // Jika mau close, wajib upload signed document
-      if (newStatus === 'CLOSE' && !item.signedDocument) {
+      if (newStatus === 'CLOSE' && !item.signedDocumentId) {
         showAlert('Validation Error', '⚠️ Cannot close Delivery Note without signed document!\n\nPlease upload signed document (Surat Jalan yang sudah di TTD) first.');
         return;
       }
@@ -3226,21 +3122,26 @@ const DeliveryNote = () => {
         const updated = deliveries.map(d =>
           d.id === item.id ? { ...d, status: newStatus as any } : d
         );
-        await storageService.set('gt_delivery', updated);
-        setDeliveries(updated);
+        await storageService.set(StorageKeys.GENERAL_TRADING.DELIVERY, updated);
+        
+        // CRITICAL: Jangan panggil setDeliveries() di sini!
+        // storageService.set() akan trigger event listener yang akan call loadDeliveries()
+        // Memanggil setDeliveries() langsung akan menyebabkan double update dan refresh berkali-kali
         
         // Jika status diubah jadi CLOSE dan sudah ada signed document, pastikan invoice notification sudah ada
-        if (newStatus === 'CLOSE' && item.signedDocument) {
+        if (newStatus === 'CLOSE' && item.signedDocumentId) {
           try {
-            const invoiceNotifications = await storageService.get<any[]>('gt_invoiceNotifications') || [];
-            const existingInvoiceNotif = invoiceNotifications.find((n: any) => 
+            const invoiceNotifications = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.INVOICE_NOTIFICATIONS) || [];
+            const invoiceNotificationsArray = Array.isArray(invoiceNotifications) ? invoiceNotifications : [];
+            const existingInvoiceNotif = invoiceNotificationsArray.find((n: any) => 
               n.sjNo === item.sjNo && n.type === 'CUSTOMER_INVOICE'
             );
             
             if (!existingInvoiceNotif) {
               // Get SO info
-              const salesOrders = await storageService.get<any[]>('gt_salesOrders') || [];
-              const so = salesOrders.find((s: any) => s.soNo === item.soNo);
+              const salesOrders = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.SALES_ORDERS) || [];
+              const salesOrdersArray = Array.isArray(salesOrders) ? salesOrders : [];
+              const so = salesOrdersArray.find((s: any) => s.soNo === item.soNo);
               const poCustomerNo = so?.poCustomerNo || so?.soNo || '-';
               
               // Get SPK numbers from delivery items
@@ -3266,15 +3167,13 @@ const DeliveryNote = () => {
                   unit: deliveryItem.unit || 'PCS',
                 })),
                 totalQty: (item.items || []).reduce((sum: number, deliveryItem: any) => sum + (deliveryItem.qty || 0), 0),
-                signedDocument: item.signedDocument, // Base64 untuk image
-                signedDocumentPath: item.signedDocumentPath, // Path untuk PDF
+                signedDocumentId: item.signedDocumentId, // FileId stored on MinIO
                 signedDocumentName: item.signedDocumentName,
-                signedDocumentType: item.signedDocumentType, // PDF atau image
                 status: 'PENDING',
                 created: new Date().toISOString(),
               };
               // CRITICAL: Force immediate sync ke server untuk invoice notification
-              await storageService.set('gt_invoiceNotifications', [...invoiceNotifications, newInvoiceNotification], true);
+              await storageService.set(StorageKeys.GENERAL_TRADING.INVOICE_NOTIFICATIONS, [...invoiceNotifications, newInvoiceNotification], true);
               showAlert('Success', `✅ Status updated to: ${newStatus}\n\n📧 Notification sent to Accounting - Customer Invoice tab`);
             } else {
               showAlert('Success', `✅ Status updated to: ${newStatus}`);
@@ -3360,7 +3259,7 @@ const DeliveryNote = () => {
           >
             Delete
           </Button>
-          {item.status === 'OPEN' && !item.signedDocument && (
+          {item.status === 'OPEN' && !item.signedDocumentId && (
             <>
               <input
                 ref={(el) => {
@@ -3399,7 +3298,7 @@ const DeliveryNote = () => {
               </Button>
             </>
           )}
-          {item.signedDocument && (
+          {item.signedDocumentId && (
             <>
               <div title={`View signed document: ${item.signedDocumentName || 'Signed SJ'}`}>
                 <Button 
@@ -3473,6 +3372,56 @@ const DeliveryNote = () => {
       });
     }
     
+    // Helper to normalize date string to ISO format (YYYY-MM-DD)
+    const normalizeDate = (dateStr: string | number): string => {
+      if (!dateStr) return '';
+      
+      // If already ISO format (YYYY-MM-DD), return as-is
+      if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+        return dateStr.split('T')[0];
+      }
+      
+      // If MM/DD/YY format, convert to ISO
+      if (typeof dateStr === 'string' && /^\d{1,2}\/\d{1,2}\/\d{2}$/.test(dateStr)) {
+        const parts = dateStr.split('/');
+        const month = parts[0].padStart(2, '0');
+        const day = parts[1].padStart(2, '0');
+        let year = parts[2];
+        if (year.length === 2) {
+          year = '20' + year;
+        }
+        return `${year}-${month}-${day}`;
+      }
+      
+      // Try parsing as Date
+      try {
+        const date = new Date(dateStr);
+        if (!isNaN(date.getTime())) {
+          return date.toISOString().split('T')[0];
+        }
+      } catch (e) {
+        // ignore
+      }
+      
+      return '';
+    };
+    
+    // Date filter - normalize dates before comparing
+    if (dateFrom) {
+      const normalizedFrom = normalizeDate(dateFrom);
+      filtered = filtered.filter(delivery => {
+        const normalizedDeliveryDate = normalizeDate(delivery.deliveryDate || '');
+        return normalizedDeliveryDate >= normalizedFrom;
+      });
+    }
+    if (dateTo) {
+      const normalizedTo = normalizeDate(dateTo);
+      filtered = filtered.filter(delivery => {
+        const normalizedDeliveryDate = normalizeDate(delivery.deliveryDate || '');
+        return normalizedDeliveryDate <= normalizedTo;
+      });
+    }
+    
     // Sort: Yang paling baru di atas, terutama yang masih OPEN
     // Ensure filtered is still an array before sorting
     if (!Array.isArray(filtered)) {
@@ -3489,7 +3438,7 @@ const DeliveryNote = () => {
       const idB = parseInt(b.id) || 0;
       return idB - idA; // Descending (newest first)
     });
-  }, [deliveries, searchQuery, activeTab]);
+  }, [deliveries, searchQuery, activeTab, dateFrom, dateTo]);
 
   const groupedDeliveries = useMemo(() => {
     const groups: Record<string, {
@@ -3689,7 +3638,7 @@ const DeliveryNote = () => {
               unit: item.unit || 'PCS',
               status: delivery.status,
               deliveryDate: delivery.deliveryDate || '',
-              signedDocument: delivery.signedDocument ? 'Yes' : 'No',
+              signedDocumentId: delivery.signedDocumentId ? 'Yes' : 'No',
               signedDocumentName: delivery.signedDocumentName || '',
             });
           });
@@ -3707,7 +3656,7 @@ const DeliveryNote = () => {
             unit: 'PCS',
             status: delivery.status,
             deliveryDate: delivery.deliveryDate || '',
-            signedDocument: delivery.signedDocument ? 'Yes' : 'No',
+            signedDocumentId: delivery.signedDocumentId ? 'Yes' : 'No',
             signedDocumentName: delivery.signedDocumentName || '',
           });
         }
@@ -3728,7 +3677,7 @@ const DeliveryNote = () => {
           { key: 'status', header: 'Status', width: 15 },
           { key: 'deliveryDate', header: 'Delivery Date', width: 18, format: 'date' },
           { key: 'created', header: 'Created Date', width: 18, format: 'date' },
-          { key: 'signedDocument', header: 'Signed Document', width: 15 },
+          { key: 'signedDocumentId', header: 'Signed Document', width: 15 },
           { key: 'signedDocumentName', header: 'Document Name', width: 30 },
         ];
         const wsDelivery = createStyledWorksheet(allDeliveryData, deliveryColumns, 'Sheet 1 - Delivery');
@@ -3930,12 +3879,12 @@ const DeliveryNote = () => {
       render: (item: any) => {
         const delivery = item._delivery;
         // Ensure file input exists for upload functionality
-        if (!fileInputRefs.current[delivery.id] && delivery.sjNo && delivery.status === 'OPEN' && !delivery.signedDocument) {
+        if (!fileInputRefs.current[delivery.id] && delivery.sjNo && delivery.status === 'OPEN' && !delivery.signedDocumentId) {
           // Create a temporary input element if needed (will be handled by cards view)
         }
         return (
           <>
-            {delivery.sjNo && delivery.status === 'OPEN' && !delivery.signedDocument && (
+            {delivery.sjNo && delivery.status === 'OPEN' && !delivery.signedDocumentId && (
               <input
                 ref={(el) => {
                   if (el) fileInputRefs.current[delivery.id] = el;
@@ -3960,14 +3909,14 @@ const DeliveryNote = () => {
               onViewDetail={delivery.sjNo ? () => handleViewDetail(delivery) : undefined}
               onEdit={delivery.sjNo ? () => handleEditSJ(delivery) : undefined}
               onPrint={delivery.sjNo ? () => handlePrint(delivery) : undefined}
-              onUploadSignedDocument={delivery.sjNo && delivery.status === 'OPEN' && !delivery.signedDocument ? () => {
+              onUploadSignedDocument={delivery.sjNo && delivery.status === 'OPEN' && !delivery.signedDocumentId ? () => {
                 const input = fileInputRefs.current[delivery.id];
                 if (input) {
                   input.click();
                 }
               } : undefined}
-              onViewSignedDocument={delivery.signedDocument ? () => handleViewSignedDocument(delivery) : undefined}
-              onDownloadSignedDocument={delivery.signedDocument ? () => handleDownloadSignedDocument(delivery) : undefined}
+              onViewSignedDocument={delivery.signedDocumentId ? () => handleViewSignedDocument(delivery) : undefined}
+              onDownloadSignedDocument={delivery.signedDocumentId ? () => handleDownloadSignedDocument(delivery) : undefined}
             />
           </>
         );
@@ -4055,7 +4004,7 @@ const DeliveryNote = () => {
           </div>
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Customer *
+              Customer *to
             </label>
             <input
               type="text"
@@ -4375,6 +4324,16 @@ const DeliveryNote = () => {
                     fontFamily: 'inherit',
                   }}
                 />
+                <div style={{ flex: '1 1 400px', minWidth: '350px' }}>
+                  <DateRangeFilter
+                    onDateChange={(from, to) => {
+                      setDateFrom(from);
+                      setDateTo(to);
+                    }}
+                    defaultFrom={dateFrom}
+                    defaultTo={dateTo}
+                  />
+                </div>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <button
                     onClick={() => setDeliveryViewMode('cards')}
@@ -4495,6 +4454,7 @@ const DeliveryNote = () => {
                 <Table 
                   columns={tableColumns} 
                   data={flattenedDeliveryData} 
+                  showPagination={false}
                   emptyMessage={searchQuery ? "No deliveries found matching your search" : "No deliveries"}
                   getRowStyle={(item: any) => ({
                     backgroundColor: getRowColor(item.soNo),
@@ -4526,6 +4486,7 @@ const DeliveryNote = () => {
               <Table 
                 columns={tableColumns} 
                 data={flattenedDeliveryData} 
+                showPagination={false}
                 emptyMessage="No outstanding deliveries"
                 getRowStyle={(item: any) => ({
                   backgroundColor: getRowColor(item.soNo),
@@ -4586,8 +4547,11 @@ const DeliveryNote = () => {
               };
               
               const updated = [...deliveries, newDelivery];
-              await storageService.set('gt_delivery', updated);
-              setDeliveries(updated);
+              await storageService.set(StorageKeys.GENERAL_TRADING.DELIVERY, updated);
+              
+              // CRITICAL: Jangan panggil setDeliveries() di sini!
+              // storageService.set() akan trigger event listener yang akan call loadDeliveries()
+              // Memanggil setDeliveries() langsung akan menyebabkan double update dan refresh berkali-kali
               
               // Update inventory - TAMBAHKAN OUTGOING untuk product yang dikirim
               try {
@@ -4613,8 +4577,37 @@ const DeliveryNote = () => {
             const updated = deliveries.map(d =>
               d.id === selectedDelivery.id ? { ...d, ...updatedData } : d
             );
-            await storageService.set('gt_delivery', updated);
-            setDeliveries(updated);
+            await storageService.set(StorageKeys.GENERAL_TRADING.DELIVERY, updated);
+            
+            // CRITICAL: Jangan panggil setDeliveries() di sini!
+            // storageService.set() akan trigger event listener yang akan call loadDeliveries()
+            // Memanggil setDeliveries() langsung akan menyebabkan double update dan refresh berkali-kali
+            
+            // Update invoice notification jika ada perubahan items
+            try {
+              const invoiceNotifications = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.INVOICE_NOTIFICATIONS) || [];
+              const updatedDelivery = updated.find(d => d.id === selectedDelivery.id);
+              
+              if (updatedDelivery && updatedDelivery.sjNo) {
+                const updatedNotifications = invoiceNotifications.map((notif: any) => {
+                  if (notif.sjNo === updatedDelivery.sjNo && notif.type === 'CUSTOMER_INVOICE') {
+                    return {
+                      ...notif,
+                      items: updatedDelivery.items || [],
+                      totalQty: (updatedDelivery.items || []).reduce((sum: number, itm: any) => sum + (itm.qty || 0), 0),
+                    };
+                  }
+                  return notif;
+                });
+                
+                if (JSON.stringify(updatedNotifications) !== JSON.stringify(invoiceNotifications)) {
+                  await storageService.set(StorageKeys.GENERAL_TRADING.INVOICE_NOTIFICATIONS, updatedNotifications, true);
+                }
+              }
+            } catch (error: any) {
+              console.error('Error updating invoice notification:', error);
+            }
+            
             setSelectedDelivery(null);
             showAlert('Success', '✅ Surat Jalan updated');
           }}
@@ -4764,8 +4757,8 @@ const EditSJDialog = ({ delivery, onClose, onSave }: { delivery: DeliveryNote; o
   
   useEffect(() => {
     const loadData = async () => {
-      const productsData = await storageService.get<any[]>('gt_products') || [];
-      const customersData = await storageService.get<Customer[]>('gt_customers') || [];
+      const productsData = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PRODUCTS) || [];
+      const customersData = await storageService.get<Customer[]>(StorageKeys.GENERAL_TRADING.CUSTOMERS) || [];
       setProducts(productsData);
       setCustomers(customersData);
     };
@@ -4832,6 +4825,16 @@ const EditSJDialog = ({ delivery, onClose, onSave }: { delivery: DeliveryNote; o
   const handleItemChange = (index: number, field: keyof DeliveryNoteItem, value: any) => {
     const updated = [...items];
     updated[index] = { ...updated[index], [field]: value };
+    
+    // Auto-fill product name when productCode is entered
+    if (field === 'productCode' && value) {
+      const productName = getProductNameByCode(value, 'gt');
+      if (productName !== value) {
+        // Found in master data
+        updated[index].product = productName;
+      }
+    }
+    
     setItems(updated);
   };
 
@@ -4917,10 +4920,8 @@ const EditSJDialog = ({ delivery, onClose, onSave }: { delivery: DeliveryNote; o
   };
 
   const handleSave = async () => {
-    let signedDocument = delivery.signedDocument;
+    let signedDocumentId = delivery.signedDocumentId;
     let signedDocumentName = delivery.signedDocumentName;
-    let signedDocumentPath: string | undefined = delivery.signedDocumentPath;
-    let signedDocumentType: 'pdf' | 'image' | undefined = delivery.signedDocumentType;
 
     const updateData: Partial<DeliveryNote> = {
       driver,
@@ -4948,62 +4949,19 @@ const EditSJDialog = ({ delivery, onClose, onSave }: { delivery: DeliveryNote; o
     };
 
     if (signedFile) {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const base64 = e.target?.result as string;
-        
-        // Deteksi tipe file
-        const isPDF = signedFile.name.toLowerCase().endsWith('.pdf') || signedFile.type === 'application/pdf';
-        
-        // Untuk PDF, simpan sebagai file di file system (karena terlalu besar untuk localStorage)
-        // Untuk image, tetap simpan sebagai base64 (lebih kecil)
-        if (isPDF) {
-          // PDF: Simpan sebagai file di Electron, atau base64 di mobile jika kecil
-          const electronAPI = (window as any).electronAPI;
-          if (electronAPI && typeof electronAPI.saveUploadedFile === 'function') {
-            try {
-              const result = await electronAPI.saveUploadedFile(base64, signedFile.name, 'pdf');
-              if (result.success) {
-                signedDocumentPath = result.path;
-                signedDocumentType = 'pdf';
-                signedDocument = undefined; // Clear base64 untuk PDF
-              } else {
-                showAlert('Error', `Failed to save PDF: ${result.error || 'Unknown error'}`);
-                return;
-              }
-            } catch (error: any) {
-              showAlert('Error', `Error saving PDF: ${error.message || 'Unknown error'}`);
-              return;
-            }
-          } else {
-            // Browser mode: coba simpan sebagai base64 jika kecil
-            const base64Size = base64.length;
-            if (base64Size > 5000000) { // 5MB limit
-              showAlert('Error', 'PDF terlalu besar (' + 
-                Math.round(base64Size / 1024 / 1024) + 'MB\n\nMaksimal ukuran: 5MB\n\nSilakan gunakan file PDF yang lebih kecil atau gunakan aplikasi desktop.');
-              return;
-            }
-            signedDocument = base64;
-            signedDocumentType = 'pdf';
-            signedDocumentPath = undefined;
-          }
-        } else {
-          // Image: Simpan sebagai base64 (biasanya lebih kecil)
-          signedDocument = base64;
-          signedDocumentType = 'image';
-          signedDocumentPath = undefined;
-        }
+      try {
+        // Upload file to MinIO using BlobService
+        const uploadResult = await BlobService.uploadFile(signedFile, 'general-trading');
         
         signedDocumentName = signedFile.name;
         onSave({ 
           ...updateData, 
-          signedDocument, 
+          signedDocumentId: uploadResult.fileId,
           signedDocumentName,
-          signedDocumentPath,
-          signedDocumentType,
         });
-      };
-      reader.readAsDataURL(signedFile);
+      } catch (error: any) {
+        showAlert('Error', `Error uploading signed document: ${error.message}`);
+      }
     } else {
       onSave(updateData);
     }
@@ -5644,9 +5602,13 @@ const CreateDeliveryNoteDialog = ({
       // Load customer data
       const customerData = customers.find(c => c.nama === so.customer);
       if (customerData) {
-        setCustomerAddress(customerData.alamat || '');
+        // Prioritize SO customerAddress, fallback to customer master
+        setCustomerAddress(so.customerAddress || customerData.alamat || '');
         setCustomerPIC(customerData.kontak || '');
         setCustomerPhone(customerData.telepon || '');
+      } else {
+        // If customer not found in master, use SO data
+        setCustomerAddress(so.customerAddress || '');
       }
       // Auto-populate items from SO
       if (so.items && so.items.length > 0) {
@@ -5692,6 +5654,16 @@ const CreateDeliveryNoteDialog = ({
   const handleItemChange = (index: number, field: keyof DeliveryNoteItem, value: any) => {
     const updated = [...items];
     updated[index] = { ...updated[index], [field]: value };
+    
+    // Auto-fill product name when productCode is entered
+    if (field === 'productCode' && value) {
+      const productName = getProductNameByCode(value, 'gt');
+      if (productName !== value) {
+        // Found in master data
+        updated[index].product = productName;
+      }
+    }
+    
     setItems(updated);
   };
 

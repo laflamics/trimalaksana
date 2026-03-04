@@ -1,0 +1,358 @@
+.bar-container {
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.bar-container h1 {
+  margin-bottom: 20px;
+  color: var(--text-primary);
+}
+
+/* Filters */
+.bar-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
+  padding: 15px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.filter-group label {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.filter-group input {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 14px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.filter-group input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+/* Info */
+.bar-info {
+  margin-bottom: 15px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+/* Timeline */
+.bar-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.bar-empty {
+  padding: 40px;
+  text-align: center;
+  color: var(--text-tertiary);
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.bar-loading,
+.bar-error {
+  padding: 20px;
+  text-align: center;
+  border-radius: 8px;
+}
+
+.bar-loading {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.bar-error {
+  background: #ffebee;
+  color: #c62828;
+}
+
+/* Bar Item */
+.bar-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 15px;
+  background: var(--bg-primary);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.2s;
+}
+
+.bar-item:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 15px;
+  gap: 15px;
+}
+
+.bar-info-left {
+  flex: 1;
+}
+
+.bar-info-left h3 {
+  margin: 0 0 5px 0;
+  color: var(--text-primary);
+  font-size: 16px;
+}
+
+.bar-customer {
+  margin: 3px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.bar-spk {
+  margin: 3px 0;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.bar-product {
+  margin: 3px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.bar-qty {
+  margin: 3px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.bar-detail-btn {
+  padding: 8px 16px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.bar-detail-btn:hover {
+  background: var(--primary-dark);
+}
+
+/* Stages */
+.bar-stages {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding: 15px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  overflow-x: auto;
+  position: relative;
+}
+
+.bar-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 100px;
+  flex: 1;
+  position: relative;
+  z-index: 2;
+}
+
+.bar-stage-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-primary);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: white;
+  font-size: 16px;
+}
+
+.bar-stage-dot.skipped {
+  opacity: 0.6;
+}
+
+.bar-stage-icon {
+  display: inline-block;
+}
+
+.bar-stage:hover .bar-stage-dot {
+  transform: scale(1.15);
+}
+
+.bar-stage-label {
+  text-align: center;
+}
+
+.bar-stage-name {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.bar-stage-status {
+  margin: 2px 0 0 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.bar-stage-connector {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  width: calc(100% - 32px);
+  height: 2px;
+  z-index: 1;
+}
+
+/* Progress Bar */
+.bar-progress-section {
+  margin-bottom: 15px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+}
+
+.bar-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.bar-progress-percent {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.bar-progress-bar {
+  width: 100%;
+  height: 24px;
+  background: var(--bg-tertiary);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.bar-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--primary-dark));
+  transition: width 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Dates */
+.bar-dates {
+  display: flex;
+  gap: 20px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+/* Pagination */
+.bar-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  margin-top: 20px;
+  padding: 15px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.bar-pagination button {
+  padding: 8px 16px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.bar-pagination button:hover:not(:disabled) {
+  background: var(--primary-dark);
+}
+
+.bar-pagination button:disabled {
+  background: var(--bg-tertiary);
+  cursor: not-allowed;
+}
+
+.bar-pagination span {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .bar-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .bar-header {
+    flex-direction: column;
+  }
+
+  .bar-stages {
+    flex-wrap: wrap;
+  }
+
+  .bar-stage {
+    min-width: 80px;
+  }
+
+  .bar-dates {
+    flex-direction: column;
+    gap: 5px;
+  }
+}

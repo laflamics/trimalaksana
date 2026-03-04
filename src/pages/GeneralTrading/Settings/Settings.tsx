@@ -6,9 +6,11 @@ import { storageService, StorageType, SyncStatus } from '../../../services/stora
 import { dockerServerService } from '../../../services/docker-server';
 import { getTheme, applyTheme, Theme } from '../../../utils/theme';
 import { checkMobileUpdate, downloadMobileAPK, getAPKFileName } from '../../../utils/actions';
+import { useLanguage } from '../../../hooks/useLanguage';
 import '../../../styles/compact.css';
 
 const Settings = () => {
+  const { language, setLanguage, t } = useLanguage();
   const [storageType, setStorageType] = useState<StorageType>('local');
   const [serverUrl, setServerUrl] = useState('');
   // Custom Dialog state
@@ -207,7 +209,7 @@ const Settings = () => {
     
     // Set default WebSocket URL if not set
     if (config.type === 'server' && !localStorage.getItem('websocket_url')) {
-      localStorage.setItem('websocket_url', 'ws://server-tljp.tail75a421.ts.net:8888/ws');
+      localStorage.setItem('websocket_url', 'wss://server-tljp.tail75a421.ts.net/ws');
       localStorage.setItem('websocket_enabled', 'true');
     }
   };
@@ -367,8 +369,8 @@ const Settings = () => {
     await storageService.setConfig(config);
     if (storageType === 'server') {
       await storageService.syncFromServer();
-      // Set default WebSocket URL
-      localStorage.setItem('websocket_url', 'ws://server-tljp.tail75a421.ts.net:8888/ws');
+      // Set default WebSocket URL using Tailscale Funnel (HTTPS only, no port)
+      localStorage.setItem('websocket_url', 'wss://server-tljp.tail75a421.ts.net/ws');
       localStorage.setItem('websocket_enabled', 'true');
     }
 
@@ -589,7 +591,7 @@ const Settings = () => {
       'Aplikasi akan restart untuk menginstall update. Lanjutkan?',
       async () => {
         try {
-          await window.electronAPI.installUpdate();
+          await window.electronAPI?.installUpdate?.();
         } catch (error: any) {
           showAlert(`Error: ${error.message}`, 'Error');
         }
@@ -680,6 +682,35 @@ const Settings = () => {
               <span>☀️ Light (Terang)</span>
             </label>
           </div>
+        </div>
+      </Card>
+
+      <Card title={t('settings.language')} style={{ marginTop: '20px' }}>
+        <div className="settings-group">
+          <label className="settings-label">{t('settings.language')}</label>
+          <div className="radio-group">
+            <label className="radio-label">
+              <input
+                type="radio"
+                value="id"
+                checked={language === 'id'}
+                onChange={(e) => setLanguage(e.target.value as 'id' | 'en')}
+              />
+              <span>🇮🇩 Bahasa Indonesia</span>
+            </label>
+            <label className="radio-label">
+              <input
+                type="radio"
+                value="en"
+                checked={language === 'en'}
+                onChange={(e) => setLanguage(e.target.value as 'id' | 'en')}
+              />
+              <span>🇬🇧 English</span>
+            </label>
+          </div>
+        </div>
+        <div style={{ marginTop: '12px', padding: '8px', backgroundColor: 'var(--bg-secondary)', borderRadius: '4px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+          {t('settings.languageChanged')}
         </div>
       </Card>
 

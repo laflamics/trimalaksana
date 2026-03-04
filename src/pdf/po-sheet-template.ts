@@ -1,3 +1,4 @@
+import { ensureLogoIsBase64 } from '../utils/hardcoded-logo';
 /**
  * Template PDF Purchase Order Sheet (Format Baru)
  * Format sederhana dengan:
@@ -45,7 +46,7 @@ export function generatePOSheetHtml({
   totalPages = 1,
 }: POSheetParams): string {
   // Logo fallback
-  const logoSrc = logo || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzAwN2JmZiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LXNpemU9IjE0IiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkxPR088L3RleHQ+PC9zdmc+';
+  const logoSrc = ensureLogoIsBase64(logo);
   
   // Split address menjadi 2 baris
   let addressLine1 = '';

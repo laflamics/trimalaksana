@@ -5,6 +5,7 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
+import { useLanguage } from '../../../hooks/useLanguage';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -56,6 +57,7 @@ interface ProductCostAnalysis {
 }
 
 const CostAnalysis = () => {
+  const { t } = useLanguage();
   const [products, setProducts] = useState<Product[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [bomData, setBomData] = useState<BOMItem[]>([]);

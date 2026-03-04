@@ -1,0 +1,6002 @@
+[
+  {
+    "id": "so_1770829742434_6g4xa33yd",
+    "soNo": "001/TO/PURCH/XI/25",
+    "customer": "PT. INDOSAFETY SENTOSA INDUSTRY",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-06",
+    "items": [
+      {
+        "qty": 10,
+        "unit": "ROL",
+        "price": 38410,
+        "discount": 0,
+        "total": 384100,
+        "tax": 42251,
+        "totalAkhir": 426351,
+        "productName": "\"LAKBAN OKAMOTO 2\"\"\"\"X50M\"",
+        "productKode": "TRM4452",
+        "productId": "TRM4452"
+      },
+      {
+        "qty": 10,
+        "unit": "ROL",
+        "price": 10896,
+        "discount": 0,
+        "total": 108960,
+        "tax": 11985,
+        "totalAkhir": 120945,
+        "productName": "EKA TAPE 45MM X 85 Y",
+        "productKode": "TRM4447",
+        "productId": "TRM4447"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : 001/TO/PURCH/XI/25 DO : 12274-060125",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "so_1770829742434_kfltmpijn",
+    "soNo": "KIPO25090293",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-06",
+    "items": [
+      {
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 3564,
+        "discount": 0,
+        "total": 3564000,
+        "tax": 392040,
+        "totalAkhir": 3956040,
+        "productName": "TERMINAL BLOCK UPUN UTD 10 (RD201)",
+        "productKode": "TRM0231",
+        "productId": "TRM0231"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO25090293 DO : 12272-060125",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "so_1770829742434_kn2tdiroi",
+    "soNo": "KIPO25110014",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-06",
+    "items": [
+      {
+        "qty": 2,
+        "unit": "PCS",
+        "price": 625000,
+        "discount": 0,
+        "total": 1250000,
+        "tax": 137500,
+        "totalAkhir": 1387500,
+        "productName": "FLOW METER WIEBROCK FOR AIR 20°C 1 ATM NI/MIN (OP-DF15)",
+        "productKode": "TRM3446",
+        "productId": "TRM3446"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO25110014 DO : 12270-060125",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "so_1770829742434_b97dkvjwk",
+    "soNo": "KIPO25120172",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-06",
+    "items": [
+      {
+        "qty": 2,
+        "unit": "PCS",
+        "price": 1048000,
+        "discount": 0,
+        "total": 2096000,
+        "tax": 230560,
+        "totalAkhir": 2326560,
+        "productName": "\"TOWER LIGHT LED (Q-LIGHT) ST45LF-BZ 3-3 220-AC220V RAG (RED, AMBER, GREEN) BRACKET TYPE SZ18 C/W BUZZER (FLASHING) FOR DRYER TYPE (RG087)\"",
+        "productKode": "TRM1929",
+        "productId": "TRM1929"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO25120172 DO : 12266-060125",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "so_1770829742434_ncmkjg029",
+    "soNo": "KIPO25120191",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-06",
+    "items": [
+      {
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 346,
+        "discount": 0,
+        "total": 346000,
+        "tax": 38060,
+        "totalAkhir": 384060,
+        "productName": "FLAT WASHER / RING PLATE (SS400) Ø8 LEBAR (GALVANIZED) (NB419)",
+        "productKode": "TRM0671",
+        "productId": "TRM0671"
+      },
+      {
+        "qty": 500,
+        "unit": "PCS",
+        "price": 500,
+        "discount": 0,
+        "total": 250000,
+        "tax": 27500,
+        "totalAkhir": 277500,
+        "productName": "BOLT (BAUT HEXAGONAL) M8XP1.25XL25MM (GALVANIZED) (HA059)",
+        "productKode": "TRM0298",
+        "productId": "TRM0298"
+      },
+      {
+        "qty": 500,
+        "unit": "PCS",
+        "price": 6500,
+        "discount": 0,
+        "total": 3250000,
+        "tax": 357500,
+        "totalAkhir": 3607500,
+        "productName": "CLAMP HOSE BAND (SILVER) Ø42 - Ø48 (DOUBLE WIRE CLAMP) FOR PVC HOSE Ø38 /SILICONE HOSE Ø43 (SUNTRAC) (NB060-1)",
+        "productKode": "TRM2158",
+        "productId": "TRM2158"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO25120191 DO : 12265-060125",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "so_1770829742435_arfj4sxhy",
+    "soNo": "KIPO25110221",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-06",
+    "items": [
+      {
+        "qty": 100,
+        "unit": "PCS",
+        "price": 91500,
+        "discount": 0,
+        "total": 9150000,
+        "tax": 1006500,
+        "totalAkhir": 10156500,
+        "productName": "\"REVOLVING WARNING LIGHT (RED) DV LTD-1101J MULTI VOLT 220VAC, 24VDC, 12VDC C/W BUZZER (RG141)\"",
+        "productKode": "TRM0061",
+        "productId": "TRM0061"
+      },
+      {
+        "qty": 100,
+        "unit": "PCS",
+        "price": 83160,
+        "discount": 0,
+        "total": 8316000,
+        "tax": 914760,
+        "totalAkhir": 9230760,
+        "productName": "MAGNETIC (SENSOR) LEAD SWITCH SENSOR SNS CSI-U DC 12-24V 2 WIRE (DL030)",
+        "productKode": "TRM0045",
+        "productId": "TRM0045"
+      },
+      {
+        "qty": 300,
+        "unit": "PCS",
+        "price": 5000,
+        "discount": 0,
+        "total": 1500000,
+        "tax": 165000,
+        "totalAkhir": 1665000,
+        "productName": "TERMINAL BLOCK UPUN UTD 15 (RD207)",
+        "productKode": "TRM0232",
+        "productId": "TRM0232"
+      },
+      {
+        "qty": 2396,
+        "unit": "PCS",
+        "price": 3564,
+        "discount": 0,
+        "total": 8539344,
+        "tax": 939327,
+        "totalAkhir": 9478671,
+        "productName": "TERMINAL BLOCK UPUN UTD 10 (RD201)",
+        "productKode": "TRM0231",
+        "productId": "TRM0231"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO25110221 DO : 12269-060125",
+    "timestamp": 1770829742435
+  },
+  {
+    "id": "so_1770829742435_gwbf2uls1",
+    "soNo": "KIPO25120095",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-06",
+    "items": [
+      {
+        "qty": 1,
+        "unit": "PCS",
+        "price": 1583175,
+        "discount": 0,
+        "total": 1583175,
+        "tax": 174149,
+        "totalAkhir": 1757324,
+        "productName": "\"TOWER LIGHT LED (Q-LIGHT) QTG50 LF-BZ 2-2 220-AC220V RA (RED, AMBER) BRACKET TYPE QZ18 C/W BUZZER (RG084)\"",
+        "productKode": "TRM0237",
+        "productId": "TRM0237"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO25120095 DO : 12268-060125",
+    "timestamp": 1770829742435
+  },
+  {
+    "id": "so_1770829742435_se02wm6w7",
+    "soNo": "KIPO25100071",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-06",
+    "items": [
+      {
+        "qty": 323,
+        "unit": "LBR",
+        "price": 113850,
+        "discount": 1362891,
+        "total": 36773550,
+        "tax": 4045090,
+        "totalAkhir": 40818640,
+        "productName": "PLYWOOD (KAYU TRIPLEK) L=240 W=120 T=9MM (NB019)",
+        "productKode": "TRM0057",
+        "productId": "TRM0057"
+      },
+      {
+        "qty": 836,
+        "unit": "BTG",
+        "price": 12500,
+        "discount": 0,
+        "total": 10450000,
+        "tax": 1149500,
+        "totalAkhir": 11599500,
+        "productName": "WAINSCOT (KAYU LIST) L=250 W=7 T=2 (NB018)",
+        "productKode": "TRM0340",
+        "productId": "TRM0340"
+      },
+      {
+        "qty": 960,
+        "unit": "BTG",
+        "price": 12500,
+        "discount": 0,
+        "total": 12000000,
+        "tax": 1320000,
+        "totalAkhir": 13320000,
+        "productName": "BEAMWOOD (KAYU BALOK) L=150 W=8 T=5 (NB017)",
+        "productKode": "TRM0004",
+        "productId": "TRM0004"
+      },
+      {
+        "qty": 154,
+        "unit": "BTG",
+        "price": 24000,
+        "discount": 0,
+        "total": 3696000,
+        "tax": 406560,
+        "totalAkhir": 4102560,
+        "productName": "BEAMWOOD (KAYU BALOK) L=200 X W=8 X T=5 (NB1343)",
+        "productKode": "TRM0005",
+        "productId": "TRM0005"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO25100071 DO : 12271-060125",
+    "timestamp": 1770829742435
+  },
+  {
+    "id": "so_1770829742435_68cz6xclf",
+    "soNo": "KIPO25120147",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-06",
+    "items": [
+      {
+        "qty": 2,
+        "unit": "PCS",
+        "price": 908200,
+        "discount": 0,
+        "total": 1816400,
+        "tax": 199804,
+        "totalAkhir": 2016204,
+        "productName": "PNEUMATIC VIBRATORS VIBTEC GT-10 (NB050)",
+        "productKode": "TRM0667",
+        "productId": "TRM0667"
+      },
+      {
+        "qty": 2,
+        "unit": "PCS",
+        "price": 908200,
+        "discount": 0,
+        "total": 1816400,
+        "tax": 199804,
+        "totalAkhir": 2016204,
+        "productName": "PNEUMATIC VIBRATORS VIBTEC GT-10 (NB050)",
+        "productKode": "TRM0667",
+        "productId": "TRM0667"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO25120147 DO : 12267-060125",
+    "timestamp": 1770829742435
+  },
+  {
+    "id": "so_1770829742435_w65m3qrkd",
+    "soNo": "KIPO25120209",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-06",
+    "items": [
+      {
+        "qty": 12,
+        "unit": "TUBE",
+        "price": 150000,
+        "discount": 0,
+        "total": 1800000,
+        "tax": 198000,
+        "totalAkhir": 1998000,
+        "productName": "RTV MULTI PERPOSE SEALENT DOW CORNING 732 CLEAR 300ML (ANB026)",
+        "productKode": "TRM0065",
+        "productId": "TRM0065"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO25120209 DO : 12264-060125",
+    "timestamp": 1770829742435
+  },
+  {
+    "id": "so_1770829742438_1zanzpwkt",
+    "soNo": "PL2600003",
+    "customer": "\"SANOH INDONESIA, PT\"",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-06",
+    "items": [
+      {
+        "qty": 150,
+        "unit": "PCS",
+        "price": 62000,
+        "discount": 0,
+        "total": 9300000,
+        "tax": 1023000,
+        "totalAkhir": 10323000,
+        "productName": "KARET GELANG BESAR",
+        "productKode": "TRM0172",
+        "productId": "TRM0172"
+      },
+      {
+        "qty": 35,
+        "unit": "PCS",
+        "price": 33450,
+        "discount": 0,
+        "total": 1170750,
+        "tax": 128782,
+        "totalAkhir": 1299532,
+        "productName": "KAWAT LAS NICHO 2.6 MM",
+        "productKode": "TRM0245",
+        "productId": "TRM0245"
+      },
+      {
+        "qty": 192,
+        "unit": "PCS",
+        "price": 5500,
+        "discount": 0,
+        "total": 1056000,
+        "tax": 116160,
+        "totalAkhir": 1172160,
+        "productName": "MASKING TAVE",
+        "productKode": "TRM0211",
+        "productId": "TRM0211"
+      },
+      {
+        "qty": 150,
+        "unit": "PCS",
+        "price": 9500,
+        "discount": 0,
+        "total": 1425000,
+        "tax": 156750,
+        "totalAkhir": 1581750,
+        "productName": "MASKER KAIN",
+        "productKode": "TRM0208",
+        "productId": "TRM0208"
+      },
+      {
+        "qty": 120,
+        "unit": "PCS",
+        "price": 16000,
+        "discount": 0,
+        "total": 1920000,
+        "tax": 211200,
+        "totalAkhir": 2131200,
+        "productName": "MARKING LT. BLUE (ARTLINE)",
+        "productKode": "TRM0183",
+        "productId": "TRM0183"
+      },
+      {
+        "qty": 120,
+        "unit": "PCS",
+        "price": 14700,
+        "discount": 0,
+        "total": 1764000,
+        "tax": 194040,
+        "totalAkhir": 1958040,
+        "productName": "MARKING SNOWMAN BLACK",
+        "productKode": "TRM0189",
+        "productId": "TRM0189"
+      },
+      {
+        "qty": 240,
+        "unit": "PCS",
+        "price": 14700,
+        "discount": 0,
+        "total": 3528000,
+        "tax": 388080,
+        "totalAkhir": 3916080,
+        "productName": "MARKING SNOWMAN BLUE",
+        "productKode": "TRM0185",
+        "productId": "TRM0185"
+      },
+      {
+        "qty": 120,
+        "unit": "PCS",
+        "price": 14700,
+        "discount": 0,
+        "total": 1764000,
+        "tax": 194040,
+        "totalAkhir": 1958040,
+        "productName": "MARKING SNOWMAN GREEN",
+        "productKode": "TRM0188",
+        "productId": "TRM0188"
+      },
+      {
+        "qty": 120,
+        "unit": "PCS",
+        "price": 14700,
+        "discount": 0,
+        "total": 1764000,
+        "tax": 194040,
+        "totalAkhir": 1958040,
+        "productName": "MARKING SNOWMAN ORANGE",
+        "productKode": "TRM0192",
+        "productId": "TRM0192"
+      },
+      {
+        "qty": 120,
+        "unit": "PCS",
+        "price": 14700,
+        "discount": 0,
+        "total": 1764000,
+        "tax": 194040,
+        "totalAkhir": 1958040,
+        "productName": "MARKING SNOWMAN RED",
+        "productKode": "TRM0191",
+        "productId": "TRM0191"
+      },
+      {
+        "qty": 240,
+        "unit": "PCS",
+        "price": 14700,
+        "discount": 0,
+        "total": 3528000,
+        "tax": 388080,
+        "totalAkhir": 3916080,
+        "productName": "MARKING SNOWMAN YELLOW",
+        "productKode": "TRM0190",
+        "productId": "TRM0190"
+      },
+      {
+        "qty": 120,
+        "unit": "PCS",
+        "price": 16000,
+        "discount": 0,
+        "total": 1920000,
+        "tax": 211200,
+        "totalAkhir": 2131200,
+        "productName": "MARKING YELLOW GREEN (ARTLINE)",
+        "productKode": "TRM0184",
+        "productId": "TRM0184"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PL2600003 DO : 12263-060125",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742438_busl63qkl",
+    "soNo": "POQ012880",
+    "customer": "\"VALMET TECHNOLOGY CENTER, PT\"",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-06",
+    "items": [
+      {
+        "qty": 20,
+        "unit": "PC",
+        "price": 139650,
+        "discount": 0,
+        "total": 2793000,
+        "tax": 307230,
+        "totalAkhir": 3100230,
+        "productName": "MICROBACT 1 LITER",
+        "productKode": "TRM0568",
+        "productId": "TRM0568"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : POQ012880 DO : 12273-061225",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742432_vjwaltfh6",
+    "soNo": "5701690021",
+    "customer": "PT Hanjaya Mandala Sampoerna Tbk",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-07",
+    "items": [
+      {
+        "qty": 500,
+        "unit": "PCS",
+        "price": 4000,
+        "discount": 0,
+        "total": 2000000,
+        "tax": 220000,
+        "totalAkhir": 2220000,
+        "productName": "CHECKLIST APAR",
+        "productKode": "TRM2606",
+        "productId": "TRM2606"
+      },
+      {
+        "qty": 500,
+        "unit": "PCS",
+        "price": 8500,
+        "discount": 0,
+        "total": 4250000,
+        "tax": 467500,
+        "totalAkhir": 4717500,
+        "productName": "CHECKLIST TANGGA DORONG",
+        "productKode": "TRM2595",
+        "productId": "TRM2595"
+      },
+      {
+        "qty": 500,
+        "unit": "PCS",
+        "price": 8500,
+        "discount": 0,
+        "total": 4250000,
+        "tax": 467500,
+        "totalAkhir": 4717500,
+        "productName": "CHECKLIST BODY HARNESS",
+        "productKode": "TRM2602",
+        "productId": "TRM2602"
+      },
+      {
+        "qty": 200,
+        "unit": "PCS",
+        "price": 9500,
+        "discount": 0,
+        "total": 1900000,
+        "tax": 209000,
+        "totalAkhir": 2109000,
+        "productName": "CHECKLIST FALL ARRESTER",
+        "productKode": "TRM2596",
+        "productId": "TRM2596"
+      },
+      {
+        "qty": 200,
+        "unit": "PCS",
+        "price": 9500,
+        "discount": 0,
+        "total": 1900000,
+        "tax": 209000,
+        "totalAkhir": 2109000,
+        "productName": "CHECKLIST EYEWASH",
+        "productKode": "TRM2598",
+        "productId": "TRM2598"
+      },
+      {
+        "qty": 200,
+        "unit": "PCS",
+        "price": 10500,
+        "discount": 0,
+        "total": 2100000,
+        "tax": 231000,
+        "totalAkhir": 2331000,
+        "productName": "CHECKLIST HAND PALLET",
+        "productKode": "TRM2597",
+        "productId": "TRM2597"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : 5701690021 DO : 12393-070126",
+    "timestamp": 1770829742432
+  },
+  {
+    "id": "so_1770829742432_vixwz89qc",
+    "soNo": "5701690028",
+    "customer": "PT Hanjaya Mandala Sampoerna Tbk",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-07",
+    "items": [
+      {
+        "qty": 50,
+        "unit": "PCS",
+        "price": 9500,
+        "discount": 0,
+        "total": 475000,
+        "tax": 52250,
+        "totalAkhir": 527250,
+        "productName": "CHECKLIST MEWP",
+        "productKode": "TRM4466",
+        "productId": "TRM4466"
+      },
+      {
+        "qty": 50,
+        "unit": "PCS",
+        "price": 19000,
+        "discount": 0,
+        "total": 950000,
+        "tax": 104500,
+        "totalAkhir": 1054500,
+        "productName": "CHECKLIST EMERGENCY CABINET",
+        "productKode": "TRM4467",
+        "productId": "TRM4467"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : 5701690028 DO : 12394-070126",
+    "timestamp": 1770829742432
+  },
+  {
+    "id": "so_1770829742433_ouu72bsgw",
+    "soNo": "PO-L-202512000210",
+    "customer": "PT INTEGRASI MEDIKA PRIMA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-07",
+    "items": [
+      {
+        "qty": 14,
+        "unit": "PCS",
+        "price": 145000,
+        "discount": 0,
+        "total": 2030000,
+        "tax": 223300,
+        "totalAkhir": 2253300,
+        "productName": "TEMPAT PAPAN NAMA 30 X 7.5CM",
+        "productKode": "TRM4454",
+        "productId": "TRM4454"
+      },
+      {
+        "qty": 19,
+        "unit": "PCS",
+        "price": 21000,
+        "discount": 0,
+        "total": 399000,
+        "tax": 43890,
+        "totalAkhir": 442890,
+        "productName": "PAPAN NAMA 34 X 4.5CM",
+        "productKode": "TRM4455",
+        "productId": "TRM4455"
+      },
+      {
+        "qty": 19,
+        "unit": "PCS",
+        "price": 21000,
+        "discount": 0,
+        "total": 399000,
+        "tax": 43890,
+        "totalAkhir": 442890,
+        "productName": "PAPAN NAMA 30 X 7CM",
+        "productKode": "TRM4456",
+        "productId": "TRM4456"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO-L-202512000210 DO : 12278-070125",
+    "timestamp": 1770829742433
+  },
+  {
+    "id": "so_1770829742435_n9t4qqq4w",
+    "soNo": "KIPO26010013",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-07",
+    "items": [
+      {
+        "qty": 1000,
+        "unit": "MTR",
+        "price": 1465,
+        "discount": 0,
+        "total": 1465000,
+        "tax": 161150,
+        "totalAkhir": 1626150,
+        "productName": "CABLE NYAF Ø0.50MM2 (BLUE) [100MTR/ROLL] (CC481)",
+        "productKode": "TRM0012",
+        "productId": "TRM0012"
+      },
+      {
+        "qty": 500,
+        "unit": "MTR",
+        "price": 3146,
+        "discount": 0,
+        "total": 1573000,
+        "tax": 173030,
+        "totalAkhir": 1746030,
+        "productName": "CABLE NYAF Ø1.50MM2 (WHITE) [100MTR/ROLL] (CC474-1)",
+        "productKode": "TRM0134",
+        "productId": "TRM0134"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO26010013 DO : 12276-070125",
+    "timestamp": 1770829742435
+  },
+  {
+    "id": "so_1770829742435_adqijnzvz",
+    "soNo": "KIPO26010043",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-07",
+    "items": [
+      {
+        "qty": 100,
+        "unit": "PCS",
+        "price": 131532,
+        "discount": 0,
+        "total": 13153200,
+        "tax": 1446852,
+        "totalAkhir": 14600052,
+        "productName": "\"CASTER WHEEL NYLON (KASTOR RODA) 4\"\"\"\" C/W BRAKE (ODØ 101.6MM) SWIPEL FLANGE (SLOT 70MMX85MM Ø12) (CD038)\"",
+        "productKode": "TRM0019",
+        "productId": "TRM0019"
+      },
+      {
+        "qty": 100,
+        "unit": "PCS",
+        "price": 98746,
+        "discount": 0,
+        "total": 9874600,
+        "tax": 1086206,
+        "totalAkhir": 10960806,
+        "productName": "\"CASTER WHEEL NYLON (KASTOR RODA) 4\"\"\"\" W/O BRAKE (ODØ 101.6MM) SWIPEL FLANGE (SLOT 70MMX85MM Ø12) (CD037)\"",
+        "productKode": "TRM0020",
+        "productId": "TRM0020"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO26010043 DO : 12277-070125",
+    "timestamp": 1770829742435
+  },
+  {
+    "id": "so_1770829742435_kjd6sqn2q",
+    "soNo": "KIPO26010022",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-07",
+    "items": [
+      {
+        "qty": 50,
+        "unit": "PCS",
+        "price": 113850,
+        "discount": 0,
+        "total": 5692500,
+        "tax": 626175,
+        "totalAkhir": 6318675,
+        "productName": "INK RIBBON (BLACK) LETATWIN LM-1R300B (5PCS/BOX) FOR LETATWIN LM-370A (NB304-1)",
+        "productKode": "TRM0036",
+        "productId": "TRM0036"
+      },
+      {
+        "qty": 2000,
+        "unit": "PCS",
+        "price": 506,
+        "discount": 0,
+        "total": 1012000,
+        "tax": 111320,
+        "totalAkhir": 1123320,
+        "productName": "TERMINAL LUG RING R1.25-4 (SPECIAL) (NB982)",
+        "productKode": "TRM0235",
+        "productId": "TRM0235"
+      },
+      {
+        "qty": 200,
+        "unit": "PCS",
+        "price": 2250,
+        "discount": 0,
+        "total": 450000,
+        "tax": 49500,
+        "totalAkhir": 499500,
+        "productName": "SOCKET CONNECTOR 2 PIN MALE (NB470)",
+        "productKode": "TRM0070",
+        "productId": "TRM0070"
+      },
+      {
+        "qty": 200,
+        "unit": "PCS",
+        "price": 2250,
+        "discount": 0,
+        "total": 450000,
+        "tax": 49500,
+        "totalAkhir": 499500,
+        "productName": "SOCKET CONNECTOR 2 PIN FEMALE (NB471)",
+        "productKode": "TRM0069",
+        "productId": "TRM0069"
+      },
+      {
+        "qty": 400,
+        "unit": "MTR",
+        "price": 1804,
+        "discount": 0,
+        "total": 721600,
+        "tax": 79376,
+        "totalAkhir": 800976,
+        "productName": "MARKER TUBE MOTP WHITE 3.2 (200MTR/ROL) (CC104-1)",
+        "productKode": "TRM0046",
+        "productId": "TRM0046"
+      },
+      {
+        "qty": 100,
+        "unit": "PCS",
+        "price": 2800,
+        "discount": 0,
+        "total": 280000,
+        "tax": 30800,
+        "totalAkhir": 310800,
+        "productName": "NYLON CABLE GLAND PG-13.5 (BLACK) FOR (Ø20.4 HOLE) (NB479-1)",
+        "productKode": "TRM2344",
+        "productId": "TRM2344"
+      },
+      {
+        "qty": 200,
+        "unit": "MTR",
+        "price": 9800,
+        "discount": 0,
+        "total": 1960000,
+        "tax": 215600,
+        "totalAkhir": 2175600,
+        "productName": "FIBERGLASS SLEEVING Ø10MM (WHITE) (NB136-1)",
+        "productKode": "TRM0033",
+        "productId": "TRM0033"
+      },
+      {
+        "qty": 200,
+        "unit": "MTR",
+        "price": 16900,
+        "discount": 0,
+        "total": 3380000,
+        "tax": 371800,
+        "totalAkhir": 3751800,
+        "productName": "FIBERGLASS SLEEVING Ø15MM (WHITE) (NB619)",
+        "productKode": "TRM0034",
+        "productId": "TRM0034"
+      },
+      {
+        "qty": 100,
+        "unit": "MTR",
+        "price": 5840,
+        "discount": 0,
+        "total": 584000,
+        "tax": 64240,
+        "totalAkhir": 648240,
+        "productName": "CABLE NYAF Ø2.50 MM2 (WHITE) (100MTR/ROLL) (CC476-1)",
+        "productKode": "TRM0152",
+        "productId": "TRM0152"
+      },
+      {
+        "qty": 500,
+        "unit": "MTR",
+        "price": 1465,
+        "discount": 0,
+        "total": 732500,
+        "tax": 80575,
+        "totalAkhir": 813075,
+        "productName": "CABLE NYAF Ø0.50MM2 (YELLOW) [100MTR/ROLL] (CC491-1)",
+        "productKode": "TRM0131",
+        "productId": "TRM0131"
+      },
+      {
+        "qty": 2000,
+        "unit": "PCS",
+        "price": 506,
+        "discount": 0,
+        "total": 1012000,
+        "tax": 111320,
+        "totalAkhir": 1123320,
+        "productName": "TERMINAL LUG RING R1.25-3 (SPECIAL) (NB901)",
+        "productKode": "TRM0234",
+        "productId": "TRM0234"
+      },
+      {
+        "qty": 500,
+        "unit": "MTR",
+        "price": 1465,
+        "discount": 0,
+        "total": 732500,
+        "tax": 80575,
+        "totalAkhir": 813075,
+        "productName": "CABLE NYAF Ø0.50MM2 (YELLOW) [100MTR/ROLL] (CC491-1)",
+        "productKode": "TRM0131",
+        "productId": "TRM0131"
+      },
+      {
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 333,
+        "discount": 0,
+        "total": 333000,
+        "tax": 36630,
+        "totalAkhir": 369630,
+        "productName": "TERMINAL LUG RING TYPE KSS R1.25-6 [100PCS./PACK] (SKUN RING POLOR FOR WIRE 0.50-1.50MM2) (NB144-1)",
+        "productKode": "TRM1213",
+        "productId": "TRM1213"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO26010022 DO : 12275-070125",
+    "timestamp": 1770829742435
+  },
+  {
+    "id": "so_1770829742433_54r0vh15d",
+    "soNo": "PO-L-202601000027",
+    "customer": "PT INTEGRASI MEDIKA PRIMA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-08",
+    "items": [
+      {
+        "qty": 2,
+        "unit": "PCS",
+        "price": 105000,
+        "discount": 0,
+        "total": 210000,
+        "tax": 23100,
+        "totalAkhir": 233100,
+        "productName": "PRINT CARTON UK 41 X 60CM",
+        "productKode": "TRM3440",
+        "productId": "TRM3440"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO-L-202601000027 DO : 12280-080126",
+    "timestamp": 1770829742433
+  },
+  {
+    "id": "so_1770829742434_ldkvd1wgw",
+    "soNo": "HKB/PO/12/025/3375",
+    "customer": "PT. HANYA KARYA BAHANA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-08",
+    "items": [
+      {
+        "qty": 10,
+        "unit": "KG",
+        "price": 53000,
+        "discount": 0,
+        "total": 530000,
+        "tax": 58300,
+        "totalAkhir": 588300,
+        "productName": "PLASTIK WAYANG UK 15X20",
+        "productKode": "TRM0382",
+        "productId": "TRM0382"
+      },
+      {
+        "qty": 500,
+        "unit": "PCS",
+        "price": 1765,
+        "discount": 0,
+        "total": 882500,
+        "tax": 97075,
+        "totalAkhir": 979575,
+        "productName": "KERTAS VCI 30 x 33",
+        "productKode": "TRM0532",
+        "productId": "TRM0532"
+      },
+      {
+        "qty": 2,
+        "unit": "PAIL",
+        "price": 133650,
+        "discount": 0,
+        "total": 267300,
+        "tax": 29403,
+        "totalAkhir": 296703,
+        "productName": "NABAKEM",
+        "productKode": "TRM1216",
+        "productId": "TRM1216"
+      },
+      {
+        "qty": 2,
+        "unit": "LTR",
+        "price": 41100,
+        "discount": 0,
+        "total": 82200,
+        "tax": 9042,
+        "totalAkhir": 91242,
+        "productName": "OIL SINGER 1 LITER",
+        "productKode": "TRM0214",
+        "productId": "TRM0214"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : HKB/PO/12/025/3375 DO : 12295-080126",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "so_1770829742436_b6qxvd2yb",
+    "soNo": "KIPO25120231",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-08",
+    "items": [
+      {
+        "qty": 4,
+        "unit": "PCS",
+        "price": 663,
+        "discount": 0,
+        "total": 2652,
+        "tax": 291,
+        "totalAkhir": 2943,
+        "productName": "BOLT (BAUT JT) M4XP0.7XL12MM (SUS304) (NB180)",
+        "productKode": "TRM0672",
+        "productId": "TRM0672"
+      },
+      {
+        "qty": 6,
+        "unit": "PCS",
+        "price": 1732,
+        "discount": 0,
+        "total": 10392,
+        "tax": 1143,
+        "totalAkhir": 11535,
+        "productName": "BOLT (BAUT L) M6XP1.0XL20MM (SUS304) (NB204)",
+        "productKode": "TRM0114",
+        "productId": "TRM0114"
+      },
+      {
+        "qty": 4,
+        "unit": "PCS",
+        "price": 850,
+        "discount": 0,
+        "total": 3400,
+        "tax": 374,
+        "totalAkhir": 3774,
+        "productName": "SPACER NUT M6X18MM (GALVANIZED) FOR XF-400RA (CN050)",
+        "productKode": "TRM4307",
+        "productId": "TRM4307"
+      },
+      {
+        "qty": 20,
+        "unit": "PCS",
+        "price": 663,
+        "discount": 0,
+        "total": 13260,
+        "tax": 1458,
+        "totalAkhir": 14718,
+        "productName": "BOLT (BAUT JT) M4XP0.7XL12MM (SUS304) (NB180)",
+        "productKode": "TRM0672",
+        "productId": "TRM0672"
+      },
+      {
+        "qty": 30,
+        "unit": "PCS",
+        "price": 989,
+        "discount": 0,
+        "total": 29670,
+        "tax": 3263,
+        "totalAkhir": 32933,
+        "productName": "BOLT (BAUT L) M4XP0.7XL20MM (SUS304) (HC026)",
+        "productKode": "TRM3917",
+        "productId": "TRM3917"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO25120231 DO : 12281-080126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "so_1770829742436_2ih9pxf8k",
+    "soNo": "KIPO26010033",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-08",
+    "items": [
+      {
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 300,
+        "discount": 0,
+        "total": 300000,
+        "tax": 33000,
+        "totalAkhir": 333000,
+        "productName": "BOLT (BAUT JP) M4XP0.7XL30MM (GALVANIZED) (NB1026)",
+        "productKode": "TRM2019",
+        "productId": "TRM2019"
+      },
+      {
+        "qty": 10,
+        "unit": "PCS",
+        "price": 13500,
+        "discount": 0,
+        "total": 135000,
+        "tax": 14850,
+        "totalAkhir": 149850,
+        "productName": "TOGGLE SWITCH C513B (SPDT) ON/OFF/ON (CNTD) 15A 250VAC SELF-LOCKING (RC802)",
+        "productKode": "TRM3713",
+        "productId": "TRM3713"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO26010033 DO : 12284-080126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "so_1770829742436_9bzv6rjbt",
+    "soNo": "KIPO25120221",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-08",
+    "items": [
+      {
+        "qty": 1,
+        "unit": "PCS",
+        "price": 1583175,
+        "discount": 0,
+        "total": 1583175,
+        "tax": 174149,
+        "totalAkhir": 1757324,
+        "productName": "\"TOWER LIGHT LED (Q-LIGHT) QTG50 LF-BZ 2-2 220-AC220V RA (RED, AMBER) BRACKET TYPE QZ18 C/W BUZZER (RG084)\"",
+        "productKode": "TRM0237",
+        "productId": "TRM0237"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO25120221 DO : 12282-080126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "so_1770829742434_eosq0jlbi",
+    "soNo": "JRE-KARAWANG-GA/137/01/2026",
+    "customer": "PT. JAYA REFRIGERATION EQUIPMENT",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-09",
+    "items": [
+      {
+        "qty": 17,
+        "unit": "PCS",
+        "price": 823500,
+        "discount": 0,
+        "total": 13999500,
+        "tax": 1539945,
+        "totalAkhir": 15539445,
+        "productName": "APAR TEMATIK",
+        "productKode": "TRM4453",
+        "productId": "TRM4453"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : JRE-KARAWANG-GA/137/01/2026 DO : 12293-090126",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "so_1770829742436_x0ne2re6v",
+    "soNo": "KIPO26010061",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-09",
+    "items": [
+      {
+        "qty": 500,
+        "unit": "PCS",
+        "price": 2208,
+        "discount": 0,
+        "total": 1104000,
+        "tax": 121440,
+        "totalAkhir": 1225440,
+        "productName": "BOLT (BAUT L) M8XP1.25XL25MM (GALVANIZED) (NB031-1)",
+        "productKode": "TRM0118",
+        "productId": "TRM0118"
+      },
+      {
+        "qty": 2000,
+        "unit": "PCS",
+        "price": 48,
+        "discount": 0,
+        "total": 96000,
+        "tax": 10560,
+        "totalAkhir": 106560,
+        "productName": "FLAT WASHER / RING PLATE (SS400) M6 (GALVANIZED) (NB033)",
+        "productKode": "TRM0348",
+        "productId": "TRM0348"
+      },
+      {
+        "qty": 500,
+        "unit": "PCS",
+        "price": 400,
+        "discount": 0,
+        "total": 200000,
+        "tax": 22000,
+        "totalAkhir": 222000,
+        "productName": "FLAT WASHER / RING PLATE (SS400) M6 GALVANIZED LEBAR (NB041)",
+        "productKode": "TRM0593",
+        "productId": "TRM0593"
+      },
+      {
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 149,
+        "discount": 0,
+        "total": 149000,
+        "tax": 16390,
+        "totalAkhir": 165390,
+        "productName": "BOLT (BAUT JP) M4XP0.7XL10MM (GALVANIZED) (NB107-1)",
+        "productKode": "TRM0097",
+        "productId": "TRM0097"
+      },
+      {
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 400,
+        "discount": 0,
+        "total": 400000,
+        "tax": 44000,
+        "totalAkhir": 444000,
+        "productName": "FLAT WASHER / RING PLATE M8 (SUS304) (NB348)",
+        "productKode": "TRM0592",
+        "productId": "TRM0592"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO26010061 DO : 12292-090126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "so_1770829742436_l87ppapso",
+    "soNo": "KIPO26010062",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-09",
+    "items": [
+      {
+        "qty": 5,
+        "unit": "ROL",
+        "price": 269664,
+        "discount": 0,
+        "total": 1348320,
+        "tax": 148315,
+        "totalAkhir": 1496635,
+        "productName": "SUPER SEAL SIZE : 7MM X 3MM X 15M (15MTR/ROLL) PTFE JOINT SEALENT (NB356-1)",
+        "productKode": "TRM0073",
+        "productId": "TRM0073"
+      },
+      {
+        "qty": 2,
+        "unit": "ROL",
+        "price": 80000,
+        "discount": 0,
+        "total": 160000,
+        "tax": 17600,
+        "totalAkhir": 177600,
+        "productName": "STRAPPING BAND SIZE : 15MMW X 0.6MMT X 2.500MTR/ROLL (NB064)",
+        "productKode": "TRM1089",
+        "productId": "TRM1089"
+      },
+      {
+        "qty": 1,
+        "unit": "ROL",
+        "price": 641520,
+        "discount": 0,
+        "total": 641520,
+        "tax": 70567,
+        "totalAkhir": 712087,
+        "productName": "STEREO FOAM 3MM (NB233)",
+        "productKode": "TRM0072",
+        "productId": "TRM0072"
+      },
+      {
+        "qty": 1,
+        "unit": "PCS",
+        "price": 55000,
+        "discount": 0,
+        "total": 55000,
+        "tax": 6050,
+        "totalAkhir": 61050,
+        "productName": "METERAN 5M (NB467)",
+        "productKode": "TRM0051",
+        "productId": "TRM0051"
+      },
+      {
+        "qty": 1,
+        "unit": "PCS",
+        "price": 132715,
+        "discount": 0,
+        "total": 132715,
+        "tax": 14598,
+        "totalAkhir": 147313,
+        "productName": "OBENG SHOCK M8 (NB314-5)",
+        "productKode": "TRM4468",
+        "productId": "TRM4468"
+      },
+      {
+        "qty": 90,
+        "unit": "LBR",
+        "price": 113850,
+        "discount": 0,
+        "total": 10246500,
+        "tax": 1127115,
+        "totalAkhir": 11373615,
+        "productName": "PLYWOOD (KAYU TRIPLEK) L=240 W=120 T=9MM (NB019)",
+        "productKode": "TRM0057",
+        "productId": "TRM0057"
+      },
+      {
+        "qty": 620,
+        "unit": "BTG",
+        "price": 12500,
+        "discount": 0,
+        "total": 7750000,
+        "tax": 852500,
+        "totalAkhir": 8602500,
+        "productName": "WAINSCOT (KAYU LIST) L=250 W=7 T=2 (NB018)",
+        "productKode": "TRM0340",
+        "productId": "TRM0340"
+      },
+      {
+        "qty": 660,
+        "unit": "BTG",
+        "price": 12500,
+        "discount": 0,
+        "total": 8250000,
+        "tax": 907500,
+        "totalAkhir": 9157500,
+        "productName": "BEAMWOOD (KAYU BALOK) L=150 W=8 T=5 (NB017)",
+        "productKode": "TRM0004",
+        "productId": "TRM0004"
+      },
+      {
+        "qty": 33,
+        "unit": "BTG",
+        "price": 24000,
+        "discount": 0,
+        "total": 792000,
+        "tax": 87120,
+        "totalAkhir": 879120,
+        "productName": "BEAMWOOD (KAYU BALOK) L=200 X W=8 X T=5 (NB1343)",
+        "productKode": "TRM0005",
+        "productId": "TRM0005"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO26010062 DO : 12291-090126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "so_1770829742438_x1uc2xrjr",
+    "soNo": "CTP/PO/000021733",
+    "customer": "PT. WELGRO FEEDMILL (INDONESIA)",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-09",
+    "items": [
+      {
+        "qty": 3000,
+        "unit": "PCS",
+        "price": 3200,
+        "discount": 0,
+        "total": 9600000,
+        "tax": 1056000,
+        "totalAkhir": 10656000,
+        "productName": "SUSU ULTRA UK 125 ML PLAIN",
+        "productKode": "TRM2452",
+        "productId": "TRM2452"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : CTP/PO/000021733 DO : 12287-090126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742434_h1uf19wu5",
+    "soNo": "C90738",
+    "customer": "PT. KAWASAKI MOTOR INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-10",
+    "items": [
+      {
+        "qty": 126000,
+        "unit": "PCS",
+        "price": 760,
+        "discount": 0,
+        "total": 95760000,
+        "tax": 10533600,
+        "totalAkhir": 106293600,
+        "productName": "BOLT FLANGE 8X20 MC3 G7 (K1410-0025)",
+        "productKode": "TRM0487",
+        "productId": "TRM0487"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : C90738 DO : 12297-100126",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "so_1770829742436_m1i1o7yxm",
+    "soNo": "KIPO26010071",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-12",
+    "items": [
+      {
+        "qty": 300,
+        "unit": "PCS",
+        "price": 1620,
+        "discount": 0,
+        "total": 486000,
+        "tax": 53460,
+        "totalAkhir": 539460,
+        "productName": "BOLT (BAUT L) M8XP1.25XL30MM (GALVANIZED) (NB407)",
+        "productKode": "TRM0116",
+        "productId": "TRM0116"
+      },
+      {
+        "qty": 500,
+        "unit": "PCS",
+        "price": 2208,
+        "discount": 0,
+        "total": 1104000,
+        "tax": 121440,
+        "totalAkhir": 1225440,
+        "productName": "BOLT (BAUT L) M8XP1.25XL25MM (GALVANIZED) (NB031-1)",
+        "productKode": "TRM0118",
+        "productId": "TRM0118"
+      },
+      {
+        "qty": 500,
+        "unit": "PCS",
+        "price": 3360,
+        "discount": 0,
+        "total": 1680000,
+        "tax": 184800,
+        "totalAkhir": 1864800,
+        "productName": "BOLT (BAUT L) M10XP1.5XL20MM (GALVANIZED) (HC088)",
+        "productKode": "TRM0430",
+        "productId": "TRM0430"
+      },
+      {
+        "qty": 500,
+        "unit": "PCS",
+        "price": 247,
+        "discount": 0,
+        "total": 123500,
+        "tax": 13585,
+        "totalAkhir": 137085,
+        "productName": "BOLT (BAUT HEXAGONAL) M6XP1.0XL15MM (GALVANIZED) (HA041)",
+        "productKode": "TRM0543",
+        "productId": "TRM0543"
+      },
+      {
+        "qty": 500,
+        "unit": "PCS",
+        "price": 1750,
+        "discount": 0,
+        "total": 875000,
+        "tax": 96250,
+        "totalAkhir": 971250,
+        "productName": "BOLT (BAUT HEXAGONAL) M10XP1.5XL25MM (GALVANIZED) (HA078)",
+        "productKode": "TRM1195",
+        "productId": "TRM1195"
+      },
+      {
+        "qty": 300,
+        "unit": "PCS",
+        "price": 2880,
+        "discount": 0,
+        "total": 864000,
+        "tax": 95040,
+        "totalAkhir": 959040,
+        "productName": "BOLT (BAUT L) M10XP1.5XL30MM (GALVANIZED)(NB391-1)",
+        "productKode": "TRM2462",
+        "productId": "TRM2462"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO26010071 DO : 12301-120126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "so_1770829742438_mp86vfvhh",
+    "soNo": "PO26-006-12",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-12",
+    "items": [
+      {
+        "qty": 16,
+        "unit": "PCS",
+        "price": 42500,
+        "discount": 0,
+        "total": 680000,
+        "tax": 74800,
+        "totalAkhir": 754800,
+        "productName": "RUMAH LAMPU 120 CM",
+        "productKode": "TRM1087",
+        "productId": "TRM1087"
+      },
+      {
+        "qty": 5,
+        "unit": "PCK",
+        "price": 53325,
+        "discount": 0,
+        "total": 266625,
+        "tax": 29328,
+        "totalAkhir": 295953,
+        "productName": "KABEL TIES 300 SIGMA",
+        "productKode": "TRM2000",
+        "productId": "TRM2000"
+      },
+      {
+        "qty": 16,
+        "unit": "PCS",
+        "price": 12000,
+        "discount": 0,
+        "total": 192000,
+        "tax": 21120,
+        "totalAkhir": 213120,
+        "productName": "KONEKTOR LAMPU 30 CM",
+        "productKode": "TRM3898",
+        "productId": "TRM3898"
+      },
+      {
+        "qty": 20,
+        "unit": "PCS",
+        "price": 21600,
+        "discount": 0,
+        "total": 432000,
+        "tax": 47520,
+        "totalAkhir": 479520,
+        "productName": "NIPPON RESIBON MATA GERINDA",
+        "productKode": "TRM4130",
+        "productId": "TRM4130"
+      },
+      {
+        "qty": 5,
+        "unit": "PCS",
+        "price": 45000,
+        "discount": 0,
+        "total": 225000,
+        "tax": 24750,
+        "totalAkhir": 249750,
+        "productName": "SIKAT KAWAT UNION HI-11",
+        "productKode": "TRM3864",
+        "productId": "TRM3864"
+      },
+      {
+        "qty": 50,
+        "unit": "PCS",
+        "price": 1377,
+        "discount": 0,
+        "total": 68850,
+        "tax": 7573,
+        "totalAkhir": 76423,
+        "productName": "DYNABOLT M8 X 40",
+        "productKode": "TRM2253",
+        "productId": "TRM2253"
+      },
+      {
+        "qty": 50,
+        "unit": "PCS",
+        "price": 1982,
+        "discount": 0,
+        "total": 99100,
+        "tax": 10901,
+        "totalAkhir": 110001,
+        "productName": "DYNABOLT M10 X 60",
+        "productKode": "TRM2254",
+        "productId": "TRM2254"
+      },
+      {
+        "qty": 5,
+        "unit": "PCS",
+        "price": 108000,
+        "discount": 0,
+        "total": 540000,
+        "tax": 59400,
+        "totalAkhir": 599400,
+        "productName": "SAKLAR OUTBOW ISI 4",
+        "productKode": "TRM1372",
+        "productId": "TRM1372"
+      },
+      {
+        "qty": 16,
+        "unit": "PCS",
+        "price": 112500,
+        "discount": 0,
+        "total": 1800000,
+        "tax": 198000,
+        "totalAkhir": 1998000,
+        "productName": "LAMPU LED 120 CM SAFE LIGHT",
+        "productKode": "TRM4483",
+        "productId": "TRM4483"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO26-006-12 DO : 12299-120126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742438_6ds7md0bf",
+    "soNo": "PO25-575-1",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-12",
+    "items": [
+      {
+        "qty": 8,
+        "unit": "PCS",
+        "price": 112500,
+        "discount": 0,
+        "total": 900000,
+        "tax": 99000,
+        "totalAkhir": 999000,
+        "productName": "LAMPU LED 120 CM",
+        "productKode": "TRM1085",
+        "productId": "TRM1085"
+      },
+      {
+        "qty": 8,
+        "unit": "PCS",
+        "price": 42500,
+        "discount": 0,
+        "total": 340000,
+        "tax": 37400,
+        "totalAkhir": 377400,
+        "productName": "RUMAH LAMPU 120 CM",
+        "productKode": "TRM1087",
+        "productId": "TRM1087"
+      },
+      {
+        "qty": 15,
+        "unit": "PCS",
+        "price": 6000,
+        "discount": 0,
+        "total": 90000,
+        "tax": 9900,
+        "totalAkhir": 99900,
+        "productName": "KABEL KONEKTOR LAMPU LED",
+        "productKode": "TRM3899",
+        "productId": "TRM3899"
+      },
+      {
+        "qty": 5,
+        "unit": "PCK",
+        "price": 27000,
+        "discount": 0,
+        "total": 135000,
+        "tax": 14850,
+        "totalAkhir": 149850,
+        "productName": "KABEL TIES 200 SIGMA",
+        "productKode": "TRM1999",
+        "productId": "TRM1999"
+      },
+      {
+        "qty": 8,
+        "unit": "ROL",
+        "price": 105000,
+        "discount": 0,
+        "total": 840000,
+        "tax": 92400,
+        "totalAkhir": 932400,
+        "productName": "SELANG ANGIN SPIRAL DIAMETER 12MM PANJANG 6M",
+        "productKode": "TRM4429",
+        "productId": "TRM4429"
+      },
+      {
+        "qty": 4,
+        "unit": "PCS",
+        "price": 56000,
+        "discount": 0,
+        "total": 224000,
+        "tax": 24640,
+        "totalAkhir": 248640,
+        "productName": "SIKAT KAWAT UNION HI-11",
+        "productKode": "TRM3864",
+        "productId": "TRM3864"
+      },
+      {
+        "qty": 5,
+        "unit": "PCS",
+        "price": 108000,
+        "discount": 0,
+        "total": 540000,
+        "tax": 59400,
+        "totalAkhir": 599400,
+        "productName": "SAKLAR OUTBOW ISI 4",
+        "productKode": "TRM3909",
+        "productId": "TRM3909"
+      },
+      {
+        "qty": 2,
+        "unit": "PCS",
+        "price": 187500,
+        "discount": 0,
+        "total": 375000,
+        "tax": 41250,
+        "totalAkhir": 416250,
+        "productName": "LAMPU INLITE 30W",
+        "productKode": "TRM4430",
+        "productId": "TRM4430"
+      },
+      {
+        "qty": 2,
+        "unit": "PCS",
+        "price": 52500,
+        "discount": 0,
+        "total": 105000,
+        "tax": 11550,
+        "totalAkhir": 116550,
+        "productName": "COUPLER QUICK 2 CABANG",
+        "productKode": "TRM2823",
+        "productId": "TRM2823"
+      },
+      {
+        "qty": 2,
+        "unit": "PAK",
+        "price": 45000,
+        "discount": 0,
+        "total": 90000,
+        "tax": 9900,
+        "totalAkhir": 99900,
+        "productName": "TIE MOUNT FORT 25X25",
+        "productKode": "TRM4284",
+        "productId": "TRM4284"
+      },
+      {
+        "qty": 2,
+        "unit": "PCS",
+        "price": 1900000,
+        "discount": 0,
+        "total": 3800000,
+        "tax": 418000,
+        "totalAkhir": 4218000,
+        "productName": "SLING 4 KAKI 6X37 WRC RRT 12MM X 81 CM",
+        "productKode": "TRM0800",
+        "productId": "TRM0800"
+      },
+      {
+        "qty": 1,
+        "unit": "PCS",
+        "price": 42500,
+        "discount": 0,
+        "total": 42500,
+        "tax": 4675,
+        "totalAkhir": 47175,
+        "productName": "RUMAH LAMPU 120 CM",
+        "productKode": "TRM1087",
+        "productId": "TRM1087"
+      },
+      {
+        "qty": 20,
+        "unit": "PCS",
+        "price": 21600,
+        "discount": 0,
+        "total": 432000,
+        "tax": 47520,
+        "totalAkhir": 479520,
+        "productName": "FLEXIBLE DISC WHEEL 100X2X16 NIPPON RESIBON",
+        "productKode": "TRM4258",
+        "productId": "TRM4258"
+      },
+      {
+        "qty": 3,
+        "unit": "PCS",
+        "price": 112500,
+        "discount": 0,
+        "total": 337500,
+        "tax": 37125,
+        "totalAkhir": 374625,
+        "productName": "LAMPU LED 120 CM SAFE LIGHT",
+        "productKode": "TRM4483",
+        "productId": "TRM4483"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO25-575-1 DO : 12290-120126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742438_nrcuulzsg",
+    "soNo": "PO26-004-12",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-12",
+    "items": [
+      {
+        "qty": 1,
+        "unit": "ROL",
+        "price": 560000,
+        "discount": 0,
+        "total": 560000,
+        "tax": 61600,
+        "totalAkhir": 621600,
+        "productName": "KABEL FEDERAL ISI 3",
+        "productKode": "TRM3897",
+        "productId": "TRM3897"
+      },
+      {
+        "qty": 5,
+        "unit": "PCS",
+        "price": 46500,
+        "discount": 0,
+        "total": 232500,
+        "tax": 25575,
+        "totalAkhir": 258075,
+        "productName": "TERMINAL 3 LUBANG 15330",
+        "productKode": "TRM2417",
+        "productId": "TRM2417"
+      },
+      {
+        "qty": 3,
+        "unit": "PCS",
+        "price": 42000,
+        "discount": 0,
+        "total": 126000,
+        "tax": 13860,
+        "totalAkhir": 139860,
+        "productName": "TERMINAL 2 LUBANG 15321",
+        "productKode": "TRM4459",
+        "productId": "TRM4459"
+      },
+      {
+        "qty": 4,
+        "unit": "PCS",
+        "price": 24000,
+        "discount": 0,
+        "total": 96000,
+        "tax": 10560,
+        "totalAkhir": 106560,
+        "productName": "SAKLAR LAMPU BROCO DOUBLE 16220",
+        "productKode": "TRM4460",
+        "productId": "TRM4460"
+      },
+      {
+        "qty": 5,
+        "unit": "PCS",
+        "price": 14250,
+        "discount": 0,
+        "total": 71250,
+        "tax": 7837,
+        "totalAkhir": 79087,
+        "productName": "STECKER BROCO",
+        "productKode": "TRM0566",
+        "productId": "TRM0566"
+      },
+      {
+        "qty": 5,
+        "unit": "PCS",
+        "price": 909000,
+        "discount": 0,
+        "total": 4545000,
+        "tax": 499950,
+        "totalAkhir": 5044950,
+        "productName": "KIPAS ANGIN PANASONIC F EQ-405",
+        "productKode": "TRM0175",
+        "productId": "TRM0175"
+      },
+      {
+        "qty": 80,
+        "unit": "PCS",
+        "price": 3000,
+        "discount": 0,
+        "total": 240000,
+        "tax": 26400,
+        "totalAkhir": 266400,
+        "productName": "TERMINAL CH FEMALE MALE",
+        "productKode": "TRM4040",
+        "productId": "TRM4040"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO26-004-12 DO : 12298-120126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742438_0dhu6cyew",
+    "soNo": "PO02-2026/A/004/GEN",
+    "customer": "PT. TRI SAUDARA SENTOSA INDUSTRI",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-12",
+    "items": [
+      {
+        "qty": 500,
+        "unit": "PCS",
+        "price": 3400,
+        "discount": 0,
+        "total": 1700000,
+        "tax": 187000,
+        "totalAkhir": 1887000,
+        "productName": "\"POCKET KANBAN/LABEL (P28XL9.5CM, TEBAL 0.5MM)\"",
+        "productKode": "TRM4287",
+        "productId": "TRM4287"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO02-2026/A/004/GEN DO : DLV-2601123420",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742433_25tano848",
+    "soNo": "POV2512086",
+    "customer": "PT. ADVANEX PRECISION INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-13",
+    "items": [
+      {
+        "qty": 20,
+        "unit": "PCS",
+        "price": 69750,
+        "discount": 0,
+        "total": 1395000,
+        "tax": 153450,
+        "totalAkhir": 1548450,
+        "productName": "KERTAS HVS ROLL 60GSM LEBAR 2CM",
+        "productKode": "TRM3888",
+        "productId": "TRM3888"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : POV2512086 1. 12309-140126 2. 12279-070126",
+    "timestamp": 1770829742433
+  },
+  {
+    "id": "so_1770829742434_i3vb5tye3",
+    "soNo": "PO ASI/26/0035",
+    "customer": "PT. ASAHI SUKSES INDUSTRI",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-13",
+    "items": [
+      {
+        "qty": 1,
+        "unit": "ROL",
+        "price": 1500000,
+        "discount": 0,
+        "total": 1500000,
+        "tax": 165000,
+        "totalAkhir": 1665000,
+        "productName": "STRAPING BAND EYZER 19MM ROLL",
+        "productKode": "TRM4471",
+        "productId": "TRM4471"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO ASI/26/0035 DO : 12312-140126",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "so_1770829742436_tw65s3i9j",
+    "soNo": "KIPO26010080",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-13",
+    "items": [
+      {
+        "qty": 3,
+        "unit": "PCS",
+        "price": 12000,
+        "discount": 0,
+        "total": 36000,
+        "tax": 3960,
+        "totalAkhir": 39960,
+        "productName": "TESPEN (NB109-1)",
+        "productKode": "TRM3027",
+        "productId": "TRM3027"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO26010080 DO : 12304-130126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "so_1770829742436_vrx6fu68v",
+    "soNo": "KIPO26010086",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-13",
+    "items": [
+      {
+        "qty": 50,
+        "unit": "PCS",
+        "price": 98746,
+        "discount": 0,
+        "total": 4937300,
+        "tax": 543103,
+        "totalAkhir": 5480403,
+        "productName": "\"CASTER WHEEL NYLON (KASTOR RODA) 4\"\"\"\" W/O BRAKE (ODØ 101.6MM) SWIPEL FLANGE (SLOT 70MMX85MM Ø12) (CD037)\"",
+        "productKode": "TRM0020",
+        "productId": "TRM0020"
+      },
+      {
+        "qty": 50,
+        "unit": "PCS",
+        "price": 131532,
+        "discount": 0,
+        "total": 6576600,
+        "tax": 723426,
+        "totalAkhir": 7300026,
+        "productName": "\"CASTER WHEEL NYLON (KASTOR RODA) 4\"\"\"\" C/W BRAKE (ODØ 101.6MM) SWIPEL FLANGE (SLOT 70MMX85MM Ø12) (CD038)\"",
+        "productKode": "TRM0019",
+        "productId": "TRM0019"
+      },
+      {
+        "qty": 2,
+        "unit": "ROL",
+        "price": 269664,
+        "discount": 0,
+        "total": 539328,
+        "tax": 59326,
+        "totalAkhir": 598654,
+        "productName": "SUPER SEAL SIZE : 7MM X 3MM X 15M (15MTR/ROLL) PTFE JOINT SEALENT (NB356-1)",
+        "productKode": "TRM0073",
+        "productId": "TRM0073"
+      },
+      {
+        "qty": 500,
+        "unit": "PCS",
+        "price": 384,
+        "discount": 0,
+        "total": 192000,
+        "tax": 21120,
+        "totalAkhir": 213120,
+        "productName": "BOLT (BAUT JP) M4XP.07XL50MM (GALVANIZED) (NB488-1)",
+        "productKode": "TRM0099",
+        "productId": "TRM0099"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO26010086 DO : 12308-130126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "so_1770829742436_m4gm6v1m5",
+    "soNo": "KIPO26010069",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-13",
+    "items": [
+      {
+        "qty": 2000,
+        "unit": "PCS",
+        "price": 69,
+        "discount": 0,
+        "total": 138000,
+        "tax": 15180,
+        "totalAkhir": 153180,
+        "productName": "SPRING WASHER / RING PER M8 (S20C) (ZINC PLATED) (JH057)",
+        "productKode": "TRM0542",
+        "productId": "TRM0542"
+      },
+      {
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 69,
+        "discount": 0,
+        "total": 69000,
+        "tax": 7590,
+        "totalAkhir": 76590,
+        "productName": "FLAT WASHER / RING PLATE (S20C) M8 (ZINC PLATED) (JJ007)",
+        "productKode": "TRM0350",
+        "productId": "TRM0350"
+      },
+      {
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 247,
+        "discount": 0,
+        "total": 247000,
+        "tax": 27170,
+        "totalAkhir": 274170,
+        "productName": "FLAT WASHER / RING PLATE M6 (SUS304) (NB089-1)",
+        "productKode": "TRM0161",
+        "productId": "TRM0161"
+      },
+      {
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 247,
+        "discount": 0,
+        "total": 247000,
+        "tax": 27170,
+        "totalAkhir": 274170,
+        "productName": "SPRING WASHER / RING PER M6 (SUS304) (JH156)",
+        "productKode": "TRM0591",
+        "productId": "TRM0591"
+      },
+      {
+        "qty": 2000,
+        "unit": "PCS",
+        "price": 128,
+        "discount": 0,
+        "total": 256000,
+        "tax": 28160,
+        "totalAkhir": 284160,
+        "productName": "SPRING WASHER / RING PER M4 (SUS304) (NB829-1)",
+        "productKode": "TRM0590",
+        "productId": "TRM0590"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO26010069 DO : 12307-130126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "so_1770829742436_amg68p2n3",
+    "soNo": "KIPO26010094",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-13",
+    "items": [
+      {
+        "qty": 100,
+        "unit": "PCS",
+        "price": 32800,
+        "discount": 0,
+        "total": 3280000,
+        "tax": 360800,
+        "totalAkhir": 3640800,
+        "productName": "KEYLESS CAM LOCK TYPE MS720 (CL005)",
+        "productKode": "TRM0040",
+        "productId": "TRM0040"
+      },
+      {
+        "qty": 200,
+        "unit": "PCS",
+        "price": 20295,
+        "discount": 0,
+        "total": 4059000,
+        "tax": 446490,
+        "totalAkhir": 4505490,
+        "productName": "EYE BOLT M12X1.75XL20MM MATERIAL CASTING (ZINC PLATED) (HF003-1)",
+        "productKode": "TRM0030",
+        "productId": "TRM0030"
+      },
+      {
+        "qty": 100,
+        "unit": "PCS",
+        "price": 31346,
+        "discount": 0,
+        "total": 3134600,
+        "tax": 344806,
+        "totalAkhir": 3479406,
+        "productName": "EYE BOLT M16X2.0XL20MM MATERIAL CASTING (ZINC PLATED) (HF004)",
+        "productKode": "TRM0031",
+        "productId": "TRM0031"
+      },
+      {
+        "qty": 150,
+        "unit": "PCS",
+        "price": 32000,
+        "discount": 0,
+        "total": 4800000,
+        "tax": 528000,
+        "totalAkhir": 5328000,
+        "productName": "KNOB STAR COLOR BLACK FOR FILTER CASE (M10) (IDR0015-6401)",
+        "productKode": "TRM0041",
+        "productId": "TRM0041"
+      },
+      {
+        "qty": 100,
+        "unit": "PCS",
+        "price": 29000,
+        "discount": 0,
+        "total": 2900000,
+        "tax": 319000,
+        "totalAkhir": 3219000,
+        "productName": "HINGE (ENGSEL PANEL) BLACK 40X40X9MM (IDR0015-6400)",
+        "productKode": "TRM0038",
+        "productId": "TRM0038"
+      },
+      {
+        "qty": 100,
+        "unit": "PCS",
+        "price": 73500,
+        "discount": 0,
+        "total": 7350000,
+        "tax": 808500,
+        "totalAkhir": 8158500,
+        "productName": "HASP (LOCK DOOR HOPPER) TYPE PP-21-2 (SUS304) (DJ004)",
+        "productKode": "TRM0037",
+        "productId": "TRM0037"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO26010094 DO : 12306-130126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "so_1770829742433_u9zieifxg",
+    "soNo": "POV2601044",
+    "customer": "PT. ADVANEX PRECISION INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-14",
+    "items": [
+      {
+        "qty": 3,
+        "unit": "PCS",
+        "price": 33750,
+        "discount": 0,
+        "total": 101250,
+        "tax": 11137,
+        "totalAkhir": 112387,
+        "productName": "TEKIRO HEX KEY ELECTRO SET (KUNCI L ELEKTRONIK) HK-EL1198 0.71-3MM 1 SET (7PCS)",
+        "productKode": "TRM4472",
+        "productId": "TRM4472"
+      },
+      {
+        "qty": 20,
+        "unit": "PCS",
+        "price": 62843,
+        "discount": 0,
+        "total": 1256860,
+        "tax": 138254,
+        "totalAkhir": 1395114,
+        "productName": "HONEYWELL KACAMATA SAFETY KINGS KY8811A ANTI-SCRATCH - ANTI SINAR UV",
+        "productKode": "TRM4473",
+        "productId": "TRM4473"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : POV2601044 DO : 12136-140126",
+    "timestamp": 1770829742433
+  },
+  {
+    "id": "so_1770829742438_lzmgh09o6",
+    "soNo": "A-26/MCM/PPIC/030",
+    "customer": "PT. MENARA CIPTA METALINDO",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-14",
+    "items": [
+      {
+        "qty": 8,
+        "unit": "PAIL",
+        "price": 209250,
+        "discount": 0,
+        "total": 1674000,
+        "tax": 184140,
+        "totalAkhir": 1858140,
+        "productName": "\"DEMPUL, SAN POLAC (COPRSU053N)\"",
+        "productKode": "TRM1204",
+        "productId": "TRM1204"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : A-26/MCM/PPIC/030 1. 12315-140126 2. 12302-120126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742438_c17xa2uhq",
+    "soNo": "SA26011 MM",
+    "customer": "PT. SUBANG AUTOCOMP INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-14",
+    "items": [
+      {
+        "qty": 10,
+        "unit": "KG",
+        "price": 113850,
+        "discount": 0,
+        "total": 1138500,
+        "tax": 125235,
+        "totalAkhir": 1263735,
+        "productName": "KARET GELANG BESAR",
+        "productKode": "TRM0172",
+        "productId": "TRM0172"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : SA26011 MM DO : 12317-140126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742438_uo6w3dvmu",
+    "soNo": "PO26-013-1",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-14",
+    "items": [
+      {
+        "qty": 11,
+        "unit": "PCS",
+        "price": 163875,
+        "discount": 0,
+        "total": 1802625,
+        "tax": 198288,
+        "totalAkhir": 2000913,
+        "productName": "\"STEEL WIRE BRUSH 8\"\"\"\" MULTI PRO\"",
+        "productKode": "TRM3525",
+        "productId": "TRM3525"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO26-013-1 DO : 12310-140126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742438_4rw2fkjqy",
+    "soNo": "PO26-003-12",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-14",
+    "items": [
+      {
+        "qty": 5,
+        "unit": "SHEET",
+        "price": 1275000,
+        "discount": 0,
+        "total": 6375000,
+        "tax": 701250,
+        "totalAkhir": 7076250,
+        "productName": "ACRYLIC BENING 1.2 X 2.4 M X 5MM",
+        "productKode": "TRM2612",
+        "productId": "TRM2612"
+      },
+      {
+        "qty": 5,
+        "unit": "PCS",
+        "price": 33000,
+        "discount": 0,
+        "total": 165000,
+        "tax": 18150,
+        "totalAkhir": 183150,
+        "productName": "PYLOX PUTIH",
+        "productKode": "TRM2854",
+        "productId": "TRM2854"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO26-003-12 DO : 12311-140126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742438_pcddl82du",
+    "soNo": "PL2600119",
+    "customer": "\"SANOH INDONESIA, PT\"",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-14",
+    "items": [
+      {
+        "qty": 1,
+        "unit": "PCS",
+        "price": 1901200,
+        "discount": 0,
+        "total": 1901200,
+        "tax": 209132,
+        "totalAkhir": 2110332,
+        "productName": "FS-500H PLASTIC FILM SEALER",
+        "productKode": "TRM4474",
+        "productId": "TRM4474"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PL2600119 DO : 12313-140126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742433_nky92waof",
+    "soNo": "PO-L-20260100071",
+    "customer": "PT INTEGRASI MEDIKA PRIMA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-15",
+    "items": [
+      {
+        "qty": 10,
+        "unit": "LBR",
+        "price": 35000,
+        "discount": 0,
+        "total": 350000,
+        "tax": 38500,
+        "totalAkhir": 388500,
+        "productName": "\"STICKER LASA A4 @170 PCS (2,5 X 1,3CM)\"",
+        "productKode": "TRM2265",
+        "productId": "TRM2265"
+      },
+      {
+        "qty": 10,
+        "unit": "LBR",
+        "price": 35000,
+        "discount": 0,
+        "total": 350000,
+        "tax": 38500,
+        "totalAkhir": 388500,
+        "productName": "STICKER ENCERKAN A4 @170 PCS (1.3 X 2.5 CM)",
+        "productKode": "TRM3294",
+        "productId": "TRM3294"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO-L-20260100071 DO : 12314-140126",
+    "timestamp": 1770829742433
+  },
+  {
+    "id": "so_1770829742437_ot5af7nq2",
+    "soNo": "KIPO26010118",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-15",
+    "items": [
+      {
+        "qty": 4,
+        "unit": "TIN",
+        "price": 546000,
+        "discount": 0,
+        "total": 2184000,
+        "tax": 240240,
+        "totalAkhir": 2424240,
+        "productName": "ACETONE (20LTR/TIN) (NB156)",
+        "productKode": "TRM0002",
+        "productId": "TRM0002"
+      },
+      {
+        "qty": 1,
+        "unit": "TIN",
+        "price": 555000,
+        "discount": 0,
+        "total": 555000,
+        "tax": 61050,
+        "totalAkhir": 616050,
+        "productName": "ALCOHOL 100% (NB155)",
+        "productKode": "TRM0001",
+        "productId": "TRM0001"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO26010118 DO : 12320-150126",
+    "timestamp": 1770829742437
+  },
+  {
+    "id": "so_1770829742438_e4ijh7yx6",
+    "soNo": "PO-000002596",
+    "customer": "\"PT. SUPRAVISI RAMA OPTIK, MANUFACTURING\"",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-15",
+    "items": [
+      {
+        "qty": 62500,
+        "unit": "PCS",
+        "price": 55,
+        "discount": 0,
+        "total": 3437500,
+        "tax": 378125,
+        "totalAkhir": 3815625,
+        "productName": "SPONBON (CSUCMMS0020008)",
+        "productKode": "TRM1389",
+        "productId": "TRM1389"
+      },
+      {
+        "qty": 47500,
+        "unit": "PCS",
+        "price": 55,
+        "discount": 0,
+        "total": 2612500,
+        "tax": 287375,
+        "totalAkhir": 2899875,
+        "productName": "SPONBON (CSUCMMS0020008)",
+        "productKode": "TRM1389",
+        "productId": "TRM1389"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO-000002596 1. 12321-150126 2. 12303-120126 3. 12296-090126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742438_32fpbltgi",
+    "soNo": "PO-379/SAI-T/PUR-SAI/XI/25",
+    "customer": "PT. SURABAYA AUTOCOMP INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-15",
+    "items": [
+      {
+        "qty": 135,
+        "unit": "KG",
+        "price": 200000,
+        "discount": 0,
+        "total": 27000000,
+        "tax": 2970000,
+        "totalAkhir": 29970000,
+        "productName": "MATE-0017626 KARET KUMIS LIGHT BROWN",
+        "productKode": "TRM3980",
+        "productId": "TRM3980"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO-379/SAI-T/PUR-SAI/XI/25 DO : 12324-150126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742438_cb0xulzo7",
+    "soNo": "PO-035/SAI-T/PUR-SAI/XII/25",
+    "customer": "PT. SURABAYA AUTOCOMP INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-15",
+    "items": [
+      {
+        "qty": 20,
+        "unit": "KG",
+        "price": 200000,
+        "discount": 0,
+        "total": 4000000,
+        "tax": 440000,
+        "totalAkhir": 4440000,
+        "productName": "MATE-0017626 KARET KUMIS LIGHT BROWN",
+        "productKode": "TRM3980",
+        "productId": "TRM3980"
+      },
+      {
+        "qty": 20,
+        "unit": "KG",
+        "price": 200000,
+        "discount": 0,
+        "total": 4000000,
+        "tax": 440000,
+        "totalAkhir": 4440000,
+        "productName": "MATE-0017626 KARET KUMIS LIGHT BROWN",
+        "productKode": "TRM3980",
+        "productId": "TRM3980"
+      },
+      {
+        "qty": 20,
+        "unit": "KG",
+        "price": 200000,
+        "discount": 0,
+        "total": 4000000,
+        "tax": 440000,
+        "totalAkhir": 4440000,
+        "productName": "MATE-0017626 KARET KUMIS LIGHT BROWN",
+        "productKode": "TRM3980",
+        "productId": "TRM3980"
+      },
+      {
+        "qty": 20,
+        "unit": "KG",
+        "price": 200000,
+        "discount": 0,
+        "total": 4000000,
+        "tax": 440000,
+        "totalAkhir": 4440000,
+        "productName": "MATE-0017626 KARET KUMIS LIGHT BROWN",
+        "productKode": "TRM3980",
+        "productId": "TRM3980"
+      },
+      {
+        "qty": 20,
+        "unit": "KG",
+        "price": 200000,
+        "discount": 0,
+        "total": 4000000,
+        "tax": 440000,
+        "totalAkhir": 4440000,
+        "productName": "MATE-0017626 KARET KUMIS LIGHT BROWN",
+        "productKode": "TRM3980",
+        "productId": "TRM3980"
+      },
+      {
+        "qty": 20,
+        "unit": "KG",
+        "price": 200000,
+        "discount": 0,
+        "total": 4000000,
+        "tax": 440000,
+        "totalAkhir": 4440000,
+        "productName": "MATE-0017626 KARET KUMIS LIGHT BROWN",
+        "productKode": "TRM3980",
+        "productId": "TRM3980"
+      },
+      {
+        "qty": 10,
+        "unit": "KG",
+        "price": 200000,
+        "discount": 0,
+        "total": 2000000,
+        "tax": 220000,
+        "totalAkhir": 2220000,
+        "productName": "MATE-0017626 KARET KUMIS LIGHT BROWN",
+        "productKode": "TRM3980",
+        "productId": "TRM3980"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO-035/SAI-T/PUR-SAI/XII/25 DO : 12323-150126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742438_rkar0kbgf",
+    "soNo": "SUAI.TLJ-852512-001",
+    "customer": "PT. SUBANG AUTOCOMP INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-16",
+    "items": [
+      {
+        "qty": 62,
+        "unit": "KG",
+        "price": 205000,
+        "discount": 0,
+        "total": 12710000,
+        "tax": 1398100,
+        "totalAkhir": 14108100,
+        "productName": "KARET KUMIS TRANSPARAN 5CM (COKLAT)",
+        "productKode": "TRM3454",
+        "productId": "TRM3454"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : SUAI.TLJ-852512-001 DO : 12322-160126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742438_30apz9qen",
+    "soNo": "PO-000004079",
+    "customer": "\"PT. SUPRAVISI RAMA OPTIK, MANUFACTURING\"",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-19",
+    "items": [
+      {
+        "qty": 4,
+        "unit": "PCS",
+        "price": 882000,
+        "discount": 0,
+        "total": 3528000,
+        "tax": 388080,
+        "totalAkhir": 3916080,
+        "productName": "LAMPU PHILIPS LED PANEL 40W",
+        "productKode": "TRM3217",
+        "productId": "TRM3217"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO-000004079 DO : 12322-190126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742438_mnymxh6vw",
+    "soNo": "PO-000004089",
+    "customer": "\"PT. SUPRAVISI RAMA OPTIK, MANUFACTURING\"",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-19",
+    "items": [
+      {
+        "qty": 150,
+        "unit": "PCK",
+        "price": 15000,
+        "discount": 0,
+        "total": 2250000,
+        "tax": 247500,
+        "totalAkhir": 2497500,
+        "productName": "PLASTIK SAMPAH 90x120",
+        "productKode": "TRM1580",
+        "productId": "TRM1580"
+      },
+      {
+        "qty": 20,
+        "unit": "ROL",
+        "price": 77000,
+        "discount": 0,
+        "total": 1540000,
+        "tax": 169400,
+        "totalAkhir": 1709400,
+        "productName": "THERMAL PAPER ROLL 80X140",
+        "productKode": "TRM1799",
+        "productId": "TRM1799"
+      },
+      {
+        "qty": 50,
+        "unit": "PCK",
+        "price": 35000,
+        "discount": 0,
+        "total": 1750000,
+        "tax": 192500,
+        "totalAkhir": 1942500,
+        "productName": "SARUNG TANGAN KAIN KASAR",
+        "productKode": "TRM1715",
+        "productId": "TRM1715"
+      },
+      {
+        "qty": 500,
+        "unit": "PCS",
+        "price": 2500,
+        "discount": 0,
+        "total": 1250000,
+        "tax": 137500,
+        "totalAkhir": 1387500,
+        "productName": "KARUNG PLASTIK POLOS 60X90",
+        "productKode": "TRM1581",
+        "productId": "TRM1581"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO-000004089 DO : 12323-190126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742434_ozufafxql",
+    "soNo": "PO-000010277",
+    "customer": "PT. Essilorluxottica Professional Solutions Indonesia",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-20",
+    "items": [
+      {
+        "qty": 288,
+        "unit": "PCS",
+        "price": 6750,
+        "discount": 0,
+        "total": 1944000,
+        "tax": 213840,
+        "totalAkhir": 2157840,
+        "productName": "LAKBAN COKLAT BESAR",
+        "productKode": "TRM1375",
+        "productId": "TRM1375"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO-000010277 DO : 12326-200126",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "so_1770829742438_gw1p15u8y",
+    "soNo": "PL2600167",
+    "customer": "\"SANOH INDONESIA, PT\"",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-20",
+    "items": [
+      {
+        "qty": 36,
+        "unit": "PCS",
+        "price": 4800,
+        "discount": 0,
+        "total": 172800,
+        "tax": 19008,
+        "totalAkhir": 191808,
+        "productName": "POWER GLUE",
+        "productKode": "TRM0390",
+        "productId": "TRM0390"
+      },
+      {
+        "qty": 150,
+        "unit": "KG",
+        "price": 5800,
+        "discount": 0,
+        "total": 870000,
+        "tax": 95700,
+        "totalAkhir": 965700,
+        "productName": "MAJUN WARNA",
+        "productKode": "TRM0181",
+        "productId": "TRM0181"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PL2600167 DO : 12325-200126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742438_mxkhhtc9h",
+    "soNo": "083/PO/SBM-TLJP/I/26",
+    "customer": "\"SINAR BENGAWAN MANDIRI, PT\"",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-20",
+    "items": [
+      {
+        "qty": 10,
+        "unit": "LSN",
+        "price": 25650,
+        "discount": 0,
+        "total": 256500,
+        "tax": 28215,
+        "totalAkhir": 284715,
+        "productName": "SARUNG TANGAN 5 BENANG",
+        "productKode": "TRM0182",
+        "productId": "TRM0182"
+      },
+      {
+        "qty": 50,
+        "unit": "KG",
+        "price": 6500,
+        "discount": 0,
+        "total": 325000,
+        "tax": 35750,
+        "totalAkhir": 360750,
+        "productName": "MAJUN WARNA",
+        "productKode": "TRM0181",
+        "productId": "TRM0181"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : 083/PO/SBM-TLJP/I/26 DO : 12324-200126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742433_bhubfx4yb",
+    "soNo": "POV2601058",
+    "customer": "PT. ADVANEX PRECISION INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-21",
+    "items": [
+      {
+        "qty": 5,
+        "unit": "PCS",
+        "price": 114750,
+        "discount": 0,
+        "total": 573750,
+        "tax": 63112,
+        "totalAkhir": 636862,
+        "productName": "BATERAI CR2477N ORIGINAL RENATA BATTERY LITHIUM 3V",
+        "productKode": "TRM4476",
+        "productId": "TRM4476"
+      },
+      {
+        "qty": 10,
+        "unit": "PCS",
+        "price": 61425,
+        "discount": 0,
+        "total": 614250,
+        "tax": 67567,
+        "totalAkhir": 681817,
+        "productName": "RELAY MY4N-GS-R AC220/240 BY OMZ OMRON",
+        "productKode": "TRM4477",
+        "productId": "TRM4477"
+      },
+      {
+        "qty": 2,
+        "unit": "PCS",
+        "price": 17010,
+        "discount": 0,
+        "total": 34020,
+        "tax": 3742,
+        "totalAkhir": 37762,
+        "productName": "WIPRO ADAPTOR FOR IMPACT WRENCH AND RATCHET WRENCHES AW-1214",
+        "productKode": "TRM4478",
+        "productId": "TRM4478"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : POV2601058 DO : 12330-210126",
+    "timestamp": 1770829742433
+  },
+  {
+    "id": "so_1770829742437_zmnmykyhw",
+    "soNo": "KIPO26010132",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-21",
+    "items": [
+      {
+        "qty": 12,
+        "unit": "PCS",
+        "price": 190000,
+        "discount": 0,
+        "total": 2280000,
+        "tax": 250800,
+        "totalAkhir": 2530800,
+        "productName": "\"BRONZE SWING CHECK VALVE 32A (1 1/4\"\"\"\") (CS067)\"",
+        "productKode": "TRM0295",
+        "productId": "TRM0295"
+      },
+      {
+        "qty": 18,
+        "unit": "PCS",
+        "price": 120000,
+        "discount": 0,
+        "total": 2160000,
+        "tax": 237600,
+        "totalAkhir": 2397600,
+        "productName": "\"BRONZE SWING CHECK VALVE 25A(1\"\"\"\") (CS066)\"",
+        "productKode": "TRM0010",
+        "productId": "TRM0010"
+      },
+      {
+        "qty": 20,
+        "unit": "PCS",
+        "price": 220000,
+        "discount": 0,
+        "total": 4400000,
+        "tax": 484000,
+        "totalAkhir": 4884000,
+        "productName": "\"BRONZE SWING CHECK VALVE 40A(1 1/2\"\"\"\") (CS068)\"",
+        "productKode": "TRM0126",
+        "productId": "TRM0126"
+      },
+      {
+        "qty": 8,
+        "unit": "PCS",
+        "price": 190000,
+        "discount": 0,
+        "total": 1520000,
+        "tax": 167200,
+        "totalAkhir": 1687200,
+        "productName": "\"BRONZE SWING CHECK VALVE 32A (1 1/4\"\"\"\") (CS067)\"",
+        "productKode": "TRM0295",
+        "productId": "TRM0295"
+      },
+      {
+        "qty": 32,
+        "unit": "PCS",
+        "price": 120000,
+        "discount": 0,
+        "total": 3840000,
+        "tax": 422400,
+        "totalAkhir": 4262400,
+        "productName": "\"BRONZE SWING CHECK VALVE 25A(1\"\"\"\") (CS066)\"",
+        "productKode": "TRM0010",
+        "productId": "TRM0010"
+      },
+      {
+        "qty": 30,
+        "unit": "PCS",
+        "price": 434775,
+        "discount": 0,
+        "total": 13043250,
+        "tax": 1434757,
+        "totalAkhir": 14478007,
+        "productName": "\"BRONZE SWING CHECK VALVE 50A(2\"\"\"\") (CS069)\"",
+        "productKode": "TRM0353",
+        "productId": "TRM0353"
+      },
+      {
+        "qty": 10,
+        "unit": "PCS",
+        "price": 610000,
+        "discount": 0,
+        "total": 6100000,
+        "tax": 671000,
+        "totalAkhir": 6771000,
+        "productName": "\"BRONZE SWING CHECK VALVE 65A(2 1/2\"\"\"\") (CS070)\"",
+        "productKode": "TRM0833",
+        "productId": "TRM0833"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO26010132 DO :12328-210126",
+    "timestamp": 1770829742437
+  },
+  {
+    "id": "so_1770829742438_23uk9pciw",
+    "soNo": "PFA.PS-260120001",
+    "customer": "TRIMA ANUGERAH SEJAHTERA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-21",
+    "items": [
+      {
+        "qty": 1,
+        "unit": "PCS",
+        "price": 4680000,
+        "discount": 0,
+        "total": 4680000,
+        "tax": 514800,
+        "totalAkhir": 5194800,
+        "productName": "STANG SEALANT HILTI",
+        "productKode": "TRM4479",
+        "productId": "TRM4479"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PFA.PS-260120001 DO : 12329-210126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742438_o0wbcl6np",
+    "soNo": "PO-000004114",
+    "customer": "\"PT. SUPRAVISI RAMA OPTIK, MANUFACTURING\"",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-22",
+    "items": [
+      {
+        "qty": 10,
+        "unit": "PCS",
+        "price": 656250,
+        "discount": 0,
+        "total": 6562500,
+        "tax": 721875,
+        "totalAkhir": 7284375,
+        "productName": "FILTER INNOVTECH 50 MICRON ABSOLUTE",
+        "productKode": "TRM4482",
+        "productId": "TRM4482"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO-000004114 DO : 12332-220126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742438_mvoq0fx72",
+    "soNo": "S20030348",
+    "customer": "\"VALMET, PT\"",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-22",
+    "items": [
+      {
+        "qty": 60,
+        "unit": "PCS",
+        "price": 6875,
+        "discount": 0,
+        "total": 412500,
+        "tax": 45375,
+        "totalAkhir": 457875,
+        "productName": "RUBBER CHICACO 3/4",
+        "productKode": "TRM4469",
+        "productId": "TRM4469"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : S20030348 DO : 12331-220126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742434_ruza9p5gi",
+    "soNo": "PO-000010847",
+    "customer": "PT. Essilorluxottica Professional Solutions Indonesia",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-23",
+    "items": [
+      {
+        "qty": 15,
+        "unit": "RIM",
+        "price": 73190,
+        "discount": 0,
+        "total": 1097850,
+        "tax": 120763,
+        "totalAkhir": 1218613,
+        "productName": "HVS PAPER A4 PINK 70GR",
+        "productKode": "TRM1555",
+        "productId": "TRM1555"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO-000010847 DO : 12334-230126",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "so_1770829742437_mw4luidk0",
+    "soNo": "KIPO26010162",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-23",
+    "items": [
+      {
+        "qty": 5,
+        "unit": "TIN",
+        "price": 546000,
+        "discount": 0,
+        "total": 2730000,
+        "tax": 300300,
+        "totalAkhir": 3030300,
+        "productName": "ACETONE (20LTR/TIN) (NB156)",
+        "productKode": "TRM0002",
+        "productId": "TRM0002"
+      },
+      {
+        "qty": 30,
+        "unit": "PCS",
+        "price": 190000,
+        "discount": 0,
+        "total": 5700000,
+        "tax": 627000,
+        "totalAkhir": 6327000,
+        "productName": "\"BRONZE SWING CHECK VALVE 32A (1 1/4\"\"\"\") (CS067)\"",
+        "productKode": "TRM0295",
+        "productId": "TRM0295"
+      },
+      {
+        "qty": 10,
+        "unit": "PCS",
+        "price": 434775,
+        "discount": 0,
+        "total": 4347750,
+        "tax": 478252,
+        "totalAkhir": 4826002,
+        "productName": "\"BRONZE SWING CHECK VALVE 50A(2\"\"\"\") (CS069)\"",
+        "productKode": "TRM0353",
+        "productId": "TRM0353"
+      },
+      {
+        "qty": 10,
+        "unit": "PCS",
+        "price": 434775,
+        "discount": 0,
+        "total": 4347750,
+        "tax": 478252,
+        "totalAkhir": 4826002,
+        "productName": "\"BRONZE SWING CHECK VALVE 50A(2\"\"\"\") (CS069)\"",
+        "productKode": "TRM0353",
+        "productId": "TRM0353"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO26010162 DO : 12333-230126",
+    "timestamp": 1770829742437
+  },
+  {
+    "id": "so_1770829742438_1jqa13xy5",
+    "soNo": "088/PO/SBM-TLJP/I/26",
+    "customer": "\"SINAR BENGAWAN MANDIRI, PT\"",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-24",
+    "items": [
+      {
+        "qty": 1,
+        "unit": "ROL",
+        "price": 303750,
+        "discount": 0,
+        "total": 303750,
+        "tax": 33412,
+        "totalAkhir": 337162,
+        "productName": "\"AMPLAS ROLL GRADE 150 UKURAN 4\"\"\"\" X 46 MTR\"",
+        "productKode": "TRM3423",
+        "productId": "TRM3423"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : 088/PO/SBM-TLJP/I/26 DO : 12355-240126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742438_popog2q89",
+    "soNo": "PO26-049-1",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-26",
+    "items": [
+      {
+        "qty": 1,
+        "unit": "PCS",
+        "price": 2900000,
+        "discount": 0,
+        "total": 2900000,
+        "tax": 319000,
+        "totalAkhir": 3219000,
+        "productName": "SELANG TOGAWA 6X11",
+        "productKode": "TRM3953",
+        "productId": "TRM3953"
+      },
+      {
+        "qty": 1,
+        "unit": "PCS",
+        "price": 3000000,
+        "discount": 0,
+        "total": 3000000,
+        "tax": 330000,
+        "totalAkhir": 3330000,
+        "productName": "REGULATOR CROWN NON HEATER",
+        "productKode": "TRM4485",
+        "productId": "TRM4485"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO26-049-1 DO : 12336-260126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742432_98lgej6f5",
+    "soNo": "082/PO/AIP-TLJP/I/25",
+    "customer": "\"ARDON INTI PRESISI, PT\"",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-27",
+    "items": [
+      {
+        "qty": 50,
+        "unit": "PCS",
+        "price": 7225,
+        "discount": 0,
+        "total": 361250,
+        "tax": 39737,
+        "totalAkhir": 400987,
+        "productName": "FLANGE BOLT M14 X 1.5 X 15",
+        "productKode": "TRM0284",
+        "productId": "TRM0284"
+      },
+      {
+        "qty": 30000,
+        "unit": "PCS",
+        "price": 255,
+        "discount": 0,
+        "total": 7650000,
+        "tax": 841500,
+        "totalAkhir": 8491500,
+        "productName": "NUT WELDING M.8 X 1.25",
+        "productKode": "TRM0243",
+        "productId": "TRM0243"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : 082/PO/AIP-TLJP/I/25 DO : 12342-270126",
+    "timestamp": 1770829742432
+  },
+  {
+    "id": "so_1770829742433_04gm4d2d6",
+    "soNo": "PO-L-202601000142",
+    "customer": "PT INTEGRASI MEDIKA PRIMA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-27",
+    "items": [
+      {
+        "qty": 4,
+        "unit": "PCS",
+        "price": 514750,
+        "discount": 0,
+        "total": 2059000,
+        "tax": 226490,
+        "totalAkhir": 2285490,
+        "productName": "LAMPU LED 60X60 29W",
+        "productKode": "TRM3764",
+        "productId": "TRM3764"
+      },
+      {
+        "qty": 4,
+        "unit": "PC",
+        "price": 442250,
+        "discount": 0,
+        "total": 1769000,
+        "tax": 194590,
+        "totalAkhir": 1963590,
+        "productName": "LAMPU LED 30X120 29W",
+        "productKode": "TRM3220",
+        "productId": "TRM3220"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO-L-202601000142 DO : 12344-270126",
+    "timestamp": 1770829742433
+  },
+  {
+    "id": "so_1770829742437_hw38bc4re",
+    "soNo": "KIPO26010182",
+    "customer": "PT. KAWATA INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-27",
+    "items": [
+      {
+        "qty": 1,
+        "unit": "BOX",
+        "price": 265000,
+        "discount": 0,
+        "total": 265000,
+        "tax": 29150,
+        "totalAkhir": 294150,
+        "productName": "LEM EPOTEC (NB132)",
+        "productKode": "TRM0042",
+        "productId": "TRM0042"
+      },
+      {
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 990,
+        "discount": 0,
+        "total": 990000,
+        "tax": 108900,
+        "totalAkhir": 1098900,
+        "productName": "BOLT (BAUT L) M6XP1.0XL16MM (GALVANIZED) (NB030)",
+        "productKode": "TRM0113",
+        "productId": "TRM0113"
+      },
+      {
+        "qty": 500,
+        "unit": "PCS",
+        "price": 1113,
+        "discount": 0,
+        "total": 556500,
+        "tax": 61215,
+        "totalAkhir": 617715,
+        "productName": "BOLT (BAUT L) M5XP0.8XL12MM (GALVANIZED) (NB008-1)",
+        "productKode": "TRM0111",
+        "productId": "TRM0111"
+      },
+      {
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 360,
+        "discount": 0,
+        "total": 360000,
+        "tax": 39600,
+        "totalAkhir": 399600,
+        "productName": "BOLT (BAUT JP) M3XP0.3XL60MM (GALVANIZED) (NB319)",
+        "productKode": "TRM0341",
+        "productId": "TRM0341"
+      },
+      {
+        "qty": 500,
+        "unit": "PCS",
+        "price": 891,
+        "discount": 0,
+        "total": 445500,
+        "tax": 49005,
+        "totalAkhir": 494505,
+        "productName": "BOLT (BAUT L) M8XP1.25XL20MM (GALVANIZED) (NB360)",
+        "productKode": "TRM0299",
+        "productId": "TRM0299"
+      },
+      {
+        "qty": 2000,
+        "unit": "PCS",
+        "price": 238,
+        "discount": 0,
+        "total": 476000,
+        "tax": 52360,
+        "totalAkhir": 528360,
+        "productName": "BOLT (BAUT JT PHILIP) M5XP0.8XL10MM (GALVANIZED) (NC387)",
+        "productKode": "TRM0545",
+        "productId": "TRM0545"
+      },
+      {
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 579,
+        "discount": 0,
+        "total": 579000,
+        "tax": 63690,
+        "totalAkhir": 642690,
+        "productName": "BOLT (BAUT JP) M5XP0.8XL10MM (SUS304) (NB575)",
+        "productKode": "TRM0101",
+        "productId": "TRM0101"
+      },
+      {
+        "qty": 500,
+        "unit": "PCS",
+        "price": 1732,
+        "discount": 0,
+        "total": 866000,
+        "tax": 95260,
+        "totalAkhir": 961260,
+        "productName": "BOLT (BAUT L) M6XP1.0XL20MM (SUS304) (NB204)",
+        "productKode": "TRM0114",
+        "productId": "TRM0114"
+      },
+      {
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 475,
+        "discount": 0,
+        "total": 475000,
+        "tax": 52250,
+        "totalAkhir": 527250,
+        "productName": "BOLT(BAUT JT) M4XP0.7XL12MM (GALVANIZED) (NB180-1)",
+        "productKode": "TRM4486",
+        "productId": "TRM4486"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : KIPO26010182 DO : 123346-270126",
+    "timestamp": 1770829742437
+  },
+  {
+    "id": "so_1770829742438_lhpxu9oqj",
+    "soNo": "PL2600217",
+    "customer": "\"SANOH INDONESIA, PT\"",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-27",
+    "items": [
+      {
+        "qty": 240,
+        "unit": "PCS",
+        "price": 14700,
+        "discount": 0,
+        "total": 3528000,
+        "tax": 388080,
+        "totalAkhir": 3916080,
+        "productName": "MARKING SNOWMAN PINK",
+        "productKode": "TRM0193",
+        "productId": "TRM0193"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PL2600217 DO : 12345-270126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742434_7wzhkkboh",
+    "soNo": "PO/IS510/260101077",
+    "customer": "PT. INDOSAFETY SENTOSA INDUSTRY",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-29",
+    "items": [
+      {
+        "qty": 122,
+        "unit": "ROL",
+        "price": 38410,
+        "discount": 0,
+        "total": 4686020,
+        "tax": 515462,
+        "totalAkhir": 5201482,
+        "productName": "\"LAKBAN OKAMOTO 2\"\"\"\"X50M\"",
+        "productKode": "TRM4452",
+        "productId": "TRM4452"
+      },
+      {
+        "qty": 40,
+        "unit": "ROL",
+        "price": 10896,
+        "discount": 0,
+        "total": 435840,
+        "tax": 47942,
+        "totalAkhir": 483782,
+        "productName": "EKATAPE 45MM X 85Y COKLAT",
+        "productKode": "TRM4458",
+        "productId": "TRM4458"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO/IS510/260101077 DO : 12353-290126",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "so_1770829742438_2c1gxmg1a",
+    "soNo": "BKS/PO/000104320",
+    "customer": "PT. UNIVERSAL AGRI BISNISINDO",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-29",
+    "items": [
+      {
+        "qty": 5940,
+        "unit": "PCS",
+        "price": 3500,
+        "discount": 0,
+        "total": 20790000,
+        "tax": 2286900,
+        "totalAkhir": 23076900,
+        "productName": "SUSU ULTRA UK 125 ML PLAIN",
+        "productKode": "TRM2452",
+        "productId": "TRM2452"
+      },
+      {
+        "qty": 145,
+        "unit": "PCS",
+        "price": 5777,
+        "discount": 0,
+        "total": 837665,
+        "tax": 92143,
+        "totalAkhir": 929808,
+        "productName": "SUSU ULTRA UK 250 ML RASA COKLAT",
+        "productKode": "TRM0354",
+        "productId": "TRM0354"
+      },
+      {
+        "qty": 72,
+        "unit": "PCS",
+        "price": 10600,
+        "discount": 0,
+        "total": 763200,
+        "tax": 83952,
+        "totalAkhir": 847152,
+        "productName": "SUSU BEAR BRAND",
+        "productKode": "TRM0355",
+        "productId": "TRM0355"
+      },
+      {
+        "qty": 266,
+        "unit": "PCS",
+        "price": 10600,
+        "discount": 0,
+        "total": 2819600,
+        "tax": 310156,
+        "totalAkhir": 3129756,
+        "productName": "SUSU BEAR BRAND",
+        "productKode": "TRM0355",
+        "productId": "TRM0355"
+      },
+      {
+        "qty": 322,
+        "unit": "PCS",
+        "price": 10600,
+        "discount": 0,
+        "total": 3413200,
+        "tax": 375452,
+        "totalAkhir": 3788652,
+        "productName": "SUSU BEAR BRAND",
+        "productKode": "TRM0355",
+        "productId": "TRM0355"
+      },
+      {
+        "qty": 108,
+        "unit": "PCS",
+        "price": 10600,
+        "discount": 0,
+        "total": 1144800,
+        "tax": 125928,
+        "totalAkhir": 1270728,
+        "productName": "SUSU BEAR BRAND",
+        "productKode": "TRM0355",
+        "productId": "TRM0355"
+      },
+      {
+        "qty": 24,
+        "unit": "PCS",
+        "price": 10600,
+        "discount": 0,
+        "total": 254400,
+        "tax": 27984,
+        "totalAkhir": 282384,
+        "productName": "SUSU BEAR BRAND",
+        "productKode": "TRM0355",
+        "productId": "TRM0355"
+      },
+      {
+        "qty": 6,
+        "unit": "PAK",
+        "price": 11800,
+        "discount": 0,
+        "total": 70800,
+        "tax": 7788,
+        "totalAkhir": 78588,
+        "productName": "PLASTIK KRESEK",
+        "productKode": "TRM0385",
+        "productId": "TRM0385"
+      },
+      {
+        "qty": 2,
+        "unit": "PCS",
+        "price": 27000,
+        "discount": 0,
+        "total": 54000,
+        "tax": 5940,
+        "totalAkhir": 59940,
+        "productName": "GAS 3KG",
+        "productKode": "TRM0384",
+        "productId": "TRM0384"
+      },
+      {
+        "qty": 51,
+        "unit": "KG",
+        "price": 30000,
+        "discount": 0,
+        "total": 1539000,
+        "tax": 169290,
+        "totalAkhir": 1708290,
+        "productName": "TELUR",
+        "productKode": "TRM0383",
+        "productId": "TRM0383"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : BKS/PO/000104320 DO : 12349-290126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1770829742438_7v48xttvx",
+    "soNo": "PO26-040-1",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-01-30",
+    "items": [
+      {
+        "qty": 3,
+        "unit": "CAN",
+        "price": 375000,
+        "discount": 0,
+        "total": 1125000,
+        "tax": 123750,
+        "totalAkhir": 1248750,
+        "productName": "MICRO CLEANER JIP 141",
+        "productKode": "TRM1466",
+        "productId": "TRM1466"
+      },
+      {
+        "qty": 6,
+        "unit": "PCS",
+        "price": 337500,
+        "discount": 0,
+        "total": 2025000,
+        "tax": 222750,
+        "totalAkhir": 2247750,
+        "productName": "BATERAI LITHIUM LS 14250 3.6V",
+        "productKode": "TRM1905",
+        "productId": "TRM1905"
+      }
+    ],
+    "ppicNotified": false,
+    "notes": "PO : PO26-040-1 DO : 12352-300126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "so_1771553267226_esc782o3i",
+    "soNo": "KIPO26010208",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-02",
+    "items": [
+      {
+        "id": "item_1771553267226_rmperzmml",
+        "productId": "TRM1215",
+        "productKode": "TRM1215",
+        "productName": "CORRUGATED FLEXIBLE CONDUIT HITAM ID DIA 10MM/OD.16MM TYPE FCP-10 (50MTR./ROLL) (NB115-1)",
+        "qty": 100,
+        "unit": "MTR",
+        "price": 1800,
+        "total": 180000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_6ombhe3yn",
+        "productId": "TRM0152",
+        "productKode": "TRM0152",
+        "productName": "CABLE NYAF Ø2.50 MM2 (WHITE) (100MTR/ROLL) (CC476-1)",
+        "qty": 100,
+        "unit": "MTR",
+        "price": 5840,
+        "total": 584000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_815mvh51w",
+        "productId": "TRM0152",
+        "productKode": "TRM0152",
+        "productName": "CABLE NYAF Ø2.50 MM2 (WHITE) (100MTR/ROLL) (CC476-1)",
+        "qty": 100,
+        "unit": "MTR",
+        "price": 5840,
+        "total": 584000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267226_hnc6sdqrx",
+    "soNo": "KIPO26010223",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-02",
+    "items": [
+      {
+        "id": "item_1771553267226_c16odsr2i",
+        "productId": "TRM0236",
+        "productKode": "TRM0236",
+        "productName": "TERMINAL LUG RING TYPE KSS R3.5-6 [100PCS/PACK] (SKUN RING POLOS FOR WIRE 2.50-4.00MM2) (CC029)",
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 450,
+        "total": 450000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267226_5c2rivmbf",
+        "productId": "TRM0145",
+        "productKode": "TRM0145",
+        "productName": "DIODA IN4002 (DN001)",
+        "qty": 200,
+        "unit": "PCS",
+        "price": 400,
+        "total": 80000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267226_arp1i93r8",
+        "productId": "TRM0063",
+        "productKode": "TRM0063",
+        "productName": "ROCK WOOL Ø16 X Ø26 (BESAR) (NB390)",
+        "qty": 10,
+        "unit": "PCS",
+        "price": 214600,
+        "total": 2146000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267229_ptkb6u9c4",
+        "productId": "TRM0131",
+        "productKode": "TRM0131",
+        "productName": "CABLE NYAF Ø0.50MM2 (YELLOW) [100MTR/ROLL] (CC491-1)",
+        "qty": 1000,
+        "unit": "MTR",
+        "price": 1465,
+        "total": 1465000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267229_83tswlt9d",
+        "productId": "TRM0012",
+        "productKode": "TRM0012",
+        "productName": "CABLE NYAF Ø0.50MM2 (BLUE) [100MTR/ROLL] (CC481)",
+        "qty": 1000,
+        "unit": "MTR",
+        "price": 1465,
+        "total": 1465000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267229_7jq8nn68l",
+        "productId": "TRM1966",
+        "productKode": "TRM1966",
+        "productName": "CABLE NYAF Ø6.00MM2 (WHITE) [100M/ROLL] (CC480)",
+        "qty": 100,
+        "unit": "MTR",
+        "price": 14260,
+        "total": 1426000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267229_xv5rvn2xp",
+        "productId": "TRM0063",
+        "productKode": "TRM0063",
+        "productName": "ROCK WOOL Ø16 X Ø26 (BESAR) (NB390)",
+        "qty": 35,
+        "unit": "PCS",
+        "price": 214600,
+        "total": 7511000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_pzil9912u",
+        "productId": "TRM0063",
+        "productKode": "TRM0063",
+        "productName": "ROCK WOOL Ø16 X Ø26 (BESAR) (NB390)",
+        "qty": 5,
+        "unit": "PCS",
+        "price": 214600,
+        "total": 1073000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267227_f0dxpa1vw",
+    "soNo": "KIPO26010222",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-02",
+    "items": [
+      {
+        "id": "item_1771553267227_idtlxliwc",
+        "productId": "TRM4494",
+        "productKode": "TRM4494",
+        "productName": "LONG DRAT M10X1.5 (GALVANIZE) [Q235] (1 METER/PC) FOR SHAFT HONEYCOMB DFG-SERIES",
+        "qty": 50,
+        "unit": "PCS",
+        "price": 12416,
+        "total": 620800,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267227_4a5vnhuij",
+    "soNo": "KIPO25110126",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-02",
+    "items": [
+      {
+        "id": "item_1771553267227_pl8ljy5w6",
+        "productId": "TRM1008",
+        "productKode": "TRM1008",
+        "productName": "\"TOWER LIGHT LED (Q-LIGHT) ST45L-BZ 2-2 220-AC220V RG (RED, GREEN) BRACKET TYPE QZ18 C/W BUZZER (RG085)\"",
+        "qty": 7,
+        "unit": "PCS",
+        "price": 900000,
+        "total": 6300000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267227_z2qzcg8ay",
+    "soNo": "HKB/PO/01/0256/3456",
+    "customer": "PT. HANYA KARYA BAHANA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-02",
+    "items": [
+      {
+        "id": "item_1771553267227_7t3rqv2wd",
+        "productId": "TRM0532",
+        "productKode": "TRM0532",
+        "productName": "KERTAS VCI 30 x 33",
+        "qty": 500,
+        "unit": "PCS",
+        "price": 1765,
+        "total": 882500,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267227_ld8nl5uxs",
+    "soNo": "KIPO25100184",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-02",
+    "items": [
+      {
+        "id": "item_1771553267227_zqi78x0jc",
+        "productId": "TRM0079",
+        "productKode": "TRM0079",
+        "productName": "BUBBLE SHEET (NB058)",
+        "qty": 4,
+        "unit": "ROL",
+        "price": 156245,
+        "total": 624980,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267227_z9427jrfk",
+        "productId": "TRM0220",
+        "productKode": "TRM0220",
+        "productName": "POLYFOAM 200CMX100CMX2.6CM (NB059)",
+        "qty": 15,
+        "unit": "LBR",
+        "price": 150000,
+        "total": 2250000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267227_10ntvmsuq",
+        "productId": "TRM0212",
+        "productKode": "TRM0212",
+        "productName": "METALIZING W 1.2XL.50M (NB148)",
+        "qty": 18,
+        "unit": "ROL",
+        "price": 351450,
+        "total": 6326100,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267227_nlnlfp4bb",
+        "productId": "TRM1089",
+        "productKode": "TRM1089",
+        "productName": "STRAPPING BAND SIZE : 15MMW X 0.6MMT X 2.500MTR/ROLL (NB064)",
+        "qty": 2,
+        "unit": "ROL",
+        "price": 80000,
+        "total": 160000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267227_ahoc1jijy",
+        "productId": "TRM0058",
+        "productKode": "TRM0058",
+        "productName": "PYLOX : BLACK NIPPON/RJ (NB027)",
+        "qty": 5,
+        "unit": "CAN",
+        "price": 25000,
+        "total": 125000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267227_z9p3yyrii",
+        "productId": "TRM0228",
+        "productKode": "TRM0228",
+        "productName": "SILICA GEL 250GR/PACK (NB282)",
+        "qty": 250,
+        "unit": "PCK",
+        "price": 15456,
+        "total": 3864000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267227_fixtakqo3",
+        "productId": "TRM0072",
+        "productKode": "TRM0072",
+        "productName": "STEREO FOAM 3MM (NB233)",
+        "qty": 2,
+        "unit": "ROL",
+        "price": 641520,
+        "total": 1283040,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267227_ih9k9zxdi",
+    "soNo": "PO-L- 202601000168",
+    "customer": "PT INTEGRASI MEDIKA PRIMA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-02",
+    "items": [
+      {
+        "id": "item_1771553267227_0d12qq6l3",
+        "productId": "TRM3234",
+        "productKode": "TRM3234",
+        "productName": "PRINT CARTON UK 60 X 100CM",
+        "qty": 1,
+        "unit": "PCS",
+        "price": 120000,
+        "total": 120000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267227_1b5hve0z1",
+    "soNo": "C90947",
+    "customer": "PT. KAWASAKI MOTOR INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-02",
+    "items": [
+      {
+        "id": "item_1771553267227_2fdonuy0r",
+        "productId": "TRM0487",
+        "productKode": "TRM0487",
+        "productName": "BOLT FLANGE 8X20 MC3 G7 (K1410-0025)",
+        "qty": 39000,
+        "unit": "PCS",
+        "price": 760,
+        "total": 29640000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267227_t3rmt6mlu",
+    "soNo": "SUAI.TLJP-852601-001",
+    "customer": "PT. SUBANG AUTOCOMP INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-02",
+    "items": [
+      {
+        "id": "item_1771553267227_2t9z2hxcv",
+        "productId": "TRM3454",
+        "productKode": "TRM3454",
+        "productName": "KARET KUMIS TRANSPARAN 5CM (COKLAT)",
+        "qty": 65,
+        "unit": "KG",
+        "price": 205000,
+        "total": 13325000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267227_hersskj4u",
+    "soNo": "PL2600295",
+    "customer": "\"SANOH INDONESIA, PT\"",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-02",
+    "items": [
+      {
+        "id": "item_1771553267227_te3k9trli",
+        "productId": "TRM0172",
+        "productKode": "TRM0172",
+        "productName": "KARET GELANG BESAR",
+        "qty": 200,
+        "unit": "PCS",
+        "price": 62000,
+        "total": 12400000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267227_6li5cpft6",
+        "productId": "TRM0162",
+        "productKode": "TRM0162",
+        "productName": "FOAM SHEET 2MM",
+        "qty": 4,
+        "unit": "PCS",
+        "price": 530000,
+        "total": 2120000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267227_jkpi4dqxc",
+        "productId": "TRM0245",
+        "productKode": "TRM0245",
+        "productName": "KAWAT LAS NICHO 2.6 MM",
+        "qty": 25,
+        "unit": "PCS",
+        "price": 33450,
+        "total": 836250,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267227_eete4dkem",
+        "productId": "TRM0181",
+        "productKode": "TRM0181",
+        "productName": "MAJUN WARNA",
+        "qty": 150,
+        "unit": "KG",
+        "price": 5800,
+        "total": 870000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267227_4jm8bopxf",
+        "productId": "TRM0211",
+        "productKode": "TRM0211",
+        "productName": "MASKING TAVE",
+        "qty": 96,
+        "unit": "PCS",
+        "price": 5500,
+        "total": 528000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267227_dkihwk6nc",
+        "productId": "TRM0208",
+        "productKode": "TRM0208",
+        "productName": "MASKER KAIN",
+        "qty": 150,
+        "unit": "PCS",
+        "price": 9500,
+        "total": 1425000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267227_n3dfmbgiu",
+        "productId": "TRM0185",
+        "productKode": "TRM0185",
+        "productName": "MARKING SNOWMAN BLUE",
+        "qty": 120,
+        "unit": "PCS",
+        "price": 14700,
+        "total": 1764000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267227_ut4whah2m",
+        "productId": "TRM0188",
+        "productKode": "TRM0188",
+        "productName": "MARKING SNOWMAN GREEN",
+        "qty": 120,
+        "unit": "PCS",
+        "price": 14700,
+        "total": 1764000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267227_f10puadx3",
+        "productId": "TRM0192",
+        "productKode": "TRM0192",
+        "productName": "MARKING SNOWMAN ORANGE",
+        "qty": 120,
+        "unit": "PCS",
+        "price": 14700,
+        "total": 1764000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267227_p7jxlkbjd",
+        "productId": "TRM0191",
+        "productKode": "TRM0191",
+        "productName": "MARKING SNOWMAN RED",
+        "qty": 120,
+        "unit": "PCS",
+        "price": 14700,
+        "total": 1764000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267227_ecf8f4fn4",
+        "productId": "TRM0194",
+        "productKode": "TRM0194",
+        "productName": "MARKING SNOWMAN WHITE",
+        "qty": 240,
+        "unit": "PCS",
+        "price": 14700,
+        "total": 3528000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267227_ev04z7cja",
+        "productId": "TRM0190",
+        "productKode": "TRM0190",
+        "productName": "MARKING SNOWMAN YELLOW",
+        "qty": 120,
+        "unit": "PCS",
+        "price": 14700,
+        "total": 1764000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267232_a9d4arj9a",
+        "productId": "TRM0181",
+        "productKode": "TRM0181",
+        "productName": "MAJUN WARNA",
+        "qty": 100,
+        "unit": "KG",
+        "price": 5800,
+        "total": 580000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267227_yfnw1lld0",
+    "soNo": "PO-000010914",
+    "customer": "PT. Essilorluxottica Professional Solutions Indonesia",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-03",
+    "items": [
+      {
+        "id": "item_1771553267227_4x8hqnr25",
+        "productId": "TRM1376",
+        "productKode": "TRM1376",
+        "productName": "LAKBAN BENING BESAR",
+        "qty": 144,
+        "unit": "PCS",
+        "price": 6750,
+        "total": 972000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267227_q2w4wvxx7",
+        "productId": "TRM1375",
+        "productKode": "TRM1375",
+        "productName": "LAKBAN COKLAT BESAR",
+        "qty": 288,
+        "unit": "PCS",
+        "price": 6750,
+        "total": 1944000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267227_zzo2yj77g",
+    "soNo": "PO-000004125",
+    "customer": "\"PT. SUPRAVISI RAMA OPTIK, MANUFACTURING\"",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-03",
+    "items": [
+      {
+        "id": "item_1771553267227_csgdlmh1o",
+        "productId": "TRM1280",
+        "productKode": "TRM1280",
+        "productName": "PAPER A5",
+        "qty": 520,
+        "unit": "RIM",
+        "price": 21525,
+        "total": 11193000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267227_ec9ua4xi9",
+    "soNo": "PO-000004034",
+    "customer": "\"PT. SUPRAVISI RAMA OPTIK, MANUFACTURING\"",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-03",
+    "items": [
+      {
+        "id": "item_1771553267227_6yl7m4sb8",
+        "productId": "TRM1389",
+        "productKode": "TRM1389",
+        "productName": "SPONBON (CSUCMMS0020008)",
+        "qty": 30000,
+        "unit": "PCS",
+        "price": 55,
+        "total": 1650000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267231_fpm8nsjd8",
+        "productId": "TRM1389",
+        "productKode": "TRM1389",
+        "productName": "SPONBON (CSUCMMS0020008)",
+        "qty": 30000,
+        "unit": "PCS",
+        "price": 55,
+        "total": 1650000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267228_62x8kw6uc",
+    "soNo": "KIPO26020016",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-04",
+    "items": [
+      {
+        "id": "item_1771553267228_w7ez771lo",
+        "productId": "TRM3030",
+        "productKode": "TRM3030",
+        "productName": "\"BRASS BALL VALVE 40A (LONG HANDLE ORANGE) MDT MODEL BV-600(1 1/2\"\"\"\") (CS099-1)\"",
+        "qty": 3,
+        "unit": "PCS",
+        "price": 420000,
+        "total": 1260000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267228_9v35swfsj",
+    "soNo": "KIPO26020015",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-04",
+    "items": [
+      {
+        "id": "item_1771553267228_avm65nxr8",
+        "productId": "TRM0054",
+        "productKode": "TRM0054",
+        "productName": "PLASTIC CLIP CLEAR 10CMX7CM [100PCS/PCK] (NB067-1)",
+        "qty": 10,
+        "unit": "PCK",
+        "price": 6100,
+        "total": 61000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267228_rrfiemvca",
+        "productId": "TRM0079",
+        "productKode": "TRM0079",
+        "productName": "BUBBLE SHEET (NB058)",
+        "qty": 3,
+        "unit": "ROL",
+        "price": 156245,
+        "total": 468735,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_4vryw1ci2",
+        "productId": "TRM1302",
+        "productKode": "TRM1302",
+        "productName": "\"PISAU POTONG CIRCLE GMT7\"\"\"\" (NB357)\"",
+        "qty": 3,
+        "unit": "PCS",
+        "price": 76046,
+        "total": 228138,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_qqsld2q8a",
+        "productId": "TRM1529",
+        "productKode": "TRM1529",
+        "productName": "PAKU RENG 4CM (NB464)",
+        "qty": 2,
+        "unit": "KG",
+        "price": 42750,
+        "total": 85500,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_tya2h9pzo",
+        "productId": "TRM0057",
+        "productKode": "TRM0057",
+        "productName": "PLYWOOD (KAYU TRIPLEK) L=240 W=120 T=9MM (NB019)",
+        "qty": 90,
+        "unit": "LBR",
+        "price": 113850,
+        "total": 10246500,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_c341ie3i8",
+        "productId": "TRM0340",
+        "productKode": "TRM0340",
+        "productName": "WAINSCOT (KAYU LIST) L=250 W=7 T=2 (NB018)",
+        "qty": 750,
+        "unit": "BTG",
+        "price": 12500,
+        "total": 9375000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_vrclpmrzm",
+        "productId": "TRM0004",
+        "productKode": "TRM0004",
+        "productName": "BEAMWOOD (KAYU BALOK) L=150 W=8 T=5 (NB017)",
+        "qty": 710,
+        "unit": "BTG",
+        "price": 12500,
+        "total": 8875000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_15yih9b9k",
+        "productId": "TRM0005",
+        "productKode": "TRM0005",
+        "productName": "BEAMWOOD (KAYU BALOK) L=200 X W=8 X T=5 (NB1343)",
+        "qty": 18,
+        "unit": "BTG",
+        "price": 24000,
+        "total": 432000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267228_5mzky7qd4",
+    "soNo": "KIPO26010243",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-04",
+    "items": [
+      {
+        "id": "item_1771553267228_qouk5vhxr",
+        "productId": "TRM1370",
+        "productKode": "TRM1370",
+        "productName": "METAL CONNECTOR SINOCONTEC PLUG+ FLANGE SOCKET 19M-4A+4E (4PIN) ZINC ALLOY",
+        "qty": 1,
+        "unit": "SET",
+        "price": 136000,
+        "total": 136000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_evvi8ff8m",
+        "productId": "TRM4496",
+        "productKode": "TRM4496",
+        "productName": "CORRUGATED FLEXIBLE CONDUIT HITAM IDØ7.0MM/OD.12MM TYPE FCP-7 [100MTR./ROLL](NB117-1)",
+        "qty": 100,
+        "unit": "MTR",
+        "price": 1700,
+        "total": 170000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267228_pf49hb5bt",
+    "soNo": "KIPO26010263",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-04",
+    "items": [
+      {
+        "id": "item_1771553267228_rhidfyjt1",
+        "productId": "TRM0670",
+        "productKode": "TRM0670",
+        "productName": "SPRING WASHER / RING PER M5 (S20C) (ZINC PLATED) (JB003)",
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 44,
+        "total": 44000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267228_0jk89egdb",
+        "productId": "TRM0301",
+        "productKode": "TRM0301",
+        "productName": "SPRING WASHER / RING PER M6 (SS400) (ZINC PLATED) (NB345)",
+        "qty": 2000,
+        "unit": "PCS",
+        "price": 48,
+        "total": 96000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267228_khzuie2h5",
+        "productId": "TRM0348",
+        "productKode": "TRM0348",
+        "productName": "FLAT WASHER / RING PLATE (SS400) M6 (GALVANIZED) (NB033)",
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 48,
+        "total": 48000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267228_sw8bt60ju",
+        "productId": "TRM0296",
+        "productKode": "TRM0296",
+        "productName": "HEX. NUT / MUR (S20C) M6X1.0 (GALVANIZED) (JA006)",
+        "qty": 500,
+        "unit": "PCS",
+        "price": 190,
+        "total": 95000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267228_n9btji762",
+        "productId": "TRM0347",
+        "productKode": "TRM0347",
+        "productName": "FLAT WASHER / RING PLATE (SS400) M4 (GALVANIZED) (NB512)",
+        "qty": 2000,
+        "unit": "PCS",
+        "price": 34,
+        "total": 68000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267228_bfe66v1fn",
+        "productId": "TRM0671",
+        "productKode": "TRM0671",
+        "productName": "FLAT WASHER / RING PLATE (SS400) Ø8 LEBAR (GALVANIZED) (NB419)",
+        "qty": 300,
+        "unit": "PCS",
+        "price": 346,
+        "total": 103800,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267228_57rd0mtye",
+        "productId": "TRM0673",
+        "productKode": "TRM0673",
+        "productName": "\"TAPING SCREW 8X3/8\"\"\"\" GALVANIZED (NB368)\"",
+        "qty": 500,
+        "unit": "PCS",
+        "price": 60,
+        "total": 30000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267228_eein59vx6",
+        "productId": "TRM2158",
+        "productKode": "TRM2158",
+        "productName": "CLAMP HOSE BAND (SILVER) Ø42 - Ø48 (DOUBLE WIRE CLAMP) FOR PVC HOSE Ø38 /SILICONE HOSE Ø43 (SUNTRAC) (NB060-1)",
+        "qty": 300,
+        "unit": "PCS",
+        "price": 6500,
+        "total": 1950000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267229_7hhk0d5ty",
+        "productId": "TRM1158",
+        "productKode": "TRM1158",
+        "productName": "CLAMP HOSE BAND (SILVER) Ø50-Ø55 (DOUBLE WIRE CLAMP) FOR SILICON HOSE Ø51 (SUNTRAC) (NB065)",
+        "qty": 500,
+        "unit": "PCS",
+        "price": 6412,
+        "total": 3206000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267229_dkbo8jnao",
+        "productId": "TRM0099",
+        "productKode": "TRM0099",
+        "productName": "BOLT (BAUT JP) M4XP.07XL50MM (GALVANIZED) (NB488-1)",
+        "qty": 500,
+        "unit": "PCS",
+        "price": 384,
+        "total": 192000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267229_m58ihziy4",
+        "productId": "TRM0299",
+        "productKode": "TRM0299",
+        "productName": "BOLT (BAUT L) M8XP1.25XL20MM (GALVANIZED) (NB360)",
+        "qty": 500,
+        "unit": "PCS",
+        "price": 891,
+        "total": 445500,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267229_vpsmezv6r",
+        "productId": "TRM0298",
+        "productKode": "TRM0298",
+        "productName": "BOLT (BAUT HEXAGONAL) M8XP1.25XL25MM (GALVANIZED) (HA059)",
+        "qty": 500,
+        "unit": "PCS",
+        "price": 500,
+        "total": 250000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267229_5gwnalz06",
+        "productId": "TRM0117",
+        "productKode": "TRM0117",
+        "productName": "BOLT (BAUT L) M8XP1.25XL16MM (GALVANIZED) (NB139)",
+        "qty": 500,
+        "unit": "PCS",
+        "price": 1650,
+        "total": 825000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267229_9rr2k591a",
+        "productId": "TRM2158",
+        "productKode": "TRM2158",
+        "productName": "CLAMP HOSE BAND (SILVER) Ø42 - Ø48 (DOUBLE WIRE CLAMP) FOR PVC HOSE Ø38 /SILICONE HOSE Ø43 (SUNTRAC) (NB060-1)",
+        "qty": 200,
+        "unit": "PCS",
+        "price": 6500,
+        "total": 1300000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267229_jcam97foz",
+    "soNo": "KIPO26010257",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-04",
+    "items": [
+      {
+        "id": "item_1771553267229_9klphzz8c",
+        "productId": "TRM0697",
+        "productKode": "TRM0697",
+        "productName": "SARUNG TANGAN KARET SENSI SIZE : XL (NB145)",
+        "qty": 3,
+        "unit": "BOX",
+        "price": 103230,
+        "total": 309690,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267229_znyc40dn2",
+    "soNo": "PO26-062-1",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-04",
+    "items": [
+      {
+        "id": "item_1771553267229_n7x28bto1",
+        "productId": "TRM4150",
+        "productKode": "TRM4150",
+        "productName": "PALU KARET",
+        "qty": 4,
+        "unit": "PCS",
+        "price": 90000,
+        "total": 360000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267229_mbqodbvn9",
+        "productId": "TRM1300",
+        "productKode": "TRM1300",
+        "productName": "PALU BESI KAMBING",
+        "qty": 4,
+        "unit": "PCS",
+        "price": 86250,
+        "total": 345000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267229_cl5cmvtw6",
+        "productId": "TRM4498",
+        "productKode": "TRM4498",
+        "productName": "PALU PLASTIK",
+        "qty": 3,
+        "unit": "PCS",
+        "price": 160125,
+        "total": 480375,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267229_6wlpdrlo4",
+        "productId": "TRM2128",
+        "productKode": "TRM2128",
+        "productName": "ARC MEN GEL (NPO NOZZLE CLEANER)",
+        "qty": 5,
+        "unit": "PCS",
+        "price": 184500,
+        "total": 922500,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267229_qzhd0ez5x",
+    "soNo": "FJI-2026/II/002/JB23",
+    "customer": "PT. FAKTA JABBAR INDUSTRI",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-04",
+    "items": [
+      {
+        "id": "item_1771553267229_y7xl1s4fj",
+        "productId": "TRM4499",
+        "productKode": "TRM4499",
+        "productName": "BOX ODP 16-CORE DOUBLE LOCK ( KOSONGAN )",
+        "qty": 30,
+        "unit": "PCS",
+        "price": 200000,
+        "total": 6000000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267229_9erkcddah",
+    "soNo": "PO/IS720/260200484",
+    "customer": "PT. INDOSAFETY SENTOSA INDUSTRY",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-04",
+    "items": [
+      {
+        "id": "item_1771553267229_6heh8tyf3",
+        "productId": "\"TRM4452 (2\"\"\"\"x50M)\"",
+        "productKode": "\"TRM4452 (2\"\"\"\"x50M)\"",
+        "productName": "LAKBAN OKAMOTO",
+        "qty": 180,
+        "unit": "ROL",
+        "price": 38410,
+        "total": 6913800,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267229_kewpqyq3a",
+        "productId": "TRM4458 (45MM X 85Y)",
+        "productKode": "TRM4458 (45MM X 85Y)",
+        "productName": "LAKBAN EKATAPE",
+        "qty": 60,
+        "unit": "ROL",
+        "price": 10896,
+        "total": 653760,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267229_n9xi4tccs",
+    "soNo": "B-26/MCM/PPIC/035",
+    "customer": "PT. MENARA CIPTA METALINDO",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-05",
+    "items": [
+      {
+        "id": "item_1771553267229_y1rzibcb4",
+        "productId": "TRM1204",
+        "productKode": "TRM1204",
+        "productName": "\"DEMPUL, SAN POLAC (COPRSU053N)\"",
+        "qty": 8,
+        "unit": "PAIL",
+        "price": 209250,
+        "total": 1674000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267229_d3ft096g2",
+    "soNo": "PO-L-2026020000035",
+    "customer": "PT INTEGRASI MEDIKA PRIMA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-05",
+    "items": [
+      {
+        "id": "item_1771553267229_k925p5aul",
+        "productId": "TRM3223",
+        "productKode": "TRM3223",
+        "productName": "LAMPU DOWNLIGHT 15W",
+        "qty": 8,
+        "unit": "PCS",
+        "price": 217500,
+        "total": 1740000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267229_ugcu75wz6",
+    "soNo": "PO-000004183",
+    "customer": "\"PT. SUPRAVISI RAMA OPTIK, MANUFACTURING\"",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-05",
+    "items": [
+      {
+        "id": "item_1771553267229_umjo7mz7c",
+        "productId": "TRM4484",
+        "productKode": "TRM4484",
+        "productName": "IBC TANK / KEMPU 1000 LITER",
+        "qty": 1,
+        "unit": "UNIT",
+        "price": 1560000,
+        "total": 1560000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267229_x6u43eqcv",
+    "soNo": "PO2-2026/A/089/GEN",
+    "customer": "PT. TRI SAUDARA SENTOSA INDUSTRI",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-05",
+    "items": [
+      {
+        "id": "item_1771553267229_5owsnr1rn",
+        "productId": "TRM4287",
+        "productKode": "TRM4287",
+        "productName": "\"POCKET KANBAN/LABEL (P28XL9.5CM, TEBAL 0.5MM)\"",
+        "qty": 500,
+        "unit": "PCS",
+        "price": 3400,
+        "total": 1700000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267230_y1kewvzlx",
+    "soNo": "KIPO26020011",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-06",
+    "items": [
+      {
+        "id": "item_1771553267230_1ctclxcuj",
+        "productId": "TRM3201",
+        "productKode": "TRM3201",
+        "productName": "LEM PVC 45GR (ESURON) NO.73S (CP005)",
+        "qty": 2,
+        "unit": "TUBE",
+        "price": 171000,
+        "total": 342000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267230_f3x89c6j1",
+    "soNo": "PO26-059-1",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-06",
+    "items": [
+      {
+        "id": "item_1771553267230_x23dpv80u",
+        "productId": "TRM4492",
+        "productKode": "TRM4492",
+        "productName": "HYDRAULIC CYLINDER CAP. 5 TON STROKE 232 MM TYPE RSC-",
+        "qty": 1,
+        "unit": "UNIT",
+        "price": 8857800,
+        "total": 8857800,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267230_lloyhdm43",
+    "soNo": "KIPO26020051",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-09",
+    "items": [
+      {
+        "id": "item_1771553267230_vlxpel6c4",
+        "productId": "TRM0241",
+        "productKode": "TRM0241",
+        "productName": "TIMING BELT S5M-800 FOR HONEYCOMB DFG-15/150Z (IDF0050-7313)",
+        "qty": 50,
+        "unit": "PCS",
+        "price": 128500,
+        "total": 6425000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_nbzl0j34r",
+        "productId": "TRM0038",
+        "productKode": "TRM0038",
+        "productName": "HINGE (ENGSEL PANEL) BLACK 40X40X9MM (IDR0015-6400)",
+        "qty": 150,
+        "unit": "PCS",
+        "price": 29000,
+        "total": 4350000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_x7f2j90a3",
+        "productId": "TRM0024",
+        "productKode": "TRM0024",
+        "productName": "CLAMP LATCH LOCK FOR PANEL (ADB/ADG-15-300Z) SUS304 (IAD005-6403)",
+        "qty": 50,
+        "unit": "PCS",
+        "price": 24960,
+        "total": 1248000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267230_av9vjg9zc",
+    "soNo": "KIPO26020038",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-09",
+    "items": [
+      {
+        "id": "item_1771553267230_wdqy9hize",
+        "productId": "TRM0062",
+        "productKode": "TRM0062",
+        "productName": "REVOLVING WARNING LIGHT LTE-1101 AC220V (RED) W/O BUZZER (RG091)",
+        "qty": 10,
+        "unit": "PCS",
+        "price": 90000,
+        "total": 900000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267230_cw7xb0x82",
+    "soNo": "KIPO26020033",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-09",
+    "items": [
+      {
+        "id": "item_1771553267230_6dsmraef0",
+        "productId": "TRM0053",
+        "productKode": "TRM0053",
+        "productName": "PLASTIC CHAIN STAR 6X50M YELLOW (NB161)",
+        "qty": 1,
+        "unit": "ROL",
+        "price": 643500,
+        "total": 643500,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_4rlcue0yv",
+        "productId": "TRM2344",
+        "productKode": "TRM2344",
+        "productName": "NYLON CABLE GLAND PG-13.5 (BLACK) FOR (Ø20.4 HOLE) (NB479-1)",
+        "qty": 200,
+        "unit": "PCS",
+        "price": 2800,
+        "total": 560000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_e8o536msz",
+        "productId": "TRM0081",
+        "productKode": "TRM0081",
+        "productName": "NYLON CABLE GLAND PG-29 (BLACK) FOR (Ø37.0 HOLE) (NB490)",
+        "qty": 50,
+        "unit": "PCS",
+        "price": 5280,
+        "total": 264000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_4ikfwpp30",
+        "productId": "TRM0046",
+        "productKode": "TRM0046",
+        "productName": "MARKER TUBE MOTP WHITE 3.2 (200MTR/ROL) (CC104-1)",
+        "qty": 200,
+        "unit": "MTR",
+        "price": 1804,
+        "total": 360800,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_7kvhr8zxv",
+        "productId": "TRM0070",
+        "productKode": "TRM0070",
+        "productName": "SOCKET CONNECTOR 2 PIN MALE (NB470)",
+        "qty": 200,
+        "unit": "PCS",
+        "price": 2250,
+        "total": 450000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_5a3gb1670",
+        "productId": "TRM0069",
+        "productKode": "TRM0069",
+        "productName": "SOCKET CONNECTOR 2 PIN FEMALE (NB471)",
+        "qty": 200,
+        "unit": "PCS",
+        "price": 2250,
+        "total": 450000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267232_gwpkfh56w",
+        "productId": "TRM2445",
+        "productKode": "TRM2445",
+        "productName": "SKUN PIN 1.25-18 (100PCS/PCK)(NC250)",
+        "qty": 10,
+        "unit": "PAK",
+        "price": 29697,
+        "total": 296970,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267230_fnhodbqf7",
+    "soNo": "PO-000004136",
+    "customer": "\"PT. SUPRAVISI RAMA OPTIK, MANUFACTURING\"",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-09",
+    "items": [
+      {
+        "id": "item_1771553267230_mw501qwz3",
+        "productId": "TRM4501",
+        "productKode": "TRM4501",
+        "productName": "FISHER TEMBOK ISI 100",
+        "qty": 1,
+        "unit": "PCS",
+        "price": 8400,
+        "total": 8400,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_4peqq9duv",
+        "productId": "TRM4502",
+        "productKode": "TRM4502",
+        "productName": "BAUD FISHER 20MM",
+        "qty": 40,
+        "unit": "PCS",
+        "price": 680,
+        "total": 27200,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_kcz4eovqf",
+        "productId": "TRM4503",
+        "productKode": "TRM4503",
+        "productName": "KABEL NYMHY 2X1.5MM SUPREME",
+        "qty": 25,
+        "unit": "MTR",
+        "price": 19600,
+        "total": 490000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_xkkkvlki6",
+        "productId": "TRM4504",
+        "productKode": "TRM4504",
+        "productName": "LAMPU EMERGENCY MEVAL",
+        "qty": 3,
+        "unit": "PCS",
+        "price": 490000,
+        "total": 1470000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_t9g2zm3mk",
+        "productId": "TRM4505",
+        "productKode": "TRM4505",
+        "productName": "CLAMP CONDUIT 20MM ISI 100",
+        "qty": 1,
+        "unit": "PCS",
+        "price": 105000,
+        "total": 105000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267230_l8qs7qny3",
+    "soNo": "KIPO26010157",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-10",
+    "items": [
+      {
+        "id": "item_1771553267230_ggaeklkaw",
+        "productId": "TRM0802",
+        "productKode": "TRM0802",
+        "productName": "\"METAL CONNECTOR FEMALE TYPE \"\"\"\"S\"\"\"\" 2 PIN (NANABOSHI) NCS-162-P-CH (125V 5A) (448-9993)\"",
+        "qty": 2,
+        "unit": "PCS",
+        "price": 390450,
+        "total": 780900,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_43ea5p1bo",
+        "productId": "TRM0803",
+        "productKode": "TRM0803",
+        "productName": "\"METAL CONNECTOR MALE TYPE \"\"\"\"S\"\"\"\" 2 PIN (NANABOSHI) NCS-162-ADF-CH (125V 5A) (NCC26)\"",
+        "qty": 2,
+        "unit": "PCS",
+        "price": 243200,
+        "total": 486400,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267230_d0ikl1gge",
+    "soNo": "KIPO26020083",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-11",
+    "items": [
+      {
+        "id": "item_1771553267230_l7cajs5jz",
+        "productId": "TRM3226",
+        "productKode": "TRM3226",
+        "productName": "DUCT TAPE (TECOM) NON ADHESIVE (4.5MMX12MTR/ROLL) (COLOR CREAM) (NA688)",
+        "qty": 10,
+        "unit": "ROL",
+        "price": 6412,
+        "total": 64120,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267230_4h403uijq",
+        "productId": "TRM3225",
+        "productKode": "TRM3225",
+        "productName": "DUCT TAPE (TECOM) WITH ADHESIVE (4.5MMX12MTR/ROLL) (COLOR CREAM) (NA689)",
+        "qty": 5,
+        "unit": "ROL",
+        "price": 12113,
+        "total": 60565,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267230_dkyo8hieh",
+    "soNo": "KIPO26020020",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-11",
+    "items": [
+      {
+        "id": "item_1771553267230_csez163gf",
+        "productId": "TRM3497",
+        "productKode": "TRM3497",
+        "productName": "\"ELBOW HOSE NIPPLE 20A(3/4\"\"\"\") X DIA. 19 (BRASS BSPT) (CE005)\"",
+        "qty": 7,
+        "unit": "PCS",
+        "price": 78375,
+        "total": 548625,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267230_5iiy69lzy",
+    "soNo": "KIPO25100070",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-11",
+    "items": [
+      {
+        "id": "item_1771553267230_vxreszo11",
+        "productId": "TRM0057",
+        "productKode": "TRM0057",
+        "productName": "PLYWOOD (KAYU TRIPLEK) L=240 W=120 T=9MM (NB019)",
+        "qty": 334,
+        "unit": "LBR",
+        "price": 113850,
+        "total": 36619462,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267231_kiduzsi5a",
+        "productId": "TRM0340",
+        "productKode": "TRM0340",
+        "productName": "WAINSCOT (KAYU LIST) L=250 W=7 T=2 (NB018)",
+        "qty": 864,
+        "unit": "BTG",
+        "price": 12500,
+        "total": 10800000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267231_x4zf5zqsu",
+        "productId": "TRM0004",
+        "productKode": "TRM0004",
+        "productName": "BEAMWOOD (KAYU BALOK) L=150 W=8 T=5 (NB017)",
+        "qty": 992,
+        "unit": "BTG",
+        "price": 12500,
+        "total": 12400000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267231_gc4n3gcb5",
+        "productId": "TRM0005",
+        "productKode": "TRM0005",
+        "productName": "BEAMWOOD (KAYU BALOK) L=200 X W=8 X T=5 (NB1343)",
+        "qty": 154,
+        "unit": "BTG",
+        "price": 24000,
+        "total": 3696000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267231_3g3yx5mx0",
+    "soNo": "PL2600378",
+    "customer": "\"SANOH INDONESIA, PT\"",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-11",
+    "items": [
+      {
+        "id": "item_1771553267231_uz1b7vd4z",
+        "productId": "TRM3983",
+        "productKode": "TRM3983",
+        "productName": "MINI CUPLA 33 SF",
+        "qty": 6,
+        "unit": "PCS",
+        "price": 198500,
+        "total": 1191000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267231_nze50m8rc",
+        "productId": "TRM4147",
+        "productKode": "TRM4147",
+        "productName": "PVC SHEET 5MM X 120CM X 240CM",
+        "qty": 1,
+        "unit": "PCS",
+        "price": 679000,
+        "total": 679000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267231_za37rvdfz",
+    "soNo": "KIPO26020068",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-12",
+    "items": [
+      {
+        "id": "item_1771553267231_bknvi02tg",
+        "productId": "TRM0111",
+        "productKode": "TRM0111",
+        "productName": "BOLT (BAUT L) M5XP.08XL12MM (GALVANIZED) (NB008-1)",
+        "qty": 500,
+        "unit": "PCS",
+        "price": 1113,
+        "total": 556500,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267231_6h9tofln4",
+        "productId": "TRM0095",
+        "productKode": "TRM0095",
+        "productName": "BOLT (BAUT JP) M4XP0.7XL6MM (GALVANIZED) (NB388)",
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 144,
+        "total": 144000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267231_r6wx4iemm",
+        "productId": "TRM0298",
+        "productKode": "TRM0298",
+        "productName": "BOLT (BAUT HEXAGONAL) M8XP1.25XL25MM (GALVANIZED) (HA059)",
+        "qty": 500,
+        "unit": "PCS",
+        "price": 500,
+        "total": 250000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267231_eltb3qyon",
+        "productId": "TRM4486",
+        "productKode": "TRM4486",
+        "productName": "BOLT(BAUT JT) M4XP0.7XL12MM (GALVANIZED) (NB180-1)",
+        "qty": 500,
+        "unit": "PCS",
+        "price": 475,
+        "total": 237500,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267231_iqoc0r49t",
+        "productId": "TRM0853",
+        "productKode": "TRM0853",
+        "productName": "BOLT (BAUT JP) M5XP0.8XL6MM (SUS304) (NB241)",
+        "qty": 500,
+        "unit": "PCS",
+        "price": 500,
+        "total": 250000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267231_i6ny0qo6o",
+        "productId": "TRM0159",
+        "productKode": "TRM0159",
+        "productName": "FLAT WASHER/RING PLATE M4 (SUS304) (NB828-1)",
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 128,
+        "total": 128000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267231_rs7d6fkh0",
+        "productId": "TRM0671",
+        "productKode": "TRM0671",
+        "productName": "FLAT WASHER / RING PLATE (SS400) Ø8 LEBAR (GALVANIZED) (NB419)",
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 346,
+        "total": 346000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267231_blhf2d6rv",
+        "productId": "TRM0347",
+        "productKode": "TRM0347",
+        "productName": "FLAT WASHER / RING PLATE (SS400) M4 (GALVANIZED) (NB512)",
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 34,
+        "total": 34000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267231_7kbhs7gag",
+        "productId": "TRM0670",
+        "productKode": "TRM0670",
+        "productName": "SPRING WASHER / RING PER M5 (S20C) (ZINC PLATED) (JB003)",
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 44,
+        "total": 44000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267231_mwxf6bagm",
+        "productId": "TRM0588",
+        "productKode": "TRM0588",
+        "productName": "FLAT WASHER / RING PLATE (SS400) M5 GALVANIZED (JB002)",
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 44,
+        "total": 44000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267231_4io9bt5qd",
+        "productId": "TRM0296",
+        "productKode": "TRM0296",
+        "productName": "HEX. NUT / MUR (S20C) M6X1.0 (GALVANIZED) (JA006)",
+        "qty": 500,
+        "unit": "PCS",
+        "price": 190,
+        "total": 95000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267231_hcc67h69s",
+        "productId": "TRM0542",
+        "productKode": "TRM0542",
+        "productName": "SPRING WASHER / RING PER M8 (S20C) (ZINC PLATED) (JH057)",
+        "qty": 2000,
+        "unit": "PCS",
+        "price": 69,
+        "total": 138000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267232_vjexewpgy",
+        "productId": "TRM0350",
+        "productKode": "TRM0350",
+        "productName": "FLAT WASHER / RING PLATE (S20C) M8 (ZINC PLATED) (JJ007)",
+        "qty": 2000,
+        "unit": "PCS",
+        "price": 69,
+        "total": 138000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267232_fkr2uxv8p",
+        "productId": "TRM0346",
+        "productKode": "TRM0346",
+        "productName": "FLAT WASHER / RING PLATE (SS400) M10 (GALVANIZED) (NB242)",
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 158,
+        "total": 158000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267232_5p34b6nac",
+        "productId": "TRM0345",
+        "productKode": "TRM0345",
+        "productName": "SPRING WASHER / RING PER M10 (SS400) (ZINC PLATED) (NB265)",
+        "qty": 1000,
+        "unit": "PCS",
+        "price": 158,
+        "total": 158000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267232_mie6k0azl",
+        "productId": "TRM2487",
+        "productKode": "TRM2487",
+        "productName": "\"U BOLT 1 1/2\"\"\"\" PLATING (P-57MMXH=68MM) FOR PIPE Ø48MM (NB445-1)\"",
+        "qty": 100,
+        "unit": "PCS",
+        "price": 3100,
+        "total": 310000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267232_4xbnbzhjy",
+    "soNo": "KIPO26020086",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-12",
+    "items": [
+      {
+        "id": "item_1771553267232_uxvc90nr1",
+        "productId": "TRM3709",
+        "productKode": "TRM3709",
+        "productName": "\"INSULATION PIPE INSULFLEX 1 1/4\"\"\"\"X (ID.23MM) T9MM (BLACK) 1.8 MTR/BTG (ISP-009)\"",
+        "qty": 10,
+        "unit": "BTG",
+        "price": 22500,
+        "total": 225000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267232_kp4a3jb68",
+        "productId": "TRM3708",
+        "productKode": "TRM3708",
+        "productName": "\"INSULATION SHEET INSULFLEX 3/8\"\"\"\"XT9MM (BLACK) (1.2MTRX0.9MTR) (ISP-014)\"",
+        "qty": 5,
+        "unit": "PCS",
+        "price": 144000,
+        "total": 720000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267232_1q2eh22vp",
+    "soNo": "KIPO26020103",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-13",
+    "items": [
+      {
+        "id": "item_1771553267232_g85ab5v4a",
+        "productId": "TRM0008",
+        "productKode": "TRM0008",
+        "productName": "\"BRASS BALL VALVE 50A (LONG HANDLE ORANGE) MDT MODEL BV-600 (2\"\"\"\") (CS096-1)\"",
+        "qty": 2,
+        "unit": "PCS",
+        "price": 549990,
+        "total": 1099980,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267232_owlmmr23w",
+    "soNo": "PO-L-202602000095",
+    "customer": "PT INTEGRASI MEDIKA PRIMA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-13",
+    "items": [
+      {
+        "id": "item_1771553267232_owffrsp78",
+        "productId": "TRM3764",
+        "productKode": "TRM3764",
+        "productName": "LAMPU LED 60X60 29W",
+        "qty": 4,
+        "unit": "PCS",
+        "price": 514750,
+        "total": 2059000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267232_hk9ml9d0f",
+    "soNo": "POV2601102",
+    "customer": "PT. ADVANEX PRECISION INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-13",
+    "items": [
+      {
+        "id": "item_1771553267232_pskv38o6b",
+        "productId": "TRM3888",
+        "productKode": "TRM3888",
+        "productName": "KERTAS HVS ROLL 60GSM LEBAR 2CM",
+        "qty": 20,
+        "unit": "PCS",
+        "price": 69750,
+        "total": 1395000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267232_tx35zn3yj",
+    "soNo": "PO-L-202602000084",
+    "customer": "PT INTEGRASI MEDIKA PRIMA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-13",
+    "items": [
+      {
+        "id": "item_1771553267232_xbffge0zr",
+        "productId": "TRM4518",
+        "productKode": "TRM4518",
+        "productName": "DIGITAL MULTIMETER",
+        "qty": 1,
+        "unit": "UNIT",
+        "price": 665000,
+        "total": 665000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267232_wt8484m0c",
+    "soNo": "PO26-084-1",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-13",
+    "items": [
+      {
+        "id": "item_1771553267232_r95mm6qpv",
+        "productId": "TRM3388",
+        "productKode": "TRM3388",
+        "productName": "RATCHET PULLER HHH-500K (INDENT 2 WEEKS)",
+        "qty": 7,
+        "unit": "PCS",
+        "price": 1455000,
+        "total": 10185000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267232_g3vc7jpsn",
+        "productId": "TRM3433",
+        "productKode": "TRM3433",
+        "productName": "RATCHET PULLER HHH-700K (INDENT 2 WEEKS)",
+        "qty": 8,
+        "unit": "PCS",
+        "price": 1564650,
+        "total": 12517200,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267232_22wp338y2",
+        "productId": "TRM3564",
+        "productKode": "TRM3564",
+        "productName": "WIRE BRUSH SWB-03",
+        "qty": 4,
+        "unit": "PCS",
+        "price": 172500,
+        "total": 690000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267232_xipx7lmz7",
+    "soNo": "PO26-073-1",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-13",
+    "items": [
+      {
+        "id": "item_1771553267232_iqjeo7edh",
+        "productId": "TRM1085",
+        "productKode": "TRM1085",
+        "productName": "LAMPU LED 120 CM",
+        "qty": 5,
+        "unit": "PCS",
+        "price": 112500,
+        "total": 562500,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267232_2nw6g3kyd",
+        "productId": "TRM1084",
+        "productKode": "TRM1084",
+        "productName": "LAMPU LED 60 CM LIGHT",
+        "qty": 5,
+        "unit": "PCS",
+        "price": 120000,
+        "total": 600000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267232_y5gf48gec",
+        "productId": "TRM1086",
+        "productKode": "TRM1086",
+        "productName": "RUMAH LAMPU LED 60 CM",
+        "qty": 5,
+        "unit": "PCS",
+        "price": 22500,
+        "total": 112500,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267232_ipg6vo1tw",
+        "productId": "TRM1999",
+        "productKode": "TRM1999",
+        "productName": "KABEL TIES 200 SIGMA",
+        "qty": 5,
+        "unit": "PCK",
+        "price": 27000,
+        "total": 135000,
+        "specNote": "",
+        "discountPercent": 0
+      },
+      {
+        "id": "item_1771553267232_lpzd8c5o7",
+        "productId": "TRM4512",
+        "productKode": "TRM4512",
+        "productName": "BAUT HEXAGONAL M8X25 SUS304",
+        "qty": 15,
+        "unit": "PCS",
+        "price": 3400,
+        "total": 51000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267232_kwcu1t2dt",
+    "soNo": "PO-000004182",
+    "customer": "\"PT. SUPRAVISI RAMA OPTIK, MANUFACTURING\"",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-13",
+    "items": [
+      {
+        "id": "item_1771553267232_f1g14gy8s",
+        "productId": "TRM4488",
+        "productKode": "TRM4488",
+        "productName": "POMPA CELUP AIR KOTOR 2 IN 550 WATT OTOMATIS",
+        "qty": 1,
+        "unit": "PCS",
+        "price": 2450000,
+        "total": 2450000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267232_xkl91vuy0",
+    "soNo": "PO-000004218",
+    "customer": "\"PT. SUPRAVISI RAMA OPTIK, MANUFACTURING\"",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-13",
+    "items": [
+      {
+        "id": "item_1771553267232_vx33x28de",
+        "productId": "TRM4525",
+        "productKode": "TRM4525",
+        "productName": "KEBUTUHAN PART IMPROVE HEADER EWRS",
+        "qty": 1,
+        "unit": "SET",
+        "price": 3812200,
+        "total": 3812200,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  },
+  {
+    "id": "so_1771553267232_ftt9296a1",
+    "soNo": "KIPO26020116",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerKode": "",
+    "paymentTerms": "TOP",
+    "topDays": 30,
+    "status": "OPEN",
+    "created": "2026-02-16",
+    "items": [
+      {
+        "id": "item_1771553267232_oqaaytkd2",
+        "productId": "TRM3030",
+        "productKode": "TRM3030",
+        "productName": "\"BRASS BALL VALVE 40A (LONG HANDLE ORANGE) MDT MODEL BV-600(1 1/2\"\"\"\") (CS099-1)\"",
+        "qty": 2,
+        "unit": "PCS",
+        "price": 420000,
+        "total": 840000,
+        "specNote": "",
+        "discountPercent": 0
+      }
+    ]
+  }
+]

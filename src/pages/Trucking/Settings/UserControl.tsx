@@ -3,8 +3,9 @@ import Card from '../../../components/Card';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import Table from '../../../components/Table';
-import { storageService, BusinessType } from '../../../services/storage';
-import { deleteTruckingItem, deleteTruckingItems, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { storageService, BusinessType, StorageKeys } from '../../../services/storage';
+import { deleteTruckingItems, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { setupRealTimeSync, TRUCKING_SYNC_KEYS } from '../../../utils/real-time-sync-helper';
 import { useDialog } from '../../../hooks/useDialog';
 import { getCurrentUser, isDefaultAdmin } from '../../../utils/access-control-helper';
 import '../../Settings/UserControl.css';
@@ -33,162 +34,6 @@ interface BusinessMenuConfig {
 }
 
 const BUSINESS_MENU_CONFIG: BusinessMenuConfig[] = [
-  {
-    id: 'packaging',
-    label: 'Packaging',
-    description: 'Manufacturing & packaging ERP module',
-    icon: '📦',
-    accent: '#ff9800',
-    sections: [
-      {
-        id: 'packaging-master',
-        title: 'Master Data',
-        items: [
-          { id: '/packaging/master/products', label: 'Products', path: '/packaging/master/products' },
-          { id: '/packaging/master/materials', label: 'Materials', path: '/packaging/master/materials' },
-          { id: '/packaging/master/customers', label: 'Customers', path: '/packaging/master/customers' },
-          { id: '/packaging/master/suppliers', label: 'Suppliers', path: '/packaging/master/suppliers' },
-          { id: '/packaging/master/inventory', label: 'Inventory', path: '/packaging/master/inventory' },
-        ],
-      },
-      {
-        id: 'packaging-ops',
-        title: 'Operations',
-        items: [
-          { id: '/packaging/workflow', label: 'Workflow', path: '/packaging/workflow' },
-          { id: '/packaging/sales-orders', label: 'Sales Orders', path: '/packaging/sales-orders' },
-          { id: '/packaging/ppic', label: 'PPIC', path: '/packaging/ppic' },
-          { id: '/packaging/purchasing', label: 'Purchasing', path: '/packaging/purchasing' },
-          { id: '/packaging/production', label: 'Production', path: '/packaging/production' },
-          { id: '/packaging/qa-qc', label: 'QA/QC', path: '/packaging/qa-qc' },
-          { id: '/packaging/delivery-note', label: 'WH & Delivery', path: '/packaging/delivery-note' },
-          { id: '/packaging/return', label: 'Return', path: '/packaging/return' },
-        ],
-      },
-      {
-        id: 'packaging-finance',
-        title: 'Finance & Accounting',
-        items: [
-          { id: '/packaging/finance/ledger', label: 'General Ledger', path: '/packaging/finance/ledger' },
-          { id: '/packaging/finance/reports', label: 'Financial Reports', path: '/packaging/finance/reports' },
-          { id: '/packaging/finance/invoices', label: 'Invoices', path: '/packaging/finance/invoices' },
-          { id: '/packaging/finance/accounting', label: 'Accounting', path: '/packaging/finance/accounting' },
-          { id: '/packaging/finance/ar', label: 'Accounts Receivable', path: '/packaging/finance/ar' },
-          { id: '/packaging/finance/ap', label: 'Accounts Payable', path: '/packaging/finance/ap' },
-          { id: '/packaging/finance/payments', label: 'Payments', path: '/packaging/finance/payments' },
-          { id: '/packaging/finance/tax-management', label: 'Tax Management', path: '/packaging/finance/tax-management' },
-          { id: '/packaging/finance/cost-analysis', label: 'Cost Analysis', path: '/packaging/finance/cost-analysis' },
-          { id: '/packaging/finance/all-business-reports', label: 'All Business Reports', path: '/packaging/finance/all-business-reports' },
-          { id: '/packaging/finance/coa', label: 'Chart of Accounts', path: '/packaging/finance/coa' },
-        ],
-      },
-      {
-        id: 'packaging-hr',
-        title: 'HR & People',
-        items: [
-          { id: '/packaging/hr', label: 'HRD', path: '/packaging/hr' },
-        ],
-      },
-      {
-        id: 'packaging-settings',
-        title: 'Settings & Tools',
-        items: [
-          { id: '/packaging/settings', label: 'Company Settings', path: '/packaging/settings' },
-          { id: '/packaging/settings/report', label: 'Report Center', path: '/packaging/settings/report' },
-          { id: '/packaging/settings/db-activity', label: 'DB Activity', path: '/packaging/settings/db-activity' },
-          { id: '/packaging/settings/test-automation', label: 'Test Automation', path: '/packaging/settings/test-automation' },
-          { id: '/packaging/settings/user-control', label: 'User Control', path: '/packaging/settings/user-control' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'general-trading',
-    label: 'General Trading',
-    description: 'Trading & distribution business unit',
-    icon: '🏢',
-    accent: '#2563eb',
-    sections: [
-      {
-        id: 'gt-dashboard',
-        title: 'Overview',
-        items: [
-          { id: '/general-trading/dashboard', label: 'Dashboard', path: '/general-trading/dashboard' },
-        ],
-      },
-      {
-        id: 'gt-master',
-        title: 'Master Data',
-        items: [
-          { id: '/general-trading/master/products', label: 'Products', path: '/general-trading/master/products' },
-          { id: '/general-trading/master/customers', label: 'Customers', path: '/general-trading/master/customers' },
-          { id: '/general-trading/master/suppliers', label: 'Suppliers', path: '/general-trading/master/suppliers' },
-          { id: '/general-trading/master/inventory', label: 'Inventory', path: '/general-trading/master/inventory' },
-        ],
-      },
-      {
-        id: 'gt-orders',
-        title: 'Orders & Sales',
-        items: [
-          { id: '/general-trading/orders/sales', label: 'Sales Orders', path: '/general-trading/orders/sales' },
-          { id: '/general-trading/orders/purchase', label: 'Purchase Orders', path: '/general-trading/orders/purchase' },
-          { id: '/general-trading/sales/quotations', label: 'Quotations', path: '/general-trading/sales/quotations' },
-          { id: '/general-trading/sales/invoices', label: 'Invoices', path: '/general-trading/sales/invoices' },
-        ],
-      },
-      {
-        id: 'gt-production',
-        title: 'Production & QA',
-        items: [
-          { id: '/general-trading/ppic', label: 'PPIC', path: '/general-trading/ppic' },
-          { id: '/general-trading/production', label: 'Production', path: '/general-trading/production' },
-          { id: '/general-trading/qa-qc', label: 'QA/QC', path: '/general-trading/qa-qc' },
-        ],
-      },
-      {
-        id: 'gt-purchasing',
-        title: 'Purchasing & Warehouse',
-        items: [
-          { id: '/general-trading/purchasing/pr', label: 'Purchase Requisition', path: '/general-trading/purchasing/pr' },
-          { id: '/general-trading/purchasing/po', label: 'PO Management', path: '/general-trading/purchasing/po' },
-          { id: '/general-trading/purchasing', label: 'Purchasing', path: '/general-trading/purchasing' },
-          { id: '/general-trading/warehouse/stock', label: 'Stock Management', path: '/general-trading/warehouse/stock' },
-          { id: '/general-trading/warehouse/receiving', label: 'Receiving', path: '/general-trading/warehouse/receiving' },
-          { id: '/general-trading/warehouse/shipping', label: 'Shipping', path: '/general-trading/warehouse/shipping' },
-          { id: '/general-trading/delivery-note', label: 'WH & Delivery', path: '/general-trading/delivery-note' },
-          { id: '/general-trading/return', label: 'Return', path: '/general-trading/return' },
-          { id: '/general-trading/workflow', label: 'Workflow', path: '/general-trading/workflow' },
-        ],
-      },
-      {
-        id: 'gt-finance',
-        title: 'Finance & Accounting',
-        items: [
-          { id: '/general-trading/finance/ledger', label: 'General Ledger', path: '/general-trading/finance/ledger' },
-          { id: '/general-trading/finance/reports', label: 'Financial Reports', path: '/general-trading/finance/reports' },
-          { id: '/general-trading/finance/accounting', label: 'Accounting', path: '/general-trading/finance/accounting' },
-          { id: '/general-trading/finance/ar', label: 'Accounts Receivable', path: '/general-trading/finance/ar' },
-          { id: '/general-trading/finance/ap', label: 'Accounts Payable', path: '/general-trading/finance/ap' },
-          { id: '/general-trading/finance/payments', label: 'Payments', path: '/general-trading/finance/payments' },
-          { id: '/general-trading/finance/invoices', label: 'Invoices', path: '/general-trading/finance/invoices' },
-          { id: '/general-trading/finance/tax-management', label: 'Tax Management', path: '/general-trading/finance/tax-management' },
-          { id: '/general-trading/finance/cost-analysis', label: 'Cost Analysis', path: '/general-trading/finance/cost-analysis' },
-          { id: '/general-trading/finance/coa', label: 'Chart of Accounts', path: '/general-trading/finance/coa' },
-        ],
-      },
-      {
-        id: 'gt-settings',
-        title: 'Settings',
-        items: [
-          { id: '/general-trading/settings', label: 'Settings', path: '/general-trading/settings' },
-          { id: '/general-trading/settings/report', label: 'Report Center', path: '/general-trading/settings/report' },
-          { id: '/general-trading/settings/db-activity', label: 'DB Activity', path: '/general-trading/settings/db-activity' },
-          { id: '/general-trading/settings/user-control', label: 'User Control', path: '/general-trading/settings/user-control' },
-          { id: '/general-trading/settings/flow-test', label: 'Flow Test', path: '/general-trading/settings/flow-test' },
-        ],
-      },
-    ],
-  },
   {
     id: 'trucking',
     label: 'Trucking',
@@ -321,7 +166,7 @@ const createEmptyForm = (): UserFormState => ({
   menuAccess: {
     packaging: [],
     'general-trading': [],
-    trucking: [],
+    trucking: []
   },
   notes: '',
 });
@@ -453,7 +298,7 @@ const UserControl = () => {
       }
     });
     
-    const stored = Array.from(mergedUsers.values());
+    let stored = Array.from(mergedUsers.values());
     
     // Save migrated data back if migration occurred
     let needsSave = false;
@@ -503,6 +348,14 @@ const UserControl = () => {
 
   useEffect(() => {
     loadUsers();
+    
+    // Real-time listener untuk server updates
+    const cleanup = setupRealTimeSync({
+      keys: [TRUCKING_SYNC_KEYS.USER_ACCESS_CONTROL],
+      onUpdate: loadUsers,
+    });
+    
+    return cleanup;
   }, [loadUsers]);
 
   useEffect(() => {
@@ -511,7 +364,7 @@ const UserControl = () => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ key?: string }>).detail;
       const storageKey = detail?.key?.split('/').pop();
-      if (storageKey === 'userAccessControl' || storageKey === 'trucking_userAccessControl') {
+      if (storageKey === 'userAccessControl' || storageKey === StorageKeys.TRUCKING.USER_ACCESS_CONTROL) {
         loadUsers();
       }
     };
@@ -533,7 +386,7 @@ const UserControl = () => {
       
       // Super admin has access to all business units
       if (isDefaultAdmin(currentUser)) {
-        setCurrentUserBusinessUnits(['packaging', 'general-trading', 'trucking']);
+        setCurrentUserBusinessUnits(['trucking']);
         return;
       }
       
@@ -563,54 +416,12 @@ const UserControl = () => {
     
     let businessFilteredUsers = users;
     if (!isSuperAdmin && currentUserBusinessUnits.length > 0) {
-      // For Trucking UserControl: Same logic as Packaging
-      // User yang punya akses ke 3 business unit (Packaging + GT + Trucking) bisa lihat semua user yang punya Trucking
-      // User yang punya akses kurang dari 3 hanya bisa lihat user yang business units-nya sama persis
-      const hasAllThreeBusinessUnits = currentUserBusinessUnits.length === 3 && 
-        currentUserBusinessUnits.includes('packaging' as BusinessId) &&
-        currentUserBusinessUnits.includes('general-trading' as BusinessId) &&
-        currentUserBusinessUnits.includes('trucking' as BusinessId);
-      
-      if (hasAllThreeBusinessUnits) {
-        // User dengan 3 business units bisa lihat semua user yang punya Trucking
-        businessFilteredUsers = users.filter((user) => {
-          return user.businessUnits.includes('trucking' as BusinessId);
-        });
-      } else {
-        // User dengan kurang dari 3 business units hanya bisa lihat user yang business units-nya sama persis
-        // Tapi tetap harus punya Trucking
-        businessFilteredUsers = users.filter((user) => {
-          // User harus punya Trucking
-          if (!user.businessUnits.includes('trucking' as BusinessId)) {
-            return false;
-          }
-          
-          // Check if user has the same business units as current user
-          if (user.businessUnits.length !== currentUserBusinessUnits.length) {
-            return false;
-          }
-          
-          // Check if all business units match
-          const userUnitsSet = new Set(user.businessUnits);
-          const currentUnitsSet = new Set(currentUserBusinessUnits);
-          
-          // Check if sets are equal
-          if (userUnitsSet.size !== currentUnitsSet.size) {
-            return false;
-          }
-          
-          for (const unit of userUnitsSet) {
-            if (!currentUnitsSet.has(unit)) {
-              return false;
-            }
-          }
-          
-          return true;
-        });
-      }
+      // For Trucking UserControl: Only show users that have trucking access
+      businessFilteredUsers = users.filter((user) => {
+        return user.businessUnits.includes('trucking' as BusinessId);
+      });
     } else if (!isSuperAdmin) {
       // If currentUserBusinessUnits is empty (user belum di-load), show all users with trucking access temporarily
-      // This will be filtered once currentUserBusinessUnits is loaded
       businessFilteredUsers = users.filter((user) => {
         return user.businessUnits.includes('trucking' as BusinessId);
       });

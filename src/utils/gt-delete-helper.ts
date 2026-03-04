@@ -5,7 +5,6 @@
  */
 
 import { storageService } from '../services/storage';
-import { websocketClient } from '../services/websocket-client';
 
 /**
  * 🚀 FIX 4: Standardize ID normalization - export untuk dipakai di semua tempat
@@ -176,26 +175,21 @@ export async function deleteGTItem(
           syncToServerTimeouts.delete(storageKey);
         }
         
-        // Force sync langsung tanpa debounce untuk delete
-        // Pakai method private syncDataToServer via reflection atau langsung fetch
-        const business = (storageService as any).getBusinessContext();
-        let serverPath = '';
-        if (business === 'general-trading') {
-          serverPath = `general-trading/${storageKey}`;
-        } else if (business === 'packaging') {
-          serverPath = `packaging/${storageKey}`;
-        } else if (business === 'trucking') {
-          serverPath = `trucking/${storageKey}`;
-        }
+        // Force sync langsung ke server via REST API (POST)
+        const response = await fetch(`${config.serverUrl}/api/storage/${encodeURIComponent(storageKey)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            value: updatedData,
+            timestamp: Date.now()
+          })
+        });
         
-        // Sync langsung ke server via WebSocket (lebih cepat, tidak pakai HTTP/Vercel)
-        if (websocketClient.isAvailable()) {
-          await websocketClient.post(serverPath, updatedData, Date.now());
-        } else {
-          throw new Error('WebSocket not available. Please enable WebSocket in settings.');
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
         }
       } catch (syncError) {
-        // Silent fail - tombstone sudah tersimpan lokal, akan sync otomatis nanti via debounce
+        // Silent fail - tombstone sudah tersimpan lokal, akan sync otomatis nanti
       }
     }
     

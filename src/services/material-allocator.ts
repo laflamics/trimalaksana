@@ -4,6 +4,8 @@
  * Prevent race conditions dan manage material reservations
  */
 
+import { StorageKeys } from './storage';
+
 export interface MaterialReservation {
   id: string;
   spkNo: string;
@@ -56,7 +58,7 @@ class MaterialAllocator {
    */
   private loadReservations() {
     try {
-      const stored = localStorage.getItem('material_reservations');
+      const stored = localStorage.getItem(StorageKeys.SHARED.MATERIAL_RESERVATIONS);
       if (stored) {
         const data = JSON.parse(stored);
         this.reservations = new Map(data);
@@ -72,7 +74,7 @@ class MaterialAllocator {
   private saveReservations() {
     try {
       const data = Array.from(this.reservations.entries());
-      localStorage.setItem('material_reservations', JSON.stringify(data));
+      localStorage.setItem(StorageKeys.SHARED.MATERIAL_RESERVATIONS, JSON.stringify(data));
     } catch (error) {
       console.error('[MaterialAllocator] Error saving reservations:', error);
     }
@@ -139,7 +141,7 @@ class MaterialAllocator {
    */
   private async getInventory(): Promise<any[]> {
     try {
-      const stored = localStorage.getItem('inventory');
+      const stored = localStorage.getItem(StorageKeys.PACKAGING.INVENTORY);
       if (!stored) return [];
       
       const parsed = JSON.parse(stored);

@@ -6,7 +6,7 @@
 export type SyncPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
 
-import { websocketClient } from './websocket-client';
+import { storageService } from './storage';
 
 export interface SyncOperation {
   id: string;
@@ -54,7 +54,7 @@ class GTSync {
         return;
       }
       
-      const storageConfig = JSON.parse(localStorage.getItem('storage_config') || '{"type":"local"}');
+      const storageConfig = storageService.getConfig();
       
       if (storageConfig.type === 'server' && storageConfig.serverUrl) {
         // Server mode - check and download data
@@ -62,9 +62,51 @@ class GTSync {
         this.emitStatusChange('syncing');
         
         try {
-          // Download essential GT data from server
-          await this.downloadServerData('gt_salesOrders', storageConfig.serverUrl);
-          await this.downloadServerData('userAccessControl', storageConfig.serverUrl);
+          // Download ALL GT data types - sama seperti Packaging
+          const dataTypes = [
+            'gt_products',
+            'gt_customers',
+            'gt_suppliers',
+            'gt_salesOrders',
+            'gt_quotations',
+            'gt_delivery',
+            'gt_invoices',
+            'gt_purchaseOrders',
+            'gt_purchaseRequests',
+            'gt_grn',
+            'gt_inventory',
+            'gt_payments',
+            'gt_expenses',
+            'gt_operationalExpenses',
+            'gt_journalEntries',
+            'gt_taxRecords',
+            'gt_accounts',
+            'gt_productionNotifications',
+            'gt_deliveryNotifications',
+            'gt_invoiceNotifications',
+            'gt_financeNotifications',
+            'gt_userAccessControl',
+            'gt_companySettings',
+            'gt_activityLogs',
+            'gt_spk',
+            'gt_schedule',
+            'gt_bom',
+            'gt_materials',
+            'gt_productCategories',
+            'gt_quotation_last_signature',
+            'gt_purchasingNotifications',
+            'gt_ppicNotifications',
+            'GT_productimage',
+            'userAccessControl',
+          ];
+          
+          for (const dataType of dataTypes) {
+            try {
+              await this.downloadServerData(dataType, storageConfig.serverUrl);
+            } catch (error) {
+              // Continue with other data types
+            }
+          }
           
           // Check if there are unsynced local changes
           const unsyncedCount = this.getUnsyncedCount();
@@ -103,7 +145,7 @@ class GTSync {
       }
       
       // Use fixed WebSocket URL
-      const wsUrl = 'ws://server-tljp.tail75a421.ts.net:8888/ws';
+      const wsUrl = 'wss://server-tljp.tail75a421.ts.net/ws';
       
       this.ws = new WebSocket(wsUrl);
       
@@ -213,7 +255,7 @@ class GTSync {
   private async syncOperation(operation: SyncOperation): Promise<void> {
     try {
       // Check if we're in server mode
-      const storageConfig = JSON.parse(localStorage.getItem('storage_config') || '{"type":"local"}');
+      const storageConfig = storageService.getConfig();
       
       if (storageConfig.type === 'local') {
         // Local mode - no server sync needed, just mark as complete
@@ -244,20 +286,26 @@ class GTSync {
     }
   }
 
-  private async syncToServer(key: string, data: any, _serverUrl: string): Promise<void> {
-    // Upload local changes to server via WebSocket (lebih cepat, tidak pakai HTTP/Vercel)
-    const ready = await websocketClient.waitUntilReady(10000);
-    if (!ready) {
-      throw new Error('WebSocket not available. Please enable WebSocket in settings.');
-    }
+  private async syncToServer(key: string, data: any, serverUrl: string): Promise<void> {
+    // Upload local changes to server via REST API (POST)
+    const response = await fetch(`${serverUrl}/api/storage/${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        value: data,
+        timestamp: Date.now()
+      })
+    });
     
-    await websocketClient.post(key, data, Date.now());
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
   }
 
   /**
    * Download data from server and merge with local data
    */
-  private async downloadServerData(key: string, _serverUrl: string): Promise<void> {
+  private async downloadServerData(key: string, serverUrl: string): Promise<void> {
     try {
       // Both server and local use general-trading/ with dash
       const storageKey = `general-trading/${key}`;
@@ -269,18 +317,23 @@ class GTSync {
           const parsed = JSON.parse(currentData);
           currentOrders = parsed.value || parsed || [];
         } catch (e) {
+          // Ignore parse errors
         }
       }
       
-      // Download from server via WebSocket (lebih cepat)
-      const ready = await websocketClient.waitUntilReady(10000);
-      if (!ready) {
-        throw new Error('WebSocket not available. Please enable WebSocket in settings.');
+      // Download from server via REST API (GET)
+      const response = await fetch(`${serverUrl}/api/storage/${encodeURIComponent(storageKey)}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
       }
       
-      const serverDataRaw = await websocketClient.get(storageKey);
+      const serverDataRaw = await response.json();
       
-      // WebSocket returns {value: ..., timestamp: ...} format
+      // REST API returns {success: true, value: ..., timestamp: ...} format
       let serverData = serverDataRaw;
       if (serverDataRaw && typeof serverDataRaw === 'object' && 'value' in serverDataRaw) {
         serverData = serverDataRaw.value;
@@ -362,7 +415,7 @@ class GTSync {
    * Force download all GT data from server
    */
   async forceDownloadFromServer(): Promise<void> {
-    const storageConfig = JSON.parse(localStorage.getItem('storage_config') || '{"type":"local"}');
+    const storageConfig = storageService.getConfig();
     
     if (storageConfig.type !== 'server' || !storageConfig.serverUrl) {
       throw new Error('Server mode not configured');
@@ -372,8 +425,43 @@ class GTSync {
     this.emitStatusChange('syncing');
     
     try {
-      // Download all GT data types
-      const dataTypes = ['gt_salesOrders', 'gt_quotations', 'gt_products', 'gt_customers', 'gt_suppliers', 'userAccessControl'];
+      // Download ALL GT data types - sama seperti Packaging
+      const dataTypes = [
+        'gt_products',
+        'gt_customers',
+        'gt_suppliers',
+        'gt_salesOrders',
+        'gt_quotations',
+        'gt_delivery',
+        'gt_invoices',
+        'gt_purchaseOrders',
+        'gt_purchaseRequests',
+        'gt_grn',
+        'gt_inventory',
+        'gt_payments',
+        'gt_expenses',
+        'gt_operationalExpenses',
+        'gt_journalEntries',
+        'gt_taxRecords',
+        'gt_accounts',
+        'gt_productionNotifications',
+        'gt_deliveryNotifications',
+        'gt_invoiceNotifications',
+        'gt_financeNotifications',
+        'gt_userAccessControl',
+        'gt_companySettings',
+        'gt_activityLogs',
+        'gt_spk',
+        'gt_schedule',
+        'gt_bom',
+        'gt_materials',
+        'gt_productCategories',
+        'gt_quotation_last_signature',
+        'gt_purchasingNotifications',
+        'gt_ppicNotifications',
+        'GT_productimage',
+        'userAccessControl',
+      ];
       
       for (const dataType of dataTypes) {
         try {

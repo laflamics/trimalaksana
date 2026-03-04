@@ -6,6 +6,7 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService, extractStorageValue } from '../../../services/storage';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../../utils/actions';
+import * as XLSX from 'xlsx';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -1035,6 +1036,175 @@ const Report = () => {
     };
   }, [filteredSoData, filteredPoData, filteredDeliveryData, filteredInvoiceData, filteredInventoryData, soColumns, poColumns, deliveryColumns, invoiceColumns, inventoryColumns, summaryData, inventoryValueSummary, dateFrom, dateTo, formatDateTime]);
 
+  const handleExportExcel = () => {
+    try {
+      const wb = XLSX.utils.book_new();
+      
+      // Helper function untuk set column widths
+      const setWidths = (ws: XLSX.WorkSheet, widths: number[]) => {
+        if (!ws['!cols']) ws['!cols'] = [];
+        widths.forEach((width, idx) => {
+          if (ws['!cols']) {
+            ws['!cols'][idx] = { wch: width };
+          }
+        });
+      };
+      
+      // Sheet 1: Sales Orders (with flattened items)
+      const soExportData = filteredSoData.flatMap((so: any) => {
+        if (so.items && Array.isArray(so.items) && so.items.length > 0) {
+          return so.items.map((item: any, idx: number) => ({
+            'SO No': idx === 0 ? so.soNo : '',
+            'Customer': idx === 0 ? so.customer : '',
+            'Payment Terms': idx === 0 ? so.paymentTerms : '',
+            'Status': idx === 0 ? so.status : '',
+            'Created': idx === 0 ? formatDateTime(so.created) : '',
+            'Product': item.productName || item.product,
+            'Qty': item.qty || 0,
+            'Total': item.total || 0,
+          }));
+        }
+        return [{
+          'SO No': so.soNo,
+          'Customer': so.customer,
+          'Payment Terms': so.paymentTerms,
+          'Status': so.status,
+          'Created': formatDateTime(so.created),
+          'Product': '-',
+          'Qty': 0,
+          'Total': 0,
+        }];
+      });
+      const wsSO = XLSX.utils.json_to_sheet(soExportData);
+      setWidths(wsSO, [20, 25, 15, 12, 20, 30, 10, 15]);
+      XLSX.utils.book_append_sheet(wb, wsSO, 'Sales Orders');
+      
+      // Sheet 2: Purchase Orders
+      const poExportData = filteredPoData.map((po: any) => ({
+        'PO No': po.poNo,
+        'Supplier': po.supplier,
+        'SO No': po.soNo || '-',
+        'Reason': po.purchaseReason || '-',
+        'Product/Item': po.productItem,
+        'Qty': po.qty,
+        'Price': po.price || 0,
+        'Total': po.total || 0,
+        'Payment Terms': po.paymentTerms,
+        'TOP Days': po.paymentTerms === 'COD' || po.paymentTerms === 'CBD' ? '-' : po.topDays || 0,
+        'Status': po.status,
+        'Receipt Date': po.receiptDate || '-',
+        'Created': formatDateTime(po.created),
+      }));
+      const wsPO = XLSX.utils.json_to_sheet(poExportData);
+      setWidths(wsPO, [20, 25, 20, 15, 30, 10, 15, 15, 15, 10, 12, 15, 20]);
+      XLSX.utils.book_append_sheet(wb, wsPO, 'Purchase Orders');
+      
+      // Sheet 3: Delivery (with flattened items)
+      const deliveryExportData = filteredDeliveryData.flatMap((del: any) => {
+        if (del.items && Array.isArray(del.items) && del.items.length > 0) {
+          return del.items.map((item: any, idx: number) => ({
+            'SJ No': idx === 0 ? del.sjNo : '',
+            'SO No': idx === 0 ? del.soNo : '',
+            'Customer': idx === 0 ? del.customer : '',
+            'Product': item.product,
+            'Qty': item.qty,
+            'Unit': item.unit || 'PCS',
+            'Delivery Date': idx === 0 ? formatDateTime(del.deliveryDate || del.created) : '',
+            'Status': idx === 0 ? del.status : '',
+          }));
+        }
+        return [{
+          'SJ No': del.sjNo,
+          'SO No': del.soNo,
+          'Customer': del.customer,
+          'Product': del.product || '-',
+          'Qty': del.qty || 0,
+          'Unit': del.unit || 'PCS',
+          'Delivery Date': formatDateTime(del.deliveryDate || del.created),
+          'Status': del.status,
+        }];
+      });
+      const wsDel = XLSX.utils.json_to_sheet(deliveryExportData);
+      setWidths(wsDel, [20, 20, 25, 30, 10, 10, 15, 12]);
+      XLSX.utils.book_append_sheet(wb, wsDel, 'Delivery');
+      
+      // Sheet 4: Invoice
+      const invExportData = filteredInvoiceData.map((inv: any) => ({
+        'Invoice No': inv.invoiceNo,
+        'Invoice Date': inv.invoiceDate || '-',
+        'Due Date': inv.dueDate || '-',
+        'Customer': inv.customer,
+        'SO No': inv.soNo,
+        'Total Amount': inv.total || inv.totalAmount || inv.bom?.total || 0,
+        'Status': inv.status,
+        'Created': formatDateTime(inv.created || inv.invoiceDate),
+      }));
+      const wsInv = XLSX.utils.json_to_sheet(invExportData);
+      setWidths(wsInv, [20, 15, 15, 25, 20, 15, 12, 20]);
+      XLSX.utils.book_append_sheet(wb, wsInv, 'Invoice');
+      
+      // Sheet 5: Inventory
+      const invtExportData = filteredInventoryData.map((item: any) => ({
+        'Supplier/Customer': item.supplierName || '-',
+        'Code Item': item.codeItem,
+        'Description': item.description,
+        'Kategori': item.kategori,
+        'Satuan': item.satuan,
+        'Price': item.price || 0,
+        'Stock Premonth': item.stockPremonth || 0,
+        'Receive': item.receive || 0,
+        'Outgoing': item.outgoing || 0,
+        'Return': item.return || 0,
+        'Next Stock': (item.stockPremonth || 0) + (item.receive || 0) - (item.outgoing || 0) + (item.return || 0),
+        'Last Update': formatDateTime(item.lastUpdate),
+      }));
+      const wsInvt = XLSX.utils.json_to_sheet(invtExportData);
+      setWidths(wsInvt, [25, 15, 35, 15, 10, 15, 12, 10, 10, 10, 12, 20]);
+      XLSX.utils.book_append_sheet(wb, wsInvt, 'Inventory');
+      
+      // Sheet 6: Payment Data
+      const paymentExportData = paymentData.map((payment: any) => ({
+        'Payment No': payment.paymentNo || payment.id,
+        'Type': payment.type || '-',
+        'Amount': payment.amount || 0,
+        'Date': formatDateTime(payment.paymentDate || payment.created),
+        'Reference': payment.reference || payment.invoiceNo || payment.poNo || '-',
+        'Status': payment.status || '-',
+      }));
+      const wsPayment = XLSX.utils.json_to_sheet(paymentExportData);
+      setWidths(wsPayment, [20, 15, 15, 15, 25, 12]);
+      XLSX.utils.book_append_sheet(wb, wsPayment, 'Payments');
+      
+      // Sheet 7: Summary
+      const summaryExportData = [
+        { 'Metric': 'Total SO', 'Value': summaryData.totalSO || 0 },
+        { 'Metric': 'Total PO', 'Value': summaryData.totalPO || 0 },
+        { 'Metric': 'Total Delivery', 'Value': summaryData.totalDelivery || 0 },
+        { 'Metric': 'Total Invoice', 'Value': summaryData.totalInvoice || 0 },
+        { 'Metric': '', 'Value': '' },
+        { 'Metric': 'Total Revenue', 'Value': summaryData.totalRevenue || 0 },
+        { 'Metric': 'Total Expenses', 'Value': summaryData.expenses || 0 },
+        { 'Metric': 'Net Profit', 'Value': summaryData.netProfit || 0 },
+        { 'Metric': '', 'Value': '' },
+        { 'Metric': 'Total Assets', 'Value': summaryData.totalAssets || 0 },
+        { 'Metric': 'Total Liabilities', 'Value': summaryData.totalLiabilities || 0 },
+        { 'Metric': 'Total Equity', 'Value': summaryData.totalEquity || 0 },
+        { 'Metric': '', 'Value': '' },
+        { 'Metric': 'Product Inventory Value', 'Value': inventoryValueSummary.productValue || 0 },
+        { 'Metric': 'Total Inventory Value', 'Value': inventoryValueSummary.totalValue || 0 },
+      ];
+      const wsSummary = XLSX.utils.json_to_sheet(summaryExportData);
+      setWidths(wsSummary, [30, 20]);
+      XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+      
+      const fileName = `GT_Report_Complete_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      showAlert(`✅ Exported complete report (SO, PO, Delivery, Invoice, Inventory, Payments, Summary) to ${fileName}`, 'Success');
+    } catch (error: any) {
+      showAlert(`Error exporting to Excel: ${error.message}`, 'Error');
+    }
+  };
+
   const handleSaveToPDF = async () => {
     try {
       const html = generateReportHtml();
@@ -1075,13 +1245,22 @@ const Report = () => {
     <div className="module-compact">
       <div className="page-header">
         <h1>Report Module</h1>
-        <Button
-          variant="primary"
-          onClick={handleSaveToPDF}
-          style={{ padding: '8px 16px', fontSize: '14px' }}
-        >
-          💾 Save to PDF
-        </Button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Button
+            variant="secondary"
+            onClick={handleExportExcel}
+            style={{ padding: '8px 16px', fontSize: '14px' }}
+          >
+            📥 Export Excel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSaveToPDF}
+            style={{ padding: '8px 16px', fontSize: '14px' }}
+          >
+            💾 Save to PDF
+          </Button>
+        </div>
       </div>
 
       <Card>

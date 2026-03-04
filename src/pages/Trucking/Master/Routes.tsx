@@ -3,8 +3,9 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService } from '../../../services/storage';
+import { storageService, StorageKeys } from '../../../services/storage';
 import { deleteTruckingItem, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { setupRealTimeSync, TRUCKING_SYNC_KEYS } from '../../../utils/real-time-sync-helper';
 import { useDialog } from '../../../hooks/useDialog';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
@@ -64,11 +65,52 @@ const Routes = () => {
 
   useEffect(() => {
     loadRoutes();
+    
+    // Real-time listener untuk server updates
+    const cleanup = setupRealTimeSync({
+      keys: [TRUCKING_SYNC_KEYS.ROUTES],
+      onUpdate: loadRoutes,
+    });
+    
+    return cleanup;
   }, []);
 
   const loadRoutes = async () => {
-    const data = await storageService.get<Route[]>('trucking_routes') || [];
-    const activeRoutes = filterActiveItems(data);
+    console.log('[Trucking Routes] Loading routes...');
+    let dataRaw = await storageService.get<Route[]>(StorageKeys.TRUCKING.ROUTES);
+    console.log('[Trucking Routes] Raw data from storage:', dataRaw);
+    
+    // If undefined or empty, try force fetch from server
+    if (!dataRaw || (Array.isArray(dataRaw) && dataRaw.length === 0)) {
+      console.log('[Trucking Routes] No data in storage, trying force fetch from server...');
+      try {
+        const config = storageService.getConfig();
+        if (config.type === 'server' && config.serverUrl) {
+          const response = await fetch(`${config.serverUrl}/api/storage/${encodeURIComponent(StorageKeys.TRUCKING.ROUTES)}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            const serverData = result.data?.value || result.value || [];
+            if (Array.isArray(serverData) && serverData.length > 0) {
+              console.log(`[Trucking Routes] Force fetch successful: ${serverData.length} routes from server`);
+              dataRaw = serverData;
+              await storageService.set(StorageKeys.TRUCKING.ROUTES, serverData);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[Trucking Routes] Force fetch failed:', error);
+      }
+    }
+    
+    if (!Array.isArray(dataRaw)) {
+      dataRaw = [];
+    }
+    
+    const activeRoutes = filterActiveItems(dataRaw);
     setRoutes(activeRoutes.map((r, idx) => ({ ...r, no: idx + 1 })));
   };
 
@@ -85,7 +127,9 @@ const Routes = () => {
             ? { ...formData, id: editingItem.id, no: editingItem.no } as Route
             : r
         );
-        await storageService.set('trucking_routes', updated);
+        await storageService.set(StorageKeys.TRUCKING.ROUTES, updated);
+        // Wait untuk memastikan sync ke server selesai
+        await new Promise(resolve => setTimeout(resolve, 500));
         setRoutes(updated.map((r, idx) => ({ ...r, no: idx + 1 })));
       } else {
         const newRoute: Route = {
@@ -94,7 +138,9 @@ const Routes = () => {
           ...formData,
         } as Route;
         const updated = [...routes, newRoute];
-        await storageService.set('trucking_routes', updated);
+        await storageService.set(StorageKeys.TRUCKING.ROUTES, updated);
+        // Wait untuk memastikan sync ke server selesai
+        await new Promise(resolve => setTimeout(resolve, 500));
         setRoutes(updated.map((r, idx) => ({ ...r, no: idx + 1 })));
       }
       setShowForm(false);
@@ -146,11 +192,11 @@ const Routes = () => {
         async () => {
           try {
             // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
-            const deleteResult = await deleteTruckingItem('trucking_routes', item.id, 'id');
+            const deleteResult = await deleteTruckingItem(StorageKeys.TRUCKING.ROUTES, item.id, 'id');
             
             if (deleteResult.success) {
               // Reload data dengan helper (handle race condition)
-              const activeRoutes = await reloadTruckingData('trucking_routes', setRoutes);
+              const activeRoutes = await reloadTruckingData(StorageKeys.TRUCKING.ROUTES, setRoutes);
               setRoutes(activeRoutes.map((r, idx) => ({ ...r, no: idx + 1 })));
               showAlert(`✅ Route "${item.routeName}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
             } else {
@@ -215,7 +261,7 @@ const Routes = () => {
           async () => {
             try {
               // Get existing routes
-              const existingRoutes = await storageService.get<Route[]>('trucking_routes') || [];
+              const existingRoutes = await storageService.get<Route[]>(StorageKeys.TRUCKING.ROUTES) || [];
               
               // Generate unique IDs and numbers for new routes
               const maxNo = existingRoutes.length > 0 
@@ -247,7 +293,9 @@ const Routes = () => {
               const uniqueNewRoutes = newRoutes.filter(r => !existingRouteCodes.has(r.routeCode));
               
               const updated = [...existingRoutes, ...uniqueNewRoutes];
-              await storageService.set('trucking_routes', updated);
+              await storageService.set(StorageKeys.TRUCKING.ROUTES, updated);
+              // Wait untuk memastikan sync ke server selesai
+              await new Promise(resolve => setTimeout(resolve, 500));
               setRoutes(updated.map((r, idx) => ({ ...r, no: idx + 1 })));
               
               const skipped = newRoutes.length - uniqueNewRoutes.length;

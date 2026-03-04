@@ -4,9 +4,10 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
+import DateRangeFilter from '../../../components/DateRangeFilter';
 import NotificationBell from '../../../components/NotificationBell';
-import { storageService } from '../../../services/storage';
-import { deletePackagingItem, reloadPackagingData } from '../../../utils/packaging-delete-helper';
+import { storageService, StorageKeys } from '../../../services/storage';
+import { useLanguage } from '../../../hooks/useLanguage';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -24,27 +25,38 @@ interface Payment {
   customerName?: string;
   supplierName?: string;
   amount: number;
+  tax?: number;
+  taxPercent?: number;
   paymentMethod: 'Cash' | 'Bank Transfer' | 'Check' | 'Credit Card';
   reference?: string;
   notes?: string;
+  grnNo?: string;
+  materialItem?: string;
+  soNo?: string;
+  spkNo?: string;
 }
 
 const Payments = () => {
+  const { t } = useLanguage();
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [invoices, setInvoices] = useState<any[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
   const [pendingFinanceNotifications, setPendingFinanceNotifications] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [amountInputValue, setAmountInputValue] = useState('');
+  const [taxPercentInputValue, setTaxPercentInputValue] = useState('');
   const [debitAccountInputValue, setDebitAccountInputValue] = useState('');
   const [creditAccountInputValue, setCreditAccountInputValue] = useState('');
   const [formData, setFormData] = useState<Partial<Payment & { debitAccount?: string; creditAccount?: string }>>({
     paymentDate: new Date().toISOString().split('T')[0],
     amount: 0,
+    tax: 0,
+    taxPercent: 11,
     paymentMethod: 'Bank Transfer',
     debitAccount: '',
     creditAccount: '',
@@ -111,21 +123,20 @@ const Payments = () => {
 
   useEffect(() => {
     loadPayments();
-    loadInvoices();
     loadPurchaseOrders();
     loadAccounts();
   }, []);
 
 
   const loadAccounts = async () => {
-    const data = await storageService.get<any[]>('accounts') || [];
+    const data = await storageService.get<any[]>(StorageKeys.PACKAGING.ACCOUNTS) || [];
     if (!data || data.length === 0) {
       const defaultAccounts: any[] = [
         { code: '1000', name: 'Cash', type: 'Asset', balance: 0 },
         { code: '1100', name: 'Accounts Receivable', type: 'Asset', balance: 0 },
         { code: '2000', name: 'Accounts Payable', type: 'Liability', balance: 0 },
       ];
-      await storageService.set('accounts', defaultAccounts);
+      await storageService.set(StorageKeys.PACKAGING.ACCOUNTS, defaultAccounts);
       setAccounts(defaultAccounts);
     } else {
       setAccounts(data);
@@ -166,6 +177,10 @@ const Payments = () => {
     return value;
   };
 
+  // Helper function untuk calculate tax amount
+  const calculateTaxAmount = (amount: number, taxPercent: number): number => {
+    return amount * (taxPercent / 100);
+  };
 
   const getDebitAccountInputDisplayValue = () => {
     if (debitAccountInputValue !== undefined && debitAccountInputValue !== '') {
@@ -232,49 +247,99 @@ const Payments = () => {
 
   const loadPayments = async () => {
     // Load from both 'payments' (existing) and create unified list
-    const existingPayments = await storageService.get<any[]>('payments') || [];
+    const existingPayments = await storageService.get<any[]>(StorageKeys.PACKAGING.PAYMENTS) || [];
     // Ensure existingPayments is always an array
     const existingPaymentsArray = Array.isArray(existingPayments) ? existingPayments : [];
-    const allPayments = existingPaymentsArray.map((p, idx) => ({
-      id: p.id || Date.now().toString() + idx,
-      no: idx + 1,
-      paymentNo: p.paymentNo || `PAY-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(idx + 1).padStart(4, '0')}`,
-      paymentDate: p.paymentDate || p.created || new Date().toISOString().split('T')[0],
-      type: p.type || (p.invoiceNo ? 'Receipt' : 'Payment'),
-      invoiceNo: p.invoiceNo,
-      poNo: p.poNo,
-      purchaseOrderNo: p.poNo || p.purchaseOrderNo,
-      customerName: p.customer || p.customerName,
-      supplierName: p.supplier || p.supplierName,
-      amount: p.amount || p.total || 0,
-      paymentMethod: p.paymentMethod || 'Bank Transfer',
-      reference: p.reference,
-      notes: p.notes,
-    }));
-    setPayments(allPayments);
-  };
-
-  const loadInvoices = async () => {
-    const data = await storageService.get<any[]>('invoices') || [];
-    const paymentsData = await storageService.get<any[]>('payments') || [];
-    // Ensure data and paymentsData are always arrays
-    const dataArray = Array.isArray(data) ? data : [];
-    const paymentsDataArray = Array.isArray(paymentsData) ? paymentsData : [];
-    // Calculate balance for each invoice
-    const invoicesWithBalance = dataArray.map(inv => {
-      const invoicePayments = paymentsDataArray.filter((p: any) => p.invoiceNo === inv.invoiceNo);
-      const paidAmount = invoicePayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
-      const balance = (inv.total || 0) - paidAmount;
-      return { ...inv, paidAmount, balance };
+    
+    // Auto-fill invoice and customer data from invoices storage
+    const invoices = await storageService.get<any[]>(StorageKeys.PACKAGING.INVOICES) || [];
+    const invoicesArray = Array.isArray(invoices) ? invoices : [];
+    
+    const normalize = (str: string) => (str || '').toString().trim().toLowerCase();
+    
+    const allPayments = existingPaymentsArray.map((p, idx) => {
+      let payment = {
+        id: p.id || Date.now().toString() + idx,
+        no: idx + 1,
+        paymentNo: p.paymentNo || `PAY-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(idx + 1).padStart(4, '0')}`,
+        paymentDate: p.paymentDate || p.created || new Date().toISOString().split('T')[0],
+        type: p.type || (p.invoiceNo ? 'Receipt' : 'Payment'),
+        invoiceNo: p.invoiceNo,
+        poNo: p.poNo,
+        purchaseOrderNo: p.poNo || p.purchaseOrderNo,
+        customerName: p.customerName || p.customer,
+        supplierName: p.supplier || p.supplierName,
+        amount: p.amount || p.total || 0,
+        paymentMethod: p.paymentMethod || 'Bank Transfer',
+        reference: p.reference,
+        notes: p.notes,
+        grnNo: p.grnNo,
+        materialItem: p.materialItem,
+        soNo: p.soNo,
+        spkNo: p.spkNo,
+      };
+      
+      // Auto-fill invoice and customer if soNo exists but invoiceNo is empty
+      if (payment.soNo && !payment.invoiceNo) {
+        const soNo = normalize(payment.soNo);
+        const relatedInvoice = invoicesArray.find((inv: any) => {
+          const invSoNo = normalize(inv.soNo || '');
+          return invSoNo === soNo;
+        });
+        
+        if (relatedInvoice) {
+          payment.invoiceNo = relatedInvoice.invoiceNo || '';
+          payment.customerName = relatedInvoice.customer || '';
+        }
+      }
+      
+      return payment;
     });
-    setInvoices(invoicesWithBalance.filter(inv => inv.balance > 0));
+    
+    // Update payments in storage if any were auto-filled
+    const needsUpdate = existingPaymentsArray.some((p) => {
+      const soNo = normalize(p.soNo || '');
+      if (soNo && !p.invoiceNo) {
+        const relatedInvoice = invoicesArray.find((inv: any) => {
+          const invSoNo = normalize(inv.soNo || '');
+          return invSoNo === soNo;
+        });
+        return !!relatedInvoice;
+      }
+      return false;
+    });
+    
+    if (needsUpdate) {
+      const updatedPayments = existingPaymentsArray.map((p) => {
+        if (p.soNo && !p.invoiceNo) {
+          const soNo = normalize(p.soNo);
+          const relatedInvoice = invoicesArray.find((inv: any) => {
+            const invSoNo = normalize(inv.soNo || '');
+            return invSoNo === soNo;
+          });
+          
+          if (relatedInvoice) {
+            return {
+              ...p,
+              invoiceNo: relatedInvoice.invoiceNo || p.invoiceNo,
+              customerName: relatedInvoice.customer || p.customerName,
+            };
+          }
+        }
+        return p;
+      });
+      
+      await storageService.set(StorageKeys.PACKAGING.PAYMENTS, updatedPayments);
+    }
+    
+    setPayments(allPayments);
   };
 
   const loadPurchaseOrders = async () => {
     const [poData, financeNotifData, paymentsData] = await Promise.all([
-      storageService.get<any[]>('purchaseOrders') || [],
-      storageService.get<any[]>('financeNotifications') || [],
-      storageService.get<any[]>('payments') || [],
+      storageService.get<any[]>(StorageKeys.PACKAGING.PURCHASE_ORDERS) || [],
+      storageService.get<any[]>(StorageKeys.PACKAGING.FINANCE_NOTIFICATIONS) || [],
+      storageService.get<any[]>(StorageKeys.PACKAGING.PAYMENTS) || [],
     ]);
     
     // Auto-cleanup: Hapus notifications yang sudah CLOSE atau PO sudah dibayar
@@ -298,7 +363,7 @@ const Payments = () => {
     
     // Update notifications di storage (cleanup yang sudah tidak relevan)
     if (financeNotifDataArray.length > 0 && JSON.stringify(cleanedNotifs) !== JSON.stringify(financeNotifDataArray)) {
-      await storageService.set('financeNotifications', cleanedNotifs);
+      await storageService.set(StorageKeys.PACKAGING.FINANCE_NOTIFICATIONS, cleanedNotifs);
     }
     
     const pending = cleanedNotifs.filter((notif: any) =>
@@ -339,40 +404,6 @@ const Payments = () => {
     return `PAY-${year}${month}-${String(count).padStart(4, '0')}`;
   };
 
-  const handleLoadFromInvoice = (invNo: string) => {
-    // Ensure invoices is always an array
-    const invoicesArray = Array.isArray(invoices) ? invoices : [];
-    const inv = invoicesArray.find(i => i.invoiceNo === invNo);
-    if (inv) {
-      setAmountInputValue('');
-      setFormData({
-        ...formData,
-        type: 'Receipt',
-        invoiceNo: inv.invoiceNo,
-        customerName: inv.customer,
-        amount: inv.balance || inv.total,
-      });
-    }
-  };
-
-  const handleLoadFromPO = (poNo: string) => {
-    // Ensure purchaseOrders is always an array
-    const purchaseOrdersArray = Array.isArray(purchaseOrders) ? purchaseOrders : [];
-    const po = purchaseOrdersArray.find(p => p.poNo === poNo);
-    if (po) {
-      setAmountInputValue('');
-      setFormData({
-        ...formData,
-        poNo: po.poNo,
-        purchaseOrderNo: po.poNo,
-        supplierName: po.supplier,
-        amount: po.total,
-      });
-    } else {
-      showAlert('Tidak ada PO dengan status open payment. Semua PO sudah CLOSE atau belum punya GRN.', 'Information');
-    }
-  };
-
   const handleViewNotificationSJ = (notif: any) => {
     if (!notif?.suratJalan) {
       showAlert('Tidak ada file surat jalan yang diupload.', 'Error');
@@ -405,26 +436,139 @@ const Payments = () => {
     win.document.write(`<iframe src="${src}" style="width:100%;height:100%;border:none;"></iframe>`);
   };
 
-  const handleLoadNotificationToForm = (notif: any) => {
-    setShowForm(true);
-    setEditingPayment(null);
-    setAmountInputValue('');
-    const defaultDate = new Date().toISOString().split('T')[0];
-    setFormData({
-      paymentDate: defaultDate,
-      poNo: notif.poNo || '',
-      purchaseOrderNo: notif.poNo || '',
-      supplierName: notif.supplier || '',
-      amount: notif.total || 0,
-      paymentMethod: 'Bank Transfer',
-      reference: notif.grnNo ? `GRN ${notif.grnNo}` : '',
-      notes: `Payment for PO ${notif.poNo || ''}${notif.invoiceNo ? ` - Invoice: ${notif.invoiceNo}` : ''}`,
-      invoiceNo: notif.invoiceNo || '',
-      debitAccount: '',
-      creditAccount: '',
-    });
-    setDebitAccountInputValue('');
-    setCreditAccountInputValue('');
+  const handleLoadNotificationToForm = async (notif: any) => {
+    try {
+      console.log('[Payment] handleLoadNotificationToForm called with notification:', { poNo: notif.poNo, soNo: notif.soNo, spkNo: notif.spkNo, grnNo: notif.grnNo });
+      setEditingPayment(null);
+      setAmountInputValue('');
+      const defaultDate = new Date().toISOString().split('T')[0];
+      
+      // Trace invoice dari SPK/SO
+      let invoiceNo = '';
+      let customerName = '';
+      try {
+        const invoices = await storageService.get<any[]>(StorageKeys.PACKAGING.INVOICES) || [];
+        const invoicesArray = Array.isArray(invoices) ? invoices : [];
+        const spks = await storageService.get<any[]>(StorageKeys.PACKAGING.SPK) || [];
+        const spksArray = Array.isArray(spks) ? spks : [];
+        const salesOrders = await storageService.get<any[]>(StorageKeys.PACKAGING.SALES_ORDERS) || [];
+        const salesOrdersArray = Array.isArray(salesOrders) ? salesOrders : [];
+        
+        // Helper function untuk normalize string untuk comparison
+        const normalize = (str: string) => (str || '').toString().trim().toLowerCase();
+        
+        // First, try to find invoice directly by SO or SPK from notification
+        let relatedInvoice = invoicesArray.find((inv: any) => {
+          const invSoNo = normalize(inv.soNo || '');
+          const invSpkNo = normalize(inv.spkNo || '');
+          const notifSoNo = normalize(notif.soNo || '');
+          const notifSpkNo = normalize(notif.spkNo || '');
+          
+          return (invSoNo && notifSoNo && invSoNo === notifSoNo) || 
+                 (invSpkNo && notifSpkNo && invSpkNo === notifSpkNo);
+        });
+        
+        // If not found, try to trace through PO → SPK → Invoice
+        if (!relatedInvoice && notif.poNo) {
+          const poNo = normalize(notif.poNo);
+          
+          // Find SPK that references this PO
+          const relatedSpk = spksArray.find((spk: any) => {
+            const spkPoNo = normalize(spk.poNo || spk.purchaseOrderNo || '');
+            return spkPoNo === poNo;
+          });
+          
+          if (relatedSpk) {
+            // Find invoice by SPK
+            relatedInvoice = invoicesArray.find((inv: any) => {
+              const invSpkNo = normalize(inv.spkNo || '');
+              const spkNo = normalize(relatedSpk.spkNo || '');
+              return invSpkNo === spkNo;
+            });
+            
+            // If still not found, try by SO
+            if (!relatedInvoice && relatedSpk.soNo) {
+              relatedInvoice = invoicesArray.find((inv: any) => {
+                const invSoNo = normalize(inv.soNo || '');
+                const soNo = normalize(relatedSpk.soNo || '');
+                return invSoNo === soNo;
+              });
+            }
+          }
+        }
+        
+        // If still not found, try by SO from notification directly
+        if (!relatedInvoice && notif.soNo) {
+          const notifSoNo = normalize(notif.soNo);
+          relatedInvoice = invoicesArray.find((inv: any) => {
+            const invSoNo = normalize(inv.soNo || '');
+            return invSoNo === notifSoNo;
+          });
+        }
+        
+        // If still not found, try to find by customer from SO
+        if (!relatedInvoice && notif.soNo) {
+          const notifSoNo = normalize(notif.soNo);
+          const relatedSO = salesOrdersArray.find((so: any) => {
+            const soNo = normalize(so.soNo || so.no || '');
+            return soNo === notifSoNo;
+          });
+          
+          if (relatedSO) {
+            // Find invoice by customer
+            relatedInvoice = invoicesArray.find((inv: any) => {
+              const invCustomer = normalize(inv.customer || '');
+              const soCustomer = normalize(relatedSO.customer || relatedSO.customerName || '');
+              return invCustomer === soCustomer && invCustomer !== '';
+            });
+          }
+        }
+        
+        if (relatedInvoice) {
+          invoiceNo = relatedInvoice.invoiceNo || '';
+          customerName = relatedInvoice.customer || '';
+          console.log('[Payment] ✅ Invoice found:', { invoiceNo, customerName, soNo: relatedInvoice.soNo });
+        } else {
+          console.log('[Payment] ⚠️ Invoice NOT found for notification:', { notifSoNo: notif.soNo, notifSpkNo: notif.spkNo, notifPoNo: notif.poNo });
+        }
+      } catch (error) {
+        console.error('Error tracing invoice:', error);
+      }
+      
+      const paymentData = {
+        paymentDate: defaultDate,
+        type: 'Payment' as const,
+        poNo: notif.poNo || '',
+        purchaseOrderNo: notif.poNo || '',
+        supplierName: notif.supplier || '',
+        amount: notif.total || 0,
+        paymentMethod: 'Bank Transfer' as const,
+        reference: notif.grnNo ? `GRN ${notif.grnNo}` : '',
+        notes: `Payment for PO ${notif.poNo || ''}${notif.materialItem ? ` - ${notif.materialItem}` : ''}${invoiceNo ? ` | Invoice: ${invoiceNo}` : ''}`,
+        invoiceNo: invoiceNo,
+        grnNo: notif.grnNo || '',
+        materialItem: notif.materialItem || '',
+        soNo: notif.soNo || '',
+        spkNo: notif.spkNo || '',
+        debitAccount: '2000', // Default: Accounts Payable
+        creditAccount: '1000', // Default: Cash
+        customerName: customerName, // Track customer
+      };
+      
+      // Show form with pre-filled data so user can review/edit before final save
+      setFormData(paymentData);
+      setAmountInputValue(String(paymentData.amount || 0));
+      setShowForm(true);
+      
+      loadPayments();
+      loadPurchaseOrders();
+      const amount = paymentData.amount || 0;
+      const invoiceDisplay = paymentData.invoiceNo ? `Invoice: ${paymentData.invoiceNo}` : 'Not found - please enter manually';
+      const customerDisplay = paymentData.customerName ? `Customer: ${paymentData.customerName}` : 'Not found - please enter manually';
+      showAlert(`✅ Payment form loaded\n\nPayment No: ${generatePaymentNo()}\nAmount: Rp ${amount.toLocaleString('id-ID')}\n${invoiceDisplay}\n${customerDisplay}\n\nReview and save, or edit the fields manually.`, 'Info');
+    } catch (error: any) {
+      showAlert(`Error creating payment: ${error.message}`, 'Error');
+    }
   };
 
   const handleSave = async () => {
@@ -450,7 +594,7 @@ const Payments = () => {
               } as Payment
             : p
         );
-        await storageService.set('payments', updated);
+        await storageService.set(StorageKeys.PACKAGING.PAYMENTS, updated);
         setPayments(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
       } else {
         const newPayment: Payment = {
@@ -463,13 +607,13 @@ const Payments = () => {
           ...formData,
         } as Payment;
         const updated = [...paymentsArray, newPayment];
-        await storageService.set('payments', updated);
+        await storageService.set(StorageKeys.PACKAGING.PAYMENTS, updated);
         setPayments(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
         
         // Auto-create journal entries untuk General Ledger
         try {
-          const journalEntries = await storageService.get<any[]>('journalEntries') || [];
-          const accounts = await storageService.get<any[]>('accounts') || [];
+          const journalEntries = await storageService.get<any[]>(StorageKeys.PACKAGING.JOURNAL_ENTRIES) || [];
+          const accounts = await storageService.get<any[]>(StorageKeys.PACKAGING.ACCOUNTS) || [];
           const entryDate = formData.paymentDate || new Date().toISOString().split('T')[0];
           const amount = formData.amount || 0;
           
@@ -529,41 +673,14 @@ const Payments = () => {
                 id: `pay-${Date.now()}-${idx + 1}`,
                 no: baseLength + idx + 1,
               }));
-              await storageService.set('journalEntries', [...journalEntriesArray, ...entriesWithNo]);
+              await storageService.set(StorageKeys.PACKAGING.JOURNAL_ENTRIES, [...journalEntriesArray, ...entriesWithNo]);
             }
           }
         } catch (error: any) {
         }
 
-        if (formData.poNo) {
-          try {
-            const financeNotifications = await storageService.get<any[]>('financeNotifications') || [];
-            // Ensure financeNotifications is always an array
-            const financeNotificationsArray = Array.isArray(financeNotifications) ? financeNotifications : [];
-            const updatedNotifications = financeNotificationsArray.map((n: any) =>
-              n.poNo === formData.poNo && n.type === 'SUPPLIER_PAYMENT'
-                ? { ...n, status: 'CLOSE', paidAt: new Date().toISOString() }
-                : n
-            );
-            await storageService.set('financeNotifications', updatedNotifications);
-
-            const purchaseOrders = await storageService.get<any[]>('purchaseOrders') || [];
-            // Ensure purchaseOrders is always an array
-            const purchaseOrdersArray = Array.isArray(purchaseOrders) ? purchaseOrders : [];
-            const updatedPOs = purchaseOrdersArray.map((po: any) =>
-              po.poNo === formData.poNo ? { ...po, status: 'CLOSE' as const } : po
-            );
-            await storageService.set('purchaseOrders', updatedPOs);
-          } catch (error) {
-          }
-        }
-        
-        // Update invoice paid amount if invoice exists
-        if (formData.invoiceNo) {
-          // Note: invoices don't have paidAmount field, so we track via payments
-          // This is just for display purposes
-          // Payment record already created above, which will be used by AR module
-        }
+        // NOTE: CLOSE status is now triggered in AP module when payment proof is uploaded
+        // Do NOT set CLOSE status here
       }
       
       setShowForm(false);
@@ -571,9 +688,9 @@ const Payments = () => {
       setAmountInputValue('');
       setDebitAccountInputValue('');
       setCreditAccountInputValue('');
-      setFormData({ paymentDate: new Date().toISOString().split('T')[0], type: 'Receipt', amount: 0, paymentMethod: 'Bank Transfer', debitAccount: '', creditAccount: '' });
+      setTaxPercentInputValue('');
+      setFormData({ paymentDate: new Date().toISOString().split('T')[0], type: 'Receipt', amount: 0, tax: 0, taxPercent: 11, paymentMethod: 'Bank Transfer', debitAccount: '', creditAccount: '' });
       loadPayments();
-      loadInvoices();
       loadPurchaseOrders();
     } catch (error: any) {
       showAlert(`Error saving payment: ${error.message}`, 'Error');
@@ -589,9 +706,17 @@ const Payments = () => {
         (payment.invoiceNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (payment.poNo || payment.purchaseOrderNo || '').toLowerCase().includes(searchQuery.toLowerCase());
       const matchesType = typeFilter === 'all' || payment.type === typeFilter;
+      
+      // Date filter
+      if (dateFrom || dateTo) {
+        const paymentDate = payment.paymentDate || '';
+        if (dateFrom && paymentDate < dateFrom) return false;
+        if (dateTo && paymentDate > dateTo) return false;
+      }
+      
       return matchesSearch && matchesType;
     });
-  }, [payments, searchQuery, typeFilter]);
+  }, [payments, searchQuery, typeFilter, dateFrom, dateTo]);
 
   // Export to Excel
   const handleExportExcel = () => {
@@ -735,7 +860,7 @@ const Payments = () => {
 
             if (newPayments.length > 0) {
               const updated = [...payments, ...newPayments];
-              await storageService.set('payments', updated);
+              await storageService.set(StorageKeys.PACKAGING.PAYMENTS, updated);
               setPayments(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
               showAlert(`✅ Imported ${newPayments.length} payments${errors.length > 0 ? `\n⚠️ ${errors.length} errors` : ''}`, 'Success');
             } else {
@@ -753,10 +878,10 @@ const Payments = () => {
     input.click();
   };
 
-  const columns = [
+  const columns = useMemo(() => [
     { 
       key: 'no', 
-      header: '#',
+      header: t('common.number') || '#',
       render: (item: Payment) => <div style={{ minWidth: '25px', textAlign: 'center', fontSize: '11px' }}>{item.no}</div>
     },
     { 
@@ -766,7 +891,7 @@ const Payments = () => {
     },
     { 
       key: 'paymentDate', 
-      header: 'Date',
+      header: t('common.date') || 'Date',
       render: (item: Payment) => <div style={{ minWidth: '70px', fontSize: '11px' }}>{item.paymentDate}</div>
     },
     { 
@@ -776,37 +901,37 @@ const Payments = () => {
     },
     { 
       key: 'invoiceNo', 
-      header: 'Invoice',
-      render: (item: Payment) => <div style={{ minWidth: '80px', fontSize: '11px' }} title={item.invoiceNo || '-'}>{item.invoiceNo ? (item.invoiceNo.length > 10 ? item.invoiceNo.substring(0, 10) + '...' : item.invoiceNo) : '-'}</div>
+      header: t('finance.invoiceNumber') || 'Invoice',
+      render: (item: Payment) => <div style={{ minWidth: '90px', fontSize: '11px', fontWeight: '500', color: item.invoiceNo ? '#1976d2' : 'var(--text-secondary)' }} title={item.invoiceNo || '-'}>{item.invoiceNo || '-'}</div>
     },
     { 
       key: 'poNo', 
       header: 'PO',
-      render: (item: Payment) => <div style={{ minWidth: '70px', fontSize: '11px' }} title={item.poNo || '-'}>{item.poNo ? (item.poNo.length > 8 ? item.poNo.substring(0, 8) + '...' : item.poNo) : '-'}</div>
+      render: (item: Payment) => <div style={{ minWidth: '70px', fontSize: '11px', fontWeight: '500' }} title={item.poNo || '-'}>{item.poNo || '-'}</div>
     },
     { 
       key: 'customerName', 
-      header: 'Customer',
-      render: (item: Payment) => <div style={{ minWidth: '100px', fontSize: '11px' }} title={item.customerName || '-'}>{item.customerName ? (item.customerName.length > 12 ? item.customerName.substring(0, 12) + '...' : item.customerName) : '-'}</div>
+      header: t('master.customerName') || 'Customer',
+      render: (item: Payment) => <div style={{ minWidth: '120px', fontSize: '11px', color: item.customerName ? '#2e7d32' : 'var(--text-secondary)' }} title={item.customerName || '-'}>{item.customerName ? (item.customerName.length > 15 ? item.customerName.substring(0, 15) + '...' : item.customerName) : '-'}</div>
     },
     { 
       key: 'supplierName', 
-      header: 'Supplier',
+      header: t('master.supplierName') || 'Supplier',
       render: (item: Payment) => <div style={{ minWidth: '100px', fontSize: '11px' }} title={item.supplierName || '-'}>{item.supplierName ? (item.supplierName.length > 12 ? item.supplierName.substring(0, 12) + '...' : item.supplierName) : '-'}</div>
     },
     { 
       key: 'amount', 
-      header: 'Amount', 
+      header: t('common.amount') || 'Amount', 
       render: (item: Payment) => <div style={{ minWidth: '90px', fontSize: '11px', textAlign: 'right' }}>Rp {item.amount.toLocaleString('id-ID')}</div>
     },
     { 
       key: 'paymentMethod', 
-      header: 'Method',
+      header: t('finance.paymentMethod') || 'Method',
       render: (item: Payment) => <div style={{ minWidth: '60px', fontSize: '11px' }}>{item.paymentMethod}</div>
     },
     { 
       key: 'actions', 
-      header: 'Actions', 
+      header: t('common.actions') || 'Actions', 
       render: (item: Payment) => (
         <div style={{ display: 'flex', gap: '4px', minWidth: '90px' }}>
           <Button onClick={() => { 
@@ -831,36 +956,35 @@ const Payments = () => {
             }
             setShowForm(true); 
           }} variant="secondary" style={{ fontSize: '10px', padding: '3px 6px', minWidth: 'auto' }}>
-            Edit
+            {t('common.edit') || 'Edit'}
           </Button>
           <Button variant="danger" onClick={() => {
             showConfirm(
               'Delete this payment?',
               async () => {
-                // 🚀 FIX: Pakai packaging delete helper untuk konsistensi
-                const deleteResult = await deletePackagingItem('payments', item.id, 'id');
-                if (deleteResult.success) {
-                  // Reload data dengan helper (handle race condition)
-                  const dataRaw = await storageService.get<any[]>('payments') || [];
-                  const data = dataRaw.filter((p: any) => !p.deleted && !p.deletedAt);
-                  setPayments(data.map((p, idx) => ({ ...p, no: idx + 1 })));
+                try {
+                  // Hard delete - langsung hapus dari array
+                  const paymentsArray = Array.isArray(payments) ? payments : [];
+                  const updated = paymentsArray.filter(p => p.id !== item.id);
+                  await storageService.set(StorageKeys.PACKAGING.PAYMENTS, updated);
+                  setPayments(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
                   closeDialog();
                   showAlert('Payment deleted successfully', 'Success');
-                } else {
+                } catch (error: any) {
                   closeDialog();
-                  showAlert(`Error deleting payment: ${deleteResult.error || 'Unknown error'}`, 'Error');
+                  showAlert(`Error deleting payment: ${error.message}`, 'Error');
                 }
               },
               () => closeDialog(),
               'Delete Confirmation'
             );
           }} style={{ fontSize: '10px', padding: '3px 6px', minWidth: 'auto' }}>
-            Del
+            {t('common.delete') || 'Del'}
           </Button>
         </div>
       )
     },
-  ];
+  ], [t, accounts]);
 
   return (
     <div className="module-compact" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', minHeight: '600px', overflow: 'hidden' }}>
@@ -869,12 +993,22 @@ const Payments = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', gap: '12px', flexWrap: 'wrap', flexShrink: 0 }}>
             <h2 style={{ margin: 0 }}>Payments</h2>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <div style={{ marginBottom: 0, display: 'flex', alignItems: 'center' }}>
+              <div style={{ marginBottom: 0, display: 'flex', alignItems: 'center', flex: '1 1 200px', minWidth: '150px' }}>
                 <Input
                   type="text"
                   placeholder="Search payments..."
                   value={searchQuery}
                   onChange={(value) => setSearchQuery(value)}
+                />
+              </div>
+              <div style={{ flex: '1 1 400px', minWidth: '300px' }}>
+                <DateRangeFilter
+                  onDateChange={(from, to) => {
+                    setDateFrom(from);
+                    setDateTo(to);
+                  }}
+                  defaultFrom={dateFrom}
+                  defaultTo={dateTo}
                 />
               </div>
             <select
@@ -885,6 +1019,8 @@ const Payments = () => {
               <option value="all">All Types</option>
               <option value="Receipt">Receipt</option>
               <option value="Payment">Payment</option>
+              <option value="General">General</option>
+              <option value="PettyCash">Petty Cash</option>
             </select>
             {pendingFinanceNotifications.length > 0 && (
               <NotificationBell
@@ -912,7 +1048,8 @@ const Payments = () => {
               setAmountInputValue(''); 
               setDebitAccountInputValue(''); 
               setCreditAccountInputValue(''); 
-              setFormData({ paymentDate: new Date().toISOString().split('T')[0], amount: 0, paymentMethod: 'Bank Transfer', debitAccount: '', creditAccount: '' }); 
+              setTaxPercentInputValue('');
+              setFormData({ paymentDate: new Date().toISOString().split('T')[0], amount: 0, tax: 0, taxPercent: 11, paymentMethod: 'Bank Transfer', debitAccount: '', creditAccount: '' }); 
             }}>
               + New Payment
             </Button>
@@ -1006,11 +1143,7 @@ const Payments = () => {
           )}
 
           <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-                  <div style={{ width: '100%', overflowX: 'auto' }}>
-                    <Table columns={columns} data={filteredPayments} />
-                  </div>
-                </div>
+                <Table columns={columns} data={filteredPayments} />
           </div>
         </div>
       </Card>
@@ -1121,34 +1254,8 @@ const Payments = () => {
                   ))}
                 </datalist>
               </div>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-                  Load from Invoice (Optional)
-                </label>
-                <select
-                  onChange={(e) => handleLoadFromInvoice(e.target.value)}
-                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid var(--border)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
-                >
-                  <option value="">Select Invoice (Optional)...</option>
-                  {invoices.map(inv => (
-                    <option key={inv.id} value={inv.invoiceNo}>{inv.invoiceNo} - {inv.customer} (Balance: Rp {inv.balance.toLocaleString('id-ID')})</option>
-                  ))}
-                </select>
-              </div>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-                  Load from Purchase Order (Optional)
-                </label>
-                <select
-                  onChange={(e) => handleLoadFromPO(e.target.value)}
-                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid var(--border)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
-                >
-                  <option value="">Select Purchase Order (Optional)...</option>
-                  {(Array.isArray(purchaseOrders) ? purchaseOrders : []).map(po => (
-                    <option key={po.id} value={po.poNo}>{po.poNo} - {po.supplier}</option>
-                  ))}
-                </select>
-              </div>
+
+
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
                   Amount
@@ -1180,7 +1287,10 @@ const Payments = () => {
                     val = val.replace(/[^\d.,]/g, '');
                     const cleaned = removeLeadingZero(val);
                     setAmountInputValue(cleaned);
-                    setFormData({ ...formData, amount: cleaned === '' ? 0 : Number(cleaned) || 0 });
+                    const amount = cleaned === '' ? 0 : Number(cleaned) || 0;
+                    const taxPercent = formData.taxPercent || 11;
+                    const taxAmount = calculateTaxAmount(amount, taxPercent);
+                    setFormData({ ...formData, amount: amount, tax: taxAmount });
                   }}
                   onBlur={(e) => {
                     const val = e.target.value;
@@ -1215,6 +1325,61 @@ const Payments = () => {
                   }}
                 />
               </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  Tax % (Default 11%)
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={taxPercentInputValue !== undefined && taxPercentInputValue !== '' ? taxPercentInputValue : (formData.taxPercent !== undefined && formData.taxPercent !== null && formData.taxPercent !== 0 ? String(formData.taxPercent) : '11')}
+                  onChange={(e) => {
+                    let val = e.target.value;
+                    val = val.replace(/[^\d.,]/g, '');
+                    setTaxPercentInputValue(val);
+                    const percent = val === '' ? 11 : Number(val) || 11;
+                    const amount = formData.amount || 0;
+                    const taxAmount = calculateTaxAmount(amount, percent);
+                    setFormData({ ...formData, taxPercent: percent, tax: taxAmount });
+                  }}
+                  onBlur={(e) => {
+                    const val = e.target.value;
+                    const percent = val === '' || isNaN(Number(val)) || Number(val) < 0 ? 11 : Number(val);
+                    const amount = formData.amount || 0;
+                    const taxAmount = calculateTaxAmount(amount, percent);
+                    setFormData({ ...formData, taxPercent: percent, tax: taxAmount });
+                    setTaxPercentInputValue('');
+                  }}
+                  placeholder="11"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  Tax Amount (Auto-calculated)
+                </label>
+                <div style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  backgroundColor: 'var(--bg-secondary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '14px',
+                }}>
+                  Rp {(formData.tax || 0).toLocaleString('id-ID')}
+                </div>
+              </div>
               <div>
                 <label>Payment Method</label>
                 <select
@@ -1228,6 +1393,18 @@ const Payments = () => {
                   <option value="Credit Card">Credit Card</option>
                 </select>
               </div>
+              <Input
+                label="Invoice No"
+                value={formData.invoiceNo || ''}
+                onChange={(value) => setFormData({ ...formData, invoiceNo: value })}
+                placeholder="Auto-filled from invoice lookup"
+              />
+              <Input
+                label="Customer Name"
+                value={formData.customerName || ''}
+                onChange={(value) => setFormData({ ...formData, customerName: value })}
+                placeholder="Auto-filled from invoice lookup"
+              />
               <Input
                 label="Reference"
                 value={formData.reference || ''}
@@ -1246,7 +1423,8 @@ const Payments = () => {
                   setAmountInputValue('');
                   setDebitAccountInputValue('');
                   setCreditAccountInputValue('');
-                  setFormData({ paymentDate: new Date().toISOString().split('T')[0], amount: 0, paymentMethod: 'Bank Transfer', debitAccount: '', creditAccount: '' });
+                  setTaxPercentInputValue('');
+                  setFormData({ paymentDate: new Date().toISOString().split('T')[0], amount: 0, tax: 0, taxPercent: 11, paymentMethod: 'Bank Transfer', debitAccount: '', creditAccount: '' });
                 }}>
                   Cancel
                 </Button>

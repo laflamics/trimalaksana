@@ -4,8 +4,9 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import NotificationBell from '../../../components/NotificationBell';
-import { storageService } from '../../../services/storage';
+import { storageService, StorageKeys, extractStorageValue } from '../../../services/storage';
 import { deleteTruckingItem, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { setupRealTimeSync, TRUCKING_SYNC_KEYS } from '../../../utils/real-time-sync-helper';
 import { useDialog } from '../../../hooks/useDialog';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../../utils/actions';
 import { loadLogoAsBase64 } from '../../../utils/logo-loader';
@@ -443,26 +444,48 @@ const PettyCash = () => {
 
   useEffect(() => {
     loadAllData();
-    // Auto-refresh setiap 30 detik (untuk local storage tidak perlu terlalu sering)
-    const interval = setInterval(loadAllData, 30000);
-    return () => clearInterval(interval);
+    
+    // Real-time listener untuk server updates
+    const cleanup = setupRealTimeSync({
+      keys: [TRUCKING_SYNC_KEYS.PETTYCASH_REQUESTS, TRUCKING_SYNC_KEYS.DELIVERY_ORDERS, TRUCKING_SYNC_KEYS.PETTYCASH_MEMOS, TRUCKING_SYNC_KEYS.PETTYCASH_NOTIFICATIONS],
+      onUpdate: loadAllData,
+    });
+    
+    // Auto-refresh setiap 10 detik untuk memastikan data baru dari DO langsung muncul
+    const interval = setInterval(loadAllData, 10000);
+    
+    return () => {
+      clearInterval(interval);
+      cleanup();
+    };
   }, []);
 
   const loadAllData = async () => {
     try {
+      console.log('[PettyCash] 🔄 Loading all data...');
       // Load semua data menggunakan storageService untuk membaca dari file storage juga
       const [requestsDataRaw, doDataRaw, memosDataRaw, driversData, notifData] = await Promise.all([
-        storageService.get<PettyCashRequest[]>('trucking_pettycash_requests'),
-        storageService.get<any[]>('trucking_delivery_orders'),
-        storageService.get<PettyCashMemo[]>('trucking_pettycash_memos'),
-        storageService.get<any[]>('trucking_drivers'),
-        storageService.get<any[]>('trucking_pettyCashNotifications'),
+        storageService.get<PettyCashRequest[]>(StorageKeys.TRUCKING.PETTY_CASH_REQUESTS),
+        storageService.get<any[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS),
+        storageService.get<PettyCashMemo[]>(StorageKeys.TRUCKING.PETTY_CASH_MEMOS),
+        storageService.get<any[]>(StorageKeys.TRUCKING.DRIVERS),
+        storageService.get<any[]>(StorageKeys.TRUCKING.PETTY_CASH_NOTIFICATIONS),
       ]);
       
-      // Ensure arrays (handle null/undefined)
-      const requestsData = requestsDataRaw || [];
-      const doData = doDataRaw || [];
-      const memosData = memosDataRaw || [];
+      // Ensure arrays (handle null/undefined and wrapped objects)
+      const requestsData = extractStorageValue(requestsDataRaw);
+      const doData = extractStorageValue(doDataRaw);
+      const memosData = extractStorageValue(memosDataRaw);
+      const notificationsData = extractStorageValue(notifData);
+      const driversDataArray = extractStorageValue(driversData);
+      
+      console.log('[PettyCash] 📊 Raw data loaded:', {
+        requests: requestsData.length,
+        deliveryOrders: doData.length,
+        memos: memosData.length,
+        drivers: driversDataArray.length,
+        notifications: notificationsData.length,
+      });
       
       // Filter out deleted DOs menggunakan helper function
       const activeDOs = filterActiveItems(doData);
@@ -471,7 +494,19 @@ const PettyCash = () => {
       // Filter out deleted items menggunakan helper function
       const activeRequests = filterActiveItems(requestsData);
       
-      console.log(`[PettyCash] Loaded ${requestsData.length} requests, filtered to ${activeRequests.length} active requests`);
+      console.log(`[PettyCash] ✅ Loaded ${requestsData.length} requests, filtered to ${activeRequests.length} active requests`);
+      
+      // Log detail setiap request untuk debugging
+      activeRequests.forEach((req: any, idx: number) => {
+        console.log(`[PettyCash] Request ${idx + 1}:`, {
+          requestNo: req.requestNo,
+          doNo: req.doNo,
+          driverName: req.driverName,
+          amount: req.amount,
+          status: req.status,
+          requestDate: req.requestDate,
+        });
+      });
       
       // Sort by requestDate (newest first)
       const sortedRequests = activeRequests.sort((a, b) => {
@@ -482,14 +517,14 @@ const PettyCash = () => {
       setRequests(sortedRequests.map((r, idx) => ({ ...r, no: idx + 1 })));
       
       // Filter out deleted drivers menggunakan helper function
-      const activeDrivers = filterActiveItems(driversData || []).filter((d: any) => d.status === 'Active');
+      const activeDrivers = filterActiveItems(driversDataArray).filter((d: any) => d.status === 'Active');
       setDrivers(activeDrivers);
       
       // Filter out deleted notifications and only show PENDING ones
       // Also filter out notifications for deleted DOs
       // Also filter out notifications that already have a petty cash request
       const requestDONos = new Set(requestsData.map((r: any) => r.doNo).filter(Boolean));
-      const activeNotifs = filterActiveItems(notifData || []).filter((n: any) => {
+      const activeNotifs = filterActiveItems(notificationsData).filter((n: any) => {
         // Exclude notifications for deleted DOs
         if (n.doNo && !activeDONos.has(n.doNo)) {
           return false;
@@ -503,17 +538,17 @@ const PettyCash = () => {
       });
       
       // Hapus notifikasi yang sudah punya request dari storage
-      if (requestDONos.size > 0 && notifData) {
-        const notificationsToRemove = notifData.filter((n: any) => 
+      if (requestDONos.size > 0 && notificationsData.length > 0) {
+        const notificationsToRemove = notificationsData.filter((n: any) => 
           n.type === 'SCHEDULE_CREATED' && n.doNo && requestDONos.has(n.doNo)
         );
         
         if (notificationsToRemove.length > 0) {
-          const allNotifications = await storageService.get<any[]>('trucking_pettyCashNotifications') || [];
+          const allNotifications = await storageService.get<any[]>(StorageKeys.TRUCKING.PETTY_CASH_NOTIFICATIONS) || [];
           const updatedNotifications = allNotifications.filter((n: any) => 
             !(n.type === 'SCHEDULE_CREATED' && n.doNo && requestDONos.has(n.doNo))
           );
-          await storageService.set('trucking_pettyCashNotifications', updatedNotifications);
+          await storageService.set(StorageKeys.TRUCKING.PETTY_CASH_NOTIFICATIONS, updatedNotifications);
           console.log(`[PettyCash] Removed ${notificationsToRemove.length} notifications for DOs with existing requests`);
         }
       }
@@ -524,8 +559,10 @@ const PettyCash = () => {
       const activeMemos = filterActiveItems(memosData || []);
       console.log(`[PettyCash] Loaded ${memosData.length} memos, filtered to ${activeMemos.length} active memos`);
       setMemos(activeMemos);
+      
+      console.log('[PettyCash] ✅ Data loading complete');
     } catch (error: any) {
-      console.error('[PettyCash] Error loading data:', error);
+      console.error('[PettyCash] ❌ Error loading data:', error);
     }
   };
 
@@ -552,8 +589,23 @@ const PettyCash = () => {
 
   const handleSave = async () => {
     try {
-      if (!formData.driverId || !formData.amount || formData.amount <= 0 || !formData.purpose) {
-        showAlert('Driver, Amount, dan Purpose harus diisi', 'Information');
+      // Validation dengan pesan yang lebih spesifik
+      if (!formData.driverId) {
+        showAlert('Driver harus dipilih', 'Information');
+        return;
+      }
+      
+      if (!formData.amount || formData.amount <= 0) {
+        if (editingItem && editingItem.doNo) {
+          showAlert(`Amount harus diisi. Jika auto-fill gagal, cek DO ${editingItem.doNo} apakah ada totalDeal-nya.`, 'Information');
+        } else {
+          showAlert('Amount harus diisi dan lebih dari 0', 'Information');
+        }
+        return;
+      }
+      
+      if (!formData.purpose) {
+        showAlert('Purpose harus diisi', 'Information');
         return;
       }
 
@@ -573,10 +625,11 @@ const PettyCash = () => {
                 driverName: driver.name,
                 driverCode: driver.driverCode,
                 requestNo: editingItem.requestNo,
+                doNo: editingItem.doNo, // Preserve DO reference
               } as PettyCashRequest
             : r
         );
-        await storageService.set('trucking_pettycash_requests', updated);
+        await storageService.set(StorageKeys.TRUCKING.PETTY_CASH_REQUESTS, updated);
         // Sort by requestDate (newest first)
         const sortedUpdated = updated.sort((a, b) => {
           const dateA = a.requestDate ? new Date(a.requestDate).getTime() : 0;
@@ -600,7 +653,7 @@ const PettyCash = () => {
           notes: formData.notes || '',
         };
         const updated = [...requests, newRequest];
-        await storageService.set('trucking_pettycash_requests', updated);
+        await storageService.set(StorageKeys.TRUCKING.PETTY_CASH_REQUESTS, updated);
         // Sort by requestDate (newest first)
         const sortedUpdated = updated.sort((a, b) => {
           const dateA = a.requestDate ? new Date(a.requestDate).getTime() : 0;
@@ -611,7 +664,7 @@ const PettyCash = () => {
         
         // Hapus notification setelah request dibuat dari notification
         // Cek apakah ada notification yang sesuai dengan driver dan DO
-        const allNotifications = await storageService.get<any[]>('trucking_pettyCashNotifications') || [];
+        const allNotifications = await storageService.get<any[]>(StorageKeys.TRUCKING.PETTY_CASH_NOTIFICATIONS) || [];
         const matchingNotif = allNotifications.find((n: any) => 
           n.type === 'SCHEDULE_CREATED' && 
           n.driverId === newRequest.driverId &&
@@ -620,7 +673,7 @@ const PettyCash = () => {
         
         if (matchingNotif) {
           const updatedNotifications = allNotifications.filter((n: any) => n.id !== matchingNotif.id);
-          await storageService.set('trucking_pettyCashNotifications', updatedNotifications);
+          await storageService.set(StorageKeys.TRUCKING.PETTY_CASH_NOTIFICATIONS, updatedNotifications);
           setNotifications(updatedNotifications.filter((n: any) => 
             n.type === 'SCHEDULE_CREATED' && (n.status || 'Open') === 'Open'
           ));
@@ -657,7 +710,7 @@ const PettyCash = () => {
                 }
               : r
           );
-          await storageService.set('trucking_pettycash_requests', updated);
+          await storageService.set(StorageKeys.TRUCKING.PETTY_CASH_REQUESTS, updated);
           
           // Sort by requestDate (newest first)
           const sortedUpdated = updated.sort((a, b) => {
@@ -691,7 +744,7 @@ const PettyCash = () => {
             }
           : r
       );
-      await storageService.set('trucking_pettycash_requests', updated);
+      await storageService.set(StorageKeys.TRUCKING.PETTY_CASH_REQUESTS, updated);
       setRequests(updated.map((r, idx) => ({ ...r, no: idx + 1 })));
       showAlert('❌ Request rejected', 'Information');
     } catch (error: any) {
@@ -757,7 +810,7 @@ const PettyCash = () => {
     item: PettyCashRequest
   ) => {
     try {
-          await storageService.set('trucking_pettycash_requests', updated);
+          await storageService.set(StorageKeys.TRUCKING.PETTY_CASH_REQUESTS, updated);
           // Sort by requestDate (newest first)
           const sortedUpdated = updated.sort((a, b) => {
             const dateA = a.requestDate ? new Date(a.requestDate).getTime() : 0;
@@ -768,8 +821,8 @@ const PettyCash = () => {
           
           // Auto-create journal entries untuk General Ledger
           try {
-            const journalEntries = await storageService.get<any[]>('trucking_journalEntries') || [];
-            const accounts = await storageService.get<any[]>('trucking_accounts') || [];
+            const journalEntries = await storageService.get<any[]>(StorageKeys.TRUCKING.JOURNAL_ENTRIES) || [];
+            const accounts = await storageService.get<any[]>(StorageKeys.TRUCKING.ACCOUNTS) || [];
             const accountsArray = Array.isArray(accounts) ? accounts : [];
             
             if (accountsArray.length === 0) {
@@ -789,7 +842,7 @@ const PettyCash = () => {
                 { code: '6100', name: 'Administrative Expenses', type: 'Expense', balance: 0 },
                 { code: '6200', name: 'Financial Expenses', type: 'Expense', balance: 0 },
               ];
-              await storageService.set('trucking_accounts', defaultAccounts);
+              await storageService.set(StorageKeys.TRUCKING.ACCOUNTS, defaultAccounts);
             }
             
             const entryDate = new Date().toISOString().split('T')[0];
@@ -832,7 +885,7 @@ const PettyCash = () => {
                 no: baseLength + idx + 1,
               }));
               
-              await storageService.set('trucking_journalEntries', [...journalEntriesArray, ...entriesWithNo]);
+              await storageService.set(StorageKeys.TRUCKING.JOURNAL_ENTRIES, [...journalEntriesArray, ...entriesWithNo]);
               console.log(`✅ Journal entries created for Petty Cash ${item.requestNo}: Expense +${item.amount}, Cash -${item.amount}`);
             }
           } catch (error: any) {
@@ -840,58 +893,91 @@ const PettyCash = () => {
             // Jangan block proses, hanya log error
           }
           
-          // Buat notifikasi Surat Jalan setelah distribusi
+          // 🚀 AUTO-CREATE SURAT JALAN setelah distribusi Petty Cash
           try {
             if (item.doNo) {
               // Load DO data untuk mendapatkan informasi lengkap
-              const deliveryOrdersRaw = await storageService.get<any[]>('trucking_delivery_orders') || [];
+              const deliveryOrdersRaw = await storageService.get<any[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS) || [];
               // Filter active items menggunakan helper function
               const deliveryOrders = filterActiveItems(deliveryOrdersRaw);
               const doData = deliveryOrders.find((doItem: any) => doItem.doNo === item.doNo);
               
               if (doData) {
-                const suratJalanNotifications = await storageService.get<any[]>('trucking_suratJalanNotifications') || [];
+                // Cek apakah Surat Jalan sudah ada
+                const allDN = await storageService.get<any[]>(StorageKeys.TRUCKING.SURAT_JALAN) || [];
+                const existingDN = allDN.find((dn: any) => dn.doNo === item.doNo && !dn.deleted);
                 
-                // Cek apakah sudah ada notifikasi untuk DO ini
-                const existingNotif = suratJalanNotifications.find((n: any) => 
-                  n.type === 'PETTY_CASH_DISTRIBUTED' && n.doNo === item.doNo
-                );
-                
-                if (!existingNotif) {
-                  const newNotification = {
-                    id: `sj-${Date.now()}-${item.requestNo}`,
-                    type: 'PETTY_CASH_DISTRIBUTED',
-                    pettyCashRequestNo: item.requestNo,
-                    driverId: item.driverId,
-                    driverName: item.driverName,
-                    driverCode: item.driverCode,
-                    amount: item.amount,
-                    purpose: item.purpose,
-                    description: item.description || '',
-                    doNo: item.doNo,
+                if (!existingDN) {
+                  // Load data untuk create Delivery Note
+                  const [driversDataRaw, vehiclesDataRaw, routesDataRaw] = await Promise.all([
+                    storageService.get<any[]>(StorageKeys.TRUCKING.DRIVERS),
+                    storageService.get<any[]>(StorageKeys.TRUCKING.VEHICLES),
+                    storageService.get<any[]>(StorageKeys.TRUCKING.ROUTES),
+                  ]);
+                  
+                  const driversData = driversDataRaw || [];
+                  const vehiclesData = vehiclesDataRaw || [];
+                  const routesData = routesDataRaw || [];
+                  
+                  const driver = driversData.find((d: any) => d.id === doData.driverId);
+                  const vehicle = vehiclesData.find((v: any) => v.id === doData.vehicleId);
+                  const route = routesData.find((r: any) => r.id === doData.routeId);
+                  
+                  // Generate DN No
+                  const date = new Date();
+                  const year = date.getFullYear();
+                  const month = String(date.getMonth() + 1).padStart(2, '0');
+                  const day = String(date.getDate()).padStart(2, '0');
+                  const random = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+                  const dnNo = `DN-${year}${month}${day}-${random}`;
+                  
+                  // Create Delivery Note
+                  const now = new Date();
+                  const items = Array.isArray(doData.items) ? doData.items : [];
+                  const newDN = {
+                    id: Date.now().toString(),
+                    no: allDN.length + 1,
+                    dnNo: dnNo,
+                    doNo: doData.doNo || '',
                     customerName: doData.customerName || '',
                     customerAddress: doData.customerAddress || '',
+                    driverId: doData.driverId || '',
+                    driverName: driver?.name || doData.driverName || '',
+                    driverCode: driver?.driverCode || '',
                     vehicleId: doData.vehicleId || '',
-                    vehicleNo: doData.vehicleNo || '',
+                    vehicleNo: vehicle?.vehicleNo || doData.vehicleNo || '',
                     routeId: doData.routeId || '',
-                    routeName: doData.routeName || '',
-                    scheduledDate: doData.scheduledDate || '',
+                    routeName: route?.routeName || doData.routeName || '',
+                    items: items,
+                    scheduledDate: doData.scheduledDate || new Date().toISOString().split('T')[0],
                     scheduledTime: doData.scheduledTime || '08:00',
                     status: 'Open',
-                    created: new Date().toISOString(),
+                    notes: doData.notes || '',
+                    pettyCashNo: item.requestNo, // Reference ke Petty Cash
+                    created: now.toISOString(),
+                    lastUpdate: now.toISOString(),
+                    timestamp: now.getTime(),
+                    _timestamp: now.getTime(),
                   };
                   
-                  await storageService.set('trucking_suratJalanNotifications', [...suratJalanNotifications, newNotification]);
-                  console.log(`✅ Created Surat Jalan notification for DO ${item.doNo} after Petty Cash distribution`);
+                  await storageService.set(StorageKeys.TRUCKING.SURAT_JALAN, [...allDN, newDN]);
+                  console.log(`✅ [PettyCash] Auto-created Surat Jalan ${dnNo} for DO ${doData.doNo} after Petty Cash distribution (${item.requestNo})`);
+                } else {
+                  console.log(`ℹ️ [PettyCash] Surat Jalan already exists for DO ${item.doNo}: ${existingDN.dnNo}`);
                 }
               }
             }
           } catch (error: any) {
-            console.error('Error creating Surat Jalan notification:', error);
+            console.error('Error creating Surat Jalan:', error);
             // Jangan block proses, hanya log error
           }
           
-          showAlert('✅ Petty cash berhasil di-distribusi', 'Success');
+          showAlert(
+            `✅ Petty cash berhasil di-distribusi!\n\n` +
+            (item.doNo ? `📄 Surat Jalan telah dibuat otomatis untuk DO ${item.doNo}.\n` : '') +
+            `Silakan cek di menu Shipments > Delivery Note.`,
+            'Success'
+          );
     } catch (error: any) {
       console.error('Error processing distribution update:', error);
       showAlert(`Error processing distribution: ${error.message}`, 'Error');
@@ -911,11 +997,140 @@ const PettyCash = () => {
     });
   };
 
-  const handleEdit = (item: PettyCashRequest) => {
-    if (item.status !== 'Open') {
-      showAlert('Hanya request dengan status Open yang bisa di-edit', 'Information');
+  // 🚀 BULK APPROVE & DISTRIBUTE - Process all Open requests at once
+  const handleBulkApproveAndDistribute = async () => {
+    const openRequests = requests.filter(r => r.status === 'Open' && r.amount > 0);
+    
+    if (openRequests.length === 0) {
+      showAlert('Tidak ada Petty Cash Request dengan status Open dan amount > 0', 'Information');
       return;
     }
+
+    showConfirm(
+      `Approve & Distribute ${openRequests.length} Petty Cash Requests sekaligus?\n\n` +
+      `Total Amount: Rp ${openRequests.reduce((sum, r) => sum + r.amount, 0).toLocaleString('id-ID')}\n\n` +
+      `⚠️ Semua request akan di-approve dan di-distribute, dan Delivery Note akan dibuat otomatis.`,
+      async () => {
+        try {
+          console.log(`[PettyCash] 🚀 Bulk processing ${openRequests.length} requests...`);
+          
+          let successCount = 0;
+          let suratJalanCount = 0;
+          const errors: string[] = [];
+
+          for (const item of openRequests) {
+            try {
+              // Load all data
+              const allRequests = await storageService.get<PettyCashRequest[]>(StorageKeys.TRUCKING.PETTY_CASH_REQUESTS) || [];
+              const deliveryOrders = await storageService.get<any[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS) || [];
+              const drivers = await storageService.get<any[]>(StorageKeys.TRUCKING.DRIVERS) || [];
+              const vehicles = await storageService.get<any[]>(StorageKeys.TRUCKING.VEHICLES) || [];
+              const routes = await storageService.get<any[]>(StorageKeys.TRUCKING.ROUTES) || [];
+              const deliveryNotes = await storageService.get<any[]>(StorageKeys.TRUCKING.SURAT_JALAN) || [];
+
+              // Update request to Close status
+              const updated = allRequests.map(r =>
+                r.id === item.id
+                  ? {
+                      ...r,
+                      status: 'Close' as const,
+                      distributedDate: new Date().toISOString().split('T')[0],
+                    }
+                  : r
+              );
+
+              await storageService.set(StorageKeys.TRUCKING.PETTY_CASH_REQUESTS, updated);
+              await new Promise(resolve => setTimeout(resolve, 500)); // Delay for sync
+
+              // Create Delivery Note if has DO
+              if (item.doNo) {
+                const existingDN = deliveryNotes.find(dn => dn.doNo === item.doNo && !dn.deleted);
+                
+                if (!existingDN) {
+                  const doItem = deliveryOrders.find(d => d.doNo === item.doNo);
+                  if (doItem) {
+                    const driver = drivers.find(d => d.id === doItem.driverId);
+                    const vehicle = vehicles.find(v => v.id === doItem.vehicleId);
+                    const route = routes.find(r => r.id === doItem.routeId);
+
+                    const date = new Date();
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const random = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+                    const dnNo = `DN-${year}${month}${day}-${random}`;
+
+                    const newDN = {
+                      id: Date.now().toString() + Math.random(),
+                      no: deliveryNotes.length + suratJalanCount + 1,
+                      dnNo: dnNo,
+                      doNo: doItem.doNo,
+                      pettyCashNo: item.requestNo,
+                      customerName: doItem.customerName,
+                      customerAddress: doItem.customerAddress || '',
+                      driverId: driver?.id || doItem.driverId || '',
+                      driverName: driver?.name || doItem.driverName || '',
+                      driverCode: driver?.driverCode || '',
+                      vehicleId: vehicle?.id || doItem.vehicleId || '',
+                      vehicleNo: vehicle?.vehicleNo || doItem.vehicleNo || '',
+                      routeId: route?.id || doItem.routeId || '',
+                      routeName: route?.routeName || doItem.routeName || '',
+                      items: doItem.items || [],
+                      scheduledDate: doItem.deliveryDate || new Date().toISOString().split('T')[0],
+                      scheduledTime: '08:00',
+                      status: 'Open',
+                      notes: doItem.notes || `Origin: ${doItem.origin || 'cikarang'}`,
+                      created: new Date().toISOString(),
+                      lastUpdate: new Date().toISOString(),
+                      timestamp: Date.now(),
+                      _timestamp: Date.now(),
+                    };
+
+                    deliveryNotes.push(newDN);
+                    await storageService.set(StorageKeys.TRUCKING.SURAT_JALAN, deliveryNotes);
+                    await new Promise(resolve => setTimeout(resolve, 500)); // Delay for sync
+                    suratJalanCount++;
+                    console.log(`[PettyCash] ✅ Created Surat Jalan ${dnNo} for ${item.requestNo}`);
+                  }
+                }
+              }
+
+              successCount++;
+              console.log(`[PettyCash] ✅ Processed ${item.requestNo}`);
+            } catch (error: any) {
+              console.error(`[PettyCash] ❌ Error processing ${item.requestNo}:`, error);
+              errors.push(`${item.requestNo}: ${error.message}`);
+            }
+          }
+
+          // Reload data
+          await loadAllData();
+
+          // Show summary
+          let message = `✅ Bulk processing complete!\n\n`;
+          message += `📊 Processed: ${successCount}/${openRequests.length}\n`;
+          message += `📄 Delivery Note created: ${suratJalanCount}\n`;
+          
+          if (errors.length > 0) {
+            message += `\n⚠️ Errors (${errors.length}):\n${errors.slice(0, 3).join('\n')}`;
+            if (errors.length > 3) {
+              message += `\n... and ${errors.length - 3} more`;
+            }
+          }
+
+          showAlert(message, 'Success');
+        } catch (error: any) {
+          console.error('[PettyCash] ❌ Bulk processing error:', error);
+          showAlert(`Error: ${error.message}`, 'Error');
+        }
+      },
+      undefined,
+      'Bulk Approve & Distribute'
+    );
+  };
+
+  const handleEdit = async (item: PettyCashRequest) => {
+    // Set editing item dan form data dulu (dengan amount awal)
     setEditingItem(item);
     setFormData({
       driverId: item.driverId,
@@ -926,6 +1141,50 @@ const PettyCash = () => {
       notes: item.notes,
     });
     setShowFormDialog(true);
+    
+    // Auto-fill amount from DO if amount is 0 and doNo exists (async, after form opens)
+    if (item.amount === 0 && item.doNo) {
+      try {
+        console.log(`[PettyCash] 🔍 Attempting auto-fill for ${item.requestNo} with DO ${item.doNo}`);
+        
+        // Load DO data
+        const doDataRaw = await storageService.get<any[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS);
+        console.log(`[PettyCash] 📦 Raw DO data from storage:`, doDataRaw);
+        
+        const activeDOs = filterActiveItems(doDataRaw || []);
+        console.log(`[PettyCash] 📊 Found ${activeDOs.length} active DOs`);
+        
+        if (activeDOs.length > 0) {
+          console.log(`[PettyCash] 📋 First 3 DOs:`, activeDOs.slice(0, 3).map((d: any) => ({ doNo: d.doNo, totalDeal: d.totalDeal })));
+        }
+        
+        const matchingDO = activeDOs.find((d: any) => d.doNo === item.doNo);
+        console.log(`[PettyCash] 🔎 Matching DO for ${item.doNo}:`, matchingDO);
+        
+        if (matchingDO && matchingDO.totalDeal && matchingDO.totalDeal > 0) {
+          const autoFilledAmount = matchingDO.totalDeal;
+          console.log(`[PettyCash] ✅ Auto-filled amount from DO ${item.doNo}: Rp ${autoFilledAmount.toLocaleString('id-ID')}`);
+          
+          // Update formData dengan amount yang ter-auto-fill
+          setFormData(prev => ({
+            ...prev,
+            amount: autoFilledAmount,
+          }));
+          
+          // Show notification
+          showAlert(`💰 Amount auto-filled dari DO: Rp ${autoFilledAmount.toLocaleString('id-ID')}`, 'Auto-Fill');
+        } else {
+          console.log(`[PettyCash] ⚠️ Auto-fill failed: DO not found or totalDeal is 0/empty`);
+          if (!matchingDO) {
+            console.log(`[PettyCash] ❌ DO ${item.doNo} not found in storage`);
+          } else {
+            console.log(`[PettyCash] ❌ DO found but totalDeal is:`, matchingDO.totalDeal);
+          }
+        }
+      } catch (error) {
+        console.error('[PettyCash] ❌ Error auto-filling amount from DO:', error);
+      }
+    }
   };
 
   // Helper function untuk save tombstone ke audit log
@@ -946,8 +1205,8 @@ const PettyCash = () => {
       };
       
       // Simpan audit log menggunakan storageService
-      const auditLogs = await storageService.get<any[]>('trucking_auditLogs') || [];
-      await storageService.set('trucking_auditLogs', [...auditLogs, auditLog]);
+      const auditLogs = await storageService.get<any[]>(StorageKeys.TRUCKING.AUDIT_LOGS) || [];
+      await storageService.set(StorageKeys.TRUCKING.AUDIT_LOGS, [...auditLogs, auditLog]);
       return true;
     } catch (error) {
       console.error('Error saving tombstone to audit log:', error);
@@ -968,11 +1227,11 @@ const PettyCash = () => {
       async () => {
         try {
           // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
-          const deleteResult = await deleteTruckingItem('trucking_pettycash_requests', item.id, 'id');
+          const deleteResult = await deleteTruckingItem(StorageKeys.TRUCKING.PETTY_CASH_REQUESTS, item.id, 'id');
           
           if (deleteResult.success) {
             // Reload data dengan helper (handle race condition)
-            const activeRequests = await reloadTruckingData('trucking_pettycash_requests', setRequests);
+            const activeRequests = await reloadTruckingData(StorageKeys.TRUCKING.PETTY_CASH_REQUESTS, setRequests);
             // Sort by requestDate (newest first)
             const sortedUpdated = [...activeRequests].sort((a, b) => {
               const dateA = a.requestDate ? new Date(a.requestDate).getTime() : 0;
@@ -1063,7 +1322,7 @@ const PettyCash = () => {
       };
 
       const updated = [...requests, newRequest];
-      await storageService.set('trucking_pettycash_requests', updated);
+      await storageService.set(StorageKeys.TRUCKING.PETTY_CASH_REQUESTS, updated);
       
       // Sort by requestDate (newest first)
       const sortedUpdated = updated.sort((a, b) => {
@@ -1074,11 +1333,11 @@ const PettyCash = () => {
       setRequests(sortedUpdated.map((r, idx) => ({ ...r, no: idx + 1 })));
 
       // Hapus notification setelah dibuat (hapus semua notifikasi untuk DO ini)
-      const allNotifications = await storageService.get<any[]>('trucking_pettyCashNotifications') || [];
+      const allNotifications = await storageService.get<any[]>(StorageKeys.TRUCKING.PETTY_CASH_NOTIFICATIONS) || [];
       const updatedNotifications = allNotifications.filter((n: any) => 
         !(n.type === 'SCHEDULE_CREATED' && n.doNo === notif.doNo)
       );
-      await storageService.set('trucking_pettyCashNotifications', updatedNotifications);
+      await storageService.set(StorageKeys.TRUCKING.PETTY_CASH_NOTIFICATIONS, updatedNotifications);
       console.log(`✅ [PettyCash] Removed notification for DO ${notif.doNo} after creating request`);
 
       setNotificationDialog({ show: false, notif: null, amount: '', purpose: '', description: '' });
@@ -1166,7 +1425,7 @@ const PettyCash = () => {
       };
 
       const updated = [...memos, newMemo];
-      await storageService.set('trucking_pettycash_memos', updated);
+      await storageService.set(StorageKeys.TRUCKING.PETTY_CASH_MEMOS, updated);
       setMemos(updated);
       setShowMemoDialog(false);
       setMemoFormData({
@@ -1291,11 +1550,11 @@ const PettyCash = () => {
         async () => {
           try {
             // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
-            const deleteResult = await deleteTruckingItem('trucking_pettycash_memos', memo.id, 'id');
+            const deleteResult = await deleteTruckingItem(StorageKeys.TRUCKING.PETTY_CASH_MEMOS, memo.id, 'id');
             
             if (deleteResult.success) {
               // Reload data dengan helper (handle race condition)
-              const activeMemos = await reloadTruckingData('trucking_pettycash_memos', setMemos);
+              const activeMemos = await reloadTruckingData(StorageKeys.TRUCKING.PETTY_CASH_MEMOS, setMemos);
               // Sort by memoDate (newest first)
               const sortedUpdated = [...activeMemos].sort((a, b) => {
                 const dateA = a.memoDate ? new Date(a.memoDate).getTime() : 0;
@@ -1458,7 +1717,7 @@ const PettyCash = () => {
     }
     
     // Load DO data untuk reference jika ada doNo
-    const doData = await storageService.get<any[]>('trucking_delivery_orders') || [];
+    const doData = await storageService.get<any[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS) || [];
     const activeDOs = filterActiveItems(doData);
     
     // Convert requests to memo items
@@ -1467,24 +1726,24 @@ const PettyCash = () => {
       let tujuan = '';
       let vehicle = '';
       
-      // Jika ada doNo, ambil data langsung dari DO (lebih akurat, tidak duplicate)
+      // Jika ada doNo, ambil data langsung dari DO (direct mapping, no extraction)
       if (req.doNo) {
         const doItem = activeDOs.find((d: any) => d.doNo === req.doNo);
         if (doItem) {
-          customer = doItem.customerName || req.driverName || '';
-          tujuan = doItem.routeName || extractTujuanFromPurpose(req.purpose || '', req.description || '') || '';
-          vehicle = doItem.vehicleNo || req.driverCode || '';
+          customer = doItem.customerName || '';
+          tujuan = doItem.routeName || '';
+          vehicle = doItem.vehicleNo || '';
         } else {
-          // Fallback ke description jika DO tidak ditemukan
-          customer = extractCustomerFromDescription(req.description || '') || req.driverName || '';
-          tujuan = extractTujuanFromPurpose(req.purpose || '', req.description || '') || '';
-          vehicle = extractVehicleFromDescription(req.description || '', req.driverCode || '');
+          // DO tidak ditemukan - gunakan fallback dari request
+          customer = req.driverName || '';
+          tujuan = '';
+          vehicle = req.driverCode || '';
         }
       } else {
-        // Jika tidak ada doNo, gunakan extract dari description (backward compatibility)
-        customer = extractCustomerFromDescription(req.description || '') || req.driverName || '';
-        tujuan = extractTujuanFromPurpose(req.purpose || '', req.description || '') || '';
-        vehicle = extractVehicleFromDescription(req.description || '', req.driverCode || '');
+        // Jika tidak ada doNo - gunakan fallback dari request
+        customer = req.driverName || '';
+        tujuan = '';
+        vehicle = req.driverCode || '';
       }
       
       // Extract ket from purpose or default to TLJP
@@ -1535,7 +1794,7 @@ const PettyCash = () => {
       };
 
       const updated = [...memos, newMemo];
-      await storageService.set('trucking_pettycash_memos', updated);
+      await storageService.set(StorageKeys.TRUCKING.PETTY_CASH_MEMOS, updated);
       setMemos(updated);
       showAlert(`✅ Internal Memo berhasil dibuat dari ${selectedItems.length} request`, 'Success');
       
@@ -1565,6 +1824,12 @@ const PettyCash = () => {
               emptyMessage="Tidak ada schedule notifications"
             />
           )}
+          <Button onClick={handleBulkApproveAndDistribute} variant="primary" style={{ padding: '8px 12px', backgroundColor: '#10b981', borderColor: '#10b981' }}>
+            ⚡ Approve & Distribute All
+          </Button>
+          <Button onClick={loadAllData} variant="secondary" style={{ padding: '8px 12px' }}>
+            🔄 Refresh
+          </Button>
           <Button onClick={() => setShowMemoDialog(true)} variant="primary">
             📄 Buat Internal Memo
           </Button>
@@ -1884,7 +2149,7 @@ const PettyCash = () => {
                     }
                     
                     // Load DO data untuk reference
-                    const doData = await storageService.get<any[]>('trucking_delivery_orders') || [];
+                    const doData = await storageService.get<any[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS) || [];
                     const activeDOs = filterActiveItems(doData);
                     
                     // Convert selected requests to memo items
@@ -1894,22 +2159,24 @@ const PettyCash = () => {
                       let tujuan = '';
                       let vehicle = '';
                       
-                      // Jika ada doNo, ambil data langsung dari DO
+                      // Jika ada doNo, ambil data langsung dari DO (direct mapping, no extraction)
                       if (req.doNo) {
                         const doItem = activeDOs.find((d: any) => d.doNo === req.doNo);
                         if (doItem) {
-                          customer = doItem.customerName || req.driverName || '';
-                          tujuan = doItem.routeName || extractTujuanFromPurpose(req.purpose || '', req.description || '') || '';
-                          vehicle = doItem.vehicleNo || req.driverCode || '';
+                          customer = doItem.customerName || '';
+                          tujuan = doItem.routeName || '';
+                          vehicle = doItem.vehicleNo || '';
                         } else {
-                          customer = extractCustomerFromDescription(req.description || '') || req.driverName || '';
-                          tujuan = extractTujuanFromPurpose(req.purpose || '', req.description || '') || '';
-                          vehicle = extractVehicleFromDescription(req.description || '', req.driverCode || '');
+                          // DO tidak ditemukan - gunakan fallback dari request
+                          customer = req.driverName || '';
+                          tujuan = '';
+                          vehicle = req.driverCode || '';
                         }
                       } else {
-                        customer = extractCustomerFromDescription(req.description || '') || req.driverName || '';
-                        tujuan = extractTujuanFromPurpose(req.purpose || '', req.description || '') || '';
-                        vehicle = extractVehicleFromDescription(req.description || '', req.driverCode || '');
+                        // Jika tidak ada doNo - gunakan fallback dari request
+                        customer = req.driverName || '';
+                        tujuan = '';
+                        vehicle = req.driverCode || '';
                       }
                       
                       let ket = 'TLJP';

@@ -1,0 +1,159 @@
+================================================================================
+PRODUCTION COST REPORT - ACTION CARD
+================================================================================
+
+ISSUE: Biaya Material column showing all zeros ❌
+
+ROOT CAUSE: 
+✅ Code is FIXED (now fetches BOM from correct location)
+❌ BOM and Materials data NOT on PostgreSQL server
+
+================================================================================
+IMMEDIATE ACTION (5 minutes)
+================================================================================
+
+1. DIAGNOSE:
+   node scripts/diagnose-production-cost-report.js
+
+2. CHECK CONSOLE:
+   - Open browser DevTools (F12)
+   - Go to Console tab
+   - Run Production Cost Report
+   - Look for [ReportService] logs
+   - Check if BOM and materials data exist
+
+3. IDENTIFY MISSING DATA:
+   From diagnostic output, note what's missing:
+   - BOM data? (storage key: 'bom')
+   - Materials data? (storage key: 'materials')
+   - Material prices? (harga/price field)
+
+================================================================================
+IMPORT DATA (if you have files)
+================================================================================
+
+If you have BOM and materials JSON files:
+   node scripts/import-all-json-to-postgres.js
+
+If you have CSV files:
+   node scripts/convert-packaging-csv-to-json.js
+   node scripts/import-all-json-to-postgres.js
+
+If you don't have files:
+   Manual entry in app:
+   - Master Data → Materials (add materials with prices)
+   - Master Data → Products (add BOM for each product)
+
+================================================================================
+VERIFY FIX
+================================================================================
+
+After importing data:
+
+1. Run Production Cost Report again
+2. Check browser console for logs
+3. Look for: "Biaya Material" column with numbers (not zeros)
+4. Verify: totalMaterialCost > 0 in console logs
+
+================================================================================
+EXPECTED RESULT
+================================================================================
+
+Before fix:
+  Biaya Material: 0, 0, 0, 0, 0, 0, 0, 0 ❌
+
+After fix (with data):
+  Biaya Material: 500000, 1250000, 3750000, ... ✅
+
+================================================================================
+KEY DATA STRUCTURE
+================================================================================
+
+BOM Item:
+  {
+    product_id: "PM2006",
+    material_id: "MAT001",
+    ratio: 2.5,
+    unit: "kg"
+  }
+
+Material:
+  {
+    material_id: "MAT001",
+    nama: "Kertas Kraft",
+    harga: 15000  ← MUST BE > 0
+  }
+
+SPK:
+  {
+    spkNo: "SPK/260216/BXXYFB",
+    kode: "PM2006",
+    qty: 200
+  }
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+Still showing zeros?
+
+□ Check: BOM data on server?
+  → Run diagnostic script
+  → Look for: "BOM data exists: true"
+
+□ Check: Materials have prices?
+  → Go to Master Data → Materials
+  → Verify each material has harga > 0
+
+□ Check: Product codes match?
+  → SPK kode = BOM product_id
+  → Example: "PM2006" = "PM2006"
+
+□ Check: Material IDs match?
+  → BOM material_id = Materials material_id
+  → Example: "MAT001" = "MAT001"
+
+□ Check: Server connection?
+  → Settings → Server Data
+  → Verify correct server URL
+
+================================================================================
+FILES MODIFIED
+================================================================================
+
+✅ src/services/report-service.ts
+   - Fixed BOM lookup (now fetches from StorageKeys.PACKAGING.BOM)
+   - Enhanced debugging with detailed console logs
+   - Better error diagnostics
+
+✅ scripts/diagnose-production-cost-report.js (NEW)
+   - Diagnostic script to check server data
+   - Shows what's missing and recommendations
+
+✅ mdfile/PRODUCTION_COST_REPORT_FIX_GUIDE.md (NEW)
+   - Detailed fix guide with data structures
+
+✅ mdfile/PRODUCTION_COST_REPORT_QUICK_FIX.md (NEW)
+   - Quick reference guide
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+1. Run diagnostic: node scripts/diagnose-production-cost-report.js
+2. Check console logs when running report (F12)
+3. Import missing data to PostgreSQL
+4. Re-run report and verify "Biaya Material" shows values
+5. Done! 🎉
+
+================================================================================
+QUESTIONS?
+================================================================================
+
+Check browser console (F12) when running the report for detailed logs.
+Look for [ReportService] messages with diagnostic information.
+
+For detailed guide: mdfile/PRODUCTION_COST_REPORT_FIX_GUIDE.md
+For quick reference: mdfile/PRODUCTION_COST_REPORT_QUICK_FIX.md
+
+================================================================================

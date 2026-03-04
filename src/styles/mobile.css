@@ -224,6 +224,21 @@
     font-size: 11px !important;
   }
   
+  /* Sticky Card Header - untuk tab containers dan main headers */
+  .card[style*="position: 'sticky'"],
+  .card[style*="position: sticky"] {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 99 !important;
+    margin-bottom: 16px !important;
+  }
+  
+  /* Tab container dalam sticky card - pastikan scrollable */
+  .card[style*="position: sticky"] .tab-container {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  
   /* ============================================
      TABLES - Mobile Optimized (Lebih Kecil)
      ============================================ */
@@ -306,6 +321,31 @@
   .button-group button,
   .btn-group button {
     width: 100%;
+  }
+  
+  /* Pagination Controls - Mobile Optimized */
+  div[style*="display: 'flex'"][style*="justifyContent: 'center'"][style*="flexWrap: 'wrap'"],
+  div[style*="display: flex"][style*="justifyContent: center"][style*="flexWrap: wrap"] {
+    gap: 6px !important;
+    margin-top: 12px !important;
+  }
+  
+  /* Pagination buttons - smaller on mobile */
+  div[style*="display: 'flex'"][style*="justifyContent: 'center'"][style*="flexWrap: 'wrap'"] button,
+  div[style*="display: flex"][style*="justifyContent: center"][style*="flexWrap: wrap"] button {
+    padding: 4px 8px !important;
+    font-size: 10px !important;
+    min-height: 28px !important;
+    min-width: 28px !important;
+  }
+  
+  /* Pagination page number buttons */
+  div[style*="display: 'flex'"][style*="justifyContent: 'center'"][style*="flexWrap: 'wrap'"] button[style*="padding: '6px 10px'"],
+  div[style*="display: flex"][style*="justifyContent: center"][style*="flexWrap: wrap"] button[style*="padding: 6px 10px"] {
+    padding: 4px 6px !important;
+    font-size: 9px !important;
+    min-height: 26px !important;
+    min-width: 26px !important;
   }
   
   /* ============================================
@@ -618,6 +658,31 @@
   
   .stat-value {
     font-size: 24px;
+  }
+  
+  /* Pagination Controls - Extra Small Mobile */
+  div[style*="display: 'flex'"][style*="justifyContent: 'center'"][style*="flexWrap: 'wrap'"],
+  div[style*="display: flex"][style*="justifyContent: center"][style*="flexWrap: wrap"] {
+    gap: 4px !important;
+    margin-top: 8px !important;
+  }
+  
+  /* Pagination buttons - even smaller on extra small mobile */
+  div[style*="display: 'flex'"][style*="justifyContent: 'center'"][style*="flexWrap: 'wrap'"] button,
+  div[style*="display: flex"][style*="justifyContent: center"][style*="flexWrap: wrap"] button {
+    padding: 3px 6px !important;
+    font-size: 8px !important;
+    min-height: 24px !important;
+    min-width: 24px !important;
+  }
+  
+  /* Pagination page number buttons - extra small */
+  div[style*="display: 'flex'"][style*="justifyContent: 'center'"][style*="flexWrap: 'wrap'"] button[style*="padding: '6px 10px'"],
+  div[style*="display: flex"][style*="justifyContent: center"][style*="flexWrap: wrap"] button[style*="padding: 6px 10px"] {
+    padding: 3px 5px !important;
+    font-size: 7px !important;
+    min-height: 22px !important;
+    min-width: 22px !important;
   }
   
 }

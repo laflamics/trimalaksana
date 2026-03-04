@@ -1,3 +1,4 @@
+import { ensureLogoIsBase64 } from '../utils/hardcoded-logo';
 /**
  * Template Struktur PDF Purchase Request (PR)
  * Mirip dengan PO template, tapi untuk Purchase Request
@@ -34,7 +35,7 @@ export function generatePRHtml({
 }: PRHtmlParams): string {
   // Logo harus sudah base64 string (dari component yang memanggil template ini)
   // Fallback ke placeholder base64 jika tidak ada
-  const logoSrc = logo || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzAwN2JmZiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LXNpemU9IjE0IiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkxPR088L3RleHQ+PC9zdmc+';
+  const logoSrc = ensureLogoIsBase64(logo);
   
   // Format tanggal: DD/MM/YYYY
   const formatDate = (dateStr: string | undefined): string => {
@@ -389,7 +390,7 @@ export function generatePRHtml({
     <div class="header-center-text">
       <div class="company-name">${company.companyName || 'PT TRIMA LAKSANA JAYA PRATAMA'}</div>
       <div class="company-address">
-        ${(company.address || '').split(',').map((line: string) => `<span class="company-address-line">${line.trim()}</span>`).join('')}
+        ${(company.address || 'Jl. Raya Cikarang Cibarusah Kp. Kukun RT 11/06 Desa Ciantra Kecamatan Cikarang Selatan Kabupaten Bekasi').split(',').map((line: string) => `<span class="company-address-line">${line.trim()}</span>`).join('')}
       </div>
     </div>
     <div class="header-right"></div>

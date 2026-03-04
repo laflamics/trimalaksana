@@ -1,15 +1,104 @@
 version: '3.8'
 
+networks:
+  trimalaksana-network:
+    driver: bridge
+
 services:
-  storage-server:
-    build: .
-    ports:
-      - "0.0.0.0:8888:8888"  # Bind to all interfaces (localhost + network)
-    volumes:
-      - ./data:/app/data
-      - ./updates:/app/updates
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: trimalaksana-postgres
     environment:
-      - PORT=8888
+      POSTGRES_USER: trimalaksana
+      POSTGRES_PASSWORD: trimalaksana123
+      POSTGRES_DB: trimalaksana_db
+    ports:
+      - "0.0.0.0:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trimalaksana"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - trimalaksana-network
     restart: unless-stopped
-    network_mode: bridge
+
+  # MinIO Object Storage
+  minio:
+    image: minio/minio:latest
+    container_name: trimalaksana-minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "0.0.0.0:9000:9000"
+      - "0.0.0.0:9001:9001"
+    volumes:
+      - minio_data:/minio_data
+    command: server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - trimalaksana-network
+    restart: unless-stopped
+
+  # pgAdmin for Database Management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: trimalaksana-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@trimalaksana.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "0.0.0.0:5051:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - trimalaksana-network
+    restart: unless-stopped
+
+  # Node.js Storage Server (PostgreSQL + MinIO Only)
+  storage-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: docker-storage-server-1
+    ports:
+      - "0.0.0.0:9999:8888"  # Fresh server on port 9999
+    environment:
+      PORT: 8888
+      NODE_ENV: production
+      DB_USER: trimalaksana
+      DB_PASSWORD: trimalaksana123
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: trimalaksana_db
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin123
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - trimalaksana-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  minio_data:
 

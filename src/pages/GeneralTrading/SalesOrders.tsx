@@ -3,16 +3,19 @@ import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
-import { storageService } from '../../services/storage';
+import DateRangeFilter from '../../components/DateRangeFilter';
+import { storageService, StorageKeys } from '../../services/storage';
 import { deleteGTItem, reloadGTData, filterActiveItems } from '../../utils/gt-delete-helper';
 import { openPrintWindow, focusAppWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
 import { useDialog } from '../../hooks/useDialog';
+import { useLanguage } from '../../hooks/useLanguage';
 import { generateQuotationHtml } from '../../pdf/quotation-pdf-template';
 import { PageSizeDialog, PageSize } from '../../components/PageSizeDialog';
 import { logCreate, logUpdate, logDelete } from '../../utils/activity-logger';
+import BlobService from '../../services/blob-service';
 import '../../styles/common.css';
 import '../../styles/compact.css';
 
@@ -44,7 +47,8 @@ interface SalesOrder {
   globalSpecNote?: string;
   items: SOItem[];
   discountPercent?: number; // Discount percentage untuk quotation
-  signatureBase64?: string; // Base64 signature image untuk quotation
+  signatureBase64?: string; // Base64 signature image (deprecated - for backward compatibility)
+  signatureId?: string; // MinIO fileId for signature (new)
   signatureName?: string; // Nama penandatangan
   signatureTitle?: string; // Jabatan/title penandatangan
   matchedSoNo?: string; // SO No yang di-match dengan quotation (jika sudah di-match)
@@ -390,6 +394,7 @@ const SOActionMenu = ({
 };
 
 const SalesOrders = () => {
+  const { t } = useLanguage();
   const [orders, setOrders] = useState<SalesOrder[]>([]);
   const [quotations, setQuotations] = useState<SalesOrder[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -437,6 +442,7 @@ const SalesOrders = () => {
     globalSpecNote: '',
     discountPercent: 0,
     signatureBase64: '',
+    signatureId: '',
     signatureName: '',
     signatureTitle: '',
   });
@@ -541,7 +547,7 @@ const SalesOrders = () => {
 
       // Save ke gt_products
       const updatedProducts = [...products, newProduct];
-      await storageService.set('gt_products', updatedProducts);
+      await storageService.set(StorageKeys.GENERAL_TRADING.PRODUCTS, updatedProducts);
       setProducts(updatedProducts);
 
       // Langsung select product ini ke quotation item
@@ -619,7 +625,7 @@ const SalesOrders = () => {
   // Helper functions untuk save/load signature dari localStorage
   const saveSignatureToLocalStorage = (signatureBase64: string, signatureName: string, signatureTitle: string) => {
     try {
-      localStorage.setItem('gt_quotation_last_signature', JSON.stringify({
+      localStorage.setItem(StorageKeys.GENERAL_TRADING.QUOTATION_LAST_SIGNATURE, JSON.stringify({
         signatureBase64,
         signatureName,
         signatureTitle,
@@ -631,7 +637,7 @@ const SalesOrders = () => {
 
   const loadSignatureFromLocalStorage = () => {
     try {
-      const saved = localStorage.getItem('gt_quotation_last_signature');
+      const saved = localStorage.getItem(StorageKeys.GENERAL_TRADING.QUOTATION_LAST_SIGNATURE);
       if (saved) {
         return JSON.parse(saved);
       }
@@ -913,12 +919,12 @@ const SalesOrders = () => {
   }, [showHiddenPopup]);
 
   const loadOrders = async () => {
-    let data = await storageService.get<SalesOrder[]>('gt_salesOrders') || [];
+    let data = await storageService.get<SalesOrder[]>(StorageKeys.GENERAL_TRADING.SALES_ORDERS) || [];
     
     // If we have very few orders, try force reload from file
     if (data.length <= 1) {
       console.log('[GT SalesOrders] Few orders detected, trying force reload from file...');
-      const fileData = await storageService.forceReloadFromFile<SalesOrder[]>('gt_salesOrders');
+      const fileData = await storageService.forceReloadFromFile<SalesOrder[]>(StorageKeys.GENERAL_TRADING.SALES_ORDERS);
       if (fileData && Array.isArray(fileData) && fileData.length > data.length) {
         console.log(`[GT SalesOrders] Force reload successful: ${fileData.length} orders from file`);
         data = fileData;
@@ -944,14 +950,14 @@ const SalesOrders = () => {
   };
 
   const loadQuotations = async () => {
-    const data = await storageService.get<SalesOrder[]>('gt_quotations') || [];
+    const data = await storageService.get<SalesOrder[]>(StorageKeys.GENERAL_TRADING.QUOTATIONS) || [];
     // CRITICAL: Filter deleted items using helper function
     const activeQuotations = filterActiveItems(data);
     setQuotations(activeQuotations);
   };
 
   const loadDeliveries = async () => {
-    const data = await storageService.get<any[]>('gt_delivery') || [];
+    const data = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.DELIVERY) || [];
     // Filter out deleted items menggunakan helper function
     const activeDeliveries = filterActiveItems(data);
     setDeliveries(activeDeliveries);
@@ -1024,12 +1030,12 @@ const SalesOrders = () => {
   };
 
   const loadCustomers = async () => {
-    let data = await storageService.get<Customer[]>('gt_customers') || [];
+    let data = await storageService.get<Customer[]>(StorageKeys.GENERAL_TRADING.CUSTOMERS) || [];
     
     // If we have very few customers, try force reload from file
     if (data.length <= 1) {
       console.log('[GT SalesOrders] Few customers detected, trying force reload from file...');
-      const fileData = await storageService.forceReloadFromFile<Customer[]>('gt_customers');
+      const fileData = await storageService.forceReloadFromFile<Customer[]>(StorageKeys.GENERAL_TRADING.CUSTOMERS);
       if (fileData && Array.isArray(fileData) && fileData.length > data.length) {
         console.log(`[GT SalesOrders] Force reload successful: ${fileData.length} customers from file`);
         data = fileData;
@@ -1042,12 +1048,12 @@ const SalesOrders = () => {
   };
 
   const loadProducts = async () => {
-    let dataRaw = await storageService.get<Product[]>('gt_products') || [];
+    let dataRaw = await storageService.get<Product[]>(StorageKeys.GENERAL_TRADING.PRODUCTS) || [];
     
     // If we have very few products, try force reload from file
     if (dataRaw.length <= 1) {
       console.log('[GT SalesOrders] Few products detected, trying force reload from file...');
-      const fileData = await storageService.forceReloadFromFile<Product[]>('gt_products');
+      const fileData = await storageService.forceReloadFromFile<Product[]>(StorageKeys.GENERAL_TRADING.PRODUCTS);
       if (fileData && Array.isArray(fileData) && fileData.length > dataRaw.length) {
         console.log(`[GT SalesOrders] Force reload successful: ${fileData.length} products from file`);
         dataRaw = fileData;
@@ -1061,9 +1067,10 @@ const SalesOrders = () => {
 
   // Filtered customers for autocomplete
   const filteredCustomers = useMemo(() => {
-    if (!customerSearch) return customers;
+    if (!customerSearch) return Array.isArray(customers) ? customers : [];
+    const customersArray = Array.isArray(customers) ? customers : [];
     const query = customerSearch.toLowerCase();
-    return customers
+    return customersArray
       .filter(c => 
         (c.nama || '').toLowerCase().includes(query) || 
         (c.kode || '').toLowerCase().includes(query)
@@ -1073,7 +1080,7 @@ const SalesOrders = () => {
   // Filtered products for dialog with limit for performance
   const filteredProductsForDialog = useMemo(() => {
     // Pastikan products sudah di-filter deleted items (sudah dilakukan di loadProducts)
-    let filtered = products;
+    let filtered = Array.isArray(products) ? products : [];
     if (productDialogSearch) {
       const query = productDialogSearch.toLowerCase();
       filtered = products.filter(p => {
@@ -1121,9 +1128,10 @@ const SalesOrders = () => {
 
   // Filtered customers for quotation autocomplete
   const filteredQuotationCustomers = useMemo(() => {
-    if (!quotationCustomerSearch) return customers;
+    if (!quotationCustomerSearch) return Array.isArray(customers) ? customers : [];
+    const customersArray = Array.isArray(customers) ? customers : [];
     const query = quotationCustomerSearch.toLowerCase();
-    return customers
+    return customersArray
       .filter(c => 
         (c.nama || '').toLowerCase().includes(query) || 
         (c.kode || '').toLowerCase().includes(query)
@@ -1134,9 +1142,10 @@ const SalesOrders = () => {
   const getFilteredQuotationProducts = useMemo(() => {
     return (lineIndex: number) => {
       const search = (quotationProductSearch && quotationProductSearch[lineIndex]) || '';
-      if (!search) return products;
+      if (!search) return Array.isArray(products) ? products : [];
+      const productsArray = Array.isArray(products) ? products : [];
       const query = search.toLowerCase();
-      return products
+      return productsArray
         .filter(p => 
           (p.nama || '').toLowerCase().includes(query) ||
           (p.kode || '').toLowerCase().includes(query) ||
@@ -1249,7 +1258,8 @@ const SalesOrders = () => {
         item.total = 0;
         setProductInputValue(prev => ({ ...prev, [index]: '' }));
       } else {
-        const product = products.find(p => 
+        const productsArray = Array.isArray(products) ? products : [];
+        const product = productsArray.find(p => 
           (p.product_id || p.kode) === value || p.nama === value
         );
         if (product) {
@@ -1403,7 +1413,8 @@ const SalesOrders = () => {
           setQuotationProductSearch(prevSearch => ({ ...prevSearch, [index]: '' }));
         } else {
           // Sama seperti handleUpdateItem di SO
-          const product = products.find(p => 
+          const productsArray = Array.isArray(products) ? products : [];
+          const product = productsArray.find(p => 
             (p.product_id || p.kode) === value || p.nama === value
           );
           if (product) {
@@ -1504,6 +1515,7 @@ const SalesOrders = () => {
       globalSpecNote: quotation.globalSpecNote || '',
       discountPercent: quotation.discountPercent || 0,
       signatureBase64: quotation.signatureBase64 || '',
+      signatureId: quotation.signatureId || '',
       signatureName: quotation.signatureName || '',
       signatureTitle: quotation.signatureTitle || '',
     });
@@ -1524,15 +1536,16 @@ const SalesOrders = () => {
       showAlert('Please add at least one product', 'Validation Error');
       return;
     }
-    if (quotationFormData.items.some(item => !item.productId || item.qty <= 0)) {
+    if ((Array.isArray(quotationFormData.items) && quotationFormData.items.some(item => !item.productId || item.qty <= 0)) || false) {
       showAlert('Please fill all product fields and ensure qty > 0', 'Validation Error');
       return;
     }
     
     // Validasi: semua item harus ada di master products
-    const invalidItems = quotationFormData.items.filter(item => {
+    const productsArray = Array.isArray(products) ? products : [];
+    const invalidItems = (Array.isArray(quotationFormData.items) ? quotationFormData.items : []).filter(item => {
       if (!item.productId) return false; // Skip jika kosong (sudah di-validasi di atas)
-      const product = products.find(p => 
+      const product = productsArray.find(p => 
         (p.product_id || p.kode) === item.productId || 
         p.nama === item.productName
       );
@@ -1576,6 +1589,7 @@ const SalesOrders = () => {
                 globalSpecNote: quotationFormData.globalSpecNote,
                 discountPercent: quotationFormData.discountPercent || 0,
                 signatureBase64: finalSignatureBase64,
+                signatureId: quotationFormData.signatureId,
                 signatureName: finalSignatureName,
                 signatureTitle: finalSignatureTitle,
                 timestamp: Date.now(),
@@ -1584,7 +1598,7 @@ const SalesOrders = () => {
               }
             : q
         );
-        await storageService.set('gt_quotations', updated);
+        await storageService.set(StorageKeys.GENERAL_TRADING.QUOTATIONS, updated);
         setQuotations(updated);
         showAlert(`Quotation ${editingQuotation.soNo} updated successfully`, 'Success');
       } else {
@@ -1608,6 +1622,7 @@ const SalesOrders = () => {
           globalSpecNote: quotationFormData.globalSpecNote,
           discountPercent: quotationFormData.discountPercent || 0,
           signatureBase64: finalSignatureBase64,
+          signatureId: quotationFormData.signatureId,
           signatureName: finalSignatureName,
           signatureTitle: finalSignatureTitle,
         };
@@ -1621,7 +1636,7 @@ const SalesOrders = () => {
         
         // Save to quotations storage (terpisah dari SO)
         const updated = [...quotationsArray, quotationData];
-        await storageService.set('gt_quotations', updated);
+        await storageService.set(StorageKeys.GENERAL_TRADING.QUOTATIONS, updated);
         setQuotations(updated);
         showAlert(`Quotation ${quotationNo} created successfully`, 'Success');
       }
@@ -1646,6 +1661,7 @@ const SalesOrders = () => {
         globalSpecNote: '',
         discountPercent: 0,
         signatureBase64: '',
+        signatureId: '',
         signatureName: '',
         signatureTitle: '',
       });
@@ -1670,7 +1686,7 @@ const SalesOrders = () => {
       const logoBase64 = await loadLogoAsBase64();
       
       // Load company data dari storage
-      const companyData = await storageService.get<any>('gt_company') || {};
+      const companyData = await storageService.get<any>(StorageKeys.GENERAL_TRADING.COMPANY_SETTINGS) || {};
       const company = {
         companyName: companyData.companyName || 'PT. TRIMA LAKSANA JAYA PRATAMA',
         address: companyData.address || 'Jl. Raya Cikarang Cibarusah Km. 10',
@@ -1722,11 +1738,20 @@ const SalesOrders = () => {
       
       // Jika ada signature, inject ke HTML
       let finalHtml = html;
-      if (quotation.signatureBase64) {
+      let signatureImageSrc = '';
+      
+      // Support both old base64 and new fileId
+      if (quotation.signatureId) {
+        signatureImageSrc = BlobService.getDownloadUrl(quotation.signatureId, 'general-trading');
+      } else if (quotation.signatureBase64) {
+        signatureImageSrc = quotation.signatureBase64;
+      }
+      
+      if (signatureImageSrc) {
         // Replace signature box di template dengan signature yang di-upload
         // Signature image di atas garis, nama dan title di bawah garis
         const signatureHtml = `<div class="signature-box">
-            <img src="${quotation.signatureBase64}" alt="Signature" class="signature-image" />
+            <img src="${signatureImageSrc}" alt="Signature" class="signature-image" />
             <div class="signature-line">
               <div class="signature-name">${quotation.signatureName || company.picPurchasingName}</div>
               <div class="signature-title">${quotation.signatureTitle || 'Direktur Utama'}</div>
@@ -1754,7 +1779,7 @@ const SalesOrders = () => {
       const logoBase64 = await loadLogoAsBase64();
       
       // Load company data dari storage
-      const companyData = await storageService.get<any>('gt_company') || {};
+      const companyData = await storageService.get<any>(StorageKeys.GENERAL_TRADING.COMPANY_SETTINGS) || {};
       const companyName = companyData.companyName || 'PT. TRIMA LAKSANA JAYA PRATAMA';
       const companyAddress = companyData.address || 'Jl. Raya Cikarang Cibarusah Km. 10';
       const companyPhone = companyData.phone || '021 8982 3556';
@@ -2107,19 +2132,21 @@ const SalesOrders = () => {
   // Handle Match SO dengan Quotation
   const handleMatchSO = async (quotation: SalesOrder, soNo: string) => {
     try {
-      const so = orders.find(o => o.soNo.trim().toUpperCase() === soNo.trim().toUpperCase());
+      const ordersArray = Array.isArray(orders) ? orders : [];
+      const so = ordersArray.find(o => o.soNo.trim().toUpperCase() === soNo.trim().toUpperCase());
       if (!so) {
         showAlert(`SO No "${soNo}" tidak ditemukan!`, 'Validation Error');
         return;
       }
 
       // Update quotation dengan matchedSoNo
-      const updatedQuotations = quotations.map(q => 
+      const quotationsArray = Array.isArray(quotations) ? quotations : [];
+      const updatedQuotations = quotationsArray.map(q => 
         q.id === quotation.id 
           ? { ...q, matchedSoNo: soNo }
           : q
       );
-      await storageService.set('gt_quotations', updatedQuotations);
+      await storageService.set(StorageKeys.GENERAL_TRADING.QUOTATIONS, updatedQuotations);
       setQuotations(updatedQuotations);
       setShowMatchSODialog(null);
       showAlert(`Quotation ${quotation.soNo} berhasil di-match dengan SO ${soNo}`, 'Success');
@@ -2159,16 +2186,17 @@ const SalesOrders = () => {
 
       // Save SO
       const updatedOrders = [...ordersArray, newSO];
-      await storageService.set('gt_salesOrders', updatedOrders);
+      await storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updatedOrders);
       setOrders(updatedOrders);
 
       // Update quotation dengan matchedSoNo
-      const updatedQuotations = quotations.map(q => 
+      const quotationsArray = Array.isArray(quotations) ? quotations : [];
+      const updatedQuotations = quotationsArray.map(q => 
         q.id === quotation.id 
           ? { ...q, matchedSoNo: soNo }
           : q
       );
-      await storageService.set('gt_quotations', updatedQuotations);
+      await storageService.set(StorageKeys.GENERAL_TRADING.QUOTATIONS, updatedQuotations);
       setQuotations(updatedQuotations);
 
       showAlert(`SO ${soNo} berhasil dibuat dari Quotation ${quotation.soNo}`, 'Success');
@@ -2213,7 +2241,7 @@ const SalesOrders = () => {
       showAlert('Please add at least one product', 'Validation Error');
       return;
     }
-    if (formData.items.some(item => !item.productId || item.qty <= 0)) {
+    if ((Array.isArray(formData.items) && formData.items.some(item => !item.productId || item.qty <= 0)) || false) {
       showAlert('Please fill all product fields and ensure qty > 0', 'Validation Error');
       return;
     }
@@ -2245,7 +2273,7 @@ const SalesOrders = () => {
               } as SalesOrder
             : o
         );
-        await storageService.set('gt_salesOrders', updated);
+        await storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updated);
         setOrders(updated);
         // Log activity
         try {
@@ -2277,7 +2305,7 @@ const SalesOrders = () => {
         };
         const ordersArray = Array.isArray(orders) ? orders : [];
         const updated = [...ordersArray, newOrder];
-        await storageService.set('gt_salesOrders', updated);
+        await storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updated);
         setOrders(updated);
         
         // Log activity
@@ -2400,9 +2428,9 @@ const SalesOrders = () => {
       }
       
       // Cek apakah SO sudah punya turunan (PO/Delivery)
-      const poListRaw = await storageService.get<any[]>('gt_purchaseOrders') || [];
-      const deliveryListRaw = await storageService.get<any[]>('gt_delivery') || [];
-      const prListRaw = await storageService.get<any[]>('gt_purchaseRequests') || [];
+      const poListRaw = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PURCHASE_ORDERS) || [];
+      const deliveryListRaw = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.DELIVERY) || [];
+      const prListRaw = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PURCHASE_REQUESTS) || [];
       
       // Ensure all data are arrays before using filterActiveItems
       const poList = Array.isArray(poListRaw) ? filterActiveItems(poListRaw) : [];
@@ -2439,11 +2467,11 @@ const SalesOrders = () => {
             console.log('[GT SalesOrders] Delete confirmed for:', item.soNo, item.id);
             
             // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
-            const deleteResult = await deleteGTItem('gt_salesOrders', item.id, 'id');
+            const deleteResult = await deleteGTItem(StorageKeys.GENERAL_TRADING.SALES_ORDERS, item.id, 'id');
             
             if (deleteResult.success) {
               // Reload data dengan helper (handle race condition)
-              await reloadGTData('gt_salesOrders', setOrders);
+              await reloadGTData(StorageKeys.GENERAL_TRADING.SALES_ORDERS, setOrders);
               
               // Log activity
               try {
@@ -2506,7 +2534,7 @@ const SalesOrders = () => {
           
           // CRITICAL: Force immediate sync ke server untuk confirm SO
           // Ini memastikan notifikasi langsung muncul di PPIC di device lain
-          await storageService.set('gt_salesOrders', updated, true);
+          await storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updated, true);
           setOrders(updated);
           closeDialog();
           showAlert(`SO ${item.soNo} telah dikonfirmasi dan dikirim ke PPIC untuk diproses.`, 'Success');
@@ -2591,6 +2619,40 @@ const SalesOrders = () => {
     openPrintWindow(html);
   };
 
+  // Helper to normalize date string to ISO format (YYYY-MM-DD)
+  const normalizeDate = (dateStr: string | number): string => {
+    if (!dateStr) return '';
+    
+    // If already ISO format (YYYY-MM-DD), return as-is
+    if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+      return dateStr.split('T')[0];
+    }
+    
+    // If MM/DD/YY format, convert to ISO
+    if (typeof dateStr === 'string' && /^\d{1,2}\/\d{1,2}\/\d{2}$/.test(dateStr)) {
+      const parts = dateStr.split('/');
+      const month = parts[0].padStart(2, '0');
+      const day = parts[1].padStart(2, '0');
+      let year = parts[2];
+      if (year.length === 2) {
+        year = '20' + year;
+      }
+      return `${year}-${month}-${day}`;
+    }
+    
+    // Try parsing as Date
+    try {
+      const date = new Date(dateStr);
+      if (!isNaN(date.getTime())) {
+        return date.toISOString().split('T')[0];
+      }
+    } catch (e) {
+      // ignore
+    }
+    
+    return '';
+  };
+
   // Filter and sort orders (terbaru di atas) - HANYA SO, BUKAN QUOTATION
   const filteredOrders = useMemo(() => {
     // Tab quotation akan menampilkan quotations terpisah (pakai filteredQuotations)
@@ -2612,22 +2674,41 @@ const SalesOrders = () => {
       }
     }
     
-    // Date filter
+    // Date filter - normalize dates before comparing
     if (dateFrom) {
-      filtered = filtered.filter(order => order.created >= dateFrom);
+      const normalizedFrom = normalizeDate(dateFrom);
+      filtered = filtered.filter(order => {
+        const normalizedCreated = normalizeDate(order.created);
+        return normalizedCreated >= normalizedFrom;
+      });
     }
     if (dateTo) {
-      filtered = filtered.filter(order => order.created <= dateTo);
+      const normalizedTo = normalizeDate(dateTo);
+      filtered = filtered.filter(order => {
+        const normalizedCreated = normalizeDate(order.created);
+        return normalizedCreated <= normalizedTo;
+      });
     }
     
-    // Search query
+    // Search query - comprehensive search (SO No, Customer, Item names)
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(order => 
-        order.soNo.toLowerCase().includes(query) ||
-        order.customer.toLowerCase().includes(query) ||
-        (order.customerKode || '').toLowerCase().includes(query)
-      );
+      filtered = filtered.filter(order => {
+        // Search di SO No, Customer, Customer Kode
+        const basicMatch = 
+          order.soNo.toLowerCase().includes(query) ||
+          order.customer.toLowerCase().includes(query) ||
+          (order.customerKode || '').toLowerCase().includes(query);
+        
+        // Search di item names juga
+        const itemMatch = order.items && Array.isArray(order.items) && order.items.some(item =>
+          (item.productName || '').toLowerCase().includes(query) ||
+          (item.productKode || '').toLowerCase().includes(query) ||
+          (item.productId || '').toLowerCase().includes(query)
+        );
+        
+        return basicMatch || itemMatch;
+      });
     }
     
     // Sort by created date (terbaru di atas)
@@ -2636,8 +2717,8 @@ const SalesOrders = () => {
       return [];
     }
     return filtered.sort((a, b) => {
-      const dateA = new Date(a.created).getTime();
-      const dateB = new Date(b.created).getTime();
+      const dateA = new Date(normalizeDate(a.created)).getTime();
+      const dateB = new Date(normalizeDate(b.created)).getTime();
       return dateB - dateA; // Descending (newest first)
     });
   }, [orders, activeTab, statusFilter, dateFrom, dateTo, searchQuery]);
@@ -2646,14 +2727,25 @@ const SalesOrders = () => {
   const filteredQuotations = useMemo(() => {
     let filtered = Array.isArray(quotations) ? quotations : [];
     
-    // Search query untuk quotations
+    // Search query untuk quotations - comprehensive search (SO No, Customer, Item names)
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(quotation => 
-        quotation.soNo.toLowerCase().includes(query) ||
-        quotation.customer.toLowerCase().includes(query) ||
-        (quotation.customerKode || '').toLowerCase().includes(query)
-      );
+      filtered = filtered.filter(quotation => {
+        // Search di SO No, Customer, Customer Kode
+        const basicMatch = 
+          quotation.soNo.toLowerCase().includes(query) ||
+          quotation.customer.toLowerCase().includes(query) ||
+          (quotation.customerKode || '').toLowerCase().includes(query);
+        
+        // Search di item names juga
+        const itemMatch = quotation.items && Array.isArray(quotation.items) && quotation.items.some(item =>
+          (item.productName || '').toLowerCase().includes(query) ||
+          (item.productKode || '').toLowerCase().includes(query) ||
+          (item.productId || '').toLowerCase().includes(query)
+        );
+        
+        return basicMatch || itemMatch;
+      });
     }
     
     // Sort by created date (terbaru di atas)
@@ -2832,14 +2924,58 @@ const SalesOrders = () => {
         XLSX.utils.book_append_sheet(wb, wsItems, 'Sheet 3 - Order Items');
       }
       
-      // Sheet 4: BOM Detail
+      // Sheet 4: Quotations
+      const quotationsArray = Array.isArray(quotations) ? quotations : [];
+      const quotationsData = quotationsArray.map(quotation => {
+        const totalAmount = quotation.items.reduce((sum, item) => sum + (item.total || 0), 0);
+        return {
+          quotationNo: quotation.soNo,
+          customer: quotation.customer,
+          customerCode: quotation.customerKode || '',
+          paymentTerms: quotation.paymentTerms,
+          topDays: quotation.topDays || 0,
+          status: quotation.status || 'OPEN',
+          createdDate: quotation.created,
+          totalItems: quotation.items.length,
+          totalAmount: totalAmount,
+          matchedSoNo: quotation.matchedSoNo || '-',
+          globalSpecNote: quotation.globalSpecNote || '',
+        };
+      });
+
+      if (quotationsData.length > 0) {
+        const quotationsColumns: ExcelColumn[] = [
+          { key: 'quotationNo', header: 'Quotation No', width: 25 },
+          { key: 'customer', header: 'Customer', width: 30 },
+          { key: 'customerCode', header: 'Customer Code', width: 15 },
+          { key: 'paymentTerms', header: 'Payment Terms', width: 15 },
+          { key: 'topDays', header: 'TOP Days', width: 12, format: 'number' },
+          { key: 'status', header: 'Status', width: 12 },
+          { key: 'createdDate', header: 'Created Date', width: 18, format: 'date' },
+          { key: 'totalItems', header: 'Total Items', width: 12, format: 'number' },
+          { key: 'totalAmount', header: 'Total Amount', width: 18, format: 'currency' },
+          { key: 'matchedSoNo', header: 'Matched SO No', width: 20 },
+          { key: 'globalSpecNote', header: 'Global Spec Note', width: 50 },
+        ];
+        const wsQuotations = createStyledWorksheet(quotationsData, quotationsColumns, 'Sheet 4 - Quotations');
+        setColumnWidths(wsQuotations, quotationsColumns);
+        const totalQuotationsAmount = quotationsData.reduce((sum, q) => sum + (q.totalAmount || 0), 0);
+        addSummaryRow(wsQuotations, quotationsColumns, {
+          quotationNo: 'TOTAL',
+          totalItems: quotationsData.length,
+          totalAmount: totalQuotationsAmount,
+        });
+        XLSX.utils.book_append_sheet(wb, wsQuotations, 'Sheet 4 - Quotations');
+      }
+      
+      // Sheet 5: BOM Detail
 
       
       
       
       const fileName = `Sales_Orders_Complete_${new Date().toISOString().split('T')[0]}.xlsx`;
       XLSX.writeFile(wb, fileName);
-      showAlert(`✅ Exported complete sales orders data (${allOrdersData.length} orders, ${itemsDetail.length} items) to ${fileName}`, 'Success');
+      showAlert(`✅ Exported complete sales orders data (${allOrdersData.length} orders, ${quotationsData.length} quotations, ${itemsDetail.length} items) to ${fileName}`, 'Success');
     } catch (error: any) {
       showAlert(`Error exporting to Excel: ${error.message}`, 'Error');
     }
@@ -2964,7 +3100,7 @@ const SalesOrders = () => {
                       const updatedOrders = ordersArray.map(o =>
                         o.id === order.id ? { ...o, items: updatedItems } : o
                       );
-                      storageService.set('gt_salesOrders', updatedOrders);
+                      storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updatedOrders);
                       setOrders(updatedOrders);
                     }
                   }}
@@ -2976,7 +3112,7 @@ const SalesOrders = () => {
                         const updatedOrders = orders.map(o =>
                           o.id === order.id ? { ...o, items: updatedItems } : o
                         );
-                        await storageService.set('gt_salesOrders', updatedOrders);
+                        await storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updatedOrders);
                         setOrders(updatedOrders);
                         closeDialog();
                       },
@@ -3291,14 +3427,14 @@ const SalesOrders = () => {
   const tableColumns = [
     { 
       key: 'soNo', 
-      header: 'SO No',
+      header: t('salesOrder.number') || 'SO No',
       render: (item: any) => (
         <strong style={{ color: '#2e7d32', fontSize: '13px' }}>{item.soNo}</strong>
       ),
     },
     { 
       key: 'customer', 
-      header: 'Customer',
+      header: t('master.customerName') || 'Customer',
       render: (item: any) => {
         const theme = document.documentElement.getAttribute('data-theme') || 'dark';
         const color = theme === 'light' ? '#000000' : '#ffffff';
@@ -3309,21 +3445,21 @@ const SalesOrders = () => {
     },
     {
       key: 'productCode',
-      header: 'Product Code',
+      header: t('master.productCode') || 'Product Code',
       render: (item: any) => (
         <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{item.productCode}</span>
       ),
     },
     {
       key: 'productName',
-      header: 'Product',
+      header: t('master.productName') || 'Product',
       render: (item: any) => (
         <span style={{ fontSize: '13px' }}>{item.productName}</span>
       ),
     },
     {
       key: 'qty',
-      header: 'Qty Ordered',
+      header: t('common.quantity') || 'Qty Ordered',
       render: (item: any) => (
         <span style={{ fontSize: '13px', textAlign: 'right', display: 'block' }}>
           {Number(item.qty || 0).toLocaleString('id-ID')} {item.unit}
@@ -3371,7 +3507,7 @@ const SalesOrders = () => {
     },
     {
       key: 'price',
-      header: 'Unit Price',
+      header: t('common.price') || 'Unit Price',
       render: (item: any) => (
         <span style={{ fontSize: '12px', textAlign: 'right', display: 'block' }}>
           Rp {Math.ceil(item.price || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 })}
@@ -3380,7 +3516,7 @@ const SalesOrders = () => {
     },
     {
       key: 'total',
-      header: 'Total',
+      header: t('common.total') || 'Total',
       render: (item: any) => (
         <span style={{ fontSize: '13px', textAlign: 'right', display: 'block', fontWeight: '500' }}>
           Rp {Math.ceil(item.total || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 })}
@@ -3399,7 +3535,7 @@ const SalesOrders = () => {
     },
     {
       key: 'status',
-      header: 'Status',
+      header: t('common.status') || 'Status',
       render: (item: any) => (
         <span className={`status-badge status-${item.status.toLowerCase()}`}>
           {item.status}
@@ -3408,7 +3544,7 @@ const SalesOrders = () => {
     },
     { 
       key: 'created', 
-      header: 'Created',
+      header: t('common.createdAt') || 'Created',
       render: (item: any) => {
         const { date, time } = formatDateSimple(item.created);
         return (
@@ -3421,7 +3557,7 @@ const SalesOrders = () => {
     },
     {
       key: 'actions',
-      header: 'Actions',
+      header: t('common.actions') || 'Actions',
       render: (item: any) => (
         <SOActionMenu
           onView={() => handleViewSO(item._order)}
@@ -3438,14 +3574,14 @@ const SalesOrders = () => {
   const columns = [
     { 
       key: 'soNo', 
-      header: 'SO No (PO Customer)',
+      header: t('salesOrder.number') || 'SO No (PO Customer)',
       render: (item: SalesOrder) => (
         <strong style={{ color: '#2e7d32', fontSize: '14px' }}>{item.soNo}</strong>
       ),
     },
     { 
       key: 'customer', 
-      header: 'Customer',
+      header: t('master.customerName') || 'Customer',
       render: (item: SalesOrder) => (
         <span style={{ color: '#ffffff' }}>{item.customer}</span>
       ),
@@ -3462,7 +3598,7 @@ const SalesOrders = () => {
     },
     {
       key: 'status',
-      header: 'Status',
+      header: t('common.status') || 'Status',
       render: (item: SalesOrder) => (
         <span className={`status-badge status-${item.status.toLowerCase()}`}>
           {item.status}
@@ -3471,7 +3607,7 @@ const SalesOrders = () => {
     },
     { 
       key: 'created', 
-      header: 'Created',
+      header: t('common.createdAt') || 'Created',
       render: (item: SalesOrder) => {
         const { date, time } = formatDateSimple(item.created);
         return (
@@ -3484,7 +3620,7 @@ const SalesOrders = () => {
     },
     {
       key: 'actions',
-      header: 'Actions',
+      header: t('common.actions') || 'Actions',
       render: (item: SalesOrder) => (
         <SOActionMenu
           onView={() => handleViewSO(item)}
@@ -3516,7 +3652,7 @@ const SalesOrders = () => {
     },
     { 
       key: 'customer', 
-      header: 'Customer',
+      header: t('master.customerName') || 'Customer',
       render: (item: SalesOrder) => (
         <span style={{ color: '#ffffff' }}>{item.customer}</span>
       ),
@@ -3542,7 +3678,7 @@ const SalesOrders = () => {
     },
     { 
       key: 'created', 
-      header: 'Created',
+      header: t('common.createdAt') || 'Created',
       render: (item: SalesOrder) => {
         const { date, time } = formatDateSimple(item.created);
         return (
@@ -3555,7 +3691,7 @@ const SalesOrders = () => {
     },
     {
       key: 'actions',
-      header: 'Actions',
+      header: t('common.actions') || 'Actions',
       render: (item: SalesOrder) => (
         <SOActionMenu
           onViewQuotation={() => handleViewQuotation(item)}
@@ -4861,7 +4997,7 @@ const SalesOrders = () => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by SO No, Customer..."
+              placeholder="Search by SO No, Customer, Item name..."
               style={{
                 width: '100%',
                 padding: '8px 12px',
@@ -4896,40 +5032,14 @@ const SalesOrders = () => {
               <option value="CLOSE">CLOSE</option>
             </select>
           </div>
-          <div style={{ minWidth: '130px' }}>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              placeholder="Date From"
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border-color)',
-                borderRadius: '6px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '13px',
-                fontFamily: 'inherit',
+          <div style={{ flex: 1, minWidth: '400px' }}>
+            <DateRangeFilter
+              onDateChange={(from, to) => {
+                setDateFrom(from);
+                setDateTo(to);
               }}
-            />
-          </div>
-          <div style={{ minWidth: '130px' }}>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              placeholder="Date To"
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border-color)',
-                borderRadius: '6px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '13px',
-                fontFamily: 'inherit',
-              }}
+              defaultFrom={dateFrom}
+              defaultTo={dateTo}
             />
           </div>
           {activeTab !== 'quotation' && (
@@ -5378,26 +5488,27 @@ const SalesOrders = () => {
                       <input
                         type="file"
                         accept="image/*"
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (file) {
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                              const newSignatureBase64 = reader.result as string;
+                            try {
+                              // Upload to MinIO
+                              const result = await BlobService.uploadFile(file, 'general-trading');
                               setQuotationFormData({
                                 ...quotationFormData,
-                                signatureBase64: newSignatureBase64,
+                                signatureId: result.fileId,
                               });
-                              // Save ke localStorage saat upload
-                              saveSignatureToLocalStorage(
-                                newSignatureBase64,
-                                quotationFormData.signatureName || '',
-                                quotationFormData.signatureTitle || ''
-                              );
-                            };
-                            reader.readAsDataURL(file);
+                              // Save to localStorage for next time
+                              localStorage.setItem(StorageKeys.GENERAL_TRADING.QUOTATION_LAST_SIGNATURE, JSON.stringify({
+                                signatureId: result.fileId,
+                                signatureName: quotationFormData.signatureName || '',
+                                signatureTitle: quotationFormData.signatureTitle || ''
+                              }));
+                            } catch (error: any) {
+                              showAlert('Error', `Failed to upload signature: ${error.message}`);
+                            }
                           }
-                        }}
+                        }}                        
                         style={{
                           width: '100%',
                           padding: '8px',
@@ -5408,10 +5519,12 @@ const SalesOrders = () => {
                           fontSize: '14px',
                         }}
                       />
-                      {quotationFormData.signatureBase64 && (
+                      {(quotationFormData.signatureBase64 || quotationFormData.signatureId) && (
                         <div style={{ marginTop: '8px' }}>
                           <img
-                            src={quotationFormData.signatureBase64}
+                            src={quotationFormData.signatureId 
+                              ? BlobService.getDownloadUrl(quotationFormData.signatureId, 'general-trading')
+                              : quotationFormData.signatureBase64}
                             alt="Signature preview"
                             style={{ maxWidth: '200px', maxHeight: '100px', border: '1px solid var(--border)', borderRadius: '4px' }}
                           />

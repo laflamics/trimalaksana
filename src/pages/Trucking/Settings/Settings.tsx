@@ -184,7 +184,7 @@ const Settings = () => {
     
     // Set default WebSocket URL if not set
     if (config.type === 'server' && !localStorage.getItem('websocket_url')) {
-      localStorage.setItem('websocket_url', 'ws://server-tljp.tail75a421.ts.net:8888/ws');
+      localStorage.setItem('websocket_url', 'wss://server-tljp.tail75a421.ts.net/ws');
       localStorage.setItem('websocket_enabled', 'true');
     }
   };
@@ -307,7 +307,7 @@ const Settings = () => {
     if (storageType === 'server') {
       await storageService.syncFromServer();
       // Set default WebSocket URL
-      localStorage.setItem('websocket_url', 'ws://server-tljp.tail75a421.ts.net:8888/ws');
+      localStorage.setItem('websocket_url', 'wss://server-tljp.tail75a421.ts.net/ws');
       localStorage.setItem('websocket_enabled', 'true');
     }
 

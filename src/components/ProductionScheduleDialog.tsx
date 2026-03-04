@@ -43,7 +43,6 @@ interface ProductionScheduleDialogProps {
 const ProductionScheduleDialog = ({ item, onClose, onSave, inline = false }: ProductionScheduleDialogProps) => {
   const [spkProductions, setSpkProductions] = useState<SPKProduction[]>([]);
   const [selectedSPKs, setSelectedSPKs] = useState<string[]>([]); // Multiple selection
-  const [selectionMode, setSelectionMode] = useState<'single' | 'multiple'>('single'); // Default: single
   const [showBatchForm, setShowBatchForm] = useState(false);
   // Custom Dialog state
   const [dialogState, setDialogState] = useState<{
@@ -160,14 +159,10 @@ const ProductionScheduleDialog = ({ item, onClose, onSave, inline = false }: Pro
   };
 
   const handleToggleSPK = (spkNo: string) => {
-    if (selectionMode === 'single') {
-      setSelectedSPKs([spkNo]);
+    if (selectedSPKs.includes(spkNo)) {
+      setSelectedSPKs(selectedSPKs.filter(s => s !== spkNo));
     } else {
-      if (selectedSPKs.includes(spkNo)) {
-        setSelectedSPKs(selectedSPKs.filter(s => s !== spkNo));
-      } else {
-        setSelectedSPKs([...selectedSPKs, spkNo]);
-      }
+      setSelectedSPKs([...selectedSPKs, spkNo]);
     }
   };
 
@@ -181,7 +176,7 @@ const ProductionScheduleDialog = ({ item, onClose, onSave, inline = false }: Pro
   const remainingQtyAll = totalQtyAll - totalBatchQtyAll;
 
   // For single mode, use first selected SPK
-  const currentSPK = selectionMode === 'single' && selectedSPKs.length > 0 
+  const currentSPK = selectedSPKs.length > 0 
     ? spkProductions.find(spk => spk.spkNo === selectedSPKs[0])
     : null;
   const currentProductionBatches = currentSPK?.productionBatches || [];
@@ -197,7 +192,7 @@ const ProductionScheduleDialog = ({ item, onClose, onSave, inline = false }: Pro
       return;
     }
     
-    if (selectionMode === 'multiple' && selectedSPKs.length > 1) {
+    if (selectedSPKs.length > 1) {
       // Multiple selection - initialize forms untuk setiap product
       const forms: { [spkNo: string]: { qty: number; startDate: string; endDate: string } } = {};
       selectedSPKs.forEach(spkNo => {
@@ -208,14 +203,9 @@ const ProductionScheduleDialog = ({ item, onClose, onSave, inline = false }: Pro
           // Material override hanya untuk material requirement, bukan untuk product qty
           const spkQtyDisplay = spk.qty || 0; // Pakai qty asli dari SPK (dari SO), bukan dari override
           const spkRemaining = spkQtyDisplay - spkBatchQty;
-          // Default batch dates: jika mode sama, gunakan common dates (atau global dates jika belum diisi)
-          // Jika mode per product, gunakan global dates sebagai default
-          const defaultStartDate = useSameDateForAll 
-            ? (commonStartDate || startDate || '')
-            : (startDate || '');
-          const defaultEndDate = useSameDateForAll 
-            ? (commonEndDate || endDate || '')
-            : (endDate || '');
+          // Default batch dates dari global schedule dates
+          const defaultStartDate = startDate || '';
+          const defaultEndDate = endDate || '';
           
           forms[spkNo] = {
             qty: spkRemaining > 0 ? spkRemaining : 0,
@@ -341,7 +331,6 @@ const ProductionScheduleDialog = ({ item, onClose, onSave, inline = false }: Pro
     const spk = spkProductions.find(s => s.spkNo === spkNo);
     if (!spk) return;
     
-    setSelectionMode('single');
     setSelectedSPKs([spkNo]);
     setEditingBatch(batch);
     setBatchForm({
@@ -564,22 +553,13 @@ const ProductionScheduleDialog = ({ item, onClose, onSave, inline = false }: Pro
           <label style={{ fontSize: '13px', fontWeight: 500 }}>
             Pilih Product ({selectedSPKs.length} dipilih):
           </label>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <Button
-              variant="secondary"
-              onClick={() => setSelectionMode(selectionMode === 'single' ? 'multiple' : 'single')}
-              style={{ fontSize: '11px', padding: '4px 8px' }}
-            >
-              {selectionMode === 'single' ? '🔘 Single' : '☑️ Multiple'}
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={handleSelectAll}
-              style={{ fontSize: '11px', padding: '4px 8px' }}
-            >
-              {selectedSPKs.length === spkProductions.length ? '❌ Deselect All' : '✅ Select All'}
-            </Button>
-          </div>
+          <Button
+            variant="secondary"
+            onClick={handleSelectAll}
+            style={{ fontSize: '11px', padding: '4px 8px' }}
+          >
+            {selectedSPKs.length === spkProductions.length ? '❌ Deselect All' : '✅ Select All'}
+          </Button>
         </div>
         <div style={{ 
           maxHeight: '200px', 
@@ -634,9 +614,9 @@ const ProductionScheduleDialog = ({ item, onClose, onSave, inline = false }: Pro
             );
           })}
         </div>
-        {selectionMode === 'multiple' && selectedSPKs.length > 1 && (
+        {selectedSPKs.length > 1 && (
           <div style={{ marginTop: '12px', padding: '10px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '4px', fontSize: '12px', color: 'var(--text-primary)' }}>
-            <strong style={{ color: 'var(--text-primary)' }}>Multiple Selection Mode:</strong> {selectedSPKs.length} products dipilih
+            <strong style={{ color: 'var(--text-primary)' }}>{selectedSPKs.length} products dipilih</strong>
             <br />
             Total Qty: <strong style={{ color: 'var(--text-primary)' }}>{totalQtyAll}</strong> | 
             Batch Qty: <strong style={{ color: 'var(--text-primary)' }}>{totalBatchQtyAll}</strong> | 
@@ -652,9 +632,9 @@ const ProductionScheduleDialog = ({ item, onClose, onSave, inline = false }: Pro
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h4 style={{ margin: 0, color: 'var(--text-primary)' }}>
                 Production Batch Management
-                {selectionMode === 'multiple' && selectedSPKs.length > 1 && ` (${selectedSPKs.length} products)`}
+                {selectedSPKs.length > 1 && ` (${selectedSPKs.length} products)`}
               </h4>
-              {selectionMode === 'single' && currentSPK && (
+              {selectedSPKs.length === 1 && currentSPK && (
                 <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
                   Total Qty: <strong style={{ color: 'var(--text-primary)' }}>{currentSPKQty}</strong> | 
                   Batch Qty: <strong style={{ color: totalBatchQty === currentSPKQty ? '#2e7d32' : '#d32f2f' }}>
@@ -667,7 +647,7 @@ const ProductionScheduleDialog = ({ item, onClose, onSave, inline = false }: Pro
               )}
             </div>
 
-            {/* Show batches for all selected SPKs */}
+            {/* Show batches untuk semua selected SPKs */}
             {selectedSPKObjects.map((spk) => {
               const spkBatches = spk.productionBatches || [];
               const spkTotalBatchQty = spkBatches.reduce((sum, b) => sum + b.qty, 0);
@@ -746,7 +726,7 @@ const ProductionScheduleDialog = ({ item, onClose, onSave, inline = false }: Pro
               );
             })}
 
-            {showBatchForm && selectionMode === 'single' && currentSPK && (
+            {showBatchForm && selectedSPKs.length === 1 && currentSPK && (
               <div style={{ padding: '16px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '6px', marginBottom: '16px' }}>
                 <h5 style={{ marginTop: 0, marginBottom: '12px', color: 'var(--text-primary)' }}>
                   {editingBatch ? `Edit Production Batch ${editingBatch.batchNo}` : 'Tambah Production Batch Baru'}
@@ -837,7 +817,7 @@ const ProductionScheduleDialog = ({ item, onClose, onSave, inline = false }: Pro
               </div>
             )}
 
-            {showBatchForm && selectionMode === 'multiple' && selectedSPKs.length > 1 && (
+            {showBatchForm && selectedSPKs.length > 1 && (
               <div style={{ padding: '16px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '6px', marginBottom: '16px' }}>
                 <h5 style={{ marginTop: 0, marginBottom: '8px', color: 'var(--text-primary)' }}>
                   Tambah Production Batch untuk {selectedSPKs.length} Products
@@ -1108,7 +1088,7 @@ const ProductionScheduleDialog = ({ item, onClose, onSave, inline = false }: Pro
 
             {!showBatchForm && (
               <Button variant="primary" onClick={handleAddBatch} style={{ fontSize: '12px', padding: '6px 12px' }}>
-                {selectionMode === 'multiple' && selectedSPKs.length > 1 
+                {selectedSPKs.length > 1 
                   ? `+ Tambah Batch untuk ${selectedSPKs.length} Products` 
                   : '+ Tambah Production Batch'}
               </Button>

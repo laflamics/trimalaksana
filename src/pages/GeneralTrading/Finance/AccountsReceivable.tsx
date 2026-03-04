@@ -1,35 +1,32 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService } from '../../../services/storage';
-import { loadGTDataFromLocalStorage } from '../../../utils/gtStorageHelper';
-import { filterActiveItems } from '../../../utils/data-persistence-helper';
+import DateRangeFilter from '../../../components/DateRangeFilter';
+import { storageService, extractStorageValue, StorageKeys } from '../../../services/storage';
+import { useLanguage } from '../../../hooks/useLanguage';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
-interface JournalEntry {
-  id: string;
-  no: number;
-  entryDate: string;
-  reference: string;
-  account: string;
-  accountName: string;
-  debit: number;
-  credit: number;
-  description: string;
-}
-
 const AccountsReceivable = () => {
-  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
+  const { t } = useLanguage();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [agingFilter, setAgingFilter] = useState<string>('all');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [newInvoiceAlert, setNewInvoiceAlert] = useState<string>('');
+  const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
+  const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [paidAmount, setPaidAmount] = useState<number>(0);
+  const [paymentProof, setPaymentProof] = useState<File | null>(null);
+  const [activeTab, setActiveTab] = useState<'open' | 'close'>('open');
+  const invoiceNotificationListenerRef = useRef<(() => void) | null>(null);
 
   // Custom Dialog state
   const [, setDialogState] = useState<{
@@ -59,6 +56,29 @@ const AccountsReceivable = () => {
     });
   };
 
+  // Setup real-time listener untuk invoice notifications
+  useEffect(() => {
+    const setupInvoiceListener = async () => {
+      // Listen untuk perubahan di invoiceNotifications
+      invoiceNotificationListenerRef.current = () => {
+        loadData();
+        setNewInvoiceAlert('✅ New invoice detected! AR updated.');
+        setTimeout(() => setNewInvoiceAlert(''), 3000);
+      };
+
+      // Subscribe ke storage changes
+      const handleStorageChange = (event: StorageEvent) => {
+        if (event.key === 'invoiceNotifications' && invoiceNotificationListenerRef.current) {
+          invoiceNotificationListenerRef.current();
+        }
+      };
+
+      window.addEventListener('storage', handleStorageChange);
+      return () => window.removeEventListener('storage', handleStorageChange);
+    };
+
+    setupInvoiceListener();
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -67,47 +87,35 @@ const AccountsReceivable = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      // Load langsung dari localStorage untuk memastikan data terbaru
-      const [entries, invs, cust] = await Promise.all([
-        loadGTDataFromLocalStorage<JournalEntry>(
-          'gt_journalEntries',
-          async () => await storageService.get<JournalEntry[]>('gt_journalEntries') || []
-        ),
-        loadGTDataFromLocalStorage<any>(
-          'gt_invoices',
-          async () => await storageService.get<any[]>('gt_invoices') || []
-        ),
-        loadGTDataFromLocalStorage<any>(
-          'gt_customers',
-          async () => await storageService.get<any[]>('gt_customers') || []
-        ),
+      const [invsRaw, custRaw] = await Promise.all([
+        storageService.get<any[]>('gt_invoices'),
+        storageService.get<any[]>('gt_customers'),
       ]);
       
-      // Filter out deleted items menggunakan helper function
-      const activeEntries = filterActiveItems(entries || []);
-      const activeInvoices = filterActiveItems(invs || []);
-      const activeCustomers = filterActiveItems(cust || []);
+      // Extract values from wrapped storage format
+      let invs = extractStorageValue(invsRaw);
+      const cust = extractStorageValue(custRaw);
       
-      console.log(`📦 Loaded data:`, {
-        journalEntries: activeEntries.length,
-        invoices: activeInvoices.length,
-        customers: activeCustomers.length,
-      });
+      // If invoices empty, try force reload from server
+      if (!invs || invs.length === 0) {
+        const fileData = await storageService.forceReloadFromFile<any[]>('gt_invoices');
+        if (fileData && Array.isArray(fileData) && fileData.length > 0) {
+          invs = fileData;
+        }
+      }
       
-      setJournalEntries(activeEntries);
-      setInvoices(activeInvoices);
-      setCustomers(activeCustomers);
+      setInvoices(invs || []);
+      setCustomers(cust || []);
     } catch (error: any) {
-      console.error('❌ Error loading data:', error);
       showAlert(`Error loading data: ${error.message}`, 'Error');
     } finally {
       setLoading(false);
     }
   };
 
-  const calculateAging = (dueDate: string, invoiceDate: string) => {
+  const calculateAging = (dueDate: string) => {
     const today = new Date();
-    const due = dueDate ? new Date(dueDate) : new Date(invoiceDate);
+    const due = new Date(dueDate);
     const diffTime = today.getTime() - due.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
@@ -122,169 +130,97 @@ const AccountsReceivable = () => {
   };
 
   const arData = useMemo(() => {
-    // Ambil semua journal entries untuk account 1100 (Accounts Receivable)
-    // Ensure journalEntries is always an array
-    const journalEntriesArray = Array.isArray(journalEntries) ? journalEntries : [];
-    const arEntries = journalEntriesArray.filter((entry: JournalEntry) => entry.account === '1100');
+    // Ensure invoices is an array
+    if (!Array.isArray(invoices)) return [];
     
-    console.log(`📋 Total AR journal entries: ${arEntries.length}`);
-    
-    // Group by reference (Invoice No)
-    const arByReference: Record<string, {
-      reference: string;
-      totalDebit: number;
-      totalCredit: number;
-      balance: number;
-      firstEntryDate: string;
-      lastEntryDate: string;
-      descriptions: string[];
-    }> = {};
-    
-    arEntries.forEach((entry: JournalEntry) => {
-      const ref = entry.reference || entry.id;
-      if (!arByReference[ref]) {
-        arByReference[ref] = {
-          reference: ref,
-          totalDebit: 0,
-          totalCredit: 0,
-          balance: 0,
-          firstEntryDate: entry.entryDate,
-          lastEntryDate: entry.entryDate,
-          descriptions: [],
-        };
-      }
-      
-      arByReference[ref].totalDebit += entry.debit || 0;
-      arByReference[ref].totalCredit += entry.credit || 0;
-      // Untuk Asset (AR), balance = debit - credit
-      arByReference[ref].balance = arByReference[ref].totalDebit - arByReference[ref].totalCredit;
-      
-      // Update dates
-      if (entry.entryDate < arByReference[ref].firstEntryDate) {
-        arByReference[ref].firstEntryDate = entry.entryDate;
-      }
-      if (entry.entryDate > arByReference[ref].lastEntryDate) {
-        arByReference[ref].lastEntryDate = entry.entryDate;
-      }
-      
-      if (entry.description && !arByReference[ref].descriptions.includes(entry.description)) {
-        arByReference[ref].descriptions.push(entry.description);
-      }
-    });
-    
-    console.log(`📋 Total AR references: ${Object.keys(arByReference).length}`);
-    
-    // Map ke format AR dengan data dari invoices untuk customer info
-    const result = Object.values(arByReference)
-      .filter(item => item.balance > 0) // Hanya yang masih ada balance
-      .map(item => {
-        // Cari invoice berdasarkan reference (bisa INV-xxx atau invoice number)
-        // Ensure invoices is always an array
-        const invoicesArray = Array.isArray(invoices) ? invoices : [];
-        const invoice = invoicesArray.find((inv: any) => 
-          inv.invoiceNo === item.reference || 
-          item.reference.includes(inv.invoiceNo) ||
-          item.reference.startsWith('INV-')
+    // Map invoices to AR format (both OPEN and CLOSE)
+    return invoices
+      .map((inv: any) => {
+        // Find customer from master data
+        const safeCustomers = Array.isArray(customers) ? customers : [];
+        const customer = safeCustomers.find((c: any) => 
+          c.kode === inv.customer || 
+          c.nama === inv.customer ||
+          inv.customer?.includes(c.nama) ||
+          inv.customer?.includes(c.kode)
         );
         
-        // Extract customer dari description atau invoice
-        let customerName = '';
-        let customerCode = '';
-        let soNo = '';
-        let invoiceDate = item.firstEntryDate;
-        let topDays = 30;
-        let invoiceTotal = item.totalDebit; // Total AR = total debit
-        
-        if (invoice) {
-          customerName = invoice.customer || '';
-          soNo = invoice.soNo || '';
-          invoiceDate = invoice.invoiceDate || invoice.created || item.firstEntryDate;
-          topDays = invoice.topDays || 30;
-          invoiceTotal = invoice.bom?.total || invoice.total || item.totalDebit;
-        } else {
-          // Extract dari description
-          const desc = item.descriptions[0] || '';
-          const customerMatch = desc.match(/- (.+?)$/);
-          if (customerMatch) {
-            customerName = customerMatch[1];
-          }
-        }
-        
-        // Cari customer dari master data
-        // Ensure customers is always an array
-        const customersArray = Array.isArray(customers) ? customers : [];
-        const customer = customersArray.find((c: any) => 
-          c.kode === customerName || 
-          c.nama === customerName ||
-          customerName.includes(c.nama) ||
-          customerName.includes(c.kode)
-        );
-        
-        if (customer) {
-          customerCode = customer.kode || '';
-          if (!customerName) customerName = customer.nama || '';
-        }
-        
-        // Calculate due date
-        const invDate = new Date(invoiceDate);
+        // Calculate due date - use inv.created (not invoiceDate)
+        const invDate = new Date(inv.created || new Date());
+        const topDays = inv.topDays || 30;
         const dueDate = new Date(invDate);
         dueDate.setDate(dueDate.getDate() + topDays);
         
-        const agingDays = calculateAging(dueDate.toISOString().split('T')[0], invoiceDate);
+        const agingDays = calculateAging(dueDate.toISOString().split('T')[0]);
         const agingCategory = getAgingCategory(agingDays);
         
-        const result = {
-          invoiceNo: item.reference,
-          invoiceDate: invoiceDate,
+        // Calculate total from items if bom.total not available
+        let invoiceTotal = 0;
+        if (inv.bom?.total) {
+          invoiceTotal = inv.bom.total;
+        } else if (inv.total) {
+          invoiceTotal = inv.total;
+        } else if (Array.isArray(inv.items)) {
+          invoiceTotal = inv.items.reduce((sum: number, item: any) => sum + (item.totalAkhir || item.total || 0), 0);
+        }
+        
+        return {
+          invoiceNo: inv.invoiceNo,
+          invoiceDate: inv.created,
           dueDate: dueDate.toISOString().split('T')[0],
-          customerName: customerName,
-          customerCode: customerCode,
+          customerName: inv.customer || '',
+          customerCode: customer?.kode || '',
           customerCreditLimit: customer?.creditLimit || 0,
-          soNo: soNo,
+          soNo: inv.soNo || '',
           invoiceTotal: invoiceTotal,
-          paidAmount: item.totalCredit, // Payment = total credit
-          balance: item.balance,
+          paidAmount: inv.paidAmount || 0,
+          balance: invoiceTotal - (inv.paidAmount || 0),
           topDays: topDays,
           agingDays: agingDays,
           agingCategory: agingCategory,
-          isOverdue: agingDays > 0 && item.balance > 0,
-          status: item.balance > 0 ? 'OPEN' : 'CLOSE',
-          description: item.descriptions.join('; '),
+          isOverdue: agingDays > 0,
+          status: inv.status || 'OPEN',
+          paidDate: inv.paidDate || '',
+          paymentProof: inv.paymentProof || '',
         };
-        
-        console.log(`📊 AR ${item.reference}: Debit=${item.totalDebit}, Credit=${item.totalCredit}, Balance=${item.balance}`);
-        
-        return result;
-      })
-      .filter(item => item.balance > 0); // Hanya tampilkan yang masih ada balance
-    
-    // Ensure return value is always an array
-    return Array.isArray(result) ? result : [];
-  }, [journalEntries, invoices, customers]);
+      });
+  }, [invoices, customers]);
+
+  // Filter AR data by status
+  const openAR = useMemo(() => {
+    return (Array.isArray(arData) ? arData : []).filter(item => item.status === 'OPEN');
+  }, [arData]);
+
+  const closeAR = useMemo(() => {
+    return (Array.isArray(arData) ? arData : []).filter(item => item.status === 'CLOSE');
+  }, [arData]);
 
   const filteredAR = useMemo(() => {
-    // Ensure arData is always an array
-    const arDataArray = Array.isArray(arData) ? arData : [];
-    return arDataArray.filter(item => {
+    // Get data based on active tab
+    const sourceData = activeTab === 'open' ? openAR : closeAR;
+    
+    return (Array.isArray(sourceData) ? sourceData : []).filter(item => {
       const matchesSearch = !searchQuery ||
         (item.invoiceNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (item.customerName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (item.soNo || '').toLowerCase().includes(searchQuery.toLowerCase());
       
-      const matchesStatus = statusFilter === 'all' || 
-        (statusFilter === 'overdue' && item.isOverdue) ||
-        (statusFilter === 'current' && !item.isOverdue);
+      // Only apply aging filter for OPEN tab
+      const matchesAging = activeTab === 'close' ? true : (
+        agingFilter === 'all' || item.agingCategory === agingFilter
+      );
       
-      const matchesAging = agingFilter === 'all' || item.agingCategory === agingFilter;
+      // Date filtering
+      const invoiceDate = new Date(item.invoiceDate);
+      const matchesDateFrom = !dateFrom || invoiceDate >= new Date(dateFrom);
+      const matchesDateTo = !dateTo || invoiceDate <= new Date(dateTo);
       
-      return matchesSearch && matchesStatus && matchesAging;
+      return matchesSearch && matchesAging && matchesDateFrom && matchesDateTo;
     });
-  }, [arData, searchQuery, statusFilter, agingFilter]);
+  }, [arData, searchQuery, agingFilter, activeTab, openAR, closeAR, dateFrom, dateTo]);
 
   const totalAR = useMemo(() => {
-    // Ensure filteredAR is always an array
-    const filteredARArray = Array.isArray(filteredAR) ? filteredAR : [];
-    return filteredARArray.reduce((sum, item) => sum + (item.balance || 0), 0);
+    return (Array.isArray(filteredAR) ? filteredAR : []).reduce((sum, item) => sum + (item.balance || 0), 0);
   }, [filteredAR]);
 
   const agingSummary = useMemo(() => {
@@ -296,9 +232,7 @@ const AccountsReceivable = () => {
       'Over 90 Days': 0,
     };
     
-    // Ensure filteredAR is always an array
-    const filteredARArray = Array.isArray(filteredAR) ? filteredAR : [];
-    filteredARArray.forEach(item => {
+    (Array.isArray(filteredAR) ? filteredAR : []).forEach(item => {
       summary[item.agingCategory] = (summary[item.agingCategory] || 0) + (item.balance || 0);
     });
     
@@ -334,93 +268,413 @@ const AccountsReceivable = () => {
     }
   };
 
-  const columns = [
-    { key: 'invoiceNo', header: 'Invoice No' },
-    { key: 'invoiceDate', header: 'Invoice Date' },
-    { key: 'dueDate', header: 'Due Date' },
-    { key: 'customerName', header: 'Customer' },
-    { key: 'soNo', header: 'SO No' },
-    { key: 'invoiceTotal', header: 'Invoice Amount', render: (item: any) => {
+  const handlePaymentClick = (item: any) => {
+    setSelectedInvoice(item);
+    setPaymentDate(new Date().toISOString().split('T')[0]);
+    setPaidAmount(item.invoiceTotal); // Default to full amount
+    setPaymentProof(null);
+  };
+
+  const handlePaymentSubmit = async () => {
+    if (!selectedInvoice) return;
+    
+    try {
+      // Update invoice status to CLOSE
+      const updated = invoices.map(inv =>
+        inv.invoiceNo === selectedInvoice.invoiceNo 
+          ? { 
+              ...inv, 
+              status: 'CLOSE', 
+              paidDate: paymentDate,
+              paidAmount: paidAmount,
+              paymentProof: paymentProof?.name || '',
+              lastUpdate: new Date().toISOString(),
+            }
+          : inv
+      );
+      
+      await storageService.set(StorageKeys.GENERAL_TRADING.INVOICES, updated);
+      setInvoices(updated);
+      
+      showAlert(`✅ Payment recorded for Invoice ${selectedInvoice.invoiceNo}\nPayment Date: ${paymentDate}\nPaid Amount: Rp ${paidAmount.toLocaleString('id-ID')}\n\n✅ Invoice status changed to CLOSE`, 'Success');
+      setSelectedInvoice(null);
+      setPaidAmount(0);
+      setPaymentProof(null);
+    } catch (error: any) {
+      showAlert(`Error recording payment: ${error.message}`, 'Error');
+    }
+  };
+
+  const openColumns = [
+    { key: 'invoiceNo', header: t('finance.invoiceNo') },
+    { key: 'invoiceDate', header: t('finance.invoiceDate') },
+    { key: 'dueDate', header: t('finance.dueDate') },
+    { key: 'customerName', header: t('common.customer') },
+    { key: 'soNo', header: t('finance.soNo') },
+    { key: 'invoiceTotal', header: t('finance.invoiceAmount'), render: (item: any) => {
       const invoiceTotal = item.invoiceTotal || 0;
       return `Rp ${invoiceTotal.toLocaleString('id-ID')}`;
     }},
-    { key: 'paidAmount', header: 'Paid', render: (item: any) => `Rp ${(item.paidAmount || 0).toLocaleString('id-ID')}` },
-    { key: 'balance', header: 'Balance', render: (item: any) => `Rp ${(item.balance || 0).toLocaleString('id-ID')}` },
-    { key: 'agingDays', header: 'Aging Days', render: (item: any) => item.agingDays > 0 ? `${item.agingDays} days overdue` : `${Math.abs(item.agingDays)} days` },
-    { key: 'agingCategory', header: 'Aging Category' },
-    { key: 'status', header: 'Status', render: (item: any) => item.isOverdue ? 'Overdue' : 'Current' },
+    { key: 'paidAmount', header: t('finance.paid'), render: (item: any) => `Rp ${(item.paidAmount || 0).toLocaleString('id-ID')}` },
+    { key: 'balance', header: t('finance.balance'), render: (item: any) => `Rp ${(item.balance || 0).toLocaleString('id-ID')}` },
+    { key: 'agingDays', header: t('finance.agingDays'), render: (item: any) => item.agingDays > 0 ? `${item.agingDays} days overdue` : `${Math.abs(item.agingDays)} days` },
+    { key: 'agingCategory', header: t('finance.agingCategory') },
+    { key: 'status', header: t('common.status'), render: (item: any) => item.isOverdue ? 'Overdue' : 'Current' },
+    {
+      key: 'proof',
+      header: t('finance.proof'),
+      render: (item: any) => (
+        item.paymentProof ? (
+          <Button 
+            variant="secondary" 
+            onClick={() => {
+              const win = window.open('', '_blank');
+              if (win) {
+                const src = item.paymentProof.startsWith('data:') 
+                  ? item.paymentProof 
+                  : `data:application/pdf;base64,${item.paymentProof}`;
+                win.document.write(`<iframe src="${src}" style="width:100%;height:100%;border:none;"></iframe>`);
+              }
+            }}
+            style={{ fontSize: '10px', padding: '3px 6px' }}
+          >
+            📄 View
+          </Button>
+        ) : (
+          <span style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>-</span>
+        )
+      ),
+    },
+    {
+      key: 'action',
+      header: t('common.action'),
+      render: (item: any) => (
+        <Button 
+          variant="primary" 
+          onClick={() => handlePaymentClick(item)}
+          style={{ fontSize: '12px', padding: '6px 12px' }}
+        >
+          💳 Record Payment
+        </Button>
+      ),
+    },
+  ];
+
+  const closeColumns = [
+    { key: 'invoiceNo', header: t('finance.invoiceNo') },
+    { key: 'invoiceDate', header: t('finance.invoiceDate') },
+    { key: 'customerName', header: t('common.customer') },
+    { key: 'soNo', header: t('finance.soNo') },
+    { key: 'invoiceTotal', header: t('finance.invoiceAmount'), render: (item: any) => {
+      const invoiceTotal = item.invoiceTotal || 0;
+      return `Rp ${invoiceTotal.toLocaleString('id-ID')}`;
+    }},
+    { key: 'paidDate', header: t('finance.paymentDate') },
+    {
+      key: 'paymentProof',
+      header: t('finance.paymentProof'),
+      render: (item: any) => (
+        item.paymentProof ? (
+          <Button 
+            variant="secondary" 
+            onClick={() => {
+              const win = window.open('', '_blank');
+              if (win) {
+                const src = item.paymentProof.startsWith('data:') 
+                  ? item.paymentProof 
+                  : `data:application/pdf;base64,${item.paymentProof}`;
+                win.document.write(`<iframe src="${src}" style="width:100%;height:100%;border:none;"></iframe>`);
+              }
+            }}
+            style={{ fontSize: '10px', padding: '3px 6px' }}
+          >
+            📄 View
+          </Button>
+        ) : (
+          <span style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>-</span>
+        )
+      ),
+    },
+    { key: 'status', header: t('common.status'), render: () => (
+      <span style={{ color: '#4CAF50', fontWeight: '600' }}>✅ CLOSED</span>
+    )},
   ];
 
   return (
     <div className="module-compact">
+      {newInvoiceAlert && (
+        <div style={{
+          padding: '12px 16px',
+          marginBottom: '16px',
+          backgroundColor: '#d4edda',
+          color: '#155724',
+          borderRadius: '4px',
+          border: '1px solid #c3e6cb',
+          fontSize: '14px',
+          fontWeight: '500'
+        }}>
+          {newInvoiceAlert}
+        </div>
+      )}
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h2>Accounts Receivable</h2>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <Input
-              type="text"
-              placeholder="Search invoices..."
-              value={searchQuery}
-              onChange={(value) => setSearchQuery(value)}
-            />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)' }}
+            <Button 
+              variant={activeTab === 'open' ? 'primary' : 'secondary'}
+              onClick={() => setActiveTab('open')}
+              style={{ fontSize: '12px', padding: '8px 16px' }}
             >
-              <option value="all">All</option>
-              <option value="current">Current</option>
-              <option value="overdue">Overdue</option>
-            </select>
-            <select
-              value={agingFilter}
-              onChange={(e) => setAgingFilter(e.target.value)}
-              style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)' }}
-            >
-              <option value="all">All Aging</option>
-              <option value="Not Due">Not Due</option>
-              <option value="0-30 Days">0-30 Days</option>
-              <option value="31-60 Days">31-60 Days</option>
-              <option value="61-90 Days">61-90 Days</option>
-              <option value="Over 90 Days">Over 90 Days</option>
-            </select>
-            <Button variant="secondary" onClick={loadData} disabled={loading}>
-              {loading ? '⏳ Loading...' : '🔄 Refresh'}
+              📋 AR Open ({openAR.length})
             </Button>
-            <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
+            <Button 
+              variant={activeTab === 'close' ? 'primary' : 'secondary'}
+              onClick={() => setActiveTab('close')}
+              style={{ fontSize: '12px', padding: '8px 16px' }}
+            >
+              ✅ AR Close ({closeAR.length})
+            </Button>
           </div>
         </div>
 
-        <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
-            <div>
-              <strong>Total AR:</strong> Rp {totalAR.toLocaleString('id-ID')}
-            </div>
-            <div>
-              <strong>Total Invoices:</strong> {filteredAR.length}
-            </div>
-            <div>
-              <strong>Overdue:</strong> {(Array.isArray(filteredAR) ? filteredAR : []).filter(item => item.isOverdue).length}
-            </div>
+        {/* Info Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '20px' }}>
+          <div style={{ padding: '15px', backgroundColor: '#e8f5e9', borderRadius: '8px', border: '1px solid #4caf50' }}>
+            <div style={{ fontSize: '12px', color: '#2e7d32', marginBottom: '6px', fontWeight: '600' }}>💰 Dana Masuk (AR Close)</div>
+            <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1b5e20' }}>Rp {(Array.isArray(arData) ? arData : []).filter(item => item.status === 'CLOSE').reduce((sum, item) => sum + (item.paidAmount || 0), 0).toLocaleString('id-ID')}</div>
+            <div style={{ fontSize: '11px', color: '#558b2f', marginTop: '4px' }}>Sudah diterima</div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px' }}>
-            {Object.entries(agingSummary).map(([category, amount]) => (
-              <div key={category} style={{ padding: '10px', backgroundColor: 'var(--bg-primary)', borderRadius: '4px' }}>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{category}</div>
-                <div style={{ fontSize: '16px', fontWeight: 'bold' }}>Rp {amount.toLocaleString('id-ID')}</div>
-              </div>
-            ))}
+          <div style={{ padding: '15px', backgroundColor: '#fff3e0', borderRadius: '8px', border: '1px solid #ff9800' }}>
+            <div style={{ fontSize: '12px', color: '#e65100', marginBottom: '6px', fontWeight: '600' }}>⏳ Outstanding Invoice (AR Open)</div>
+            <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#bf360c' }}>Rp {(Array.isArray(arData) ? arData : []).filter(item => item.status === 'OPEN').reduce((sum, item) => sum + (item.balance || 0), 0).toLocaleString('id-ID')}</div>
+            <div style={{ fontSize: '11px', color: '#d84315', marginTop: '4px' }}>Belum diterima</div>
           </div>
         </div>
+
+        {activeTab === 'open' && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '10px', position: 'sticky', top: 0, backgroundColor: 'var(--bg-primary)', zIndex: 5, padding: '12px 0', flexWrap: 'wrap' }}>
+              <Input
+                type="text"
+                placeholder="Search invoices..."
+                value={searchQuery}
+                onChange={(value) => setSearchQuery(value)}
+              />
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <DateRangeFilter
+                  onDateChange={(from, to) => {
+                    setDateFrom(from);
+                    setDateTo(to);
+                  }}
+                />
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    const today = new Date();
+                    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+                    setDateFrom(firstDay.toISOString().split('T')[0]);
+                    setDateTo(today.toISOString().split('T')[0]);
+                  }}
+                  style={{ fontSize: '11px', padding: '6px 12px' }}
+                >
+                  This Month
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    const today = new Date();
+                    const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+                    const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                    setDateFrom(lastMonthStart.toISOString().split('T')[0]);
+                    setDateTo(lastMonthEnd.toISOString().split('T')[0]);
+                  }}
+                  style={{ fontSize: '11px', padding: '6px 12px' }}
+                >
+                  Last Month
+                </Button>
+              </div>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)' }}
+              >
+                <option value="all">All</option>
+                <option value="current">Current</option>
+                <option value="overdue">Overdue</option>
+              </select>
+              <select
+                value={agingFilter}
+                onChange={(e) => setAgingFilter(e.target.value)}
+                style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)' }}
+              >
+                <option value="all">All Aging</option>
+                <option value="Not Due">Not Due</option>
+                <option value="0-30 Days">0-30 Days</option>
+                <option value="31-60 Days">31-60 Days</option>
+                <option value="61-90 Days">61-90 Days</option>
+                <option value="Over 90 Days">Over 90 Days</option>
+              </select>
+              <Button variant="secondary" onClick={loadData} disabled={loading}>
+                {loading ? '⏳ Loading...' : '🔄 Refresh'}
+              </Button>
+              <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
+            </div>
+          </>
+        )}
+
+        {activeTab === 'close' && (
+          <div style={{ marginBottom: '20px', position: 'sticky', top: 0, backgroundColor: 'var(--bg-primary)', zIndex: 5, padding: '12px 0' }}>
+            <Input
+              type="text"
+              placeholder="Search closed invoices..."
+              value={searchQuery}
+              onChange={(value) => setSearchQuery(value)}
+            />
+          </div>
+        )}
+
+        {activeTab === 'open' && (
+          <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
+              <div>
+                <strong>Total AR:</strong> Rp {totalAR.toLocaleString('id-ID')}
+              </div>
+              <div>
+                <strong>Total Invoices:</strong> {filteredAR.length}
+              </div>
+              <div>
+                <strong>Overdue:</strong> {(Array.isArray(filteredAR) ? filteredAR : []).filter(item => item.isOverdue).length}
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px' }}>
+              {Object.entries(agingSummary).map(([category, amount]) => (
+                <div key={category} style={{ padding: '10px', backgroundColor: 'var(--bg-primary)', borderRadius: '4px' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{category}</div>
+                  <div style={{ fontSize: '16px', fontWeight: 'bold' }}>Rp {amount.toLocaleString('id-ID')}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center' }}>
             <div>⏳ Loading data...</div>
           </div>
         ) : (
-          <Table columns={columns} data={filteredAR} />
+          <Table 
+            columns={activeTab === 'open' ? openColumns : closeColumns} 
+            data={filteredAR}
+            pageSize={10}
+            showPagination={true}
+            emptyMessage={activeTab === 'open' ? 'No open invoices' : 'No closed invoices'}
+          />
         )}
       </Card>
+
+      {/* Payment Dialog */}
+      {selectedInvoice && (
+        <div className="dialog-overlay" onClick={() => setSelectedInvoice(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
+            <Card className="dialog-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h2>Record Payment</h2>
+                <Button variant="secondary" onClick={() => setSelectedInvoice(null)} style={{ padding: '6px 12px' }}>✕</Button>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Invoice No</label>
+                <div style={{ padding: '10px', backgroundColor: 'var(--bg-secondary)', borderRadius: '4px' }}>
+                  {selectedInvoice.invoiceNo}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Customer</label>
+                <div style={{ padding: '10px', backgroundColor: 'var(--bg-secondary)', borderRadius: '4px' }}>
+                  {selectedInvoice.customerName}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Invoice Amount</label>
+                <div style={{ padding: '10px', backgroundColor: 'var(--bg-secondary)', borderRadius: '4px' }}>
+                  Rp {selectedInvoice.invoiceTotal.toLocaleString('id-ID')}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Paid Amount *</label>
+                <input
+                  type="number"
+                  value={paidAmount}
+                  onChange={(e) => setPaidAmount(Number(e.target.value))}
+                  min="0"
+                  max={selectedInvoice.invoiceTotal}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                <div style={{ marginTop: '4px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  Balance: Rp {(selectedInvoice.invoiceTotal - paidAmount).toLocaleString('id-ID')}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Payment Date *</label>
+                <input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Upload Payment Proof</label>
+                <input
+                  type="file"
+                  onChange={(e) => setPaymentProof(e.target.files?.[0] || null)}
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                {paymentProof && (
+                  <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    ✅ {paymentProof.name}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <Button variant="secondary" onClick={() => setSelectedInvoice(null)}>Cancel</Button>
+                <Button variant="primary" onClick={handlePaymentSubmit}>💾 Save Payment</Button>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

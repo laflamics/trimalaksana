@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
-import { storageService } from '../../../services/storage';
-import { deleteTruckingItem, deleteTruckingItems, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { storageService, StorageKeys } from '../../../services/storage';
+import { filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { setupRealTimeSync, TRUCKING_SYNC_KEYS } from '../../../utils/real-time-sync-helper';
 import { useDialog } from '../../../hooks/useDialog';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
@@ -22,15 +23,11 @@ const DBActivity = () => {
   const [itemsPerPage, setItemsPerPage] = useState<number>(50);
   
   // Custom Dialog - menggunakan hook terpusat
-  const { showAlert: showAlertBase, showConfirm: showConfirmBase, DialogComponent } = useDialog();
+  const { showAlert: showAlertBase, DialogComponent } = useDialog();
   
   // Wrapper untuk kompatibilitas dengan urutan parameter yang berbeda
   const showAlert = (message: string, title: string = 'Information') => {
     showAlertBase(message, title);
-  };
-  
-  const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
-    showConfirmBase(message, onConfirm, onCancel, title);
   };
   
   // Clear dialog state with checkboxes
@@ -433,12 +430,12 @@ const DBActivity = () => {
     try {
       // Pakai storageService.get() seperti di Drivers - sudah dioptimasi untuk load dari localStorage dulu, sync background
       const keys = [
-        'trucking_vehicles', 'trucking_drivers', 'trucking_routes', 'trucking_customers',
-        'trucking_delivery_orders', 'trucking_unitSchedules', 'trucking_pettycash_requests', 'trucking_pettycash_memos', 'trucking_suratJalan',
-        'trucking_accounts', 'trucking_journalEntries', 'trucking_invoices', 'trucking_payments',
-        'trucking_expenses', 'trucking_taxRecords', 'trucking_bills', 'trucking_purchaseOrders', 'trucking_invoiceNotifications',
-        'trucking_unitNotifications', 'trucking_pettyCashNotifications', 'trucking_suratJalanNotifications',
-        'trucking_audit',
+        StorageKeys.TRUCKING.VEHICLES, StorageKeys.TRUCKING.DRIVERS, StorageKeys.TRUCKING.ROUTES, StorageKeys.TRUCKING.CUSTOMERS,
+        StorageKeys.TRUCKING.DELIVERY_ORDERS, StorageKeys.TRUCKING.UNIT_SCHEDULES, StorageKeys.TRUCKING.PETTY_CASH_REQUESTS, StorageKeys.TRUCKING.PETTY_CASH_MEMOS, StorageKeys.TRUCKING.SURAT_JALAN,
+        StorageKeys.TRUCKING.ACCOUNTS, StorageKeys.TRUCKING.JOURNAL_ENTRIES, StorageKeys.TRUCKING.INVOICES, StorageKeys.TRUCKING.PAYMENTS,
+        StorageKeys.TRUCKING.EXPENSES, StorageKeys.TRUCKING.TAX_RECORDS, StorageKeys.TRUCKING.EXPENSES, StorageKeys.TRUCKING.PURCHASE_ORDERS, StorageKeys.TRUCKING.INVOICE_NOTIFICATIONS,
+        StorageKeys.TRUCKING.UNIT_NOTIFICATIONS, StorageKeys.TRUCKING.PETTY_CASH_NOTIFICATIONS, StorageKeys.TRUCKING.SURAT_JALAN_NOTIFICATIONS,
+        StorageKeys.TRUCKING.AUDIT_LOGS,
       ];
       
       // Load data menggunakan storageService untuk konsistensi (tetap baca semua data termasuk deleted untuk activity log)
@@ -471,16 +468,13 @@ const DBActivity = () => {
     setSeedMessage('');
 
     try {
-      const result = await storageService.importFromJsonFiles();
+      // importFromJsonFiles is not yet implemented, show message
+      setSeedMessage(`⚠ Seed from JSON files feature is not yet implemented. Please use: node scripts/seedtrucking.js`);
       
-      if (result.imported > 0) {
-        setSeedMessage(`✓ Imported ${result.imported} data files from data/ folder`);
-        setTimeout(() => {
-          loadData();
-        }, 500);
-      } else {
-        setSeedMessage(`✗ No data files found in data/ folder`);
-      }
+      // Reload data after a short delay
+      setTimeout(() => {
+        loadData();
+      }, 500);
     } catch (error: any) {
       setSeedMessage(`✗ Error: ${error.message || 'Failed to import data'}`);
     } finally {
@@ -494,28 +488,8 @@ const DBActivity = () => {
     setExportMessage('');
 
     try {
-      const result = await storageService.exportAllData();
-      
-      if (result.success && result.data) {
-        const electronAPI = (window as any).electronAPI;
-        if (electronAPI && electronAPI.exportLocalStorage) {
-          setExportMessage(`✓ Exported ${Object.keys(result.data).length} data files to data/localStorage/`);
-        } else {
-          const jsonStr = JSON.stringify(result.data, null, 2);
-          const blob = new Blob([jsonStr], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `trucking-export-${new Date().toISOString().split('T')[0]}.json`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          setExportMessage(`✓ Exported ${Object.keys(result.data).length} data files (downloaded)`);
-        }
-      } else {
-        setExportMessage(`✗ Export failed: ${result.error || 'Unknown error'}`);
-      }
+      // exportAllData is not yet implemented, show message
+      setExportMessage(`⚠ Export feature is not yet implemented. Please use the browser's developer tools to export localStorage manually.`);
     } catch (error: any) {
       setExportMessage(`✗ Error: ${error.message || 'Failed to export data'}`);
     } finally {
@@ -699,6 +673,15 @@ const DBActivity = () => {
 
   useEffect(() => {
     loadData();
+    
+    // Real-time listener para server updates - listen to all keys for debug page
+    const allKeys = Object.values(TRUCKING_SYNC_KEYS);
+    const cleanup = setupRealTimeSync({
+      keys: allKeys,
+      onUpdate: loadData,
+    });
+    
+    return cleanup;
   }, []);
 
   useEffect(() => {

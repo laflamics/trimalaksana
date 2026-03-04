@@ -2,13 +2,15 @@ import { useState, useEffect } from 'react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
-import { storageService, StorageType, SyncStatus } from '../../services/storage';
+import { storageService, StorageType, SyncStatus, StorageKeys } from '../../services/storage';
 import { dockerServerService } from '../../services/docker-server';
 import { getTheme, applyTheme, Theme } from '../../utils/theme';
 import { checkMobileUpdate, downloadMobileAPK, getAPKFileName } from '../../utils/actions';
+import { useLanguage } from '../../hooks/useLanguage';
 import '../../styles/compact.css';
 
 const Settings = () => {
+  const { language, setLanguage } = useLanguage();
   const [storageType, setStorageType] = useState<StorageType>('local');
   const [serverUrl, setServerUrl] = useState('');
   // Custom Dialog state
@@ -219,12 +221,12 @@ const Settings = () => {
       
       let wsUrl: string;
       if (isTailscaleFunnel && isHttps && config.serverUrl) {
-        // Tailscale Funnel with HTTPS - use wss:// without port
+        // Tailscale Funnel with HTTPS - use wss:// with port 9999 (fresh PostgreSQL server)
         const hostname = config.serverUrl.replace(/^https?:\/\//, '').replace(/:\d+/, '');
-        wsUrl = `wss://${hostname}/ws`;
+        wsUrl = `wss://${hostname}:9999/ws`;
       } else {
-        // Local or HTTP server - use ws:// with port
-        wsUrl = 'ws://server-tljp.tail75a421.ts.net:8888/ws';
+        // Local or HTTP server - use ws:// with port 9999 (fresh PostgreSQL server)
+        wsUrl = 'wss://server-tljp.tail75a421.ts.net:9999/ws';
       }
       
       const oldWsUrl = localStorage.getItem('websocket_url');
@@ -288,10 +290,11 @@ const Settings = () => {
       }
       
       // Normalize serverUrl (remove http:// or https:// if user accidentally included it)
-      // Tapi jangan hapus ws:// atau wss:// karena itu bukan untuk HTTP health check
       let cleanUrl = currentServerUrl.replace(/^https?:\/\//, '').trim();
-      // Jika masih ada ws:// atau wss://, hapus juga
       cleanUrl = cleanUrl.replace(/^wss?:\/\//, '').trim();
+      // Remove port from cleanUrl if it exists
+      cleanUrl = cleanUrl.replace(/:\d+$/, '').trim();
+      
       // Use https for Tailscale funnel, http for others
       const isTailscaleFunnel = cleanUrl.includes('tailscale') || cleanUrl.includes('tail') || cleanUrl.includes('.ts.net');
       const protocol = isTailscaleFunnel ? 'https' : 'http';
@@ -304,7 +307,6 @@ const Settings = () => {
       console.log(`[Settings] Checking connection to: ${fullUrl}`);
       
       // Try simple fetch first for better error reporting
-      // Android WebView will use network_security_config.xml for certificate handling
       try {
         const healthUrl = `${fullUrl}/health`;
         console.log(`[Settings] Health check URL: ${healthUrl}`);
@@ -325,58 +327,59 @@ const Settings = () => {
         clearTimeout(timeoutId);
         
         console.log(`[Settings] Direct fetch test:`, testResponse.status, testResponse.statusText);
-        console.log(`[Settings] Response headers:`, Object.fromEntries(testResponse.headers.entries()));
         
         // Check status code directly (200-299 range)
         if (testResponse.status >= 200 && testResponse.status < 300) {
           try {
             const data = await testResponse.json();
-            console.log(`[Settings] Health check response:`, data);
             setConnectionStatus('connected');
             return;
           } catch (jsonError) {
             // If JSON parse fails, check response text
             const text = await testResponse.text();
-            console.log(`[Settings] Response text:`, text);
             if (text.includes('ok') || text.includes('status') || text.includes('healthy')) {
-              console.log(`[Settings] Connection successful (text check)`);
               setConnectionStatus('connected');
               return;
             }
           }
-        } else {
-          const text = await testResponse.text().catch(() => '');
-          console.error(`[Settings] Connection failed:`, testResponse.status, testResponse.statusText, text);
         }
       } catch (fetchError: any) {
-        console.error(`[Settings] Direct fetch failed:`, fetchError);
-        console.error(`[Settings] Error type:`, fetchError.name);
-        console.error(`[Settings] Error message:`, fetchError.message);
-        console.error(`[Settings] Error code:`, fetchError.code);
-        if (fetchError.name === 'AbortError') {
-          console.error(`[Settings] Request timeout after 20 seconds`);
+        console.error(`[Settings] Direct fetch failed:`, fetchError.message);
+        
+        // Provide helpful error message based on error type
+        let errorHint = '';
+        if (fetchError.message.includes('ERR_NAME_NOT_RESOLVED') || fetchError.message.includes('Failed to fetch')) {
+          if (isTailscaleFunnel) {
+            errorHint = '\n\n⚠️ Cannot resolve Tailscale hostname!\n\nPlease check:\n' +
+                       '1. Tailscale client is running on this machine\n' +
+                       '2. You\'re connected to the Tailscale network\n' +
+                       '3. Try: tailscale status (in terminal)\n' +
+                       '4. Make sure PC utama is online';
+          } else {
+            errorHint = '\n\nPlease check:\n' +
+                       '1. Server address is correct\n' +
+                       '2. Server is running and accessible\n' +
+                       '3. Firewall allows connection to port ' + serverPort;
+          }
+        } else if (fetchError.name === 'AbortError') {
+          errorHint = '\n\nRequest timeout - server took too long to respond.';
         }
+        
+        setConnectionStatus('failed');
+        showAlert(`Connection failed!\n\nURL: ${fullUrl}\n${errorHint}\n\nTechnical: ${fetchError.message}`, 'Connection Error');
+        return;
       }
       
-      // Fallback to service
+      // Fallback to docker service check
       const connected = await dockerServerService.checkConnection(fullUrl);
       setConnectionStatus(connected ? 'connected' : 'failed');
       if (!connected) {
-        console.error(`[Settings] Connection failed. Check console for details.`);
-        const testUrl = isTailscaleFunnel ? fullUrl : `${fullUrl}/health`;
-        showAlert(`Connection failed!\n\nURL: ${fullUrl}\n\nPlease check:\n1. Server is running\n2. Tailscale funnel is active\n3. Try in browser: ${testUrl}\n4. Check console for detailed error`, 'Error');
+        showAlert(`Connection failed!\n\nURL: ${fullUrl}\n\nServer not responding. Please verify:\n1. Server is running\n2. Network connectivity\n3. Firewall settings`, 'Connection Error');
       }
     } catch (error: any) {
       console.error(`[Settings] Connection error:`, error);
       setConnectionStatus('failed');
-      // Normalize error URL display (same logic as handleCheckConnection)
-      let cleanErrorUrl = serverUrl.replace(/^https?:\/\//, '').trim();
-      const isTailscaleFunnel = cleanErrorUrl.includes('tailscale') || cleanErrorUrl.includes('tail') || cleanErrorUrl.includes('.ts.net');
-      const protocol = isTailscaleFunnel ? 'https' : 'http';
-      const errorUrl = isTailscaleFunnel
-        ? `${protocol}://${cleanErrorUrl}`
-        : `${protocol}://${cleanErrorUrl}:${serverPort}`;
-      showAlert(`Connection error: ${error.message}\n\nURL: ${errorUrl}\n\nPlease check console for details.`, 'Error');
+      showAlert(`Connection error: ${error.message}`, 'Error');
     }
   };
 
@@ -416,12 +419,12 @@ const Settings = () => {
       
       let wsUrl: string;
       if (isTailscaleFunnel && isHttps) {
-        // Tailscale Funnel with HTTPS - use wss:// without port
+        // Tailscale Funnel with HTTPS - use wss:// with port 9999 (fresh PostgreSQL server)
         const hostname = cleanServerUrl;
-        wsUrl = `wss://${hostname}/ws`;
+        wsUrl = `wss://${hostname}:9999/ws`;
       } else {
-        // Local or HTTP server - use ws:// with port
-        wsUrl = `ws://${cleanServerUrl}:${serverPort}/ws`;
+        // Local or HTTP server - use ws:// with port 9999 (fresh PostgreSQL server)
+        wsUrl = `wss://${cleanServerUrl}:9999/ws`;
       }
       
       const oldWsUrl = localStorage.getItem('websocket_url');
@@ -460,12 +463,14 @@ const Settings = () => {
     }
 
     // Save company settings
-    await storageService.set('companySettings', {
+    await storageService.set(StorageKeys.PACKAGING.COMPANY_SETTINGS, {
       companyName: companyName,
       address: companyAddress,
       bankName: bankName,
       bankAccount: bankAccount,
       npwp: npwp,
+      buffer: buffer,
+      workingCapital: workingCapital,
     });
 
     // Save and apply theme
@@ -488,6 +493,18 @@ const Settings = () => {
       // Desktop (Electron) - use electron-updater
       if (window.electronAPI?.checkForUpdates) {
         const result = await window.electronAPI.checkForUpdates();
+        // Suppress app-update.yml errors - they're expected and normal
+        if (!result.success && result.message && (
+          result.message.includes('app-update.yml') ||
+          result.message.includes('app-updates.yml') ||
+          result.message.includes('ENOENT') ||
+          (result.message.includes('no such file') && result.message.includes('app-update'))
+        )) {
+          // This is a normal error - app-update.yml is on server, not local
+          console.log('[Settings] Suppressing expected app-update.yml error:', result.message);
+          setCheckingUpdate(false);
+          return;
+        }
         if (!result.success) {
           showAlert(result.message || 'Failed to check for updates', 'Error');
           setCheckingUpdate(false);
@@ -541,9 +558,32 @@ const Settings = () => {
       try {
         const result = await window.electronAPI.downloadUpdate();
         if (!result.success) {
+          // Suppress app-update.yml errors - they're expected and normal
+          if (result.message && (
+            result.message.includes('app-update.yml') ||
+            result.message.includes('app-updates.yml') ||
+            result.message.includes('ENOENT') ||
+            result.message.includes('no such file') ||
+            result.message.includes('resources'))) {
+            // This is a normal error - app-update.yml is on server, not local
+            console.log('[Settings] Suppressing expected app-update.yml error:', result.message);
+            setUpdateProgress(null);
+            return;
+          }
           showAlert(result.message || 'Failed to download update', 'Error');
         }
       } catch (error: any) {
+        // Suppress app-update.yml errors
+        if (error.message && (
+          error.message.includes('app-update.yml') ||
+          error.message.includes('app-updates.yml') ||
+          error.message.includes('ENOENT') ||
+          error.message.includes('no such file') ||
+          error.message.includes('resources'))) {
+          console.log('[Settings] Suppressing expected app-update.yml error:', error.message);
+          setUpdateProgress(null);
+          return;
+        }
         showAlert(`Error: ${error.message}`, 'Error');
       }
       return;
@@ -677,7 +717,33 @@ const Settings = () => {
         <h1>Company Settings</h1>
       </div>
 
-      <Card title="Company Information">
+      <Card title="Language / Bahasa">
+        <div className="settings-group">
+          <label className="settings-label">Select Language</label>
+          <div className="radio-group">
+            <label className="radio-label">
+              <input
+                type="radio"
+                value="id"
+                checked={language === 'id'}
+                onChange={(e) => setLanguage(e.target.value as 'id' | 'en')}
+              />
+              <span>🇮🇩 Bahasa Indonesia</span>
+            </label>
+            <label className="radio-label">
+              <input
+                type="radio"
+                value="en"
+                checked={language === 'en'}
+                onChange={(e) => setLanguage(e.target.value as 'id' | 'en')}
+              />
+              <span>🇬🇧 English</span>
+            </label>
+          </div>
+        </div>
+      </Card>
+
+      <Card title="Company Information" style={{ marginTop: '20px' }}>
         <Input
           label="Company Name"
           value={companyName}
@@ -805,18 +871,6 @@ const Settings = () => {
                 {connectionStatus === 'failed' && '✗ Connection Failed'}
               </span>
             </div>
-            
-            {storageType === 'server' && (
-              <div style={{ marginTop: '12px', padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '4px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                <div style={{ marginBottom: '8px', fontWeight: '600', color: 'var(--text-primary)' }}>💡 Tips Koneksi:</div>
-                <div style={{ marginBottom: '4px' }}>• <strong>Local IP:</strong> 192.168.x.x (WiFi sama)</div>
-                <div style={{ marginBottom: '4px' }}>• <strong>Tailscale:</strong> 100.64.x.x (tidak perlu domain)</div>
-                <div style={{ marginBottom: '4px' }}>• <strong>Domain:</strong> yourdomain.com (perlu bayar domain)</div>
-                <div style={{ marginTop: '8px', fontSize: '11px', fontStyle: 'italic' }}>
-                  📖 Lihat docker/TAILSCALE_SETUP.md untuk setup Tailscale
-                </div>
-              </div>
-            )}
             
             {storageType === 'server' && (
               <div style={{ marginTop: '12px', padding: '8px', backgroundColor: 'var(--bg-secondary)', borderRadius: '4px' }}>
@@ -965,7 +1019,6 @@ const Settings = () => {
           </div>
         </div>
       )}
-
 
     </div>
   );

@@ -3,13 +3,16 @@ import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
-import { storageService, extractStorageValue } from '../../services/storage';
+import DateRangeFilter from '../../components/DateRangeFilter';
+import { storageService, extractStorageValue, StorageKeys } from '../../services/storage';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
 import { generateBacHtml } from '../../pdf/bac-pdf-template';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import { useDialog } from '../../hooks/useDialog';
+import { useLanguage } from '../../hooks/useLanguage';
 import '../../styles/common.css';
 import '../../styles/compact.css';
+import { deletePackagingItem, reloadPackagingData } from '@/utils/packaging-delete-helper';
 
 interface ReturnItem {
   id: string;
@@ -53,12 +56,17 @@ interface PurchaseOrder {
 }
 
 const Return = () => {
+  const { t } = useLanguage();
   const [returns, setReturns] = useState<ReturnItem[]>([]);
   const [salesOrders, setSalesOrders] = useState<SalesOrder[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
   const [viewPdfData, setViewPdfData] = useState<{ html: string; returnNo: string } | null>(null);
   const [toast, setToast] = useState<{ message: string; variant: 'success' | 'error' | 'info' } | null>(null);
   // Custom Dialog - menggunakan hook terpusat
@@ -235,13 +243,13 @@ const Return = () => {
 
       // Save return
       const currentReturns = extractStorageValue(await storageService.get<ReturnItem[]>('returns')) || [];
-      await storageService.set('returns', [...currentReturns, newReturn]);
+      await storageService.set(StorageKeys.PACKAGING.RETURNS, [...currentReturns, newReturn]);
 
       // Update inventory - tambah receipt (return)
       const inventory = extractStorageValue(await storageService.get<any[]>('inventory')) || [];
       const productCode = formData.productKode || formData.productId || '';
       const inventoryItem = inventory.find((inv: any) => 
-        inv.codeItem?.toLowerCase() === productCode.toLowerCase() ||
+        (inv.item_code || inv.codeItem)?.toLowerCase() === productCode.toLowerCase() ||
         inv.sku?.toLowerCase() === productCode.toLowerCase()
       );
 
@@ -264,7 +272,7 @@ const Return = () => {
           }
           return inv;
         });
-        await storageService.set('inventory', updatedInventory);
+        await storageService.set(StorageKeys.PACKAGING.INVENTORY, updatedInventory);
       } else {
         // Jika tidak ada di inventory, buat baru
         const stockPremonth = 0;
@@ -277,6 +285,8 @@ const Return = () => {
         const newInventoryItem = {
           id: Date.now().toString(),
           codeItem: productCode,
+          item_code: productCode, // New standardized field
+          type: formData.sourceType === 'PO' ? 'material' : 'product', // New standardized field
           description: formData.productName,
           kategori: formData.sourceType === 'PO' ? 'Material' : 'Product',
           satuan: formData.unit || 'PCS',
@@ -288,7 +298,7 @@ const Return = () => {
           nextStock: nextStock,
           lastUpdate: new Date().toISOString(),
         };
-        await storageService.set('inventory', [...inventory, newInventoryItem]);
+        await storageService.set(StorageKeys.PACKAGING.INVENTORY, [...inventory, newInventoryItem]);
       }
 
       // Trigger storage change event
@@ -326,15 +336,37 @@ const Return = () => {
   };
 
   const filteredReturns = useMemo(() => {
-    if (!searchQuery) return returns;
+    if (!searchQuery && !dateFrom && !dateTo) return returns;
     const query = searchQuery.toLowerCase();
-    return returns.filter(r =>
-      r.returnNo.toLowerCase().includes(query) ||
-      r.sourceNo.toLowerCase().includes(query) ||
-      r.productName.toLowerCase().includes(query) ||
-      r.productKode.toLowerCase().includes(query)
-    );
-  }, [returns, searchQuery]);
+    return returns.filter(r => {
+      const matchesSearch = !searchQuery ||
+        r.returnNo.toLowerCase().includes(query) ||
+        r.sourceNo.toLowerCase().includes(query) ||
+        r.productName.toLowerCase().includes(query) ||
+        r.productKode.toLowerCase().includes(query);
+      
+      // Date filtering
+      const returnDate = new Date(r.created);
+      const matchesDateFrom = !dateFrom || returnDate >= new Date(dateFrom);
+      const matchesDateTo = !dateTo || returnDate <= new Date(dateTo);
+      
+      return matchesSearch && matchesDateFrom && matchesDateTo;
+    });
+  }, [returns, searchQuery, dateFrom, dateTo]);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  // Paginated results
+  const paginatedReturns = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredReturns.slice(startIndex, endIndex);
+  }, [filteredReturns, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredReturns.length / itemsPerPage);
 
   const handleDelete = async (item: ReturnItem) => {
     try {
@@ -530,12 +562,20 @@ const Return = () => {
 
       {/* Search */}
       <Card className="mb-4">
-        <Input
-          label="Search"
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder="Search by Return No, Source No, Product Name..."
-        />
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <Input
+            label="Search"
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search by Return No, Source No, Product Name..."
+          />
+          <DateRangeFilter
+            onDateChange={(from, to) => {
+              setDateFrom(from);
+              setDateTo(to);
+            }}
+          />
+        </div>
       </Card>
 
       {/* Form Dialog */}
@@ -806,11 +846,102 @@ const Return = () => {
               {searchQuery ? 'No returns found matching your search.' : 'No return data. Click "Tambah Return" to add new return.'}
             </div>
           ) : (
-            <Table
-              columns={columns}
-              data={filteredReturns}
-              emptyMessage="No return data available"
-            />
+            <>
+              <Table
+                columns={columns}
+                data={paginatedReturns}
+                emptyMessage="No return data available"
+              />
+              
+              {/* Pagination Controls */}
+              {filteredReturns.length > itemsPerPage && (
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginTop: '16px',
+                  paddingTop: '12px',
+                  borderTop: '1px solid var(--border-color)',
+                }}>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    style={{ padding: '6px 12px', fontSize: '12px' }}
+                  >
+                    ← Previous
+                  </Button>
+                  
+                  <div style={{
+                    display: 'flex',
+                    gap: '4px',
+                    alignItems: 'center',
+                  }}>
+                    {(() => {
+                      const pages: (number | string)[] = [];
+                      const maxPagesToShow = 5;
+                      
+                      if (totalPages <= maxPagesToShow) {
+                        for (let i = 1; i <= totalPages; i++) {
+                          pages.push(i);
+                        }
+                      } else {
+                        pages.push(1);
+                        if (currentPage > 3) pages.push('...');
+                        
+                        const startPage = Math.max(2, currentPage - 1);
+                        const endPage = Math.min(totalPages - 1, currentPage + 1);
+                        for (let i = startPage; i <= endPage; i++) {
+                          pages.push(i);
+                        }
+                        
+                        if (currentPage < totalPages - 2) pages.push('...');
+                        pages.push(totalPages);
+                      }
+                      
+                      return pages.map((page, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => typeof page === 'number' && setCurrentPage(page)}
+                          disabled={page === '...'}
+                          style={{
+                            padding: '6px 10px',
+                            border: page === currentPage ? '2px solid var(--primary-color)' : '1px solid var(--border-color)',
+                            backgroundColor: page === currentPage ? 'var(--primary-color)' : 'var(--bg-primary)',
+                            color: page === currentPage ? '#fff' : 'var(--text-primary)',
+                            borderRadius: '4px',
+                            cursor: page === '...' ? 'default' : 'pointer',
+                            fontSize: '12px',
+                            fontWeight: page === currentPage ? '600' : '400',
+                            opacity: page === '...' ? 0.5 : 1,
+                          }}
+                        >
+                          {page}
+                        </button>
+                      ));
+                    })()}
+                  </div>
+                  
+                  <Button
+                    variant="secondary"
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    style={{ padding: '6px 12px', fontSize: '12px' }}
+                  >
+                    Next →
+                  </Button>
+                </div>
+              )}
+              
+              <div style={{
+                marginTop: '12px',
+                fontSize: '12px',
+                color: 'var(--text-secondary)',
+                textAlign: 'center',
+              }}>
+                Page {currentPage} of {totalPages} ({filteredReturns.length} total)
+              </div>
+            </>
           )}
         </div>
       </Card>

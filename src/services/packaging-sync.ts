@@ -7,6 +7,7 @@ export type SyncPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
 
 import { websocketClient } from './websocket-client';
+import { storageService } from './storage';
 
 export interface SyncOperation {
   id: string;
@@ -45,7 +46,7 @@ class PackagingSync {
    */
   private checkInitialSyncStatus() {
     try {
-      const storageConfig = JSON.parse(localStorage.getItem('storage_config') || '{"type":"local"}');
+      const storageConfig = storageService.getConfig();
       
       if (storageConfig.type === 'server' && storageConfig.serverUrl) {
         // If server mode is configured, check if there are unsynced items
@@ -79,7 +80,7 @@ class PackagingSync {
       }
       
       // Use fixed WebSocket URL
-      const wsUrl = 'ws://server-tljp.tail75a421.ts.net:8888/ws';
+      const wsUrl = 'wss://server-tljp.tail75a421.ts.net/ws';
       
       this.ws = new WebSocket(wsUrl);
       
@@ -587,7 +588,7 @@ class PackagingSync {
       if (this.syncQueue.length === 0) {
         // Queue is empty, check final status
         const unsyncedCount = this.getUnsyncedCount();
-        const storageConfig = JSON.parse(localStorage.getItem('storage_config') || '{"type":"local"}');
+        const storageConfig = storageService.getConfig();
         
         if (storageConfig.type === 'server' && storageConfig.serverUrl) {
           if (unsyncedCount === 0) {
@@ -630,7 +631,7 @@ class PackagingSync {
     if (this.syncQueue.length === 0) {
       // Queue is empty, check final status
       const unsyncedCount = this.getUnsyncedCount();
-      const storageConfig = JSON.parse(localStorage.getItem('storage_config') || '{"type":"local"}');
+      const storageConfig = storageService.getConfig();
       
       if (storageConfig.type === 'server' && storageConfig.serverUrl) {
         if (unsyncedCount === 0) {
@@ -668,7 +669,7 @@ class PackagingSync {
       // Check if queue is empty after sync
       if (this.syncQueue.length === 0) {
         const unsyncedCount = this.getUnsyncedCount();
-        const storageConfig = JSON.parse(localStorage.getItem('storage_config') || '{"type":"local"}');
+        const storageConfig = storageService.getConfig();
         
         if (storageConfig.type === 'server' && storageConfig.serverUrl) {
           if (unsyncedCount === 0) {
@@ -708,29 +709,37 @@ class PackagingSync {
    * Sync to server with conflict resolution metadata
    */
   private async syncToServer(operation: SyncOperation): Promise<void> {
-    const storageConfig = JSON.parse(localStorage.getItem('storage_config') || '{"type":"local"}');
+    const storageConfig = storageService.getConfig();
     
     if (storageConfig.type !== 'server' || !storageConfig.serverUrl) {
       return; // Skip server sync if not configured
     }
     
-    // Pakai WebSocket saja (lebih cepat, tidak pakai HTTP/Vercel)
-    const ready = await websocketClient.waitUntilReady(10000);
-    if (!ready) {
-      throw new Error('WebSocket not available. Please enable WebSocket in settings.');
-    }
-    
     try {
-      await websocketClient.post(operation.key, operation.data, operation.timestamp);
+      const response = await fetch(`${storageConfig.serverUrl}/api/storage/${encodeURIComponent(operation.key)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          value: operation.data,
+          timestamp: operation.timestamp
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
     } catch (error: any) {
       // Handle conflict atau error lainnya
       if (error.message && error.message.includes('conflict')) {
         // Try to get server data for conflict resolution
         try {
-          // Wait until ready again for GET request
-          const getReady = await websocketClient.waitUntilReady(10000);
-          if (getReady) {
-            const serverData = await websocketClient.get(operation.key);
+          const getResponse = await fetch(`${storageConfig.serverUrl}/api/storage/${encodeURIComponent(operation.key)}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          if (getResponse.ok) {
+            const serverData = await getResponse.json();
             await this.handleServerConflict(operation, serverData);
             return;
           }

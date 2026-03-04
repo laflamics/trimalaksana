@@ -1,0 +1,313 @@
++] Running 1/1
+ ✔ Container docker-storage-server-1  Running                             0.0s 
+    Container started successfully
+    Waiting for container to be ready...
+[3/3] Starting Tailscale funnel...
+    Starting Tailscale funnel in background...
+Process started with PID: 11312
+    WARNING: Tailscale funnel might not have started
+========================================
+All services started - 24/01/2026  9:01:04,15
+========================================
+PS D:\trimalaksanaapps\PT.Trima Laksana Jaya Pratama\docker> netstat -ano | findstr "8888"
+  TCP    0.0.0.0:8888           0.0.0.0:0              LISTENING       14264
+  TCP    100.81.50.37:8888      100.81.50.37:50271     FIN_WAIT_2      11968
+  TCP    100.81.50.37:50271     100.81.50.37:8888      CLOSE_WAIT      156     
+  TCP    127.0.0.1:8888         127.0.0.1:62934        ESTABLISHED     14264   
+  TCP    127.0.0.1:62934        127.0.0.1:8888         ESTABLISHED     6308    
+PS D:\trimalaksanaapps\PT.Trima Laksana Jaya Pratama\docker> docker-compose ps
+NAME                      IMAGE                   COMMAND                  SERVICE          CREATED              STATUS              PORTS
+docker-storage-server-1   docker-storage-server   "docker-entrypoint.s…"   storage-server   About a minute ago   Up About a minute   0.0.0.0:8888->8888/tcp, 0.0.0.0:8080->8888/tcp
+PS D:\trimalaksanaapps\PT.Trima Laksana Jaya Pratama\docker> docker-compose logs -f
+storage-server-1  | [Server] ✅ WebSocket server ready for upgrades on path: /ws
+storage-server-1  | [Server] ========================================
+storage-server-1  | [Server] Storage server running on port 8888
+storage-server-1  | [Server] DATA_DIR: /app/data
+storage-server-1  | [Server] UPDATES_DIR: /app/updates
+storage-server-1  | [Server] UPLOADS_DIR: /app/uploads
+storage-server-1  | [Server] HTTP: http://0.0.0.0:8888
+storage-server-1  | [Server] WebSocket: ws://0.0.0.0:8888/ws
+storage-server-1  | [Server] ✅ WebSocket server ready for upgrades on path: /ws
+storage-server-1  | [Server] ========================================
+storage-server-1  | [Server] ✅ DATA_DIR created/verified: /app/data
+storage-server-1  | [Server] ✅ UPDATES_DIR created/verified: /app/updates     
+storage-server-1  | [Server] ✅ DATA_DIR is accessible
+storage-server-1  | [Server] ✅ latest.yml found in UPDATES_DIR
+storage-server-1  | [Server] 📡 WebSocket upgrade request for: /ws
+storage-server-1  | [Server] 📡 Headers: Host=server-tljp.tail75a421.ts.net, Upgrade=websocket, Connection=Upgrade
+storage-server-1  | [Server] ✅ New WebSocket connection established
+storage-server-1  | [Server] Client IP: 172.17.0.1
+storage-server-1  | [Server] User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.96 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36
+
+ebSocketClient] 🔌 Attempting connection to: wss://server-tljp.tail75a421.ts.net/ws
+index.R_hhlF_4.js:6164 💡 Run test from browser console: runCompleteFlowTest()
+index.R_hhlF_4.js:8694 🚀 Starting React app...
+index.R_hhlF_4.js:8694 ✅ Server mode enabled
+index.R_hhlF_4.js:8694 ✅ Server URL: http://localhost:8888
+index.R_hhlF_4.js:8694 ✅ Root element found
+index.R_hhlF_4.js:8694 ✅ React app rendered
+index.R_hhlF_4.js:8694 ✅ Global mousedown listener added
+index.R_hhlF_4.js:8694 📱 App component rendering...
+VM699 sandbox_bundle:2 Electron Security Warning (Disabled webSecurity) This renderer process has "webSecurity" disabled. This
+  exposes users of this app to severe security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+(anonymous) @ VM699 sandbox_bundle:2
+logSecurityWarnings @ VM699 sandbox_bundle:2
+(anonymous) @ VM699 sandbox_bundle:2
+load (async)
+securityWarnings @ VM699 sandbox_bundle:2
+./lib/renderer/common-init.ts @ VM699 sandbox_bundle:2
+__webpack_require__ @ VM699 sandbox_bundle:2
+(anonymous) @ VM699 sandbox_bundle:2
+(anonymous) @ VM699 sandbox_bundle:2
+___electron_webpack_init__ @ VM699 sandbox_bundle:2
+(anonymous) @ VM699 sandbox_bundle:2
+index.R_hhlF_4.js:67 [WebSocketClient] ✅ WebSocket connected!
+/noxtiz.ico:1 
+        
+        
+       GET file:///noxtiz.ico net::ERR_FILE_NOT_FOUND
+Image (async)
+Dj @ index.R_hhlF_4.js:40
+sO @ index.R_hhlF_4.js:40
+g3 @ index.R_hhlF_4.js:40
+v3 @ index.R_hhlF_4.js:40
+Ac @ index.R_hhlF_4.js:40
+iO @ index.R_hhlF_4.js:40
+O @ index.R_hhlF_4.js:25
+T @ index.R_hhlF_4.js:25
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for companySettings (0 items)
+index.R_hhlF_4.js:67 [Storage.get] 🔄 Starting background sync for companySettings...
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] 🔄 Syncing companySettings from server...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing companySettings from server path: packaging/companySettings
+index.R_hhlF_4.js:7917 ✅ Server mode: Server is single source of truth
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for companySettings: {type: 'object', isArray: false, isEmpty: false, hasValue: false, keys: Array(5), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for companySettings: {isArray: true, length: 0}
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for companySettings (0 items)
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📭 Server returned empty array for companySettings
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for companySettings (object)
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📭 Local has 0 items for companySettings
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] ✅ Updating companySettings to empty array (local is also empty)
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] ✅ Successfully synced companySettings from server
+index.R_hhlF_4.js:7917 [Settings] Checking connection to: https://server-tljp.tail75a421.ts.net
+index.R_hhlF_4.js:7917 [Settings] Health check URL: https://server-tljp.tail75a421.ts.net/health
+index.R_hhlF_4.js:7917 [Settings] Direct fetch test: 200 
+index.R_hhlF_4.js:7944 [Settings] 🔌 Setting WebSocket URL: wss://server-tljp.tail75a421.ts.net/ws (HTTPS: true, Tailscale: true)
+index.R_hhlF_4.js:67 [Storage.syncFromServer] 🚀 syncFromServer called
+index.R_hhlF_4.js:67 [Storage.syncFromServer] 📋 Config: {type: 'server', serverUrl: 'https://server-tljp.tail75a421.ts.net'}
+index.R_hhlF_4.js:67 [Storage.syncFromServer] ✅ Starting sync...
+index.R_hhlF_4.js:67 [Storage.syncFromServer] 🏢 Business context: packaging
+index.R_hhlF_4.js:67 [Storage.syncFromServer] 🚀 Starting sync for 12 keys: (12) ['products', 'materials', 'customers', 'suppliers', 'userAccessControl', 'salesOrders', 'purchaseOrders', 'production', 'inventory', 'bom', 'spk', 'qc']
+index.R_hhlF_4.js:67 [Storage.syncFromServer] 🔄 Syncing products...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing products from server path: packaging/products
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for products: {type: 'object', isArray: true, isEmpty: false, hasValue: false, keys: Array(10980), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for products: {isArray: true, length: 10980}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Server has 10980 items for products, merging with local...
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for products (10980 items)
+index.R_hhlF_4.js:67 [Storage.get] 🔄 Starting background sync for products...
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] 🔄 Syncing products from server...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing products from server path: packaging/products
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Local has 10980 items for products
+index.R_hhlF_4.js:67 [Storage.syncFromServer] ✅ Successfully synced products
+index.R_hhlF_4.js:67 [Storage.syncFromServer] 🔄 Syncing materials...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing materials from server path: packaging/materials
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for products: {type: 'object', isArray: true, isEmpty: false, hasValue: false, keys: Array(10980), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for products: {isArray: true, length: 10980}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Server has 10980 items for products, merging with local...
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for products (10980 items)
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Local has 10980 items for products
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] ✅ Successfully synced products from server
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for materials: {type: 'object', isArray: true, isEmpty: false, hasValue: false, keys: Array(821), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for materials: {isArray: true, length: 821}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Server has 821 items for materials, merging with local...
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for materials (821 items)
+index.R_hhlF_4.js:67 [Storage.get] 🔄 Starting background sync for materials...
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] 🔄 Syncing materials from server...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing materials from server path: packaging/materials
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Local has 821 items for materials
+index.R_hhlF_4.js:67 [Storage.syncFromServer] ✅ Successfully synced materials
+index.R_hhlF_4.js:67 [Storage.syncFromServer] 🔄 Syncing customers...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing customers from server path: packaging/customers
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for materials: {type: 'object', isArray: true, isEmpty: false, hasValue: false, keys: Array(821), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for materials: {isArray: true, length: 821}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Server has 821 items for materials, merging with local...
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for materials (821 items)
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Local has 821 items for materials
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] ✅ Successfully synced materials from server
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for customers: {type: 'object', isArray: true, isEmpty: false, hasValue: false, keys: Array(324), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for customers: {isArray: true, length: 324}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Server has 324 items for customers, merging with local...
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for customers (324 items)
+index.R_hhlF_4.js:67 [Storage.get] 🔄 Starting background sync for customers...
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] 🔄 Syncing customers from server...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing customers from server path: packaging/customers
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Local has 324 items for customers
+index.R_hhlF_4.js:67 [Storage.syncFromServer] ✅ Successfully synced customers
+index.R_hhlF_4.js:67 [Storage.syncFromServer] 🔄 Syncing suppliers...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing suppliers from server path: packaging/suppliers
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for customers: {type: 'object', isArray: true, isEmpty: false, hasValue: false, keys: Array(324), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for customers: {isArray: true, length: 324}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Server has 324 items for customers, merging with local...
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for customers (324 items)
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Local has 324 items for customers
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] ✅ Successfully synced customers from server
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for suppliers: {type: 'object', isArray: true, isEmpty: false, hasValue: false, keys: Array(33), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for suppliers: {isArray: true, length: 33}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Server has 33 items for suppliers, merging with local...
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for suppliers (33 items)
+index.R_hhlF_4.js:67 [Storage.get] 🔄 Starting background sync for suppliers...
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] 🔄 Syncing suppliers from server...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing suppliers from server path: packaging/suppliers
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Local has 33 items for suppliers
+index.R_hhlF_4.js:67 [Storage.syncFromServer] ✅ Successfully synced suppliers
+index.R_hhlF_4.js:67 [Storage.syncFromServer] 🔄 Syncing userAccessControl...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing userAccessControl from server path: packaging/userAccessControl
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for suppliers: {type: 'object', isArray: true, isEmpty: false, hasValue: false, keys: Array(33), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for suppliers: {isArray: true, length: 33}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Server has 33 items for suppliers, merging with local...
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for suppliers (33 items)
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Local has 33 items for suppliers
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] ✅ Successfully synced suppliers from server
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for userAccessControl: {type: 'object', isArray: true, isEmpty: false, hasValue: false, keys: Array(256), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for userAccessControl: {isArray: true, length: 256}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Server has 256 items for userAccessControl, merging with local...
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for userAccessControl (256 items)
+index.R_hhlF_4.js:67 [Storage.get] 🔄 Starting background sync for userAccessControl...
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] 🔄 Syncing userAccessControl from server...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing userAccessControl from server path: packaging/userAccessControl
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Local has 256 items for userAccessControl
+index.R_hhlF_4.js:67 [Storage.syncFromServer] ✅ Successfully synced userAccessControl
+index.R_hhlF_4.js:67 [Storage.syncFromServer] 🔄 Syncing salesOrders...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing salesOrders from server path: packaging/salesOrders
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for userAccessControl: {type: 'object', isArray: true, isEmpty: false, hasValue: false, keys: Array(256), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for userAccessControl: {isArray: true, length: 256}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Server has 256 items for userAccessControl, merging with local...
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for userAccessControl (256 items)
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Local has 256 items for userAccessControl
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] ✅ Successfully synced userAccessControl from server
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for salesOrders: {type: 'object', isArray: true, isEmpty: false, hasValue: false, keys: Array(62), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for salesOrders: {isArray: true, length: 62}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Server has 62 items for salesOrders, merging with local...
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for salesOrders (62 items)
+index.R_hhlF_4.js:67 [Storage.get] 🔄 Starting background sync for salesOrders...
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] 🔄 Syncing salesOrders from server...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing salesOrders from server path: packaging/salesOrders
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Local has 62 items for salesOrders
+index.R_hhlF_4.js:67 [Storage.syncFromServer] ✅ Successfully synced salesOrders
+index.R_hhlF_4.js:67 [Storage.syncFromServer] 🔄 Syncing purchaseOrders...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing purchaseOrders from server path: packaging/purchaseOrders
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for salesOrders: {type: 'object', isArray: true, isEmpty: false, hasValue: false, keys: Array(62), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for salesOrders: {isArray: true, length: 62}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Server has 62 items for salesOrders, merging with local...
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for salesOrders (62 items)
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Local has 62 items for salesOrders
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] ✅ Successfully synced salesOrders from server
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for purchaseOrders: {type: 'object', isArray: true, isEmpty: true, hasValue: false, keys: Array(0), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for purchaseOrders: {isArray: true, length: 0}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📭 Server returned empty array for purchaseOrders
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for purchaseOrders (0 items)
+index.R_hhlF_4.js:67 [Storage.get] 🔄 Starting background sync for purchaseOrders...
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] 🔄 Syncing purchaseOrders from server...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing purchaseOrders from server path: packaging/purchaseOrders
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📭 Local has 0 items for purchaseOrders
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] ✅ Updating purchaseOrders to empty array (local is also empty)
+index.R_hhlF_4.js:67 [Storage.syncFromServer] ✅ Successfully synced purchaseOrders
+index.R_hhlF_4.js:67 [Storage.syncFromServer] 🔄 Syncing production...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing production from server path: packaging/production
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for purchaseOrders: {type: 'object', isArray: true, isEmpty: true, hasValue: false, keys: Array(0), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for purchaseOrders: {isArray: true, length: 0}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📭 Server returned empty array for purchaseOrders
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for purchaseOrders (0 items)
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📭 Local has 0 items for purchaseOrders
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] ✅ Updating purchaseOrders to empty array (local is also empty)
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] ✅ Successfully synced purchaseOrders from server
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for production: {type: 'object', isArray: true, isEmpty: false, hasValue: false, keys: Array(4), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for production: {isArray: true, length: 4}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Server has 4 items for production, merging with local...
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for production (3 items)
+index.R_hhlF_4.js:67 [Storage.get] 🔄 Starting background sync for production...
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] 🔄 Syncing production from server...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing production from server path: packaging/production
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Local has 3 items for production
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for production: {type: 'object', isArray: true, isEmpty: false, hasValue: false, keys: Array(4), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for production: {isArray: true, length: 4}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Server has 4 items for production, merging with local...
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for production (3 items)
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Local has 3 items for production
+index.R_hhlF_4.js:67 [Storage.syncFromServer] ✅ Successfully synced production
+index.R_hhlF_4.js:67 [Storage.syncFromServer] 🔄 Syncing inventory...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing inventory from server path: packaging/inventory
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] ✅ Successfully synced production from server
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for inventory: {type: 'object', isArray: true, isEmpty: false, hasValue: false, keys: Array(321), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for inventory: {isArray: true, length: 321}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Server has 321 items for inventory, merging with local...
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for inventory (321 items)
+index.R_hhlF_4.js:67 [Storage.get] 🔄 Starting background sync for inventory...
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] 🔄 Syncing inventory from server...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing inventory from server path: packaging/inventory
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Local has 321 items for inventory
+index.R_hhlF_4.js:67 [Storage.syncFromServer] ✅ Successfully synced inventory
+index.R_hhlF_4.js:67 [Storage.syncFromServer] 🔄 Syncing bom...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing bom from server path: packaging/bom
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for inventory: {type: 'object', isArray: true, isEmpty: false, hasValue: false, keys: Array(321), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for inventory: {isArray: true, length: 321}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Server has 321 items for inventory, merging with local...
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for inventory (321 items)
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Local has 321 items for inventory
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] ✅ Successfully synced inventory from server
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for bom: {type: 'object', isArray: true, isEmpty: false, hasValue: false, keys: Array(64), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for bom: {isArray: true, length: 64}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Server has 64 items for bom, merging with local...
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for bom (64 items)
+index.R_hhlF_4.js:67 [Storage.get] 🔄 Starting background sync for bom...
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] 🔄 Syncing bom from server...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing bom from server path: packaging/bom
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Local has 64 items for bom
+index.R_hhlF_4.js:67 [Storage.syncFromServer] ✅ Successfully synced bom
+index.R_hhlF_4.js:67 [Storage.syncFromServer] 🔄 Syncing spk...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing spk from server path: packaging/spk
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for bom: {type: 'object', isArray: true, isEmpty: false, hasValue: false, keys: Array(64), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for bom: {isArray: true, length: 64}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Server has 64 items for bom, merging with local...
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for bom (64 items)
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Local has 64 items for bom
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] ✅ Successfully synced bom from server
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for spk: {type: 'object', isArray: true, isEmpty: false, hasValue: false, keys: Array(5), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for spk: {isArray: true, length: 5}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Server has 5 items for spk, merging with local...
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for spk (2 items)
+index.R_hhlF_4.js:67 [Storage.get] 🔄 Starting background sync for spk...
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] 🔄 Syncing spk from server...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing spk from server path: packaging/spk
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Local has 2 items for spk
+index.R_hhlF_4.js:67 [Storage.syncFromServer] ✅ Successfully synced spk
+index.R_hhlF_4.js:67 [Storage.syncFromServer] 🔄 Syncing qc...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing qc from server path: packaging/qc
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for spk: {type: 'object', isArray: true, isEmpty: false, hasValue: false, keys: Array(5), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for spk: {isArray: true, length: 5}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Server has 5 items for spk, merging with local...
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for spk (7 items)
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📦 Local has 7 items for spk
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] ✅ Successfully synced spk from server
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for qc: {type: 'object', isArray: true, isEmpty: true, hasValue: false, keys: Array(0), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for qc: {isArray: true, length: 0}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📭 Server returned empty array for qc
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for qc (0 items)
+index.R_hhlF_4.js:67 [Storage.get] 🔄 Starting background sync for qc...
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] 🔄 Syncing qc from server...
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 🔄 Syncing qc from server path: packaging/qc
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📭 Local has 0 items for qc
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] ✅ Updating qc to empty array (local is also empty)
+index.R_hhlF_4.js:67 [Storage.syncFromServer] ✅ Successfully synced qc
+index.R_hhlF_4.js:67 [Storage.syncFromServer] 📊 Sync complete: 12 succeeded, 0 failed
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📥 Received data for qc: {type: 'object', isArray: true, isEmpty: true, hasValue: false, keys: Array(0), …}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📊 Extracted array for qc: {isArray: true, length: 0}
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📭 Server returned empty array for qc
+index.R_hhlF_4.js:67 [Storage.get] ✅ Using local data for qc (0 items)
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] 📭 Local has 0 items for qc
+index.R_hhlF_4.js:67 [Storage.syncDataFromServer] ✅ Updating qc to empty array (local is also empty)
+index.R_hhlF_4.js:67 [Storage.syncFromServerInBackground] ✅ Successfully synced qc from server

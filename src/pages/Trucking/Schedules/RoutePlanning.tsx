@@ -3,8 +3,9 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService, extractStorageValue } from '../../../services/storage';
+import { storageService, extractStorageValue, StorageKeys } from '../../../services/storage';
 import { filterActiveItems } from '../../../utils/data-persistence-helper';
+import { setupRealTimeSync, TRUCKING_SYNC_KEYS } from '../../../utils/real-time-sync-helper';
 import '../../../styles/common.css';
 
 interface RoutePlan {
@@ -108,17 +109,25 @@ const RoutePlanning = () => {
 
   useEffect(() => {
     loadData();
+    
+    // Real-time listener untuk server updates
+    const cleanup = setupRealTimeSync({
+      keys: [TRUCKING_SYNC_KEYS.ROUTE_PLANS, TRUCKING_SYNC_KEYS.DELIVERY_ORDERS, TRUCKING_SYNC_KEYS.ROUTES],
+      onUpdate: loadData,
+    });
+    
+    return cleanup;
   }, []);
 
   const loadData = async () => {
     try {
       // Load semua data menggunakan storageService untuk membaca dari file storage juga
       const [plansDataRaw, ordersDataRaw, routesDataRaw, vehiclesDataRaw, driversDataRaw] = await Promise.all([
-        storageService.get<RoutePlan[]>('trucking_route_plans'),
-        storageService.get<any[]>('trucking_delivery_orders'),
-        storageService.get<any[]>('trucking_routes'),
-        storageService.get<any[]>('trucking_vehicles'),
-        storageService.get<any[]>('trucking_drivers'),
+        storageService.get<RoutePlan[]>(StorageKeys.TRUCKING.ROUTE_PLANS),
+        storageService.get<any[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS),
+        storageService.get<any[]>(StorageKeys.TRUCKING.ROUTES),
+        storageService.get<any[]>(StorageKeys.TRUCKING.VEHICLES),
+        storageService.get<any[]>(StorageKeys.TRUCKING.DRIVERS),
       ]);
       
       // CRITICAL: Extract array from storage wrapper if needed
@@ -185,7 +194,7 @@ const RoutePlanning = () => {
               } as RoutePlan
             : p
         );
-        await storageService.set('trucking_route_plans', updated);
+        await storageService.set(StorageKeys.TRUCKING.ROUTE_PLANS, updated);
         setPlans(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
       } else {
         const newPlan: RoutePlan = {
@@ -203,7 +212,7 @@ const RoutePlanning = () => {
           ...formData,
         } as RoutePlan;
         const updated = [...plans, newPlan];
-        await storageService.set('trucking_route_plans', updated);
+        await storageService.set(StorageKeys.TRUCKING.ROUTE_PLANS, updated);
         setPlans(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
       }
       setShowForm(false);
@@ -428,7 +437,7 @@ const RoutePlanning = () => {
             onChange={(v) => setFormData({ ...formData, notes: v })}
           />
           <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-            <Button onClick={() => { setShowForm(false); setEditingItem(null); setFormData({ planNo: '', planDate: new Date().toISOString().split('T')[0], routeId: '', vehicleId: '', driverId: '', doIds: [], estimatedDeparture: '', estimatedArrival: '', status: 'Draft', notes: '' }); }} variant="secondary">
+            <Button onClick={() => { setShowForm(false); setEditingItem(null); setFormData({ planNo: '', planDate: new Date().toISOString().split('T')[0], routeId: '', vehicleId: '', driverId: '', doIds: [], estimatedDeparture: '', estimatedArrival: '', status: 'Open', notes: '' }); }} variant="secondary">
               Cancel
             </Button>
             <Button onClick={handleSave} variant="primary">

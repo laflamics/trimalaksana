@@ -4,79 +4,68 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService } from '../../../services/storage';
-import { deleteGTItem, reloadGTData, filterActiveItems } from '../../../utils/gt-delete-helper';
-import { loadGTDataFromLocalStorage } from '../../../utils/gtStorageHelper';
+import DateRangeFilter from '../../../components/DateRangeFilter';
+import { storageService, extractStorageValue, StorageKeys } from '../../../services/storage';
+import { logUpdate } from '../../../utils/activity-logger';
+import { useLanguage } from '../../../hooks/useLanguage';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
 interface TaxRecord {
   id: string;
   taxDate: string;
-  reference: string; // Invoice No, PO No, Payment No, etc
-  referenceType: 'Invoice' | 'Purchase Order' | 'Payment' | 'Manual';
-  taxType: 'PPN Masukan' | 'PPN Keluaran' | 'PPN Barang Mewah' | 'PPh 21' | 'PPh 23' | 'PPh 25' | 'PPh 4(2)' | 'Other';
-  coaCode: string; // COA account code
-  coaName: string; // COA account name
-  baseAmount: number; // Amount sebelum tax
-  taxPercent: number; // Tax percentage
-  taxAmount: number; // Tax amount
-  totalAmount: number; // Total amount (base + tax)
+  reference: string;
+  referenceType: 'Invoice' | 'Payment';
+  taxType: 'PPN Keluaran' | 'PPN Masukan';
+  baseAmount: number;
+  taxPercent: number;
+  taxAmount: number;
+  totalAmount: number;
   customer?: string;
   supplier?: string;
   description: string;
-  status: 'Open' | 'Paid' | 'Claimed';
+  status: 'Open' | 'Paid';
+  paidDate?: string;
+  paidAmount?: number;
+  paymentProof?: string;
+  proofFileName?: string;
   created: string;
-  updated?: string;
 }
 
-interface Account {
-  code: string;
-  name: string;
-  type: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
-  balance: number;
+interface Payment {
+  id: string;
+  no: number;
+  paymentNo: string;
+  paymentDate: string;
+  type: 'Receipt' | 'Payment';
+  invoiceNo?: string;
+  poNo?: string;
+  amount: number;
+  paymentMethod: string;
+  reference?: string;
+  notes?: string;
 }
 
 const TaxManagement = () => {
+  const { t } = useLanguage();
   const [taxRecords, setTaxRecords] = useState<TaxRecord[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [invoices, setInvoices] = useState<any[]>([]);
-  const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
-  const [payments, setPayments] = useState<any[]>([]);
-  const [showForm, setShowForm] = useState(false);
-  const [editingRecord, setEditingRecord] = useState<TaxRecord | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [taxTypeFilter, setTaxTypeFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [coaInputValue, setCoaInputValue] = useState('');
-  const [baseAmountInputValue, setBaseAmountInputValue] = useState('');
-  const [taxPercentInputValue, setTaxPercentInputValue] = useState('');
-  const [taxAmountInputValue, setTaxAmountInputValue] = useState('');
-  const [formData, setFormData] = useState<Partial<TaxRecord>>({
-    taxDate: new Date().toISOString().split('T')[0],
-    reference: '',
-    referenceType: 'Manual',
-    taxType: 'PPN Masukan',
-    coaCode: '',
-    coaName: '',
-    baseAmount: 0,
-    taxPercent: 11,
-    taxAmount: 0,
-    totalAmount: 0,
-    description: '',
-    status: 'Open',
-  });
+  const [activeTab, setActiveTab] = useState<'open' | 'paid'>('open');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<TaxRecord | null>(null);
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [paidAmount, setPaidAmount] = useState<number>(0);
+  const [paymentProof, setPaymentProof] = useState<File | null>(null);
 
   // Custom Dialog state
-  const [dialogState, setDialogState] = useState<{
+  const [, setDialogState] = useState<{
     show: boolean;
     type: 'alert' | 'confirm';
     title: string;
     message: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
   }>({
     show: false,
     type: 'alert',
@@ -84,7 +73,6 @@ const TaxManagement = () => {
     message: '',
   });
 
-  // Helper functions untuk dialog
   const showAlert = (message: string, title: string = 'Information') => {
     if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
       (window as any).setDialogOpen(true);
@@ -97,419 +85,221 @@ const TaxManagement = () => {
     });
   };
 
-  const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'confirm',
-      title,
-      message,
-      onConfirm,
-      onCancel,
-    });
-  };
-
-  const closeDialog = () => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(false);
-    }
-    setDialogState({
-      show: false,
-      type: 'alert',
-      title: '',
-      message: '',
-    });
-  };
-
-  // Helper function untuk remove leading zero dari input angka
-  const removeLeadingZero = (value: string): string => {
-    if (!value) return value;
-    if (value === '0' || value === '0.' || value === '0,') {
-      return value;
-    }
-    if (value.startsWith('0') && value.length > 1) {
-      if (value.startsWith('0.') || value.startsWith('0,')) {
-        return value;
-      }
-      const cleaned = value.replace(/^0+/, '');
-      return cleaned || '0';
-    }
-    return value;
-  };
-
   useEffect(() => {
     loadData();
   }, []);
 
-  // Enable semua input di dalam dialog saat dialog terbuka
-  useEffect(() => {
-    if (showForm) {
-      const enableDialogInputs = () => {
-        const dialogInputs = document.querySelectorAll('.dialog-card input, .dialog-card textarea, .dialog-card select');
-        dialogInputs.forEach((input: Element) => {
-          if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement || input instanceof HTMLSelectElement) {
-            input.removeAttribute('readonly');
-            input.removeAttribute('disabled');
-            (input as any).readOnly = false;
-            (input as any).disabled = false;
-          }
-        });
-      };
-      
-      // Enable inputs multiple times untuk memastikan
-      enableDialogInputs();
-      setTimeout(enableDialogInputs, 50);
-      setTimeout(enableDialogInputs, 100);
-      setTimeout(enableDialogInputs, 200);
-    }
-  }, [showForm]);
-
   const loadData = async () => {
-    // Load accounts
-    const accsRaw = await storageService.get<Account[]>('gt_accounts') || [];
-    // Filter out deleted items menggunakan helper function
-    const accs = filterActiveItems(accsRaw);
-    setAccounts(accs);
+    try {
+      setLoading(true);
+      let [invsRaw, paymentsRaw, taxRecordsRaw] = await Promise.all([
+        storageService.get<any[]>(StorageKeys.GENERAL_TRADING.INVOICES),
+        storageService.get<Payment[]>(StorageKeys.GENERAL_TRADING.PAYMENTS),
+        storageService.get<TaxRecord[]>(StorageKeys.GENERAL_TRADING.TAX_RECORDS),
+      ]);
 
-    // Load invoices, purchase orders, payments
-    const invsRaw = await storageService.get<any[]>('gt_invoices') || [];
-    const posRaw = await storageService.get<any[]>('gt_purchaseOrders') || [];
-    const paysRaw = await storageService.get<any[]>('gt_payments') || [];
-    // Filter out deleted items menggunakan helper function
-    const invs = filterActiveItems(invsRaw);
-    const pos = filterActiveItems(posRaw);
-    const pays = filterActiveItems(paysRaw);
-    setInvoices(invs);
-    setPurchaseOrders(pos);
-    setPayments(pays);
+      let invs = extractStorageValue(invsRaw);
+      const pmts = extractStorageValue(paymentsRaw);
+      const existingTaxRecords = extractStorageValue(taxRecordsRaw);
 
-    // Load tax records
-    let recordsRaw = await storageService.get<TaxRecord[]>('gt_taxRecords') || [];
-    // Ensure records is always an array
-    let records = Array.isArray(recordsRaw) ? recordsRaw : [];
-    // Filter out deleted items menggunakan helper function
-    records = filterActiveItems(records);
+      // If invoices empty, try force reload from server
+      if (!invs || invs.length === 0) {
+        const fileData = await storageService.forceReloadFromFile<any[]>(StorageKeys.GENERAL_TRADING.INVOICES);
+        if (fileData && Array.isArray(fileData) && fileData.length > 0) {
+          invs = fileData;
+        }
+      }
 
-    // Generate tax records dari invoices, purchase orders jika belum ada
-    const generatedRecords: TaxRecord[] = [];
+      // Generate tax records from invoices and payments
+      const records: TaxRecord[] = [];
 
-    // Ensure invs is always an array
-    const invsArray = Array.isArray(invs) ? invs : [];
-    // Generate dari Invoices (PPN Keluaran)
-    invsArray.forEach((inv: any) => {
-      const taxAmount = inv.tax || 0;
-      const taxPercent = inv.taxPercent || 11;
-      if (taxAmount > 0) {
-        const existing = records.find(r => r.reference === inv.invoiceNo && r.referenceType === 'Invoice');
-        if (!existing) {
-          const baseAmount = inv.subtotal || inv.bom?.subtotal || (inv.total || 0) - taxAmount;
-          generatedRecords.push({
+      // From Invoices (PPN Keluaran)
+      (Array.isArray(invs) ? invs : []).forEach((inv: any) => {
+        // Get tax from root level (calculated total) or from items
+        let taxAmount = inv.tax || 0;
+        if (taxAmount === 0 && Array.isArray(inv.items)) {
+          taxAmount = inv.items.reduce((sum: number, item: any) => sum + (item.tax || 0), 0);
+        }
+        if (taxAmount > 0) {
+          const baseAmount = inv.bom?.subtotal || (inv.bom?.total || inv.total || 0) - taxAmount;
+          records.push({
             id: `tax-inv-${inv.id || inv.invoiceNo}`,
-            taxDate: inv.invoiceDate || inv.created || new Date().toISOString().split('T')[0],
+            taxDate: inv.created || new Date().toISOString().split('T')[0],
             reference: inv.invoiceNo || inv.id,
             referenceType: 'Invoice',
             taxType: 'PPN Keluaran',
-            coaCode: '2-4110',
-            coaName: 'PPN KELUARAN',
             baseAmount: baseAmount,
-            taxPercent: taxPercent,
+            taxPercent: inv.bom?.taxPercent || inv.taxPercent || 11,
             taxAmount: taxAmount,
-            totalAmount: (inv.total || inv.bom?.total || 0),
+            totalAmount: inv.bom?.total || inv.total || 0,
             customer: inv.customer,
-            description: `PPN Keluaran dari Invoice ${inv.invoiceNo || inv.id} - ${inv.customer || 'Customer'}`,
+            description: `PPN Keluaran - Invoice ${inv.invoiceNo || inv.id}`,
             status: inv.status === 'CLOSE' ? 'Paid' : 'Open',
+            paidDate: inv.status === 'CLOSE' ? inv.paidDate : undefined,
             created: inv.created || new Date().toISOString(),
           });
         }
-      }
-    });
-
-    // Ensure pos is always an array
-    const posArray = Array.isArray(pos) ? pos : [];
-    // Generate dari Purchase Orders (PPN Masukan)
-    posArray.forEach((po: any) => {
-      const includeTax = po.includeTax || po.includeTaxFlag || false;
-      if (includeTax && po.total > 0) {
-        const existing = records.find(r => r.reference === po.poNo && r.referenceType === 'Purchase Order');
-        if (!existing) {
-          const baseAmount = po.total / 1.11; // Reverse calculate base amount
-          const taxAmount = po.total - baseAmount;
-          generatedRecords.push({
-            id: `tax-po-${po.id || po.poNo}`,
-            taxDate: po.poDate || po.orderDate || po.created || new Date().toISOString().split('T')[0],
-            reference: po.poNo || po.id,
-            referenceType: 'Purchase Order',
-            taxType: 'PPN Masukan',
-            coaCode: '1-1410',
-            coaName: 'PPN MASUKAN',
-            baseAmount: baseAmount,
-            taxPercent: 11,
-            taxAmount: taxAmount,
-            totalAmount: po.total,
-            supplier: po.supplier,
-            description: `PPN Masukan dari PO ${po.poNo || po.id} - ${po.supplier || 'Supplier'}`,
-            status: po.status === 'CLOSE' || po.status === 'RECEIVED' ? 'Claimed' : 'Open',
-            created: po.created || new Date().toISOString(),
-          });
-        }
-      }
-    });
-
-    // Merge generated records dengan existing records
-    if (generatedRecords.length > 0) {
-      records = [...records, ...generatedRecords];
-      await storageService.set('gt_taxRecords', records);
-    }
-
-    setTaxRecords(records);
-  };
-
-  const getCoaInputDisplayValue = () => {
-    if (coaInputValue !== undefined && coaInputValue !== '') {
-      return coaInputValue;
-    }
-    if (formData.coaCode) {
-      const account = accounts.find(a => a.code === formData.coaCode);
-      if (account) {
-        return `${account.code} - ${account.name}`;
-      }
-      return formData.coaCode;
-    }
-    return '';
-  };
-
-  const handleCoaInputChange = (text: string) => {
-    setCoaInputValue(text);
-    if (!text) {
-      setFormData({ ...formData, coaCode: '', coaName: '' });
-      return;
-    }
-    const normalized = text.toLowerCase();
-    const matchedAccount = accounts.find(a => {
-      const label = `${a.code || ''}${a.code ? ' - ' : ''}${a.name || ''}`.toLowerCase();
-      const code = (a.code || '').toLowerCase();
-      const name = (a.name || '').toLowerCase();
-      return label === normalized || code === normalized || name === normalized;
-    });
-    if (matchedAccount) {
-      setFormData({ ...formData, coaCode: matchedAccount.code, coaName: matchedAccount.name });
-    } else {
-      setFormData({ ...formData, coaCode: text });
-    }
-  };
-
-  const handleBaseAmountChange = (value: string) => {
-    const cleaned = removeLeadingZero(value.replace(/[^\d.,]/g, '').replace(',', '.'));
-    setBaseAmountInputValue(cleaned);
-    const numValue = parseFloat(cleaned) || 0;
-    const taxPercent = parseFloat(taxPercentInputValue) || formData.taxPercent || 11;
-    const taxAmount = numValue * (taxPercent / 100);
-    setFormData({
-      ...formData,
-      baseAmount: numValue,
-      taxAmount: taxAmount,
-      totalAmount: numValue + taxAmount,
-    });
-    setTaxAmountInputValue(taxAmount.toFixed(2));
-  };
-
-  const handleTaxPercentChange = (value: string) => {
-    const cleaned = removeLeadingZero(value.replace(/[^\d.,]/g, '').replace(',', '.'));
-    setTaxPercentInputValue(cleaned);
-    const numValue = parseFloat(cleaned) || 0;
-    const baseAmount = parseFloat(baseAmountInputValue) || formData.baseAmount || 0;
-    const taxAmount = baseAmount * (numValue / 100);
-    setFormData({
-      ...formData,
-      taxPercent: numValue,
-      taxAmount: taxAmount,
-      totalAmount: baseAmount + taxAmount,
-    });
-    setTaxAmountInputValue(taxAmount.toFixed(2));
-  };
-
-  const handleTaxAmountChange = (value: string) => {
-    const cleaned = removeLeadingZero(value.replace(/[^\d.,]/g, '').replace(',', '.'));
-    setTaxAmountInputValue(cleaned);
-    const numValue = parseFloat(cleaned) || 0;
-    const baseAmount = parseFloat(baseAmountInputValue) || formData.baseAmount || 0;
-    const taxPercent = baseAmount > 0 ? (numValue / baseAmount) * 100 : 0;
-    setFormData({
-      ...formData,
-      taxAmount: numValue,
-      taxPercent: taxPercent,
-      totalAmount: baseAmount + numValue,
-    });
-    setTaxPercentInputValue(taxPercent.toFixed(2));
-  };
-
-  const handleSave = async () => {
-    try {
-      if (!formData.taxDate || !formData.reference || !formData.coaCode || !formData.taxType) {
-        showAlert('Please fill all required fields', 'Validation Error');
-        return;
-      }
-
-      if (formData.baseAmount === 0 && formData.taxAmount === 0) {
-        showAlert('Base amount or tax amount must be greater than 0', 'Validation Error');
-        return;
-      }
-
-      const selectedAccount = accounts.find(a => a.code === formData.coaCode);
-      if (!selectedAccount) {
-        showAlert('COA account not found', 'Error');
-        return;
-      }
-
-      // Ensure taxRecords is always an array
-      const taxRecordsArray = Array.isArray(taxRecords) ? taxRecords : [];
-      
-      if (editingRecord) {
-        const updated = taxRecordsArray.map(r =>
-          r.id === editingRecord.id
-            ? { ...formData, id: editingRecord.id, updated: new Date().toISOString() } as TaxRecord
-            : r
-        );
-        await storageService.set('gt_taxRecords', updated);
-        setTaxRecords(updated);
-        showAlert('Tax record updated successfully', 'Success');
-      } else {
-        const newRecord: TaxRecord = {
-          id: Date.now().toString(),
-          ...formData,
-          created: new Date().toISOString(),
-        } as TaxRecord;
-        const updated = [...taxRecordsArray, newRecord];
-        await storageService.set('gt_taxRecords', updated);
-        setTaxRecords(updated);
-        showAlert('Tax record created successfully', 'Success');
-      }
-
-      setShowForm(false);
-      setEditingRecord(null);
-      setCoaInputValue('');
-      setBaseAmountInputValue('');
-      setTaxPercentInputValue('');
-      setTaxAmountInputValue('');
-      setFormData({
-        taxDate: new Date().toISOString().split('T')[0],
-        reference: '',
-        referenceType: 'Manual',
-        taxType: 'PPN Masukan',
-        coaCode: '',
-        coaName: '',
-        baseAmount: 0,
-        taxPercent: 11,
-        taxAmount: 0,
-        totalAmount: 0,
-        description: '',
-        status: 'Open',
       });
+
+      // From Payments (PPN Masukan)
+      (Array.isArray(pmts) ? pmts : []).forEach((pmt: any) => {
+        if (pmt.type === 'Payment') {
+          const taxAmount = pmt.tax || 0;
+          if (taxAmount > 0) {
+            const baseAmount = (pmt.amount || 0) - taxAmount;
+            // Check if this record already exists and has been marked as Paid
+            const existingRecord = (Array.isArray(existingTaxRecords) ? existingTaxRecords : []).find(
+              r => r.id === `tax-pmt-${pmt.id || pmt.paymentNo}`
+            );
+            records.push({
+              id: `tax-pmt-${pmt.id || pmt.paymentNo}`,
+              taxDate: pmt.paymentDate || pmt.created || new Date().toISOString().split('T')[0],
+              reference: pmt.paymentNo || pmt.id,
+              referenceType: 'Payment',
+              taxType: 'PPN Masukan',
+              baseAmount: baseAmount,
+              taxPercent: pmt.taxPercent || 11,
+              taxAmount: taxAmount,
+              totalAmount: pmt.amount || 0,
+              supplier: pmt.supplierName,
+              description: `PPN Masukan - Payment ${pmt.paymentNo || pmt.id}`,
+              status: existingRecord?.status || 'Open',
+              paidDate: existingRecord?.paidDate,
+              paidAmount: existingRecord?.paidAmount,
+              paymentProof: existingRecord?.paymentProof,
+              proofFileName: existingRecord?.proofFileName,
+              created: pmt.created || new Date().toISOString(),
+            });
+          }
+        }
+      });
+
+      // Merge with existing paid records that might not have corresponding invoices/payments anymore
+      const mergedRecords = records.map(r => {
+        const existing = (Array.isArray(existingTaxRecords) ? existingTaxRecords : []).find(e => e.id === r.id);
+        if (existing && existing.status === 'Paid') {
+          return { ...r, ...existing };
+        }
+        return r;
+      });
+
+      // Add any existing paid records that don't have corresponding invoices/payments
+      const existingPaidRecords = (Array.isArray(existingTaxRecords) ? existingTaxRecords : []).filter(
+        e => e.status === 'Paid' && !mergedRecords.find(r => r.id === e.id)
+      );
+
+      const finalRecords = [...mergedRecords, ...existingPaidRecords];
+
+      // Save to storage for AllReportsFinance to read
+      await storageService.set(StorageKeys.GENERAL_TRADING.TAX_RECORDS, finalRecords);
+
+      setTaxRecords(finalRecords);
     } catch (error: any) {
-      showAlert(`Error saving tax record: ${error.message}`, 'Error');
+      showAlert(`Error loading data: ${error.message}`, 'Error');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleEdit = (record: TaxRecord) => {
-    setEditingRecord(record);
-    setFormData(record);
-    setCoaInputValue(`${record.coaCode} - ${record.coaName}`);
-    setBaseAmountInputValue(String(record.baseAmount || 0));
-    setTaxPercentInputValue(String(record.taxPercent || 11));
-    setTaxAmountInputValue(String(record.taxAmount || 0));
-    setShowForm(true);
+  const filteredRecords = useMemo(() => {
+    return (Array.isArray(taxRecords) ? taxRecords : []).filter(record => {
+      const matchesSearch = !searchQuery ||
+        record.reference.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        record.customer?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        record.supplier?.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesTab = activeTab === 'open' ? record.status === 'Open' : record.status === 'Paid';
+      
+      // Date filtering
+      const taxDate = new Date(record.taxDate);
+      const matchesDateFrom = !dateFrom || taxDate >= new Date(dateFrom);
+      const matchesDateTo = !dateTo || taxDate <= new Date(dateTo);
+
+      return matchesSearch && matchesTab && matchesDateFrom && matchesDateTo;
+    });
+  }, [taxRecords, searchQuery, activeTab, dateFrom, dateTo]);
+
+  const handleRecordPayment = (record: TaxRecord) => {
+    setSelectedRecord(record);
+    setShowPaymentDialog(true);
+    setPaymentDate(new Date().toISOString().split('T')[0]);
+    setPaidAmount(record.taxAmount);
   };
 
-  const handleDelete = async (record: TaxRecord) => {
+  const handlePaymentSubmit = async () => {
+    if (!selectedRecord) return;
+
     try {
-      console.log('[GT Finance TaxManagement] handleDelete called for:', record?.reference, record?.id);
-      
-      if (!record || !record.reference) {
-        showAlert('Tax record tidak valid. Mohon coba lagi.', 'Error');
+      if (!paidAmount || paidAmount <= 0) {
+        showAlert('Please enter a paid amount', 'Validation Error');
         return;
       }
-      
-      // Validate record.id exists
-      if (!record.id) {
-        console.error('[GT Finance TaxManagement] Tax record missing ID:', record);
-        showAlert(`❌ Error: Tax record "${record.reference}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
-        return;
+
+      let proofBase64 = '';
+      if (paymentProof) {
+        proofBase64 = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target?.result as string);
+          reader.readAsDataURL(paymentProof);
+        });
       }
-      
-      showConfirm(
-        `Hapus Tax Record "${record.reference}"?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
-        async () => {
-          try {
-            // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
-            const deleteResult = await deleteGTItem('gt_taxRecords', record.id, 'id');
-            
-            if (deleteResult.success) {
-              // Reload data dengan helper (handle race condition)
-              const activeTaxRecords = await reloadGTData('gt_taxRecords', setTaxRecords);
-              setTaxRecords(activeTaxRecords);
-              closeDialog();
-              showAlert(`✅ Tax record "${record.reference}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
-            } else {
-              console.error('[GT Finance TaxManagement] Delete failed:', deleteResult.error);
-              closeDialog();
-              showAlert(`❌ Error deleting tax record "${record.reference}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+
+      // Update tax record status to Paid
+      const updated = taxRecords.map(r =>
+        r.id === selectedRecord.id
+          ? { 
+              ...r, 
+              status: 'Paid' as const, 
+              paidDate: paymentDate, 
+              paidAmount: paidAmount,
+              paymentProof: proofBase64,
+              proofFileName: paymentProof?.name || '',
             }
-          } catch (error: any) {
-            console.error('[GT Finance TaxManagement] Error deleting tax record:', error);
-            closeDialog();
-            showAlert(`❌ Error deleting tax record: ${error.message}`, 'Error');
-          }
-        },
-        () => closeDialog(),
-        'Safe Delete Confirmation'
+          : r
       );
+
+      // Save to storage
+      await storageService.set(StorageKeys.GENERAL_TRADING.TAX_RECORDS, updated);
+      
+      // Log the payment
+      await logUpdate('TaxRecord', selectedRecord.id, '/GeneralTrading/finance/tax-management', {
+        reference: selectedRecord.reference,
+        taxAmount: selectedRecord.taxAmount,
+        paidAmount: paidAmount,
+        paymentDate: paymentDate,
+        status: 'Paid',
+      });
+
+      setTaxRecords(updated);
+      showAlert(`✅ Tax payment recorded\nAmount: Rp ${paidAmount.toLocaleString('id-ID')}\nDate: ${paymentDate}${paymentProof ? '\n📄 Proof uploaded' : ''}`, 'Success');
+
+      setShowPaymentDialog(false);
+      setSelectedRecord(null);
+      setPaidAmount(0);
+      setPaymentProof(null);
     } catch (error: any) {
-      console.error('[GT Finance TaxManagement] Error in handleDelete:', error);
-      showAlert(`Error: ${error.message}`, 'Error');
+      showAlert(`Error recording payment: ${error.message}`, 'Error');
     }
   };
 
   const handleExportExcel = () => {
     try {
-      const wb = XLSX.utils.book_new();
-      
-      // Sheet 1: Tax Records
-      const wsData = [
-        ['Tax Date', 'Reference', 'Reference Type', 'Tax Type', 'COA Code', 'COA Name', 'Base Amount', 'Tax %', 'Tax Amount', 'Total Amount', 'Customer/Supplier', 'Description', 'Status'],
-        ...filteredRecords.map(r => [
-          r.taxDate,
-          r.reference,
-          r.referenceType,
-          r.taxType,
-          r.coaCode,
-          r.coaName,
-          r.baseAmount,
-          r.taxPercent,
-          r.taxAmount,
-          r.totalAmount,
-          r.customer || r.supplier || '',
-          r.description,
-          r.status,
-        ]),
-      ];
-      const ws = XLSX.utils.aoa_to_sheet(wsData);
-      XLSX.utils.book_append_sheet(wb, ws, 'Tax Records');
+      const dataToExport = filteredRecords.map(item => ({
+        'Tax Date': item.taxDate,
+        'Reference': item.reference,
+        'Type': item.referenceType,
+        'Tax Type': item.taxType,
+        'Base Amount': item.baseAmount,
+        'Tax %': item.taxPercent,
+        'Tax Amount': item.taxAmount,
+        'Total Amount': item.totalAmount,
+        'Customer/Supplier': item.customer || item.supplier || '',
+        'Status': item.status,
+      }));
 
-      // Sheet 2: Summary by Tax Type
-      const summaryData = [
-        ['Tax Type', 'Count', 'Total Base Amount', 'Total Tax Amount', 'Total Amount'],
-        ...summaryByTaxType.map(s => [
-          s.taxType,
-          s.count,
-          s.totalBaseAmount,
-          s.totalTaxAmount,
-          s.totalAmount,
-        ]),
-      ];
-      const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-      XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary by Tax Type');
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Tax Records');
 
       const fileName = `Tax_Management_${new Date().toISOString().split('T')[0]}.xlsx`;
       XLSX.writeFile(wb, fileName);
@@ -519,104 +309,30 @@ const TaxManagement = () => {
     }
   };
 
-  const filteredRecords = useMemo(() => {
-    // Ensure taxRecords is always an array
-    const taxRecordsArray = Array.isArray(taxRecords) ? taxRecords : [];
-    return taxRecordsArray.filter(record => {
-      const matchesSearch = !searchQuery ||
-        record.reference.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        record.customer?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        record.supplier?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        record.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        record.coaCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        record.coaName.toLowerCase().includes(searchQuery.toLowerCase());
-
-      const matchesDate = (!dateFrom || record.taxDate >= dateFrom) &&
-        (!dateTo || record.taxDate <= dateTo);
-
-      const matchesTaxType = taxTypeFilter === 'all' || record.taxType === taxTypeFilter;
-      const matchesStatus = statusFilter === 'all' || record.status === statusFilter;
-
-      return matchesSearch && matchesDate && matchesTaxType && matchesStatus;
-    });
-  }, [taxRecords, searchQuery, dateFrom, dateTo, taxTypeFilter, statusFilter]);
-
-  const summaryByTaxType = useMemo(() => {
-    const summary: Record<string, { count: number; totalBaseAmount: number; totalTaxAmount: number; totalAmount: number }> = {};
-    // Ensure filteredRecords is always an array
-    const filteredRecordsArray = Array.isArray(filteredRecords) ? filteredRecords : [];
-    filteredRecordsArray.forEach(record => {
-      if (!summary[record.taxType]) {
-        summary[record.taxType] = { count: 0, totalBaseAmount: 0, totalTaxAmount: 0, totalAmount: 0 };
-      }
-      summary[record.taxType].count++;
-      summary[record.taxType].totalBaseAmount += record.baseAmount || 0;
-      summary[record.taxType].totalTaxAmount += record.taxAmount || 0;
-      summary[record.taxType].totalAmount += record.totalAmount || 0;
-    });
-    return Object.entries(summary).map(([taxType, data]) => ({
-      taxType,
-      ...data,
-    }));
-  }, [filteredRecords]);
-
-  const totalSummary = useMemo(() => {
-    // Ensure filteredRecords is always an array
-    const filteredRecordsArray = Array.isArray(filteredRecords) ? filteredRecords : [];
-    return filteredRecordsArray.reduce((acc, record) => ({
-      totalBaseAmount: acc.totalBaseAmount + (record.baseAmount || 0),
-      totalTaxAmount: acc.totalTaxAmount + (record.taxAmount || 0),
-      totalAmount: acc.totalAmount + (record.totalAmount || 0),
-    }), { totalBaseAmount: 0, totalTaxAmount: 0, totalAmount: 0 });
-  }, [filteredRecords]);
-
   const columns = [
     { key: 'taxDate', header: 'Tax Date' },
     { key: 'reference', header: 'Reference' },
     { key: 'referenceType', header: 'Type' },
     { key: 'taxType', header: 'Tax Type' },
-    {
-      key: 'coaCode',
-      header: 'COA',
-      render: (item: TaxRecord) => `${item.coaCode} - ${item.coaName}`,
-    },
-    {
-      key: 'baseAmount',
-      header: 'Base Amount',
-      render: (item: TaxRecord) => `Rp ${(item.baseAmount || 0).toLocaleString('id-ID')}`,
-    },
-    {
-      key: 'taxPercent',
-      header: 'Tax %',
-      render: (item: TaxRecord) => `${item.taxPercent || 0}%`,
-    },
-    {
-      key: 'taxAmount',
-      header: 'Tax Amount',
-      render: (item: TaxRecord) => `Rp ${(item.taxAmount || 0).toLocaleString('id-ID')}`,
-    },
-    {
-      key: 'totalAmount',
-      header: 'Total Amount',
-      render: (item: TaxRecord) => `Rp ${(item.totalAmount || 0).toLocaleString('id-ID')}`,
-    },
-    { key: 'customer', header: 'Customer/Supplier' },
-    {
-      key: 'status',
-      header: 'Status',
-      render: (item: TaxRecord) => (
-        <span className={`status-badge status-${item.status.toLowerCase()}`}>
-          {item.status}
-        </span>
-      ),
-    },
+    { key: 'baseAmount', header: 'Base Amount', render: (item: TaxRecord) => `Rp ${(item.baseAmount || 0).toLocaleString('id-ID')}` },
+    { key: 'taxPercent', header: 'Tax %', render: (item: TaxRecord) => `${item.taxPercent || 0}%` },
+    { key: 'taxAmount', header: 'Tax Amount', render: (item: TaxRecord) => `Rp ${(item.taxAmount || 0).toLocaleString('id-ID')}` },
+    { key: 'customer', header: 'Customer/Supplier', render: (item: TaxRecord) => item.customer || item.supplier || '-' },
+    { key: 'status', header: 'Status' },
     {
       key: 'actions',
       header: 'Actions',
       render: (item: TaxRecord) => (
         <div style={{ display: 'flex', gap: '6px' }}>
-          <Button variant="secondary" onClick={() => handleEdit(item)} style={{ fontSize: '12px', padding: '4px 8px' }}>Edit</Button>
-          <Button variant="danger" onClick={() => handleDelete(item)} style={{ fontSize: '12px', padding: '4px 8px' }}>Delete</Button>
+          {item.status === 'Open' && (
+            <Button
+              variant="primary"
+              onClick={() => handleRecordPayment(item)}
+              style={{ fontSize: '10px', padding: '3px 6px' }}
+            >
+              💳 Pay Tax
+            </Button>
+          )}
         </div>
       ),
     },
@@ -628,478 +344,169 @@ const TaxManagement = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h2>Tax Management</h2>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <Input
-              type="text"
-              placeholder="Search..."
-              value={searchQuery}
-              onChange={(value) => setSearchQuery(value)}
-            />
-            <Input
-              type="date"
-              placeholder="From Date"
-              value={dateFrom}
-              onChange={(value) => setDateFrom(value)}
-            />
-            <Input
-              type="date"
-              placeholder="To Date"
-              value={dateTo}
-              onChange={(value) => setDateTo(value)}
-            />
-            <select
-              value={taxTypeFilter}
-              onChange={(e) => setTaxTypeFilter(e.target.value)}
-              style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+            <Button
+              variant={activeTab === 'open' ? 'primary' : 'secondary'}
+              onClick={() => setActiveTab('open')}
+              style={{ fontSize: '12px', padding: '8px 16px' }}
             >
-              <option value="all">All Tax Types</option>
-              <option value="PPN Masukan">PPN Masukan</option>
-              <option value="PPN Keluaran">PPN Keluaran</option>
-              <option value="PPN Barang Mewah">PPN Barang Mewah</option>
-              <option value="PPh 21">PPh 21</option>
-              <option value="PPh 23">PPh 23</option>
-              <option value="PPh 25">PPh 25</option>
-              <option value="PPh 4(2)">PPh 4(2)</option>
-              <option value="Other">Other</option>
-            </select>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              style={{ padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
-            >
-              <option value="all">All Status</option>
-              <option value="Open">Open</option>
-              <option value="Paid">Paid</option>
-              <option value="Claimed">Claimed</option>
-            </select>
-            <Button onClick={() => {
-              setShowForm(true);
-              setEditingRecord(null);
-              setCoaInputValue('');
-              setBaseAmountInputValue('');
-              setTaxPercentInputValue('');
-              setTaxAmountInputValue('');
-              setFormData({
-                taxDate: new Date().toISOString().split('T')[0],
-                reference: '',
-                referenceType: 'Manual',
-                taxType: 'PPN Masukan',
-                coaCode: '',
-                coaName: '',
-                baseAmount: 0,
-                taxPercent: 11,
-                taxAmount: 0,
-                totalAmount: 0,
-                description: '',
-                status: 'Open',
-              });
-            }}>
-              + New Tax Record
+              📋 Open ({(Array.isArray(taxRecords) ? taxRecords : []).filter(r => r.status === 'Open').length})
             </Button>
-            <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
-            <Button variant="secondary" onClick={loadData}>🔄 Refresh</Button>
+            <Button
+              variant={activeTab === 'paid' ? 'primary' : 'secondary'}
+              onClick={() => setActiveTab('paid')}
+              style={{ fontSize: '12px', padding: '8px 16px' }}
+            >
+              ✅ Paid ({(Array.isArray(taxRecords) ? taxRecords : []).filter(r => r.status === 'Paid').length})
+            </Button>
           </div>
         </div>
 
-        {/* Summary Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
-          <Card style={{ padding: '12px' }}>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--primary)' }}>
-              {filteredRecords.length}
+        {/* Info Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '20px' }}>
+          <div style={{ padding: '15px', backgroundColor: '#e8f5e9', borderRadius: '8px', border: '1px solid #4caf50' }}>
+            <div style={{ fontSize: '12px', color: '#2e7d32', marginBottom: '6px', fontWeight: '600' }}>✅ Tax Paid</div>
+            <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1b5e20' }}>
+              Rp {(Array.isArray(taxRecords) ? taxRecords : []).filter(r => r.status === 'Paid').reduce((sum, r) => sum + (r.taxAmount || 0), 0).toLocaleString('id-ID')}
             </div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>Total Records</div>
-          </Card>
-          <Card style={{ padding: '12px' }}>
-            <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--success)' }}>
-              Rp {totalSummary.totalBaseAmount.toLocaleString('id-ID')}
+          </div>
+          <div style={{ padding: '15px', backgroundColor: '#fff3e0', borderRadius: '8px', border: '1px solid #ff9800' }}>
+            <div style={{ fontSize: '12px', color: '#e65100', marginBottom: '6px', fontWeight: '600' }}>⏳ Tax Outstanding</div>
+            <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#bf360c' }}>
+              Rp {(Array.isArray(taxRecords) ? taxRecords : []).filter(r => r.status === 'Open').reduce((sum, r) => sum + (r.taxAmount || 0), 0).toLocaleString('id-ID')}
             </div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>Total Base Amount</div>
-          </Card>
-          <Card style={{ padding: '12px' }}>
-            <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--warning)' }}>
-              Rp {totalSummary.totalTaxAmount.toLocaleString('id-ID')}
-            </div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>Total Tax Amount</div>
-          </Card>
-          <Card style={{ padding: '12px' }}>
-            <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--accent-color)' }}>
-              Rp {totalSummary.totalAmount.toLocaleString('id-ID')}
-            </div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>Total Amount</div>
-          </Card>
+          </div>
         </div>
 
-        {/* Summary by Tax Type */}
-        {summaryByTaxType.length > 0 && (
-          <Card style={{ marginBottom: '20px', padding: '12px' }}>
-            <h3 style={{ marginBottom: '12px', fontSize: '16px' }}>Summary by Tax Type</h3>
-            <Table
-              columns={[
-                { key: 'taxType', header: 'Tax Type' },
-                { key: 'count', header: 'Count' },
-                {
-                  key: 'totalBaseAmount',
-                  header: 'Total Base Amount',
-                  render: (item: any) => `Rp ${item.totalBaseAmount.toLocaleString('id-ID')}`,
-                },
-                {
-                  key: 'totalTaxAmount',
-                  header: 'Total Tax Amount',
-                  render: (item: any) => `Rp ${item.totalTaxAmount.toLocaleString('id-ID')}`,
-                },
-                {
-                  key: 'totalAmount',
-                  header: 'Total Amount',
-                  render: (item: any) => `Rp ${item.totalAmount.toLocaleString('id-ID')}`,
-                },
-              ]}
-              data={summaryByTaxType}
-            />
-          </Card>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '10px', position: 'sticky', top: 0, backgroundColor: 'var(--bg-primary)', zIndex: 5, padding: '12px 0' }}>
+          <Input
+            type="text"
+            placeholder="Search..."
+            value={searchQuery}
+            onChange={(value) => setSearchQuery(value)}
+          />
+          <DateRangeFilter
+            onDateChange={(from, to) => {
+              setDateFrom(from);
+              setDateTo(to);
+            }}
+          />
+          <Button variant="secondary" onClick={loadData} disabled={loading}>
+            {loading ? '⏳ Loading...' : '🔄 Refresh'}
+          </Button>
+          <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
+        </div>
+
+        {loading ? (
+          <div style={{ padding: '40px', textAlign: 'center' }}>
+            <div>⏳ Loading data...</div>
+          </div>
+        ) : (
+          <Table columns={columns} data={filteredRecords} emptyMessage="No tax records found" pageSize={10} showPagination={true} />
         )}
+      </Card>
 
-        <Table columns={columns} data={filteredRecords} emptyMessage="No tax records found" />
+      {/* Payment Dialog */}
+      {showPaymentDialog && selectedRecord && (
+        <div className="dialog-overlay" onClick={() => setShowPaymentDialog(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
+            <Card className="dialog-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h2>Record Tax Payment</h2>
+                <Button variant="secondary" onClick={() => setShowPaymentDialog(false)} style={{ padding: '6px 12px' }}>✕</Button>
+              </div>
 
-        {/* Form Dialog */}
-        {showForm && (
-          <div className="dialog-overlay" onClick={() => setShowForm(false)}>
-            <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%', textAlign: 'left' }}>
-              <h3 style={{ marginTop: 0, marginBottom: '20px' }}>
-                {editingRecord ? 'Edit Tax Record' : 'New Tax Record'}
-              </h3>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
-                    Tax Date *
-                  </label>
-                  <Input
-                    type="date"
-                    value={formData.taxDate || ''}
-                    onChange={(value) => setFormData({ ...formData, taxDate: value })}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
-                    Reference *
-                  </label>
-                  <Input
-                    type="text"
-                    value={formData.reference || ''}
-                    onChange={(value) => setFormData({ ...formData, reference: value })}
-                    placeholder="Invoice No, PO No, etc"
-                  />
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Reference</label>
+                <div style={{ padding: '10px', backgroundColor: 'var(--bg-secondary)', borderRadius: '4px' }}>
+                  {selectedRecord.reference}
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
-                    Reference Type *
-                  </label>
-                  <select
-                    value={formData.referenceType || 'Manual'}
-                    onChange={(e) => setFormData({ ...formData, referenceType: e.target.value as any })}
-                    style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
-                  >
-                    <option value="Invoice">Invoice</option>
-                    <option value="Purchase Order">Purchase Order</option>
-                    <option value="Payment">Payment</option>
-                    <option value="Manual">Manual</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
-                    Tax Type *
-                  </label>
-                  <select
-                    value={formData.taxType || 'PPN Masukan'}
-                    onChange={(e) => setFormData({ ...formData, taxType: e.target.value as any })}
-                    style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
-                  >
-                    <option value="PPN Masukan">PPN Masukan</option>
-                    <option value="PPN Keluaran">PPN Keluaran</option>
-                    <option value="PPN Barang Mewah">PPN Barang Mewah</option>
-                    <option value="PPh 21">PPh 21</option>
-                    <option value="PPh 23">PPh 23</option>
-                    <option value="PPh 25">PPh 25</option>
-                    <option value="PPh 4(2)">PPh 4(2)</option>
-                    <option value="Other">Other</option>
-                  </select>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Tax Type</label>
+                <div style={{ padding: '10px', backgroundColor: 'var(--bg-secondary)', borderRadius: '4px' }}>
+                  {selectedRecord.taxType}
                 </div>
               </div>
 
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
-                  COA Account *
-                </label>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Tax Amount</label>
+                <div style={{ padding: '10px', backgroundColor: 'var(--bg-secondary)', borderRadius: '4px' }}>
+                  Rp {selectedRecord.taxAmount.toLocaleString('id-ID')}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Payment Date *</label>
                 <input
-                  type="text"
-                  list="coa-list"
-                  value={getCoaInputDisplayValue()}
-                  onChange={(e) => handleCoaInputChange(e.target.value)}
-                  onBlur={() => {
-                    if (formData.coaCode) {
-                      const account = accounts.find(a => a.code === formData.coaCode);
-                      if (account) {
-                        setCoaInputValue(`${account.code} - ${account.name}`);
-                        setFormData({ ...formData, coaName: account.name });
-                      }
-                    }
-                  }}
-                  placeholder="Search COA account..."
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '8px',
-                    border: '1px solid var(--border-color)',
+                    padding: '10px',
                     borderRadius: '4px',
+                    border: '1px solid var(--border-color)',
                     backgroundColor: 'var(--bg-primary)',
                     color: 'var(--text-primary)',
+                    boxSizing: 'border-box',
                   }}
                 />
-                <datalist id="coa-list">
-                  {accounts.filter(a => 
-                    a.code.toLowerCase().includes('tax') || 
-                    a.code.toLowerCase().includes('ppn') || 
-                    a.code.toLowerCase().includes('pph') ||
-                    a.name.toLowerCase().includes('tax') ||
-                    a.name.toLowerCase().includes('ppn') ||
-                    a.name.toLowerCase().includes('pph')
-                  ).map(account => (
-                    <option key={account.code} value={`${account.code} - ${account.name}`} />
-                  ))}
-                </datalist>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
-                    Base Amount
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={baseAmountInputValue}
-                    onChange={(e) => handleBaseAmountChange(e.target.value)}
-                    onFocus={(e) => e.target.select()}
-                    onBlur={(e) => {
-                      const val = parseFloat(e.target.value) || 0;
-                      setBaseAmountInputValue(val.toFixed(2));
-                    }}
-                    placeholder="0"
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '4px',
-                      backgroundColor: 'var(--bg-primary)',
-                      color: 'var(--text-primary)',
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
-                    Tax %
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={taxPercentInputValue}
-                    onChange={(e) => handleTaxPercentChange(e.target.value)}
-                    onFocus={(e) => e.target.select()}
-                    onBlur={(e) => {
-                      const val = parseFloat(e.target.value) || 0;
-                      setTaxPercentInputValue(val.toFixed(2));
-                    }}
-                    placeholder="11"
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '4px',
-                      backgroundColor: 'var(--bg-primary)',
-                      color: 'var(--text-primary)',
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
-                    Tax Amount
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={taxAmountInputValue}
-                    onChange={(e) => handleTaxAmountChange(e.target.value)}
-                    onFocus={(e) => e.target.select()}
-                    onBlur={(e) => {
-                      const val = parseFloat(e.target.value) || 0;
-                      setTaxAmountInputValue(val.toFixed(2));
-                    }}
-                    placeholder="0"
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '4px',
-                      backgroundColor: 'var(--bg-primary)',
-                      color: 'var(--text-primary)',
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
-                  Total Amount
-                </label>
-                <Input
-                  type="text"
-                  value={`Rp ${(formData.totalAmount || 0).toLocaleString('id-ID')}`}
-                  disabled
-                  onChange={(value) => {}}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
-                    Customer/Supplier
-                  </label>
-                  <Input
-                    type="text"
-                    value={formData.customer || formData.supplier || ''}
-                    onChange={(value) => {
-                      if (formData.taxType === 'PPN Keluaran') {
-                        setFormData({ ...formData, customer: value });
-                      } else {
-                        setFormData({ ...formData, supplier: value });
-                      }
-                    }}
-                    placeholder="Customer or Supplier name"
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
-                    Status
-                  </label>
-                  <select
-                    value={formData.status || 'Open'}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                    style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
-                  >
-                    <option value="Open">Open</option>
-                    <option value="Paid">Paid</option>
-                    <option value="Claimed">Claimed</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
-                  Description
-                </label>
-                <textarea
-                  value={formData.description || ''}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Tax description..."
-                  rows={3}
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Paid Amount *</label>
+                <input
+                  type="number"
+                  value={paidAmount}
+                  onChange={(e) => setPaidAmount(Number(e.target.value))}
+                  min="0"
+                  max={selectedRecord.taxAmount}
                   style={{
                     width: '100%',
-                    padding: '8px',
-                    border: '1px solid var(--border-color)',
+                    padding: '10px',
                     borderRadius: '4px',
+                    border: '1px solid var(--border-color)',
                     backgroundColor: 'var(--bg-primary)',
                     color: 'var(--text-primary)',
-                    resize: 'vertical',
+                    boxSizing: 'border-box',
                   }}
                 />
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Upload Payment Proof</label>
+                <input
+                  type="file"
+                  onChange={(e) => setPaymentProof(e.target.files?.[0] || null)}
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                {paymentProof && (
+                  <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    ✅ {paymentProof.name}
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                <Button variant="secondary" onClick={() => {
-                  setShowForm(false);
-                  setEditingRecord(null);
-                  setCoaInputValue('');
-                  setBaseAmountInputValue('');
-                  setTaxPercentInputValue('');
-                  setTaxAmountInputValue('');
-                  setFormData({
-                    taxDate: new Date().toISOString().split('T')[0],
-                    reference: '',
-                    referenceType: 'Manual',
-                    taxType: 'PPN Masukan',
-                    coaCode: '',
-                    coaName: '',
-                    baseAmount: 0,
-                    taxPercent: 11,
-                    taxAmount: 0,
-                    totalAmount: 0,
-                    description: '',
-                    status: 'Open',
-                  });
-                }}>
-                  Cancel
-                </Button>
-                <Button onClick={handleSave}>
-                  Save
-                </Button>
+                <Button variant="secondary" onClick={() => setShowPaymentDialog(false)}>Cancel</Button>
+                <Button variant="primary" onClick={handlePaymentSubmit}>💾 Save Payment</Button>
               </div>
-            </div>
+            </Card>
           </div>
-        )}
-
-        {/* Custom Dialog */}
-        {dialogState.show && (() => {
-          const titleLower = dialogState.title.toLowerCase();
-          let iconType = 'info';
-          let iconChar = 'ℹ️';
-          if (titleLower.includes('success') || titleLower.includes('berhasil')) {
-            iconType = 'success';
-            iconChar = '✓';
-          } else if (titleLower.includes('error') || titleLower.includes('gagal') || titleLower.includes('cannot')) {
-            iconType = 'error';
-            iconChar = '✕';
-          } else if (titleLower.includes('warning') || titleLower.includes('peringatan') || titleLower.includes('validation')) {
-            iconType = 'warning';
-            iconChar = '⚠';
-          }
-          
-          return (
-            <div className="dialog-overlay" onClick={dialogState.type === 'alert' ? closeDialog : undefined}>
-              <div className="dialog-card" onClick={(e) => e.stopPropagation()}>
-                <div className={`dialog-icon ${iconType}`}>
-                  {iconChar}
-                </div>
-                <h3 className="dialog-title">
-                  {dialogState.title}
-                </h3>
-                <div className="dialog-message">
-                  {dialogState.message}
-                </div>
-                <div className="dialog-actions">
-                  {dialogState.type === 'confirm' && (
-                    <Button variant="secondary" onClick={() => {
-                      if (dialogState.onCancel) dialogState.onCancel();
-                      closeDialog();
-                    }}>
-                      Cancel
-                    </Button>
-                  )}
-                  <Button variant="primary" onClick={() => {
-                    if (dialogState.onConfirm) dialogState.onConfirm();
-                    if (dialogState.type === 'alert') closeDialog();
-                  }}>
-                    {dialogState.type === 'alert' ? 'OK' : 'Confirm'}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-      </Card>
+        </div>
+      )}
     </div>
   );
 };
 
 export default TaxManagement;
-

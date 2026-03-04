@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { packagingSync, type SyncStatus } from '../../services/packaging-sync';
-import { storageService } from '../../services/storage';
 import { getTheme, applyTheme, type Theme } from '../../utils/theme';
 import { loadIconAsBase64 } from '../../utils/icon-loader';
 import { 
@@ -13,15 +12,11 @@ import {
   getUserAccessData
 } from '../../utils/access-control-helper';
 import { logNavigation } from '../../utils/activity-logger';
+import { useLanguage } from '../../hooks/useLanguage';
 import '../../components/Layout.css';
 
 interface LayoutProps {
   children: React.ReactNode;
-}
-
-interface UserAccess {
-  id: string;
-  menuAccess?: Record<string, string[]>;
 }
 
 const PackagingLayout = ({ children }: LayoutProps) => {
@@ -31,6 +26,7 @@ const PackagingLayout = ({ children }: LayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [userMenuAccess, setUserMenuAccess] = useState<Record<string, string[]> | null>(null);
+  const { t } = useLanguage();
   // 🚀 OPTIMASI: Gunakan path relatif dari public folder sebagai default
   // Jangan gunakan path yang bisa menjadi file://
   const [iconSrc, setIconSrc] = useState<string>('/noxtiz.ico');
@@ -151,68 +147,69 @@ const PackagingLayout = ({ children }: LayoutProps) => {
     return () => window.removeEventListener('app-storage-changed', handleStorageChange as EventListener);
   }, []);
 
-  const menuItems = [
+  const menuItems = useMemo(() => [
     {
-      title: 'MASTER',
+      title: t('master.title'),
       type: 'section',
       items: [
-        { title: 'Products', path: '/packaging/master/products', icon: '📦' },
-        { title: 'Materials', path: '/packaging/master/materials', icon: '🧱' },
-        { title: 'Customers', path: '/packaging/master/customers', icon: '👥' },
-        { title: 'Suppliers', path: '/packaging/master/suppliers', icon: '🏭' },
-        { title: 'Inventory', path: '/packaging/master/inventory', icon: '📊' },
+        { title: t('master.products'), path: '/packaging/master/products', icon: '📦' },
+        { title: t('master.materials'), path: '/packaging/master/materials', icon: '🧱' },
+        { title: t('master.customers'), path: '/packaging/master/customers', icon: '👥' },
+        { title: t('master.suppliers'), path: '/packaging/master/suppliers', icon: '🏭' },
+        { title: t('master.inventory'), path: '/packaging/master/inventory', icon: '📊' },
       ],
     },
     {
-      title: 'PACKAGING',
+      title: t('packaging.title'),
       type: 'section',
       items: [
         { title: 'Workflow', path: '/packaging/workflow', icon: '🔄' },
-        { title: 'Sales Orders', path: '/packaging/sales-orders', icon: '📋' },
-        { title: 'PPIC', path: '/packaging/ppic', icon: '📅' },
-        { title: 'Purchasing', path: '/packaging/purchasing', icon: '🛒' },
-        { title: 'Production', path: '/packaging/production', icon: '⚙️' },
-        { title: 'QA/QC', path: '/packaging/qa-qc', icon: '✅' },
-        { title: 'WH/Delivery', path: '/packaging/delivery-note', icon: '🚚' },
+        { title: t('salesOrder.title'), path: '/packaging/sales-orders', icon: '📋' },
+        { title: t('packaging.ppic'), path: '/packaging/ppic', icon: '📅' },
+        { title: t('packaging.purchasing'), path: '/packaging/purchasing', icon: '🛒' },
+        { title: t('production.title'), path: '/packaging/production', icon: '⚙️' },
+        { title: t('qaqc.title'), path: '/packaging/qa-qc', icon: '✅' },
+        { title: t('delivery.title'), path: '/packaging/delivery-note', icon: '🚚' },
         { title: 'Return', path: '/packaging/return', icon: '↩️' },
+        { title: 'BAR', path: '/packaging/bar', icon: '📊' },
       ],
     },
     {
-      title: 'FINANCE',
+      title: t('finance.title'),
       type: 'section',
       items: [
-        { title: 'Invoices', path: '/packaging/finance/invoices', icon: '🧾' },
-        { title: 'Payments', path: '/packaging/finance/payments', icon: '💳' },
-        { title: 'Accounting', path: '/packaging/finance/accounting', icon: '💰' },
-        { title: 'General Ledger', path: '/packaging/finance/ledger', icon: '📚' },
-        { title: 'Financial Reports', path: '/packaging/finance/reports', icon: '📊' },
-        // { title: 'Cost Analysis', path: '/packaging/finance/cost-analysis', icon: '💵' },
-        { title: 'Accounts Receivable', path: '/packaging/finance/ar', icon: '📈' },
-        { title: 'Accounts Payable', path: '/packaging/finance/ap', icon: '📉' },
-        { title: 'Tax Management', path: '/packaging/finance/tax-management', icon: '🧾' },
-        { title: 'All Business Reports', path: '/packaging/finance/all-business-reports', icon: '📊' },
-        { title: 'COA', path: '/packaging/finance/coa', icon: '📑' },
+        { title: t('finance.invoices'), path: '/packaging/finance/invoices', icon: '🧾' },
+        { title: t('finance.payments'), path: '/packaging/finance/payments', icon: '💳' },
+        { title: 'Operational Expenses', path: '/packaging/finance/operational-expenses', icon: '💰' },
+        { title: t('finance.reports'), path: '/packaging/finance/reports', icon: '📊' },
+        { title: 'All Reports', path: '/packaging/finance/all-reports', icon: '📈' },
+        { title: t('finance.accountsReceivable'), path: '/packaging/finance/ar', icon: '�' },
+        { title: t('finance.accountsPayable'), path: '/packaging/finance/ap', icon: '�' },
+        { title: t('finance.taxManagement'), path: '/packaging/finance/tax-management', icon: '🧾' },
+        { title: 'COA', path: '/packaging/finance/coa', icon: '�' },
       ],
     },
     {
       title: 'HR',
       type: 'section',
       items: [
-        { title: 'HRD', path: '/packaging/hr', icon: '👔' },
+        { title: 'HRD', path: '/packaging/hr', icon: '�' },
       ],
     },
     {
-      title: 'SETTINGS',
+      title: t('settings.title'),
       type: 'section',
       items: [
-        { title: 'Settings', path: '/packaging/settings', icon: '⚙️' },
+        { title: t('settings.title'), path: '/packaging/settings', icon: '⚙️' },
         { title: 'Report', path: '/packaging/settings/report', icon: '📄' },
+        { title: 'Full Reports', path: '/packaging/settings/full-reports', icon: '📊' },
         { title: 'DB Activity', path: '/packaging/settings/db-activity', icon: '📝' },
+        { title: 'Server Data', path: '/packaging/settings/server-data', icon: '🗄️' },
         { title: 'User Control', path: '/packaging/settings/user-control', icon: '👤' },
         { title: 'Test Automation', path: '/packaging/settings/test-automation', icon: '🧪' },
       ],
     },
-  ];
+  ], [t]);
 
   // Normalize path for comparison (handle trailing slash and hash router)
   const isActive = (path: string) => {
@@ -238,6 +235,7 @@ const PackagingLayout = ({ children }: LayoutProps) => {
     const adminOnlySettingsPaths = [
       '/packaging/settings/report',
       '/packaging/settings/db-activity',
+      '/packaging/settings/server-data',
       '/packaging/settings/user-control',
       '/packaging/settings/test-automation'
     ];
@@ -282,6 +280,7 @@ const PackagingLayout = ({ children }: LayoutProps) => {
       const adminOnlySettingsPaths = [
         '/packaging/settings/report',
         '/packaging/settings/db-activity',
+        '/packaging/settings/server-data',
         '/packaging/settings/user-control',
         '/packaging/settings/test-automation'
       ];

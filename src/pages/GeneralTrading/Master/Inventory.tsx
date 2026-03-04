@@ -4,8 +4,9 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService, extractStorageValue } from '../../../services/storage';
+import { storageService, extractStorageValue, StorageKeys } from '../../../services/storage';
 import { filterActiveItems } from '../../../utils/data-persistence-helper';
+import { useLanguage } from '../../../hooks/useLanguage';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 import './Inventory.css';
@@ -33,6 +34,7 @@ interface InventoryItem {
 }
 
 const Inventory = () => {
+  const { t } = useLanguage();
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   // Structure: Record<productId, string | { image: string, deleted?: boolean, deletedAt?: string, deletedTimestamp?: number }>
@@ -93,13 +95,13 @@ const Inventory = () => {
   
   const loadProducts = async () => {
     try {
-      const dataRaw = extractStorageValue(await storageService.get<any[]>('gt_products')) || [];
+      const dataRaw = extractStorageValue(await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PRODUCTS)) || [];
       // Filter out deleted items menggunakan helper function
       const activeProducts = filterActiveItems(dataRaw);
       setProducts(activeProducts);
       
       // Load product images (support both old format string and new format object with tombstone)
-      const imagesDataRaw = await storageService.get<Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }>>('GT_productimage') || {};
+      const imagesDataRaw = await storageService.get<Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }>>(StorageKeys.GENERAL_TRADING.PRODUCT_IMAGES) || {};
       
       // Filter out deleted images (tombstone) for display
       const activeImages: Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }> = {};
@@ -126,7 +128,7 @@ const Inventory = () => {
     const handleStorageChange = (e: CustomEvent) => {
       const key = e.detail?.key || '';
       // Hanya refresh jika inventory data berubah
-      if (key === 'gt_inventory' || key === 'general-trading/gt_inventory') {
+      if (key === StorageKeys.GENERAL_TRADING.INVENTORY || key === 'general-trading/' + StorageKeys.GENERAL_TRADING.INVENTORY) {
         if (timeoutId) {
           clearTimeout(timeoutId);
         }
@@ -157,8 +159,8 @@ const Inventory = () => {
       
       // Try multiple key formats (sama seperti DB Activity)
       const possibleKeys = [
-        'general-trading/gt_inventory', // With business prefix
-        'gt_inventory', // Direct key
+        'general-trading/' + StorageKeys.GENERAL_TRADING.INVENTORY, // With business prefix
+        StorageKeys.GENERAL_TRADING.INVENTORY, // Direct key
       ];
       
       for (const storageKey of possibleKeys) {
@@ -181,7 +183,7 @@ const Inventory = () => {
       // If still empty, try storageService as fallback
       if (data.length === 0) {
         console.log('[Inventory] localStorage empty, trying storageService...');
-        const rawData = await storageService.get<InventoryItem[]>('gt_inventory');
+        const rawData = await storageService.get<InventoryItem[]>(StorageKeys.GENERAL_TRADING.INVENTORY);
         data = extractStorageValue(rawData) || [];
         console.log(`[Inventory] Loaded from storageService: ${data.length} items`);
       }
@@ -262,7 +264,7 @@ const Inventory = () => {
   const handleResetData = async () => {
     try {
       setLoading(true);
-      await storageService.set('gt_inventory', []);
+      await storageService.set(StorageKeys.GENERAL_TRADING.INVENTORY, []);
       setInventory([]);
       setSuccessMessage('✅ Data inventory berhasil direset. Silakan import data baru dari Excel.');
       setError('');
@@ -298,7 +300,7 @@ const Inventory = () => {
   const handleImportExcel = () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.xlsx,.xls';
+    input.accept = '.xlsx,.xls,.ods,.csv';
     input.onchange = async (e: any) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -309,7 +311,7 @@ const Inventory = () => {
         // Read file as ArrayBuffer
         const arrayBuffer = await file.arrayBuffer();
         
-        // Use xlsx library
+        // Use xlsx library - supports .xlsx, .xls, .ods, .csv
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         
         // Get first sheet
@@ -442,7 +444,7 @@ const Inventory = () => {
         existingMap.forEach(item => merged.push(item));
 
         // Save to storage
-        await storageService.set('gt_inventory', merged);
+        await storageService.set(StorageKeys.GENERAL_TRADING.INVENTORY, merged);
         setInventory(merged);
         
         let successMsg = `✅ Berhasil import ${newItems.length} item`;
@@ -497,13 +499,13 @@ const Inventory = () => {
       
       // Load semua data source (GT: hanya product, tidak ada product)
       const [existingInventory, purchaseOrders, deliveryData, productsData, salesOrdersData, grnData, purchaseRequests] = await Promise.all([
-        storageService.get<InventoryItem[]>('gt_inventory'),
-        storageService.get<any[]>('gt_purchaseOrders'),
-        storageService.get<any[]>('gt_delivery'),
-        storageService.get<any[]>('gt_products'),
-        storageService.get<any[]>('gt_salesOrders'),
-        storageService.get<any[]>('gt_grn'),
-        storageService.get<any[]>('gt_purchaseRequests'),
+        storageService.get<InventoryItem[]>(StorageKeys.GENERAL_TRADING.INVENTORY),
+        storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PURCHASE_ORDERS),
+        storageService.get<any[]>(StorageKeys.GENERAL_TRADING.DELIVERY),
+        storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PRODUCTS),
+        storageService.get<any[]>(StorageKeys.GENERAL_TRADING.SALES_ORDERS),
+        storageService.get<any[]>(StorageKeys.GENERAL_TRADING.GRN),
+        storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PURCHASE_REQUESTS),
       ]);
 
       // Extract and ensure arrays (null safety)
@@ -1024,7 +1026,7 @@ const Inventory = () => {
       });
 
       // Save dan update state
-      await storageService.set('gt_inventory', recalculatedInventory);
+      await storageService.set(StorageKeys.GENERAL_TRADING.INVENTORY, recalculatedInventory);
       setInventory(recalculatedInventory);
       
       let message = `✅ Inventory berhasil di-recalculate dari source data! Total items: ${recalculatedInventory.length}`;
@@ -1095,7 +1097,7 @@ const Inventory = () => {
                 border: '1px solid var(--border)',
                 cursor: 'pointer'
               }}
-              onClick={() => showImageModal(imageData, item.description || item.codeItem || 'Product Image')}
+              onClick={() => console.log('Image clicked:', item.description || item.codeItem || 'Product Image')}
             />
           );
         }
@@ -1336,7 +1338,7 @@ const Inventory = () => {
           : item
       );
       
-      await storageService.set('gt_inventory', updatedInventory);
+      await storageService.set(StorageKeys.GENERAL_TRADING.INVENTORY, updatedInventory);
       setInventory(updatedInventory);
       setEditingInventory(null);
       setEditFormData({});
@@ -1758,7 +1760,7 @@ const Inventory = () => {
                 <Input
                   type="text"
                   value={editFormData.supplierName || ''}
-                  onChange={(e) => setEditFormData({ ...editFormData, supplierName: e.target.value })}
+                  onChange={(v) => setEditFormData({ ...editFormData, supplierName: v })}
                   placeholder="Supplier Name"
                 />
               </div>
@@ -1770,7 +1772,7 @@ const Inventory = () => {
                 <Input
                   type="text"
                   value={editFormData.description || ''}
-                  onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                  onChange={(v) => setEditFormData({ ...editFormData, description: v })}
                   placeholder="Description"
                 />
               </div>
@@ -1782,7 +1784,7 @@ const Inventory = () => {
                 <Input
                   type="text"
                   value={editFormData.kategori || ''}
-                  onChange={(e) => setEditFormData({ ...editFormData, kategori: e.target.value })}
+                  onChange={(v) => setEditFormData({ ...editFormData, kategori: v })}
                   placeholder="Kategori"
                 />
               </div>
@@ -1794,7 +1796,7 @@ const Inventory = () => {
                 <Input
                   type="text"
                   value={editFormData.satuan || ''}
-                  onChange={(e) => setEditFormData({ ...editFormData, satuan: e.target.value })}
+                  onChange={(v) => setEditFormData({ ...editFormData, satuan: v })}
                   placeholder="Satuan"
                 />
               </div>
@@ -1805,8 +1807,8 @@ const Inventory = () => {
                 </label>
                 <Input
                   type="number"
-                  value={editFormData.hargaBeli || 0}
-                  onChange={(e) => setEditFormData({ ...editFormData, hargaBeli: parseFloat(e.target.value) || 0 })}
+                  value={String(editFormData.hargaBeli || 0)}
+                  onChange={(v) => setEditFormData({ ...editFormData, hargaBeli: parseFloat(v) || 0 })}
                   placeholder="Harga Beli"
                 />
               </div>
@@ -1817,8 +1819,8 @@ const Inventory = () => {
                 </label>
                 <Input
                   type="number"
-                  value={editFormData.price || 0}
-                  onChange={(e) => setEditFormData({ ...editFormData, price: parseFloat(e.target.value) || 0 })}
+                  value={String(editFormData.price || 0)}
+                  onChange={(v) => setEditFormData({ ...editFormData, price: parseFloat(v) || 0 })}
                   placeholder="Harga Jual"
                 />
               </div>
@@ -1829,8 +1831,8 @@ const Inventory = () => {
                 </label>
                 <Input
                   type="number"
-                  value={editFormData.stockPremonth || 0}
-                  onChange={(e) => setEditFormData({ ...editFormData, stockPremonth: parseFloat(e.target.value) || 0 })}
+                  value={String(editFormData.stockPremonth || 0)}
+                  onChange={(v) => setEditFormData({ ...editFormData, stockPremonth: parseFloat(v) || 0 })}
                   placeholder="Stock Premonth"
                 />
               </div>

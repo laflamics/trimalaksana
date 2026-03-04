@@ -1,3 +1,5 @@
+import { ensureLogoIsBase64 } from '../utils/hardcoded-logo';
+
 export function generateInvoiceHtml({
   logo,
   company,
@@ -10,54 +12,61 @@ export function generateInvoiceHtml({
   templateType = 'template1', // 'template1', 'template2', 'template3', or 'template4'
   hideSO = false // Parameter untuk hide kolom SO (khusus trucking)
 }: any): string {
-  
-  // Jika template2, template3, atau template4 dipilih, gunakan template yang sesuai
-  if (templateType === 'template2') {
-    return generateInvoiceHtmlTemplate2({
-      logo,
-      company,
-      inv,
-      customerAddress,
-      customerNpwp,
-      soSpecNote,
-      productMap,
-      productCodeMap,
-      hideSO
-    });
-  }
-  
-  if (templateType === 'template3') {
-    return generateInvoiceHtmlTemplate3({
-      logo,
-      company,
-      inv,
-      customerAddress,
-      customerNpwp,
-      soSpecNote,
-      productMap,
-      productCodeMap,
-      hideSO
-    });
-  }
-  
-  if (templateType === 'template4') {
-    return generateInvoiceHtmlTemplate4({
-      logo,
-      company,
-      inv,
-      customerAddress,
-      customerNpwp,
-      soSpecNote,
-      productMap,
-      productCodeMap,
-      hideSO
-    });
-  }
-  
-  // Default: template1 (template yang sudah ada)
+  try {
+    // Ensure logo is base64 string, fallback ke hardcoded logo
+    const logoSrc = ensureLogoIsBase64(logo);
+    // Jika template2, template3, atau template4 dipilih, gunakan template yang sesuai
+    if (templateType === 'template2') {
+      return generateInvoiceHtmlTemplate2({
+        logo,
+        company,
+        inv,
+        customerAddress,
+        customerNpwp,
+        soSpecNote,
+        productMap,
+        productCodeMap,
+        hideSO
+      });
+    }
 
-  const bom = inv.bom || {};
-  const lines = inv.lines || [];
+    if (templateType === 'template3') {
+      return generateInvoiceHtmlTemplate3({
+        logo,
+        company,
+        inv,
+        customerAddress,
+        customerNpwp,
+        soSpecNote,
+        productMap,
+        productCodeMap,
+        hideSO
+      });
+    }
+
+    if (templateType === 'template4') {
+      return generateInvoiceHtmlTemplate4({
+        logo,
+        company,
+        inv,
+        customerAddress,
+        customerNpwp,
+        soSpecNote,
+        productMap,
+        productCodeMap,
+        hideSO
+      });
+    }
+
+    // Default: template1 (template yang sudah ada)
+
+    // Safety check for inv
+    if (!inv) {
+      return '<div>Error: Invoice data is missing</div>';
+    }
+
+    const bom = inv.bom || {};
+    const lines = inv.lines || [];
 
   const subtotal = bom.subtotal ||
     lines.reduce((s: number, l: any) => s + Number(l.qty || 0) * Number(l.price || 0), 0);
@@ -67,7 +76,16 @@ export function generateInvoiceHtml({
   const tax = bom.tax || 0;
   const discount = bom.discount || 0;
 
-  const tanggalJt = bom.tanggalJt || '';
+  // Hitung tanggal jatuh tempo dari createdAt + topDays
+  let tanggalJt = bom.tanggalJt || '';
+  if (!tanggalJt && inv.createdAt) {
+    const createdDate = new Date(inv.createdAt);
+    const topDays = bom.topDays || 30; // Default 30 hari jika tidak ada
+    const dueDate = new Date(createdDate);
+    dueDate.setDate(dueDate.getDate() + topDays);
+    tanggalJt = dueDate.toISOString();
+  }
+
   const dpPo = bom.dpPo || 0;
   const tunai = bom.tunai || 0;
   const kredit = bom.kredit || 0;
@@ -75,8 +93,14 @@ export function generateInvoiceHtml({
   // Hitung persentase potongan
   const discountPercent = subtotal > 0 ? (discount / subtotal) * 100 : 0;
 
-  // Format tanggal jatuh tempo
-  const formattedTanggalJt = tanggalJt ? new Date(tanggalJt).toLocaleDateString('id-ID') : '';
+  // Format tanggal jatuh tempo (dd/mm/yyyy)
+  const formattedTanggalJt = tanggalJt ? (() => {
+    const date = new Date(tanggalJt);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  })() : '';
 
   // Ambil nomor SO customer (bisa string atau array)
   const soNo = bom.soNo || inv.soNo || '';
@@ -86,17 +110,17 @@ export function generateInvoiceHtml({
   let customerAddressLine1 = '';
   let customerAddressLine2 = '';
   let customerAddressLine3 = '';
-  
+
   if (customerAddress) {
     // Cek panjang alamat
     const isLongAddress = customerAddress.length > 30;
     const isVeryLongAddress = customerAddress.length > 50;
-    
+
     // Cari posisi split yang tepat
     const kabupatenIndex = customerAddress.toLowerCase().indexOf('kabupaten');
     const lastCommaIndex = customerAddress.lastIndexOf(',');
     const words = customerAddress.split(/\s+/);
-    
+
     if (isVeryLongAddress && words.length > 10) {
       // Alamat sangat panjang - bagi jadi 3 baris
       const thirdPoint = Math.ceil(words.length / 3);
@@ -174,7 +198,7 @@ export function generateInvoiceHtml({
       customerAddressLine2 = '';
       customerAddressLine3 = '';
     }
-    
+
     // Validasi final: pastikan semua bagian alamat ada
     const combinedAddress = (customerAddressLine1 + ' ' + customerAddressLine2 + ' ' + customerAddressLine3).trim().replace(/\s+/g, ' ');
     const normalizedFull = customerAddress.replace(/\s+/g, ' ').trim();
@@ -191,17 +215,17 @@ export function generateInvoiceHtml({
   let companyAddressLine1 = '';
   let companyAddressLine2 = '';
   let companyAddressLine3 = '';
-  
+
   if (companyFullAddress) {
     // Cek panjang alamat
     const isLongAddress = companyFullAddress.length > 30;
     const isVeryLongAddress = companyFullAddress.length > 50;
-    
+
     // Cari posisi split yang tepat
     const kabupatenIndex = companyFullAddress.toLowerCase().indexOf('kabupaten');
     const lastCommaIndex = companyFullAddress.lastIndexOf(',');
     const words = companyFullAddress.split(/\s+/);
-    
+
     if (isVeryLongAddress && words.length > 10) {
       // Alamat sangat panjang - bagi jadi 3 baris
       const thirdPoint = Math.ceil(words.length / 3);
@@ -279,7 +303,7 @@ export function generateInvoiceHtml({
       companyAddressLine2 = '';
       companyAddressLine3 = '';
     }
-    
+
     // Validasi final: pastikan semua bagian alamat ada
     const combinedAddress = (companyAddressLine1 + ' ' + companyAddressLine2 + ' ' + companyAddressLine3).trim().replace(/\s+/g, ' ');
     const normalizedFull = companyFullAddress.replace(/\s+/g, ' ').trim();
@@ -299,17 +323,22 @@ export function generateInvoiceHtml({
 <title>Invoice ${inv.invNo || ''}</title>
 
 <style>
+  @page { 
+    size: 9.5in 11in; 
+    margin: -30mm 2px 1mm 2px; 
+  }
+  
   body {
     font-family: sans-serif;
     font-size: 12px;
-    padding: 10px 1cm 10px 1cm;
+    padding: 5mm 2px 10mm 2px;
   }
 
   .header {
-    width: 100%;
+    width: auto;
     padding-bottom: 10px;
     margin-bottom: 15px;
-    margin-top: 1cm;
+    margin-top: 0;
   }
 
   .header-top {
@@ -385,7 +414,7 @@ export function generateInvoiceHtml({
     font-weight: 900;
     text-align: center;
     text-decoration: underline;
-    margin-top: -3cm;
+    margin-top: -25mm;
     margin-left: 30px;
     position: relative;
     z-index: 20;
@@ -394,8 +423,8 @@ export function generateInvoiceHtml({
   .header-logo {
     height: 100px;
     width: auto;
-    margin-left: -0.5cm;
-    margin-top: -0.5cm;
+    margin-left: 0cm;
+    margin-top: 0;
     position: relative;
     z-index: 10;
     -webkit-print-color-adjust: exact;
@@ -571,14 +600,42 @@ export function generateInvoiceHtml({
     word-break: break-word;
   }
 
+  .keterangan-label {
+    display: inline-block;
+    font-weight: 700;
+    width: 120px;
+    vertical-align: top;
+    padding-right: 8px;
+    position: relative;
+  }
+
+  .keterangan-label-text {
+    text-align: left;
+    display: inline-block;
+  }
+
+  .keterangan-label-colon {
+    position: absolute;
+    right: calc(4px + 12mm);
+  }
+
+  .keterangan-value {
+    display: inline-block;
+    word-wrap: break-word;
+    word-break: break-word;
+    vertical-align: top;
+    margin-left: -12mm;
+  }
+
   .keterangan-item {
+    display: block;
     margin: 0;
     padding: 2px 0;
     word-wrap: break-word;
     word-break: break-word;
     white-space: pre-wrap;
-    display: block;
     min-height: 1.2em;
+    line-height: 1.6;
   }
 
 </style>
@@ -632,7 +689,7 @@ export function generateInvoiceHtml({
       </div>
       <div class="header-left-center">
         <div class="invoice-title">INVOICE</div>
-        <img src="${logo}" class="header-logo" alt="Logo" onerror="this.style.display='none'; this.onerror=null;" />
+        <img src="${logoSrc}" class="header-logo" alt="Logo" onerror="this.style.display='none'; this.onerror=null;" />
       </div>
       <div class="header-right">
         <div class="company-name">${company.companyName || ''}</div>
@@ -642,7 +699,7 @@ export function generateInvoiceHtml({
           ${companyAddressLine3 ? `<span class="company-address-line">${companyAddressLine3}</span>` : ''}
         </div>
         <div class="bank-info">
-          <span class="bank-label" style="font-weight: bold;"></span>${company.bankName ? `${company.bankName}` : ''}${company.bankName && company.bankAccount ? '<br/>' : ''}${company.bankAccount ? `AC: ${company.bankAccount}` : ''}
+          <span class="bank-label" style="font-weight: bold;"></span>${company.bankName ? `${company.bankName}` : 'Bank MANDIRI, KCP JKT Cimanggis'}${(company.bankName || 'Bank MANDIRI, KCP JKT Cimanggis') && (company.bankAccount || '129-00-1116726-5') ? '<br/>' : ''}${company.bankAccount ? `AC: ${company.bankAccount}` : 'AC: 129-00-1116726-5'}
         </div>
       </div>
     </div>
@@ -664,15 +721,15 @@ export function generateInvoiceHtml({
     </thead>
     <tbody>
       ${lines.map((l: any, i: number): string => {
-        let name = productMap[l.itemSku] || l.itemSku;
-        // Hapus informasi SO dari nama produk jika ada (format: "Product Name (SO: xxx)")
-        name = name.replace(/\s*\(SO:\s*[^)]+\)/gi, '').trim();
-        const code = productCodeMap[l.itemSku] || ''; // Ambil kode dari productCodeMap, kosongkan jika tidak ada
-        const soNo = l.soNo || ''; // Ambil SO number dari line
-        const pot = l.pot || 0; // Ambil POT dari line (khusus trucking)
-        const totalLine = Number(l.qty || 0) * Number(l.price || 0);
+    let name = productMap[l.itemSku] || l.itemSku;
+    // Hapus informasi SO dari nama produk jika ada (format: "Product Name (SO: xxx)")
+    name = name.replace(/\s*\(SO:\s*[^)]+\)/gi, '').trim();
+    const code = productCodeMap[l.itemSku] || ''; // Ambil kode dari productCodeMap, kosongkan jika tidak ada
+    const soNo = l.soNo || ''; // Ambil SO number dari line
+    const pot = l.pot || 0; // Ambil POT dari line (khusus trucking)
+    const totalLine = Number(l.qty || 0) * Number(l.price || 0);
 
-        return `
+    return `
           <tr>
             <td>${i + 1}</td>
             <td>${code || ''}</td>
@@ -684,7 +741,7 @@ export function generateInvoiceHtml({
             <td>${totalLine.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
         `;
-      }).join('')}
+  }).join('')}
       ${Array(Math.max(0, 25 - lines.length)).fill(0).map(() => `
         <tr>
           <td></td>
@@ -704,20 +761,43 @@ export function generateInvoiceHtml({
   <div class="summary-wrapper">
     <div class="summary-left">
       <div class="keterangan-block">
-        ${inv.notes ? 
-          (() => {
-            // Format notes: "DN: SJ-xxx DN: SJ-xxx" (satu string dengan spasi)
-            // Tampilkan langsung tanpa menghapus "DN:" karena format sudah benar
-            const notesDisplay = inv.notes.trim();
-            if (notesDisplay.length === 0) {
-              return '<div class="keterangan-item">Keterangan : -</div>';
-            }
-            return `<div class="keterangan-item">Keterangan : ${notesDisplay}</div>`;
-          })() :
-          (soNoList.length > 0 ? 
-            soNoList.map((so: string) => `<div class="keterangan-item">Keterangan : ${so}</div>`).join('') 
-            : '<div class="keterangan-item">Keterangan : -</div>')
+        <div>
+          <span class="keterangan-label">
+            <span class="keterangan-label-text">Keterangan</span>
+            <span class="keterangan-label-colon"> :</span>
+          </span>
+          <span class="keterangan-value">
+            ${inv.notes ?
+      (() => {
+        const notesDisplay = inv.notes.trim();
+        if (notesDisplay.length === 0) {
+          return '<span class="keterangan-item">-</span>';
         }
+        
+        // Split by "PO :" dan "DO :" untuk extract individual items
+        const poMatches = notesDisplay.match(/PO\s*:\s*([^\s]+)/gi) || [];
+        const doMatches = notesDisplay.match(/DO\s*:\s*([^\s]+)/gi) || [];
+        
+        if (poMatches.length > 0 || doMatches.length > 0) {
+          // Render vertical list
+          let html = '';
+          poMatches.forEach((po: string, idx: number) => {
+            html += `<span class="keterangan-item">${po}</span>`;
+          });
+          doMatches.forEach((do_: string) => {
+            html += `<span class="keterangan-item">${do_}</span>`;
+          });
+          return html;
+        }
+        
+        return `<span class="keterangan-item">${notesDisplay}</span>`;
+      })() :
+      (soNoList.length > 0 ?
+        soNoList.map((so: string) => `<span class="keterangan-item">${so}</span>`).join('')
+        : '<span class="keterangan-item">-</span>')
+    }
+          </span>
+        </div>
       </div>
 
       <!-- SIGNATURE -->
@@ -742,14 +822,14 @@ export function generateInvoiceHtml({
           <td>${discount.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
         </tr>
         <tr>
-          <td>Pajak :</td>
+          <td>Pajak (11%):</td>
           <td></td>
           <td>${tax.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
         </tr>
         <tr>
           <td>Lain-lain :</td>
           <td></td>
-          <td>${(bom.biayaLain||0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          <td>${(bom.biayaLain || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
         </tr>
         <tr>
           <td>Tanggal Jatuh Tempo :</td>
@@ -791,7 +871,7 @@ export function generateInvoiceHtml({
         </tr>
         <tr>
           <td>Kembali :</td>
-          <td>${(bom.kembaliKeKasir||0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          <td>${(bom.kembaliKeKasir || 0).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
         </tr>
       </table>
     </div>
@@ -799,6 +879,10 @@ export function generateInvoiceHtml({
 
 </body>
 </html>`;
+  } catch (error: any) {
+    console.error('Error generating invoice HTML:', error);
+    return `<div style="color: red; padding: 20px;">Error generating invoice: ${error.message}</div>`;
+  }
 }
 
 // Template 2: Layout baru sesuai spesifikasi
@@ -813,6 +897,9 @@ function generateInvoiceHtmlTemplate2({
   productCodeMap = {}, // Map untuk kode item
   hideSO = false // Parameter untuk hide kolom SO (khusus trucking)
 }: any): string {
+
+  // Ensure logo is base64 string, fallback ke hardcoded logo
+  const logoSrc = ensureLogoIsBase64(logo);
 
   const bom = inv.bom || {};
   const lines = inv.lines || [];
@@ -829,7 +916,7 @@ function generateInvoiceHtmlTemplate2({
   // Fungsi terbilang untuk konversi angka ke bahasa Indonesia
   const terbilang = (angka: number): string => {
     const bilangan = ['', 'Satu', 'Dua', 'Tiga', 'Empat', 'Lima', 'Enam', 'Tujuh', 'Delapan', 'Sembilan', 'Sepuluh', 'Sebelas'];
-    
+
     if (angka < 12) {
       return bilangan[angka];
     } else if (angka < 20) {
@@ -854,12 +941,12 @@ function generateInvoiceHtmlTemplate2({
   };
 
   // Format terbilang dengan minimal 3-4 kata per baris
-  const formatTerbilangWithMinWords = (text: string, minWordsPerLine: number = 4): string => {
+  const formatTerbilangWithMinWords = (text: string, minWordsPerLine: number = 6): string => {
     const words = text.split(' ');
     if (words.length <= minWordsPerLine) {
       return text; // Jika kurang dari minWordsPerLine, return as is
     }
-    
+
     // Gabungkan kata-kata menjadi kelompok dengan minimal minWordsPerLine kata per baris
     const lines: string[] = [];
     for (let i = 0; i < words.length; i += minWordsPerLine) {
@@ -868,13 +955,13 @@ function generateInvoiceHtmlTemplate2({
       const line = lineWords.join('\u00A0'); // Non-breaking space
       lines.push(line);
     }
-    
+
     // Gabungkan dengan <br/> untuk baris baru
     return lines.join('<br/>');
   };
-  
+
   const terbilangText = terbilang(Math.floor(total)).charAt(0).toUpperCase() + terbilang(Math.floor(total)).slice(1) + ' Rupiah';
-  const totalTerbilang = formatTerbilangWithMinWords(terbilangText, 4);
+  const totalTerbilang = formatTerbilangWithMinWords(terbilangText, 6);
 
   // Hitung persentase potongan
   const discountPercent = subtotal > 0 ? (discount / subtotal) * 100 : 0;
@@ -884,7 +971,25 @@ function generateInvoiceHtmlTemplate2({
   const invoiceDate = invoiceDateObj.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const invoiceTime = invoiceDateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   const invoiceDateTime = `${invoiceDate} ${invoiceTime.replace(/:/g, '.')}`;
-  const tanggalJt = bom.tanggalJt ? new Date(bom.tanggalJt).toLocaleDateString('id-ID') : '';
+  
+  // Hitung tanggal jatuh tempo dari createdAt + topDays
+  let tanggalJtDate = bom.tanggalJt || '';
+  if (!tanggalJtDate && inv.createdAt) {
+    const createdDate = new Date(inv.createdAt);
+    const topDays = bom.topDays || 30; // Default 30 hari jika tidak ada
+    const dueDate = new Date(createdDate);
+    dueDate.setDate(dueDate.getDate() + topDays);
+    tanggalJtDate = dueDate.toISOString();
+  }
+  
+  // Format tanggal jatuh tempo (dd/mm/yyyy)
+  const tanggalJt = tanggalJtDate ? (() => {
+    const date = new Date(tanggalJtDate);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  })() : '';
 
   // Format customer address
   const customerName = inv.customer || '';
@@ -894,14 +999,14 @@ function generateInvoiceHtmlTemplate2({
   let customerAddressLine1 = '';
   let customerAddressLine2 = '';
   let customerAddressLine3 = '';
-  
+
   if (customerAddress) {
     const isLongAddress = customerAddress.length > 30;
     const isVeryLongAddress = customerAddress.length > 50;
     const kabupatenIndex = customerAddress.toLowerCase().indexOf('kabupaten');
     const lastCommaIndex = customerAddress.lastIndexOf(',');
     const words = customerAddress.split(/\s+/);
-    
+
     if (isVeryLongAddress && words.length > 10) {
       const thirdPoint = Math.ceil(words.length / 3);
       const twoThirdPoint = Math.ceil(words.length * 2 / 3);
@@ -986,6 +1091,11 @@ function generateInvoiceHtmlTemplate2({
 <title>Invoice ${inv.invNo || ''}</title>
 
 <style>
+  @page { 
+    size: 9.5in 11in; 
+    margin: -30mm 2px 10mm 2px; 
+  }
+  
   * {
     margin: 0;
     padding: 0;
@@ -995,7 +1105,7 @@ function generateInvoiceHtmlTemplate2({
   body {
     font-family: sans-serif;
     font-size: 13px;
-    padding: 15mm;
+    padding: 0 2px 10mm 2px;
     color: #000;
   }
 
@@ -1003,7 +1113,7 @@ function generateInvoiceHtmlTemplate2({
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 10px;
+    margin-bottom: 5px;
   }
 
   .header-left {
@@ -1327,18 +1437,18 @@ function generateInvoiceHtmlTemplate2({
   <div class="header-container">
     <div class="header-left">
       <div class="logo-container">
-        ${logo ? `<img src="${logo}" alt="Logo" />` : ''}
+        ${logo ? `<img src="${logoSrc}" alt="Logo" />` : ''}
       </div>
       <div class="company-info">
         <div class="company-name">${company.companyName || 'PT TRIMA LAKSANA JAYA PRATAMA'}</div>
         <div class="company-address">
-          ${company.address || 'Jl. Raya Bekasi Km. 28, Cikarang, Bekasi 17530'}<br/>
+          ${company.address || 'Jl. Raya Cikarang Cibarusah Kp. Kukun RT 11/06 Desa Ciantra Kecamatan Cikarang Selatan Kabupaten Bekasi'}<br/>
           ${company.npwp ? `NPWP: ${company.npwp}` : ''}
         </div>
         <div class="company-bank">
-          ${company.bankName || company.bankAccount ? 
-            `${company.bankName ? `${company.bankName}${company.bankBranch ? `, ${company.bankBranch}` : ''}` : ''}${company.bankName && company.bankAccount ? '<br/>' : ''}${company.bankAccount ? `AC : ${company.bankAccount}${company.bankAccountName ? ` a.n. ${company.bankAccountName}` : ''}` : ''}` 
-            : ''}
+          ${company.bankName || company.bankAccount ?
+      `${company.bankName ? `${company.bankName}${company.bankBranch ? `, ${company.bankBranch}` : ''}` : ''}${company.bankName && company.bankAccount ? '<br/>' : ''}${company.bankAccount ? `AC : ${company.bankAccount}${company.bankAccountName ? ` a.n. ${company.bankAccountName}` : ''}` : ''}`
+      : ''}
         </div>
       </div>
     </div>
@@ -1400,14 +1510,14 @@ function generateInvoiceHtmlTemplate2({
         let name = productMap[l.itemSku] || l.itemSku;
         // Hapus informasi SO dari nama produk jika ada (format: "Product Name (SO: xxx)")
         name = name.replace(/\s*\(SO:\s*[^)]+\)/gi, '').trim();
-        
+
         // Gunakan productCodeMap jika sudah di-set dengan benar (sudah menggunakan productCodeDisplay)
         let code = productCodeMap[l.itemSku] || '';
         if (!code) {
           // Fallback: gunakan itemSku sebagai code
           code = l.itemSku || '';
         }
-        
+
         const soNo = l.soNo || ''; // Ambil SO number dari line
         const pot = l.pot || 0; // Ambil POT dari line (khusus trucking)
         const totalLine = Number(l.qty || 0) * Number(l.price || 0);
@@ -1450,15 +1560,33 @@ function generateInvoiceHtmlTemplate2({
         </div>
         <div class="notes-section">
           <div class="notes-label">Pesan:</div>
-          <div class="notes-content">${inv.notes ? 
-              (() => {
-                // Format notes: "DN: SJ-xxx DN: SJ-xxx" (satu string dengan spasi)
-                // Tampilkan langsung tanpa menghapus "DN:" karena format sudah benar
-                const notesDisplay = inv.notes.trim();
-                return notesDisplay.length > 0 ? notesDisplay : '-';
-              })() :
-              (soSpecNote || '-')
-            }</div>
+          <div class="notes-content">${inv.notes ?
+      (() => {
+        const notesDisplay = inv.notes.trim();
+        if (notesDisplay.length === 0) {
+          return '-';
+        }
+        
+        // Split by "PO :" dan "DO :" untuk extract individual items
+        const poMatches = notesDisplay.match(/PO\s*:\s*([^\s]+)/gi) || [];
+        const doMatches = notesDisplay.match(/DO\s*:\s*([^\s]+)/gi) || [];
+        
+        if (poMatches.length > 0 || doMatches.length > 0) {
+          // Render vertical list
+          let html = '';
+          poMatches.forEach((po: string) => {
+            html += `<div style="margin: 2px 0;">${po}</div>`;
+          });
+          doMatches.forEach((do_: string) => {
+            html += `<div style="margin: 2px 0;">${do_}</div>`;
+          });
+          return html;
+        }
+        
+        return notesDisplay;
+      })() :
+      (soSpecNote || '-')
+    }</div>
         </div>
       </div>
 
@@ -1483,7 +1611,7 @@ function generateInvoiceHtmlTemplate2({
           ` : ''}
           ${tax > 0 ? `
           <tr>
-            <td>PPN:</td>
+            <td>PPN(${bom.taxPercent || 11}%):</td>
             <td>${tax.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
           ` : ''}
@@ -1516,6 +1644,9 @@ function generateInvoiceHtmlTemplate3({
   hideSO = false // Parameter untuk hide kolom SO (khusus trucking)
 }: any): string {
 
+  // Ensure logo is base64 string, fallback ke hardcoded logo
+  const logoSrc = ensureLogoIsBase64(logo);
+
   const bom = inv.bom || {};
   const lines = inv.lines || [];
 
@@ -1536,7 +1667,25 @@ function generateInvoiceHtmlTemplate3({
   const invoiceDate = invoiceDateObj.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const invoiceTime = invoiceDateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   const invoiceDateTime = `${invoiceDate} ${invoiceTime.replace(/:/g, '.')}`;
-  const tanggalJt = bom.tanggalJt ? new Date(bom.tanggalJt).toLocaleDateString('id-ID') : '';
+  
+  // Hitung tanggal jatuh tempo dari createdAt + topDays
+  let tanggalJtDate = bom.tanggalJt || '';
+  if (!tanggalJtDate && inv.createdAt) {
+    const createdDate = new Date(inv.createdAt);
+    const topDays = bom.topDays || 30; // Default 30 hari jika tidak ada
+    const dueDate = new Date(createdDate);
+    dueDate.setDate(dueDate.getDate() + topDays);
+    tanggalJtDate = dueDate.toISOString();
+  }
+  
+  // Format tanggal jatuh tempo (dd/mm/yyyy)
+  const tanggalJt = tanggalJtDate ? (() => {
+    const date = new Date(tanggalJtDate);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  })() : '';
 
   // Format customer address
   const customerName = inv.customer || '';
@@ -1546,14 +1695,14 @@ function generateInvoiceHtmlTemplate3({
   let customerAddressLine1 = '';
   let customerAddressLine2 = '';
   let customerAddressLine3 = '';
-  
+
   if (customerAddress) {
     const isLongAddress = customerAddress.length > 30;
     const isVeryLongAddress = customerAddress.length > 50;
     const kabupatenIndex = customerAddress.toLowerCase().indexOf('kabupaten');
     const lastCommaIndex = customerAddress.lastIndexOf(',');
     const words = customerAddress.split(/\s+/);
-    
+
     if (isVeryLongAddress && words.length > 10) {
       const thirdPoint = Math.ceil(words.length / 3);
       const twoThirdPoint = Math.ceil(words.length * 2 / 3);
@@ -1638,6 +1787,11 @@ function generateInvoiceHtmlTemplate3({
 <title>Invoice ${inv.invNo || ''}</title>
 
 <style>
+  @page { 
+    size: 9.5in 11in; 
+    margin: -30mm 2px 10mm 2px; 
+  }
+  
   * {
     margin: 0;
     padding: 0;
@@ -1647,7 +1801,7 @@ function generateInvoiceHtmlTemplate3({
   body {
     font-family: sans-serif;
     font-size: 13px;
-    padding: 15mm;
+    padding: 0 2px 10mm 2px;
     color: #000;
   }
 
@@ -1655,7 +1809,7 @@ function generateInvoiceHtmlTemplate3({
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 10px;
+    margin-bottom: 5px;
   }
 
   .header-left {
@@ -1955,18 +2109,18 @@ function generateInvoiceHtmlTemplate3({
   <div class="header-container">
     <div class="header-left">
       <div class="logo-container">
-        ${logo ? `<img src="${logo}" alt="Logo" />` : ''}
+        ${logo ? `<img src="${logoSrc}" alt="Logo" />` : ''}
       </div>
       <div class="company-info">
         <div class="company-name">${company.companyName || 'PT TRIMA LAKSANA JAYA PRATAMA'}</div>
         <div class="company-address">
-          ${company.address || 'Jl. Raya Bekasi Km. 28, Cikarang, Bekasi 17530'}<br/>
+          ${company.address || 'Jl. Raya Cikarang Cibarusah Kp. Kukun RT 11/06 Desa Ciantra Kecamatan Cikarang Selatan Kabupaten Bekasi'}<br/>
           ${company.npwp ? `NPWP: ${company.npwp}` : ''}
         </div>
         <div class="company-bank">
-          ${company.bankName || company.bankAccount ? 
-            `${company.bankName ? `${company.bankName}${company.bankBranch ? `, ${company.bankBranch}` : ''}` : ''}${company.bankName && company.bankAccount ? '<br/>' : ''}${company.bankAccount ? `AC : ${company.bankAccount}${company.bankAccountName ? ` a.n. ${company.bankAccountName}` : ''}` : ''}` 
-            : ''}
+          ${company.bankName || company.bankAccount ?
+      `${company.bankName ? `${company.bankName}${company.bankBranch ? `, ${company.bankBranch}` : ''}` : ''}${company.bankName && company.bankAccount ? '<br/>' : ''}${company.bankAccount ? `AC : ${company.bankAccount}${company.bankAccountName ? ` a.n. ${company.bankAccountName}` : ''}` : ''}`
+      : ''}
         </div>
       </div>
     </div>
@@ -2028,14 +2182,14 @@ function generateInvoiceHtmlTemplate3({
         let name = productMap[l.itemSku] || l.itemSku;
         // Hapus informasi SO dari nama produk jika ada (format: "Product Name (SO: xxx)")
         name = name.replace(/\s*\(SO:\s*[^)]+\)/gi, '').trim();
-        
+
         // Gunakan productCodeMap jika sudah di-set dengan benar (sudah menggunakan productCodeDisplay)
         let code = productCodeMap[l.itemSku] || '';
         if (!code) {
           // Fallback: gunakan itemSku sebagai code
           code = l.itemSku || '';
         }
-        
+
         const soNo = l.soNo || ''; // Ambil SO number dari line
         const pot = l.pot || 0; // Ambil POT dari line (khusus trucking)
         const totalLine = Number(l.qty || 0) * Number(l.price || 0);
@@ -2074,15 +2228,33 @@ function generateInvoiceHtmlTemplate3({
       <div class="footer-left">
         <div class="notes-section">
           <div class="notes-label">Pesan:</div>
-          <div class="notes-content">${inv.notes ? 
-              (() => {
-                // Format notes: "DN: SJ-xxx DN: SJ-xxx" (satu string dengan spasi)
-                // Tampilkan langsung tanpa menghapus "DN:" karena format sudah benar
-                const notesDisplay = inv.notes.trim();
-                return notesDisplay.length > 0 ? notesDisplay : '-';
-              })() :
-              (soSpecNote || '-')
-            }</div>
+          <div class="notes-content">${inv.notes ?
+      (() => {
+        const notesDisplay = inv.notes.trim();
+        if (notesDisplay.length === 0) {
+          return '-';
+        }
+        
+        // Split by "PO :" dan "DO :" untuk extract individual items
+        const poMatches = notesDisplay.match(/PO\s*:\s*([^\s]+)/gi) || [];
+        const doMatches = notesDisplay.match(/DO\s*:\s*([^\s]+)/gi) || [];
+        
+        if (poMatches.length > 0 || doMatches.length > 0) {
+          // Render vertical list
+          let html = '';
+          poMatches.forEach((po: string) => {
+            html += `<div style="margin: 2px 0;">${po}</div>`;
+          });
+          doMatches.forEach((do_: string) => {
+            html += `<div style="margin: 2px 0;">${do_}</div>`;
+          });
+          return html;
+        }
+        
+        return notesDisplay;
+      })() :
+      (soSpecNote || '-')
+    }</div>
         </div>
       </div>
 
@@ -2107,7 +2279,7 @@ function generateInvoiceHtmlTemplate3({
           ` : ''}
           ${tax > 0 ? `
           <tr>
-            <td>PPN:</td>
+            <td>PPN(${bom.taxPercent || 11}%):</td>
             <td>${tax.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
           ` : ''}
@@ -2141,6 +2313,9 @@ function generateInvoiceHtmlTemplate4({
   hideSO = false
 }: any): string {
 
+  // Ensure logo is base64 string, fallback ke hardcoded logo
+  const logoSrc = ensureLogoIsBase64(logo);
+
   const bom = inv.bom || {};
   const lines = inv.lines || [];
 
@@ -2155,7 +2330,7 @@ function generateInvoiceHtmlTemplate4({
   // Fungsi terbilang untuk konversi angka ke bahasa Indonesia
   const terbilang = (angka: number): string => {
     const bilangan = ['', 'Satu', 'Dua', 'Tiga', 'Empat', 'Lima', 'Enam', 'Tujuh', 'Delapan', 'Sembilan', 'Sepuluh', 'Sebelas'];
-    
+
     if (angka < 12) {
       return bilangan[angka];
     } else if (angka < 20) {
@@ -2185,17 +2360,17 @@ function generateInvoiceHtmlTemplate4({
     if (words.length <= minWordsPerLine) {
       return text;
     }
-    
+
     const lines: string[] = [];
     for (let i = 0; i < words.length; i += minWordsPerLine) {
       const lineWords = words.slice(i, Math.min(i + minWordsPerLine, words.length));
       const line = lineWords.join('\u00A0');
       lines.push(line);
     }
-    
+
     return lines.join('<br/>');
   };
-  
+
   const terbilangText = terbilang(Math.floor(total)).charAt(0).toUpperCase() + terbilang(Math.floor(total)).slice(1) + ' Rupiah';
   const totalTerbilang = formatTerbilangWithMinWords(terbilangText, 4);
 
@@ -2212,14 +2387,14 @@ function generateInvoiceHtmlTemplate4({
   let customerAddressLine1 = '';
   let customerAddressLine2 = '';
   let customerAddressLine3 = '';
-  
+
   if (customerAddress) {
     const isLongAddress = customerAddress.length > 30;
     const isVeryLongAddress = customerAddress.length > 50;
     const kabupatenIndex = customerAddress.toLowerCase().indexOf('kabupaten');
     const lastCommaIndex = customerAddress.lastIndexOf(',');
     const words = customerAddress.split(/\s+/);
-    
+
     if (isVeryLongAddress && words.length > 10) {
       const thirdPoint = Math.ceil(words.length / 3);
       const twoThirdPoint = Math.ceil(words.length * 2 / 3);
@@ -2300,6 +2475,11 @@ function generateInvoiceHtmlTemplate4({
 <title>Invoice ${inv.invNo || ''}</title>
 
 <style>
+  @page { 
+    size: 9.5in 11in; 
+    margin: -30mm 2px 10mm 2px; 
+  }
+  
   * {
     margin: 0;
     padding: 0;
@@ -2309,7 +2489,7 @@ function generateInvoiceHtmlTemplate4({
   body {
     font-family: sans-serif;
     font-size: 13px;
-    padding: 15mm;
+    padding: 0 2px 10mm 2px;
     color: #000;
   }
 
@@ -2317,7 +2497,7 @@ function generateInvoiceHtmlTemplate4({
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 10px;
+    margin-bottom: 5px;
   }
 
   .header-left {
@@ -2630,18 +2810,18 @@ function generateInvoiceHtmlTemplate4({
   <div class="header-container">
     <div class="header-left">
       <div class="logo-container">
-        ${logo ? `<img src="${logo}" alt="Logo" />` : ''}
+        ${logo ? `<img src="${logoSrc}" alt="Logo" />` : ''}
       </div>
       <div class="company-info">
         <div class="company-name">${company.companyName || 'PT TRIMA LAKSANA JAYA PRATAMA'}</div>
         <div class="company-address">
-          ${company.address || 'Jl. Raya Bekasi Km. 28, Cikarang, Bekasi 17530'}<br/>
+          ${company.address || 'Jl. Raya Cikarang Cibarusah Kp. Kukun RT 11/06 Desa Ciantra Kecamatan Cikarang Selatan Kabupaten Bekasi'}<br/>
           ${company.npwp ? `NPWP: ${company.npwp}` : ''}
         </div>
         <div class="company-bank">
-          ${company.bankName || company.bankAccount ? 
-            `${company.bankName ? `${company.bankName}${company.bankBranch ? `, ${company.bankBranch}` : ''}` : ''}${company.bankName && company.bankAccount ? '<br/>' : ''}${company.bankAccount ? `AC : ${company.bankAccount}${company.bankAccountName ? ` a.n. ${company.bankAccountName}` : ''}` : ''}` 
-            : ''}
+          ${company.bankName || company.bankAccount ?
+      `${company.bankName ? `${company.bankName}${company.bankBranch ? `, ${company.bankBranch}` : ''}` : ''}${company.bankName && company.bankAccount ? '<br/>' : ''}${company.bankAccount ? `AC : ${company.bankAccount}${company.bankAccountName ? ` a.n. ${company.bankAccountName}` : ''}` : ''}`
+      : ''}
         </div>
       </div>
     </div>
@@ -2702,12 +2882,12 @@ function generateInvoiceHtmlTemplate4({
       ${lines.map((l: any, i: number): string => {
         let name = productMap[l.itemSku] || l.itemSku;
         name = name.replace(/\s*\(SO:\s*[^)]+\)/gi, '').trim();
-        
+
         let code = productCodeMap[l.itemSku] || '';
         if (!code) {
           code = l.itemSku || '';
         }
-        
+
         const soNo = l.soNo || '';
         const pot = l.pot || 0;
         const totalLine = Number(l.qty || 0) * Number(l.price || 0);
@@ -2755,13 +2935,33 @@ function generateInvoiceHtmlTemplate4({
       <div class="footer-left">
         <div class="notes-section">
           <div class="notes-label">Pesan:</div>
-          <div class="notes-content">${inv.notes ? 
-              (() => {
-                const notesDisplay = inv.notes.trim();
-                return notesDisplay.length > 0 ? notesDisplay : '-';
-              })() :
-              (soSpecNote || '-')
-            }</div>
+          <div class="notes-content">${inv.notes ?
+      (() => {
+        const notesDisplay = inv.notes.trim();
+        if (notesDisplay.length === 0) {
+          return '-';
+        }
+        
+        // Split by "PO :" dan "DO :" untuk extract individual items
+        const poMatches = notesDisplay.match(/PO\s*:\s*([^\s]+)/gi) || [];
+        const doMatches = notesDisplay.match(/DO\s*:\s*([^\s]+)/gi) || [];
+        
+        if (poMatches.length > 0 || doMatches.length > 0) {
+          // Render vertical list
+          let html = '';
+          poMatches.forEach((po: string) => {
+            html += `<div style="margin: 2px 0;">${po}</div>`;
+          });
+          doMatches.forEach((do_: string) => {
+            html += `<div style="margin: 2px 0;">${do_}</div>`;
+          });
+          return html;
+        }
+        
+        return notesDisplay;
+      })() :
+      (soSpecNote || '-')
+    }</div>
         </div>
       </div>
 
@@ -2786,7 +2986,7 @@ function generateInvoiceHtmlTemplate4({
           ` : ''}
           ${tax > 0 ? `
           <tr>
-            <td>PPN:</td>
+            <td>PPN(${bom.taxPercent || 11}%):</td>
             <td>${tax.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
           </tr>
           ` : ''}

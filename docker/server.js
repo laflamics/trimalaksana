@@ -1,1303 +1,469 @@
+/**
+ * Storage Server - PostgreSQL + MinIO Mode
+ * Reads/writes data to PostgreSQL
+ * Files stored in MinIO object storage
+ */
+
 const express = require('express');
 const cors = require('cors');
+const { Pool } = require('pg');
+const multer = require('multer');
+const { Client: MinioClient } = require('minio');
+const { v4: uuidv4 } = require('uuid');
 const fs = require('fs').promises;
 const path = require('path');
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const WebSocket = require('ws');
-
-const execAsync = promisify(exec);
 
 const app = express();
 const PORT = process.env.PORT || 8888;
-const DATA_DIR = path.join(__dirname, 'data');
-const ROOT_DIR = path.join(__dirname, '..');
-const UPDATES_DIR = path.join(__dirname, 'updates'); // Directory untuk update files
-const UPLOADS_DIR = path.join(__dirname, 'uploads'); // Directory untuk uploaded files (PDF, images, etc.)
 
-// Default WebSocket URL untuk client connections
-const DEFAULT_WEBSOCKET_URL = 'ws://server-tljp.tail75a421.ts.net:8888/ws';
+// ============================================
+// MinIO Client Setup
+// ============================================
+const minioEndpoint = (process.env.MINIO_ENDPOINT || 'minio:9000').replace(/^https?:\/\//, '');
+const [minioHost, minioPort] = minioEndpoint.includes(':') 
+  ? minioEndpoint.split(':') 
+  : [minioEndpoint, '9000'];
 
-// Helper function untuk menentukan file path berdasarkan key
-// Packaging keys → data/localStorage/packaging/{key}.json
-// GT keys → data/localStorage/general-trading/{key}.json
-// Trucking keys → data/localStorage/trucking/{key}.json
-// Other keys → data/{key}.json
-function getFilePath(key) {
-  // Packaging keys (products, bom, materials, customers, suppliers, dll)
-  const packagingKeys = ['products', 'bom', 'materials', 'customers', 'suppliers', 'staff', 
-    'spk', 'schedule', 'production', 'qc', 'productionResults', 'ptp',
-    'purchaseRequests', 'purchaseOrders', 'grn', 'grnPackaging', 'inventory',
-    'salesOrders', 'delivery', 'deliveryNotes',
-    'productionNotifications', 'deliveryNotifications', 'invoiceNotifications', 'financeNotifications',
-    'payments', 'journalEntries', 'accounts', 'invoices', 'expenses',
-    'audit', 'outbox', 'companySettings'];
-  
-  // Jika key sudah punya prefix packaging/, gunakan langsung
-  if (key.startsWith('packaging/')) {
-    const actualKey = key.replace('packaging/', '');
-    return path.join(DATA_DIR, 'localStorage', 'packaging', `${actualKey}.json`);
+console.log(`[MinIO] Connecting to: ${minioHost}:${minioPort}`);
+
+const minioClient = new MinioClient({
+  endPoint: minioHost,
+  port: parseInt(minioPort) || 9000,
+  useSSL: false,
+  accessKey: process.env.MINIO_ACCESS_KEY || 'minioadmin',
+  secretKey: process.env.MINIO_SECRET_KEY || 'minioadmin123',
+});
+
+console.log(`[MinIO] Client initialized with endPoint: ${minioHost}, port: ${minioPort}`);
+
+// Multer setup for file uploads
+const upload = multer({ storage: multer.memoryStorage() });
+
+// ============================================
+// PostgreSQL Connection Pool
+// ============================================
+let pool = null;
+
+function getPool() {
+  if (!pool) {
+    pool = new Pool({
+      user: process.env.DB_USER || 'trimalaksana',
+      password: process.env.DB_PASSWORD || 'trimalaksana123',
+      host: process.env.DB_HOST || 'postgres',
+      port: process.env.DB_PORT || 5432,
+      database: process.env.DB_NAME || 'trimalaksana_db',
+    });
+
+    pool.on('error', (err) => {
+      console.error('[PostgreSQL] Unexpected error on idle client', err);
+    });
   }
-  
-  // Jika key adalah packaging key tanpa prefix
-  if (packagingKeys.includes(key)) {
-    return path.join(DATA_DIR, 'localStorage', 'packaging', `${key}.json`);
-  }
-  
-  // GT keys (gt_*)
-  if (key.startsWith('gt_')) {
-    return path.join(DATA_DIR, 'localStorage', 'general-trading', `${key}.json`);
-  }
-  
-  // Trucking keys (trucking_*)
-  if (key.startsWith('trucking_')) {
-    return path.join(DATA_DIR, 'localStorage', 'trucking', `${key}.json`);
-  }
-  
-  // Default: root data/
-  return path.join(DATA_DIR, `${key}.json`);
+  return pool;
 }
 
-// Ensure data directory exists
-fs.mkdir(DATA_DIR, { recursive: true }).catch(console.error);
-
-// Ensure updates directory exists
-fs.mkdir(UPDATES_DIR, { recursive: true }).catch(console.error);
-
-// Ensure uploads directory exists
-fs.mkdir(UPLOADS_DIR, { recursive: true }).catch(console.error);
-
-app.use(cors());
-
-// 🚀 FIX: Skip JSON parsing untuk upload-binary endpoint (handle streaming langsung)
-// Endpoint /api/updates/upload-binary akan handle streaming sendiri tanpa middleware
-app.use((req, res, next) => {
-  if (req.path === '/api/updates/upload-binary' && req.method === 'POST') {
-    // Skip JSON parsing untuk binary upload - langsung ke handler
-    return next();
-  }
-  // Untuk endpoint lain, lanjut ke JSON parser
-  next();
-});
-
-// Increase body size limit BEFORE other middleware
-// Must be set before express.json() middleware
-app.use(express.json({ 
-  limit: '100mb', // Increase to 100MB for large data sync
-  parameterLimit: 50000 
-}));
-app.use(express.urlencoded({ 
-  extended: true, 
-  limit: '100mb',
-  parameterLimit: 50000 
+// ============================================
+// Middleware
+// ============================================
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true
 }));
 
-// 🚀 FIX: Upload binary endpoint HARUS SEBELUM express.json() middleware
-// Path: docker/updates/ (UPDATES_DIR = path.join(__dirname, 'updates'))
-app.post('/api/updates/upload-binary', async (req, res) => {
-  const fileName = req.headers['x-filename'] || req.query.filename || 'uploaded-file.exe';
-  const fileSize = parseInt(req.headers['content-length'] || '0', 10);
-  console.log(`[Server] 📤 POST /api/updates/upload-binary - File: ${fileName} (${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
-  
-  // Ensure UPDATES_DIR exists
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
+
+app.use(express.json({ limit: '100mb', parameterLimit: 50000 }));
+app.use(express.urlencoded({ extended: true, limit: '100mb', parameterLimit: 50000 }));
+
+// ============================================
+// Health Check
+// ============================================
+app.get('/health', async (req, res) => {
   try {
-    await fs.access(UPDATES_DIR);
-  } catch {
-    console.log(`[Server] 📁 Creating UPDATES_DIR: ${UPDATES_DIR}`);
-    await fs.mkdir(UPDATES_DIR, { recursive: true });
+    const pgResult = await getPool().query('SELECT NOW()');
+    
+    // Check MinIO health
+    let minioStatus = 'disconnected';
+    try {
+      await minioClient.listBuckets();
+      minioStatus = 'connected';
+    } catch (error) {
+      console.error('[MinIO] Health check failed:', error.message);
+    }
+    
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      database: pgResult ? 'connected' : 'disconnected',
+      minio: minioStatus,
+      mode: 'PostgreSQL + MinIO',
+      endpoints: {
+        health: '/health',
+        getStorage: '/api/storage/:key',
+        setStorage: '/api/storage/:key',
+        deleteStorage: '/api/storage/:key',
+        all: '/api/storage/all',
+        blobUpload: '/api/blob/upload',
+        blobDownload: '/api/blob/download/:business/:fileId',
+        blobDelete: '/api/blob/delete/:business/:fileId',
+        blobList: '/api/blob/list/:business'
+      }
+    });
+  } catch (error) {
+    console.error('[Server] Health check error:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// ============================================
+// Initialize MinIO Buckets
+// ============================================
+async function initializeMinIO() {
+  const buckets = ['packaging', 'general-trading', 'trucking'];
+  
+  try {
+    // Test MinIO connection first
+    console.log(`[MinIO] Testing connection to ${minioHost}:${minioPort}...`);
+    await minioClient.listBuckets();
+    console.log(`[MinIO] ✅ Connection successful`);
+  } catch (error) {
+    console.error(`[MinIO] ❌ Connection failed:`, error.message);
+    console.error(`[MinIO] Endpoint: ${minioHost}:${minioPort}`);
+    return;
   }
   
-  const filePath = path.join(UPDATES_DIR, fileName);
-  console.log(`[Server] 💾 Saving file to: ${filePath}`);
-  console.log(`[Server] 📂 UPDATES_DIR: ${UPDATES_DIR}`);
-  
-  // 🚀 FIX: Gunakan streaming langsung dari request (tidak load semua ke memory)
-  const writeStream = require('fs').createWriteStream(filePath);
-  let totalBytes = 0;
-  let hasError = false;
-  
-  req.on('data', (chunk) => {
-    if (!hasError) {
-      totalBytes += chunk.length;
-      const written = writeStream.write(chunk);
-      if (!written) {
-        // Pause request jika buffer penuh (backpressure handling)
-        req.pause();
-        writeStream.once('drain', () => {
-          req.resume();
-        });
+  for (const bucket of buckets) {
+    try {
+      const exists = await minioClient.bucketExists(bucket);
+      if (!exists) {
+        await minioClient.makeBucket(bucket, 'us-east-1');
+        console.log(`[MinIO] ✅ Created bucket: ${bucket}`);
+      } else {
+        console.log(`[MinIO] ✓ Bucket exists: ${bucket}`);
       }
+    } catch (error) {
+      console.error(`[MinIO] ❌ Error initializing bucket ${bucket}:`, error.message);
     }
-  });
-  
-  req.on('end', () => {
-    if (!hasError) {
-      writeStream.end();
-    }
-  });
-  
-  req.on('error', (error) => {
-    hasError = true;
-    writeStream.destroy();
-    console.error(`[Server] ❌ Error reading request:`, error);
-    fs.unlink(filePath).catch(() => {});
-    if (!res.headersSent) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-  
-  writeStream.on('finish', async () => {
-    if (!hasError) {
-      try {
-        // Verify file was saved
-        const stats = await fs.stat(filePath);
-        console.log(`[Server] ✅ File saved successfully: ${fileName} (${stats.size} bytes) di ${UPDATES_DIR}`);
-        
-        if (!res.headersSent) {
-          res.json({ 
-            success: true, 
-            fileName: fileName,
-            size: stats.size,
-            path: `updates/${fileName}`,
-            fullPath: filePath,
-            updatesDir: UPDATES_DIR
-          });
-        }
-      } catch (error) {
-        console.error(`[Server] ❌ Error verifying file:`, error);
-        if (!res.headersSent) {
-          res.status(500).json({ error: error.message });
-        }
-      }
-    }
-  });
-  
-  writeStream.on('error', (error) => {
-    hasError = true;
-    console.error(`[Server] ❌ Error writing file:`, error);
-    fs.unlink(filePath).catch(() => {});
-    if (!res.headersSent) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-});
+  }
+}
 
-// Root endpoint (for testing)
+// Initialize MinIO on startup
+initializeMinIO().catch(err => console.error('[MinIO] Initialization error:', err));
+
+// ============================================
+// Root endpoint
+// ============================================
 app.get('/', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    message: 'Storage server is running',
-    endpoints: {
-      health: '/health',
-      getStorage: '/api/storage/:key',
-      setStorage: '/api/storage/:key',
-      deleteStorage: '/api/storage/:key',
-      sync: '/api/storage/sync',
-      all: '/api/storage/all',
-      seed: '/api/seed'
-    }
+  res.json({
+    status: 'ok',
+    message: 'Storage server is running (PostgreSQL mode)',
+    timestamp: new Date().toISOString()
   });
 });
 
-// Get all storage with timestamps (with optional since parameter for incremental sync)
-// IMPORTANT: didefinisikan SEBELUM route '/api/storage/:key' supaya
-// '/api/storage/all' TIDAK ketangkep sebagai ':key' = 'all'
+// ============================================
+// GET - Retrieve from PostgreSQL
+// ============================================
+app.get('/api/storage/*', async (req, res) => {
+  try {
+    const key = req.path.replace('/api/storage/', '');
+    const decodedKey = decodeURIComponent(key);
+    
+    console.log(`[Server] GET /api/storage/${decodedKey}`);
+    
+    const result = await getPool().query(
+      'SELECT value, timestamp FROM storage WHERE key = $1',
+      [decodedKey]
+    );
+    
+    if (result.rows.length === 0) {
+      console.log(`[Server] Key not found: ${decodedKey}`);
+      return res.json({ value: {}, timestamp: 0 });
+    }
+    
+    const row = result.rows[0];
+    console.log(`[Server] ✅ Retrieved ${decodedKey} from PostgreSQL`);
+    
+    res.json({
+      value: row.value,
+      timestamp: row.timestamp || 0
+    });
+  } catch (error) {
+    console.error(`[Server] ❌ GET error:`, error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// POST - Save to PostgreSQL
+// ============================================
+app.post('/api/storage/*', async (req, res) => {
+  try {
+    const key = req.path.replace('/api/storage/', '');
+    const decodedKey = decodeURIComponent(key);
+    const value = req.body.value;
+    const timestamp = req.body.timestamp || Date.now();
+    
+    console.log(`[Server] 📤 POST /api/storage/${decodedKey}`);
+    console.log(`[Server] 📊 Value type: ${typeof value}, isArray: ${Array.isArray(value)}, size: ${Array.isArray(value) ? value.length : 'N/A'}`);
+    
+    await getPool().query(
+      `INSERT INTO storage (key, value, timestamp) 
+       VALUES ($1, $2, $3)
+       ON CONFLICT (key) DO UPDATE SET 
+         value = $2, 
+         timestamp = $3,
+         updated_at = CURRENT_TIMESTAMP`,
+      [decodedKey, JSON.stringify(value), timestamp]
+    );
+    
+    console.log(`[Server] ✅ Saved ${decodedKey} to PostgreSQL (${Array.isArray(value) ? value.length : 1} items)`);
+    
+    res.json({ success: true, timestamp: timestamp });
+  } catch (error) {
+    console.error(`[Server] ❌ POST error:`, error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// DELETE - Remove from PostgreSQL
+// ============================================
+app.delete('/api/storage/*', async (req, res) => {
+  try {
+    const key = req.path.replace('/api/storage/', '');
+    const decodedKey = decodeURIComponent(key);
+    
+    console.log(`[Server] DELETE /api/storage/${decodedKey}`);
+    
+    await getPool().query('DELETE FROM storage WHERE key = $1', [decodedKey]);
+    
+    console.log(`[Server] ✅ Deleted ${decodedKey} from PostgreSQL`);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error(`[Server] ❌ DELETE error:`, error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// GET ALL - Retrieve all from PostgreSQL
+// ============================================
 app.get('/api/storage/all', async (req, res) => {
   try {
-    console.log(`[Server] GET /api/storage/all - since: ${req.query.since || 0}`);
-    const since = req.query.since ? parseInt(req.query.since) : 0;
+    console.log(`[Server] GET /api/storage/all`);
     
-    // Check if DATA_DIR exists
-    try {
-      await fs.access(DATA_DIR);
-    } catch {
-      console.warn(`[Server] DATA_DIR does not exist: ${DATA_DIR}, creating...`);
-      await fs.mkdir(DATA_DIR, { recursive: true });
-    }
+    const result = await getPool().query('SELECT key, value, timestamp FROM storage');
     
     const data = {};
     const timestamps = {};
     
-    // Read from localStorage subdirectories first (packaging, general-trading, trucking)
-    const localStorageDir = path.join(DATA_DIR, 'localStorage');
-    const readDirRecursive = async (dir, prefix = '') => {
-      try {
-        const files = await fs.readdir(dir, { withFileTypes: true });
-        for (const file of files) {
-          const fullPath = path.join(dir, file.name);
-          if (file.isDirectory()) {
-            const subPrefix = prefix ? `${prefix}/${file.name}` : file.name;
-            await readDirRecursive(fullPath, subPrefix);
-          } else if (file.name.endsWith('.json')) {
-            const key = prefix ? `${prefix}/${file.name.replace('.json', '')}` : file.name.replace('.json', '');
-            // Normalize key: packaging/products -> products
-            const normalizedKey = key.replace(/^(packaging|general-trading|trucking)\//, '');
-            
-            try {
-              const filePath = fullPath;
-              const content = await fs.readFile(filePath, 'utf8');
-              const parsed = JSON.parse(content);
-              
-              let fileTimestamp = 0;
-              let fileValue;
-              
-              if (parsed && typeof parsed === 'object' && parsed.value !== undefined) {
-                fileValue = parsed.value;
-                fileTimestamp = parsed.timestamp || parsed._timestamp || 0;
-              } else if (parsed && typeof parsed === 'object' && (parsed.timestamp || parsed._timestamp)) {
-                fileValue = parsed;
-                fileTimestamp = parsed.timestamp || parsed._timestamp || 0;
-              } else {
-                fileValue = parsed;
-                fileTimestamp = 0;
-              }
-              
-              if (fileTimestamp > since || since === 0) {
-                if (!data[normalizedKey] || fileTimestamp > (timestamps[normalizedKey] || 0)) {
-                  data[normalizedKey] = fileValue;
-                  timestamps[normalizedKey] = fileTimestamp;
-                }
-              }
-            } catch (error) {
-              console.warn(`[Server] Skipping invalid JSON file: ${fullPath}`, error.message);
-            }
-          }
-        }
-      } catch (error) {
-        // Directory doesn't exist, skip
-      }
-    };
+    result.rows.forEach(row => {
+      data[row.key] = row.value;
+      timestamps[row.key] = row.timestamp || 0;
+    });
     
-    // Read from localStorage subdirectories first (priority)
-    try {
-      await fs.access(localStorageDir);
-      await readDirRecursive(localStorageDir);
-    } catch {
-      // localStorage directory doesn't exist, that's okay
-    }
+    console.log(`[Server] ✅ Retrieved ${result.rows.length} keys from PostgreSQL`);
     
-    // Also read from root data/ for backward compatibility (but don't override localStorage)
-    try {
-      const files = await fs.readdir(DATA_DIR);
-      for (const file of files) {
-        if (file.endsWith('.json')) {
-          const key = file.replace('.json', '');
-          // Skip if already loaded from localStorage
-          if (data[key]) continue;
-          
-          try {
-            const filePath = path.join(DATA_DIR, file);
-            const content = await fs.readFile(filePath, 'utf8');
-            const parsed = JSON.parse(content);
-            
-            let fileTimestamp = 0;
-            let fileValue;
-            
-            if (parsed && typeof parsed === 'object' && parsed.value !== undefined) {
-              fileValue = parsed.value;
-              fileTimestamp = parsed.timestamp || parsed._timestamp || 0;
-            } else if (parsed && typeof parsed === 'object' && (parsed.timestamp || parsed._timestamp)) {
-              fileValue = parsed;
-              fileTimestamp = parsed.timestamp || parsed._timestamp || 0;
-            } else {
-              fileValue = parsed;
-              fileTimestamp = 0;
-            }
-            
-            if (fileTimestamp > since || since === 0) {
-              data[key] = fileValue;
-              timestamps[key] = fileTimestamp;
-            }
-          } catch (error) {
-            console.warn(`[Server] Skipping invalid JSON file: ${file}`, error.message);
-          }
-        }
-      }
-    } catch (error) {
-      // Root directory read failed, that's okay
-    }
-    
-    console.log(`[Server] Returning ${Object.keys(data).length} keys from /api/storage/all`);
     res.json({ data, timestamps, serverTime: Date.now() });
   } catch (error) {
-    console.error(`[Server] Error in /api/storage/all:`, error);
+    console.error(`[Server] ❌ GET ALL error:`, error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Get storage value with timestamp (single key)
-// CRITICAL: Handle keys with slashes like "packaging/companySettings"
-// Express :key doesn't match slashes, so we need to extract from path
-// IMPORTANT: This route must be AFTER /api/storage/all, /api/storage/sync, etc.
-app.get('/api/storage/*', async (req, res) => {
-  try {
-    // Extract key from path (everything after /api/storage/)
-    const key = req.path.replace('/api/storage/', '');
-    
-    // Skip special routes (should be handled by specific routes above)
-    const specialRoutes = ['all', 'sync', 'upload-file', 'list-files'];
-    if (specialRoutes.includes(key)) {
-      return res.status(404).json({ error: 'Route not found' });
-    }
-    
-    // Decode URL encoded key (from Vercel proxy)
-    const decodedKey = decodeURIComponent(key);
-    console.log(`[Server] GET /api/storage/${decodedKey} (from path: ${req.path})`);
-    const filePath = getFilePath(decodedKey);
-    
-    // Ensure directory exists
-    const dir = path.dirname(filePath);
-    try {
-      await fs.access(dir);
-    } catch {
-      await fs.mkdir(dir, { recursive: true });
-    }
-    
-    // Try to read from new path first
-    let data;
-    try {
-      data = await fs.readFile(filePath, 'utf8');
-      console.log(`[Server] ✅ Read file from ${filePath}`);
-    } catch (error) {
-      console.log(`[Server] File not found at ${filePath}, trying legacy path...`);
-      // If file doesn't exist in new path, try legacy path (backward compatibility)
-      if (decodedKey.startsWith('packaging/')) {
-        const legacyKey = decodedKey.replace('packaging/', '');
-        const legacyPath = path.join(DATA_DIR, `${legacyKey}.json`);
-        try {
-          data = await fs.readFile(legacyPath, 'utf8');
-          console.log(`[Server] ✅ Found legacy file at ${legacyPath}, migrating...`);
-          // Copy to new location for migration
-          const dir = path.dirname(filePath);
-          await fs.mkdir(dir, { recursive: true });
-          await fs.writeFile(filePath, data);
-          console.log(`[Server] ✅ Migrated ${legacyKey} from legacy path to ${filePath}`);
-        } catch (legacyError) {
-          console.log(`[Server] Legacy file also not found, returning empty`);
-          // File doesn't exist, return empty object/array instead of 404
-          return res.json({ value: {}, timestamp: 0 });
-        }
-      } else {
-        // File doesn't exist, return empty instead of 404
-        return res.json({ value: {}, timestamp: 0 });
-      }
-    }
-    
-    let parsed;
-    try {
-      parsed = JSON.parse(data);
-    } catch (parseError) {
-      return res.json({ value: data, timestamp: 0 });
-    }
-    
-    // Return with timestamp if available
-    if (parsed && typeof parsed === 'object' && parsed.value !== undefined) {
-      res.json({ 
-        value: parsed.value,
-        timestamp: parsed.timestamp || parsed._timestamp || 0
-      });
-    } else if (parsed && typeof parsed === 'object' && (parsed.timestamp || parsed._timestamp)) {
-      res.json({ 
-        value: parsed,
-        timestamp: parsed.timestamp || parsed._timestamp 
-      });
-    } else {
-      res.json({ value: parsed, timestamp: 0 });
-    }
-  } catch (error) {
-    console.error(`[Server] ❌ Error in GET /api/storage/*:`, error);
-    console.error(`[Server] Request path: ${req.path}`);
-    // Return empty instead of 404 to avoid breaking client
-    res.json({ value: {}, timestamp: 0 });
-  }
-});
+// ============================================
+// BLOB ENDPOINTS - MinIO File Storage
+// ============================================
 
-// Set storage value with timestamp
-// CRITICAL: Handle keys with slashes like "packaging/companySettings"
-// Express :key doesn't match slashes, so we need to extract from path
-// IMPORTANT: This route must be AFTER /api/storage/sync, /api/storage/upload-file, etc.
-app.post('/api/storage/*', async (req, res) => {
-  const startTime = Date.now();
+// POST - Upload file to MinIO
+app.post('/api/blob/upload', upload.single('file'), async (req, res) => {
   try {
-    // Extract key from path (everything after /api/storage/)
-    const key = req.path.replace('/api/storage/', '');
-    
-    // Skip special routes (should be handled by specific routes above)
-    const specialRoutes = ['sync', 'upload-file'];
-    if (specialRoutes.includes(key)) {
-      return res.status(404).json({ error: 'Route not found' });
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file provided' });
     }
-    
-    // Decode URL encoded key (from Vercel proxy)
-    const decodedKey = decodeURIComponent(key);
-    console.log(`[Server] ========================================`);
-    console.log(`[Server] POST /api/storage/${decodedKey} (from path: ${req.path}) - received data`);
-    console.log(`[Server] Request body keys:`, Object.keys(req.body || {}));
-    
-    const filePath = getFilePath(decodedKey);
-    console.log(`[Server] File path determined: ${filePath}`);
-    
-    // Ensure directory exists
-    const dir = path.dirname(filePath);
-    try {
-      await fs.access(dir);
-      console.log(`[Server] Directory exists: ${dir}`);
-    } catch (dirError) {
-      console.log(`[Server] Creating directory: ${dir}`);
-      try {
-        await fs.mkdir(dir, { recursive: true });
-        console.log(`[Server] ✅ Directory created: ${dir}`);
-      } catch (mkdirError) {
-        console.error(`[Server] ❌ Failed to create directory ${dir}:`, mkdirError);
-        return res.status(500).json({ error: `Failed to create directory: ${mkdirError.message}` });
-      }
-    }
-    
-    const newValue = req.body.value;
-    const newTimestamp = req.body.timestamp || Date.now();
-    
-    console.log(`[Server] Saving ${decodedKey}: value type=${typeof newValue}, isArray=${Array.isArray(newValue)}, timestamp=${newTimestamp}`);
-    
-    // Try to read existing data for merge
-    let existingData = null;
-    let existingTimestamp = 0;
-    try {
-      const existingContent = await fs.readFile(filePath, 'utf8');
-      let existing;
-      try {
-        existing = JSON.parse(existingContent);
-      } catch (parseError) {
-        existing = existingContent;
-      }
-      
-      if (existing && typeof existing === 'object' && existing.value !== undefined) {
-        existingData = existing.value;
-        existingTimestamp = existing.timestamp || existing._timestamp || 0;
-      } else if (existing && typeof existing === 'object' && (existing.timestamp || existing._timestamp)) {
-        existingData = existing;
-        existingTimestamp = existing.timestamp || existing._timestamp || 0;
-      } else {
-        existingData = existing;
-        existingTimestamp = 0;
-      }
-    } catch (readError) {
-      // File doesn't exist, use new data
-      console.log(`[Server] File doesn't exist yet, will create new: ${filePath}`);
-    }
-    
-    // Last-write-wins: use newer data
-    let finalValue = newValue;
-    let finalTimestamp = newTimestamp;
-    
-    if (existingData && existingTimestamp > newTimestamp) {
-      finalValue = mergeData(existingData, newValue, existingTimestamp, newTimestamp);
-      finalTimestamp = existingTimestamp;
-    } else {
-      if (existingData) {
-        finalValue = mergeData(newValue, existingData, newTimestamp, existingTimestamp);
-      }
-      finalTimestamp = newTimestamp;
-    }
-    
-    // Save with timestamp
-    const dataToSave = {
-      value: finalValue,
-      timestamp: finalTimestamp,
-      _timestamp: finalTimestamp,
-    };
-    
-    try {
-      await fs.writeFile(filePath, JSON.stringify(dataToSave, null, 2));
-      const elapsedTime = Date.now() - startTime;
-      console.log(`[Server] ✅ Saved ${decodedKey} to ${filePath} (${Array.isArray(finalValue) ? finalValue.length : 'object'} items, timestamp: ${finalTimestamp})`);
-      console.log(`[Server] Request completed in ${elapsedTime}ms`);
-      console.log(`[Server] ========================================`);
-      
-      res.json({ success: true, timestamp: finalTimestamp });
-    } catch (writeError) {
-      const elapsedTime = Date.now() - startTime;
-      console.error(`[Server] ❌ Failed to write file ${filePath}:`, writeError);
-      console.error(`[Server] Write error details:`, {
-        code: writeError.code,
-        message: writeError.message,
-        stack: writeError.stack,
-        filePath: filePath,
-        dir: path.dirname(filePath)
-      });
-      console.log(`[Server] Request failed in ${elapsedTime}ms`);
-      console.log(`[Server] ========================================`);
-      
-      // CRITICAL: Always return 500, never 404 for POST
-      return res.status(500).json({ 
-        error: `Failed to write file: ${writeError.message}`,
-        code: writeError.code || 'UNKNOWN',
-        path: filePath
-      });
-    }
-  } catch (error) {
-    const elapsedTime = Date.now() - startTime;
-    console.error(`[Server] ❌ Error saving:`, error);
-    console.error(`[Server] Error details:`, {
-      code: error.code,
-      message: error.message,
-      stack: error.stack,
-      path: req.path
-    });
-    console.log(`[Server] Request failed in ${elapsedTime}ms`);
-    console.log(`[Server] ========================================`);
-    
-    // CRITICAL: Always return 500, never 404 for POST
-    res.status(500).json({ 
-      error: error.message || 'Server error',
-      code: error.code || 'UNKNOWN'
-    });
-  }
-});
 
-// Helper function to merge data intelligently
-function mergeData(newerData, olderData, newerTimestamp, olderTimestamp) {
-  // If both are arrays, merge arrays (avoid duplicates)
-  if (Array.isArray(newerData) && Array.isArray(olderData)) {
-    const merged = [...newerData];
-    const newerIds = new Set(newerData.map((item, idx) => item.id || item._id || idx));
-    olderData.forEach((item, idx) => {
-      const id = item.id || item._id || idx;
-      if (!newerIds.has(id)) {
-        merged.push(item);
-      }
-    });
-    return merged;
-  }
-  
-  // If both are objects, merge objects (newer wins for conflicts)
-  if (typeof newerData === 'object' && newerData !== null && 
-      typeof olderData === 'object' && olderData !== null &&
-      !Array.isArray(newerData) && !Array.isArray(olderData)) {
-    return {
-      ...olderData,
-      ...newerData,
-    };
-  }
-  
-  // Otherwise, newer wins
-  return newerData;
-}
+    const business = req.query.business || 'packaging';
+    const fileId = uuidv4();
+    const fileName = req.file.originalname;
+    const mimeType = req.file.mimetype;
+    const fileSize = req.file.size;
+    const objectKey = `${business}/${fileId}/${fileName}`;
 
-// Upload file (PDF, images, etc.) - convert base64 to file
-app.post('/api/storage/upload-file', async (req, res) => {
-  try {
-    console.log(`[Server] 📤 POST /api/storage/upload-file - received request`);
-    const { base64Data, fileName, fileType } = req.body;
-    
-    if (!base64Data || !fileName) {
-      console.error(`[Server] ❌ Missing required fields: base64Data=${!!base64Data}, fileName=${!!fileName}`);
-      return res.status(400).json({ error: 'base64Data and fileName are required' });
-    }
-    
-    // Ensure UPLOADS_DIR exists
-    try {
-      await fs.access(UPLOADS_DIR);
-    } catch {
-      console.log(`[Server] 📁 Creating UPLOADS_DIR: ${UPLOADS_DIR}`);
-      await fs.mkdir(UPLOADS_DIR, { recursive: true });
-    }
-    
-    // Extract base64 data (remove data URL prefix if present)
-    let base64Content = base64Data;
-    if (base64Content.includes(',')) {
-      base64Content = base64Content.split(',')[1];
-    }
-    
-    // Convert base64 to buffer
-    const buffer = Buffer.from(base64Content, 'base64');
-    console.log(`[Server] 📦 File data: ${fileName}, size: ${buffer.length} bytes, type: ${fileType || 'unknown'}`);
-    
-    // Generate unique filename to avoid conflicts
-    const timestamp = Date.now();
-    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const uniqueFileName = `${timestamp}_${sanitizedFileName}`;
-    const filePath = path.join(UPLOADS_DIR, uniqueFileName);
-    
-    console.log(`[Server] 💾 Saving file to: ${filePath}`);
-    
-    // Save file
-    await fs.writeFile(filePath, buffer);
-    
-    // Verify file was saved
-    const stats = await fs.stat(filePath);
-    console.log(`[Server] ✅ File saved successfully: ${uniqueFileName} (${stats.size} bytes)`);
-    
-    // Return file path relative to server root (for download)
-    const relativePath = `uploads/${uniqueFileName}`;
-    
-    res.json({ 
-      success: true, 
-      filePath: relativePath,
-      fileName: uniqueFileName,
-      size: buffer.length
+    console.log(`[MinIO] 📤 Uploading file: ${fileName} (${fileSize} bytes) to ${business}`);
+
+    // Upload to MinIO
+    await minioClient.putObject(
+      business,
+      objectKey,
+      req.file.buffer,
+      fileSize,
+      { 'Content-Type': mimeType }
+    );
+
+    // Save metadata to PostgreSQL
+    await getPool().query(
+      `INSERT INTO blob_storage_metadata 
+       (file_id, file_name, file_size, mime_type, bucket_name, object_key, module, entity_type, uploaded_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+      [fileId, fileName, fileSize, mimeType, business, objectKey, business, 'file']
+    );
+
+    console.log(`[MinIO] ✅ File uploaded: ${fileId}`);
+
+    res.json({
+      success: true,
+      fileId,
+      fileName,
+      fileSize,
+      mimeType,
+      url: `/api/blob/download/${business}/${fileId}`
     });
   } catch (error) {
-    console.error(`[Server] ❌ Error uploading file:`, error);
-    console.error(`[Server] Error stack:`, error.stack);
+    console.error(`[MinIO] ❌ Upload error:`, error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// List files in uploads directory (for debugging)
-app.get('/api/storage/list-files', async (req, res) => {
+// GET - Download file from MinIO
+app.get('/api/blob/download/:business/:fileId', async (req, res) => {
   try {
-    // Ensure UPLOADS_DIR exists
-    try {
-      await fs.access(UPLOADS_DIR);
-    } catch {
-      await fs.mkdir(UPLOADS_DIR, { recursive: true });
+    const { business, fileId } = req.params;
+
+    console.log(`[MinIO] 📥 Downloading file: ${fileId} from ${business}`);
+
+    // Get metadata
+    const metaResult = await getPool().query(
+      'SELECT * FROM blob_storage_metadata WHERE file_id = $1 AND deleted_at IS NULL',
+      [fileId]
+    );
+
+    if (metaResult.rows.length === 0) {
+      return res.status(404).json({ error: 'File not found' });
     }
+
+    const metadata = metaResult.rows[0];
+    const objectKey = metadata.object_key;
+
+    // Download from MinIO
+    const dataStream = await minioClient.getObject(business, objectKey);
+
+    // Set headers for preview (not download)
+    res.setHeader('Content-Type', metadata.mime_type);
+    res.setHeader('Content-Length', metadata.file_size);
+    res.setHeader('Cache-Control', 'public, max-age=3600');
     
-    const files = await fs.readdir(UPLOADS_DIR);
-    const fileDetails = await Promise.all(files.map(async (file) => {
-      try {
-        const filePath = path.join(UPLOADS_DIR, file);
-        const stats = await fs.stat(filePath);
-        return {
-          fileName: file,
-          size: stats.size,
-          created: stats.birthtime,
-          modified: stats.mtime,
-        };
-      } catch {
-        return { fileName: file, error: 'Cannot read file stats' };
-      }
-    }));
-    
-    res.json({ 
-      success: true, 
-      uploadsDir: UPLOADS_DIR,
-      count: fileDetails.length,
-      files: fileDetails 
-    });
+    // CRITICAL: Remove Content-Disposition to allow browser preview
+    // MinIO might set this, so we explicitly remove it
+    res.removeHeader('Content-Disposition');
+
+    dataStream.pipe(res);
+
+    console.log(`[MinIO] ✅ File downloaded: ${fileId}`);
   } catch (error) {
-    console.error(`[Server] ❌ Error listing files:`, error);
+    console.error(`[MinIO] ❌ Download error:`, error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Download file from uploads directory
-app.get('/api/storage/file/:fileName', async (req, res) => {
+// DELETE - Delete file from MinIO
+app.delete('/api/blob/delete/:business/:fileId', async (req, res) => {
   try {
-    const fileName = req.params.fileName;
-    const filePath = path.join(UPLOADS_DIR, fileName);
-    
-    console.log(`[Server] 📥 Download request: ${fileName}`);
-    console.log(`[Server] 📁 File path: ${filePath}`);
-    
-    // Check if file exists
-    try {
-      await fs.access(filePath);
-      const stats = await fs.stat(filePath);
-      console.log(`[Server] ✅ File exists: ${fileName} (${stats.size} bytes)`);
-    } catch {
-      console.error(`[Server] ❌ File not found: ${filePath}`);
-      return res.status(404).json({ error: 'File not found', path: filePath });
-    }
-    
-    // Determine content type based on file extension
-    const ext = path.extname(fileName).toLowerCase();
-    const contentTypes = {
-      '.pdf': 'application/pdf',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.png': 'image/png',
-      '.gif': 'image/gif',
-    };
-    const contentType = contentTypes[ext] || 'application/octet-stream';
-    
-    // Read and send file
-    const fileBuffer = await fs.readFile(filePath);
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-    res.send(fileBuffer);
-    console.log(`[Server] ✅ File sent: ${fileName}`);
-  } catch (error) {
-    console.error(`[Server] ❌ Error downloading file:`, error);
-    res.status(500).json({ error: error.message });
-  }
-});
+    const { business, fileId } = req.params;
 
-// Delete storage value
-// CRITICAL: Handle keys with slashes like "packaging/companySettings"
-// Express :key doesn't match slashes, so we need to extract from path
-app.delete('/api/storage/*', async (req, res) => {
-  try {
-    // Extract key from path (everything after /api/storage/)
-    const key = req.path.replace('/api/storage/', '');
-    // Decode URL encoded key (from Vercel proxy)
-    const decodedKey = decodeURIComponent(key);
-    console.log(`[Server] DELETE /api/storage/${decodedKey} (from path: ${req.path})`);
-    const filePath = getFilePath(decodedKey);
-    await fs.unlink(filePath);
-    console.log(`[Server] ✅ Deleted ${decodedKey} from ${filePath}`);
+    console.log(`[MinIO] 🗑️ Deleting file: ${fileId} from ${business}`);
+
+    // Get metadata
+    const metaResult = await getPool().query(
+      'SELECT * FROM blob_storage_metadata WHERE file_id = $1 AND deleted_at IS NULL',
+      [fileId]
+    );
+
+    if (metaResult.rows.length === 0) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    const metadata = metaResult.rows[0];
+    const objectKey = metadata.object_key;
+
+    // Delete from MinIO
+    await minioClient.removeObject(business, objectKey);
+
+    // Mark as deleted in PostgreSQL (soft delete)
+    await getPool().query(
+      'UPDATE blob_storage_metadata SET deleted_at = NOW() WHERE file_id = $1',
+      [fileId]
+    );
+
+    console.log(`[MinIO] ✅ File deleted: ${fileId}`);
+
     res.json({ success: true });
   } catch (error) {
-    console.error(`[Server] ❌ Error deleting:`, error);
-    // Return success even if file doesn't exist (idempotent)
-    res.json({ success: true, message: 'File not found or already deleted' });
-  }
-});
-
-// Sync all data with merge and conflict resolution
-app.post('/api/storage/sync', async (req, res) => {
-  try {
-    const clientData = req.body.data || req.body;
-    const clientTimestamp = req.body.timestamp || Date.now();
-    
-    console.log(`[Server] POST /api/storage/sync - received ${Object.keys(clientData).length} keys`);
-    
-    // Ensure DATA_DIR exists
-    try {
-      await fs.access(DATA_DIR);
-    } catch {
-      console.warn(`[Server] DATA_DIR does not exist: ${DATA_DIR}, creating...`);
-      await fs.mkdir(DATA_DIR, { recursive: true });
-    }
-    
-    const mergedData = {};
-    let conflicts = 0;
-    
-    for (const [key, clientValue] of Object.entries(clientData)) {
-      const filePath = getFilePath(key);
-      
-      // Ensure directory exists
-      const dir = path.dirname(filePath);
-      try {
-        await fs.access(dir);
-      } catch {
-        await fs.mkdir(dir, { recursive: true });
-      }
-      
-      // Try to read existing server data
-      let serverData = null;
-      let serverTimestamp = 0;
-      try {
-        const existingContent = await fs.readFile(filePath, 'utf8');
-        let existing;
-        try {
-          existing = JSON.parse(existingContent);
-        } catch (parseError) {
-          existing = existingContent;
-        }
-        
-        if (existing && typeof existing === 'object' && existing.value !== undefined) {
-          serverData = existing.value;
-          serverTimestamp = existing.timestamp || existing._timestamp || 0;
-        } else if (existing && typeof existing === 'object' && (existing.timestamp || existing._timestamp)) {
-          serverData = existing;
-          serverTimestamp = existing.timestamp || existing._timestamp || 0;
-        } else {
-          serverData = existing;
-          serverTimestamp = 0;
-        }
-      } catch {
-        // File doesn't exist
-      }
-      
-      // Last-write-wins with merge
-      let finalValue = clientValue;
-      let finalTimestamp = clientTimestamp;
-      
-      if (serverData) {
-        if (serverTimestamp > clientTimestamp) {
-          finalValue = mergeData(serverData, clientValue, serverTimestamp, clientTimestamp);
-          finalTimestamp = serverTimestamp;
-          conflicts++;
-        } else {
-          finalValue = mergeData(clientValue, serverData, clientTimestamp, serverTimestamp);
-          finalTimestamp = clientTimestamp;
-        }
-      }
-      
-      // Save merged data
-      const dataToSave = {
-        value: finalValue,
-        timestamp: finalTimestamp,
-        _timestamp: finalTimestamp,
-      };
-      
-      await fs.writeFile(filePath, JSON.stringify(dataToSave, null, 2));
-      mergedData[key] = dataToSave;
-    }
-    
-    const mergedCount = Object.keys(mergedData).length;
-    console.log(`[Server] ✅ Synced ${mergedCount} keys (${conflicts} conflicts)`);
-    
-    res.json({ 
-      success: true, 
-      merged: mergedCount,
-      conflicts 
-    });
-  } catch (error) {
-    console.error(`[Server] ❌ Error in /api/storage/sync:`, error);
+    console.error(`[MinIO] ❌ Delete error:`, error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Seed database
-app.post('/api/seed', async (req, res) => {
+// GET - List files in business bucket
+app.get('/api/blob/list/:business', async (req, res) => {
   try {
-    console.log('Starting seed process...');
-    
-    // Run seed script
-    const seedScriptPath = path.join(ROOT_DIR, 'scripts', 'seed.js');
-    
-    // Check if script exists
-    try {
-      await fs.access(seedScriptPath);
-    } catch {
-      return res.status(404).json({
-        success: false,
-        error: 'Seed script not found. Make sure scripts/seed.js exists.',
-      });
-    }
+    const { business } = req.params;
 
-    console.log('Running seed script:', seedScriptPath);
-    
-    const { stdout, stderr } = await execAsync(`node "${seedScriptPath}"`, {
-      cwd: ROOT_DIR,
-      maxBuffer: 1024 * 1024 * 10, // 10MB buffer
-      env: { ...process.env, SERVER_URL: `http://localhost:${PORT}` },
+    console.log(`[MinIO] 📋 Listing files in ${business}`);
+
+    // Get metadata from PostgreSQL
+    const result = await getPool().query(
+      `SELECT file_id, file_name, file_size, mime_type, uploaded_at 
+       FROM blob_storage_metadata 
+       WHERE bucket_name = $1 AND deleted_at IS NULL
+       ORDER BY uploaded_at DESC`,
+      [business]
+    );
+
+    console.log(`[MinIO] ✅ Listed ${result.rows.length} files from ${business}`);
+
+    res.json({
+      business,
+      files: result.rows,
+      count: result.rows.length
     });
-
-    if (stderr && !stderr.includes('warning') && !stderr.includes('deprecated')) {
-      console.error('Seed stderr:', stderr);
-    }
-
-    console.log('Seed completed:', stdout);
-
-    // Get seed results
-    const result = {
-      success: true,
-      message: 'Seed completed successfully',
-      output: stdout,
-    };
-
-    res.json(result);
   } catch (error) {
-    console.error('[Server] Seed error:', error);
-    console.error('[Server] Error details:', {
-      message: error.message,
-      code: error.code,
-      stdout: error.stdout,
-      stderr: error.stderr,
-    });
-    res.status(500).json({ 
-      success: false,
-      error: error.message || 'Unknown error',
-      output: error.stdout || error.stderr || '',
-    });
+    console.error(`[MinIO] ❌ List error:`, error);
+    res.status(500).json({ error: error.message });
   }
 });
 
-// Seed GT database (General Trading - no BOM)
-app.post('/api/seedgt', async (req, res) => {
+// GET - Get file metadata
+app.get('/api/blob/metadata/:fileId', async (req, res) => {
   try {
-    console.log('Starting GT seed process...');
-    
-    // Run seedgt script
-    const seedGTScriptPath = path.join(ROOT_DIR, 'scripts', 'seedgt.js');
-    
-    // Check if script exists
-    try {
-      await fs.access(seedGTScriptPath);
-    } catch {
-      return res.status(404).json({
-        success: false,
-        error: 'GT Seed script not found. Make sure scripts/seedgt.js exists.',
-      });
+    const { fileId } = req.params;
+
+    const result = await getPool().query(
+      'SELECT * FROM blob_storage_metadata WHERE file_id = $1 AND deleted_at IS NULL',
+      [fileId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'File not found' });
     }
 
-    console.log('Running GT seed script:', seedGTScriptPath);
-    
-    const { stdout, stderr } = await execAsync(`node "${seedGTScriptPath}"`, {
-      cwd: ROOT_DIR,
-      maxBuffer: 1024 * 1024 * 10, // 10MB buffer
-      env: { ...process.env, SERVER_URL: `http://localhost:${PORT}` },
-    });
-
-    if (stderr && !stderr.includes('warning') && !stderr.includes('deprecated') && !stderr.includes('bom')) {
-      console.error('GT Seed stderr:', stderr);
-    }
-
-    console.log('GT Seed completed:', stdout);
-
-    // Get seed results
-    const result = {
-      success: true,
-      message: 'GT Seed completed successfully',
-      output: stdout,
-    };
-
-    res.json(result);
+    res.json(result.rows[0]);
   } catch (error) {
-    console.error('GT Seed error:', error);
-    res.status(500).json({ 
-      success: false,
-      error: error.message || 'Unknown error',
-      output: error.stdout || error.stderr || '',
-    });
+    console.error(`[MinIO] ❌ Metadata error:`, error);
+    res.status(500).json({ error: error.message });
   }
 });
 
 // ============================================
-// AUTO-UPDATE ENDPOINTS
+// Start Server
 // ============================================
-// IMPORTANT: Place specific routes BEFORE static file serving to avoid conflicts
-// NOTE: /api/updates/upload-binary endpoint sudah dipindah ke SEBELUM express.json() middleware (line ~93)
-// untuk menghindari parsing JSON yang akan menyebabkan "entity too large" error
-
-// Endpoint to get latest version info (with .yml extension)
-// MUST be placed BEFORE /api/updates/latest to handle .yml correctly
-app.get('/api/updates/latest.yml', async (req, res) => {
-  try {
-    console.log(`[Server] ========================================`);
-    console.log(`[Server] GET /api/updates/latest.yml requested`);
-    console.log(`[Server] __dirname: ${__dirname}`);
-    console.log(`[Server] UPDATES_DIR: ${UPDATES_DIR}`);
-    
-    const latestYmlPath = path.join(UPDATES_DIR, 'latest.yml');
-    console.log(`[Server] Looking for latest.yml at: ${latestYmlPath}`);
-    
-    try {
-      // Check if file exists
-      const stats = await fs.stat(latestYmlPath);
-      console.log(`[Server] ✅ File exists! Size: ${stats.size} bytes, Modified: ${stats.mtime}`);
-      
-      const ymlContent = await fs.readFile(latestYmlPath, 'utf8');
-      console.log(`[Server] ✅ Read latest.yml, content length: ${ymlContent.length} bytes`);
-      console.log(`[Server] First 200 chars: ${ymlContent.substring(0, 200)}`);
-      
-      res.setHeader('Content-Type', 'text/yaml');
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.send(ymlContent);
-      console.log(`[Server] ✅ Sent latest.yml to client`);
-    } catch (error) {
-      // If latest.yml doesn't exist, return 404
-      console.error(`[Server] ❌ Error accessing latest.yml:`, error);
-      console.error(`[Server] Error code: ${error.code}, message: ${error.message}`);
-      console.error(`[Server] UPDATES_DIR: ${UPDATES_DIR}`);
-      console.error(`[Server] Full path: ${latestYmlPath}`);
-      
-      // Try to list files in UPDATES_DIR for debugging
-      try {
-        const files = await fs.readdir(UPDATES_DIR);
-        console.error(`[Server] Files in UPDATES_DIR (${files.length} files):`, files);
-      } catch (dirError) {
-        console.error(`[Server] Cannot read UPDATES_DIR:`, dirError.message);
-      }
-      
-      // Try to check if UPDATES_DIR exists
-      try {
-        const dirStats = await fs.stat(UPDATES_DIR);
-        console.error(`[Server] UPDATES_DIR exists, isDirectory: ${dirStats.isDirectory()}`);
-      } catch (dirError) {
-        console.error(`[Server] UPDATES_DIR does not exist!`);
-      }
-      
-      res.status(404).json({ 
-        error: 'No updates available',
-        message: `latest.yml not found at ${latestYmlPath}. Upload update files to ${UPDATES_DIR} directory.`,
-        path: latestYmlPath,
-        updatesDir: UPDATES_DIR
-      });
-    }
-    console.log(`[Server] ========================================`);
-  } catch (error) {
-    console.error(`[Server] ❌ Error in /api/updates/latest.yml:`, error);
-    res.status(500).json({ error: error.message });
-  }
+app.listen(PORT, () => {
+  console.log(`[Server] 🚀 Storage server running on port ${PORT}`);
+  console.log(`[Server] 📊 Mode: PostgreSQL + MinIO`);
+  console.log(`[Server] 🔗 Health check: http://localhost:${PORT}/health`);
+  console.log(`[Server] 📁 MinIO Console: http://localhost:9001`);
 });
-
-// Endpoint to get latest version info (without .yml extension)
-app.get('/api/updates/latest', async (req, res) => {
-  try {
-    console.log(`[Server] GET /api/updates/latest requested`);
-    const latestYmlPath = path.join(UPDATES_DIR, 'latest.yml');
-    console.log(`[Server] Looking for latest.yml at: ${latestYmlPath}`);
-    
-    try {
-      // Check if file exists
-      await fs.access(latestYmlPath);
-      const ymlContent = await fs.readFile(latestYmlPath, 'utf8');
-      console.log(`[Server] ✅ Found latest.yml, size: ${ymlContent.length} bytes`);
-      
-      res.setHeader('Content-Type', 'text/yaml');
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.send(ymlContent);
-    } catch (error) {
-      // If latest.yml doesn't exist, return 404
-      console.warn(`[Server] ❌ latest.yml not found at ${latestYmlPath}:`, error.message);
-      console.warn(`[Server] UPDATES_DIR: ${UPDATES_DIR}`);
-      
-      // Try to list files in UPDATES_DIR for debugging
-      try {
-        const files = await fs.readdir(UPDATES_DIR);
-        console.log(`[Server] Files in UPDATES_DIR:`, files);
-      } catch (dirError) {
-        console.error(`[Server] Cannot read UPDATES_DIR:`, dirError.message);
-      }
-      
-      res.status(404).json({ 
-        error: 'No updates available',
-        message: `latest.yml not found at ${latestYmlPath}. Upload update files to ${UPDATES_DIR} directory.`
-      });
-    }
-  } catch (error) {
-    console.error(`[Server] Error in /api/updates/latest:`, error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Serve update files (latest.yml, installer.exe, etc.) as static files
-// Place AFTER API endpoints to avoid conflicts
-app.use('/updates', express.static(UPDATES_DIR, {
-  setHeaders: (res, filePath) => {
-    // Set proper content type for YAML files
-    if (filePath.endsWith('.yml') || filePath.endsWith('.yaml')) {
-      res.setHeader('Content-Type', 'text/yaml');
-    }
-    // Allow CORS for update files
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  }
-}));
-
-// Health check - include update info
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok',
-    endpoints: {
-      health: '/health',
-      getStorage: '/api/storage/:key',
-      setStorage: '/api/storage/:key',
-      deleteStorage: '/api/storage/:key',
-      sync: '/api/storage/sync',
-      all: '/api/storage/all',
-      seed: '/api/seed',
-      seedGT: '/api/seedgt',
-      updates: '/api/updates/latest',
-      updatesFiles: '/updates/*'
-    }
-  });
-});
-
-// Ensure DATA_DIR exists before starting server
-fs.mkdir(DATA_DIR, { recursive: true })
-  .then(() => {
-    console.log(`[Server] ✅ DATA_DIR created/verified: ${DATA_DIR}`);
-    return fs.access(DATA_DIR);
-  })
-  .then(() => {
-    console.log(`[Server] ✅ DATA_DIR is accessible`);
-  })
-  .catch((error) => {
-    console.error(`[Server] ❌ Error creating/accessing DATA_DIR: ${DATA_DIR}`, error);
-  });
-
-// Check UPDATES_DIR and latest.yml before starting server
-fs.mkdir(UPDATES_DIR, { recursive: true })
-  .then(() => {
-    console.log(`[Server] ✅ UPDATES_DIR created/verified: ${UPDATES_DIR}`);
-    return fs.readdir(UPDATES_DIR);
-  })
-  .then((files) => {
-    const hasLatestYml = files.includes('latest.yml');
-    if (hasLatestYml) {
-      console.log(`[Server] ✅ latest.yml found in UPDATES_DIR`);
-    } else {
-      console.warn(`[Server] ⚠️ latest.yml NOT found in UPDATES_DIR`);
-      console.warn(`[Server] ⚠️ Files in UPDATES_DIR:`, files.length > 0 ? files.join(', ') : '(empty)');
-      console.warn(`[Server] ⚠️ To enable auto-updates, copy latest.yml and installer files to: ${UPDATES_DIR}`);
-    }
-  })
-  .catch((error) => {
-    console.error(`[Server] ❌ Error checking UPDATES_DIR: ${UPDATES_DIR}`, error);
-  })
-  .finally(() => {
-    const server = app.listen(PORT, '0.0.0.0', () => {
-      console.log(`[Server] ========================================`);
-      console.log(`[Server] Storage server running on port ${PORT}`);
-      console.log(`[Server] DATA_DIR: ${DATA_DIR}`);
-      console.log(`[Server] ROOT_DIR: ${ROOT_DIR}`);
-      console.log(`[Server] Update files directory: ${UPDATES_DIR}`);
-      console.log(`[Server] Update endpoint: http://localhost:${PORT}/api/updates/latest`);
-      console.log(`[Server] Update endpoint (with .yml): http://localhost:${PORT}/api/updates/latest.yml`);
-      console.log(`[Server] ========================================`);
-    });
-
-    // WebSocket Server untuk CRUD operations (lebih cepat dari HTTP)
-    // Set maxPayload to 1GB (1073741824 bytes) untuk support file besar
-    const wss = new WebSocket.Server({ 
-      server, 
-      path: '/ws',
-      maxPayload: 1073741824 // 1GB - no limit praktis untuk data sync
-    });
-    
-    wss.on('connection', (ws) => {
-      ws.on('message', async (message) => {
-        try {
-          const data = JSON.parse(message.toString());
-          const { requestId, action, key, value, timestamp } = data;
-          
-          // Handle CRUD operations via WebSocket
-          if (action === 'POST' || action === 'PUT') {
-            // POST/PUT: Save data
-            const decodedKey = decodeURIComponent(key);
-            const filePath = getFilePath(decodedKey);
-            
-            // Ensure directory exists
-            const dir = path.dirname(filePath);
-            try {
-              await fs.access(dir);
-            } catch {
-              await fs.mkdir(dir, { recursive: true });
-            }
-            
-            const dataToSave = {
-              value: value,
-              timestamp: timestamp || Date.now(),
-              _timestamp: timestamp || Date.now(),
-            };
-            
-            await fs.writeFile(filePath, JSON.stringify(dataToSave, null, 2));
-            
-            // Broadcast to other clients
-            wss.clients.forEach((client) => {
-              if (client !== ws && client.readyState === WebSocket.OPEN) {
-                client.send(JSON.stringify({
-                  type: 'STORAGE_CHANGED',
-                  key: decodedKey,
-                  data: value,
-                  timestamp: dataToSave.timestamp
-                }));
-              }
-            });
-            
-            ws.send(JSON.stringify({
-              requestId: requestId,
-              success: true,
-              action: action,
-              key: decodedKey,
-              timestamp: dataToSave.timestamp
-            }));
-            
-          } else if (action === 'DELETE') {
-            // DELETE: Delete data
-            const decodedKey = decodeURIComponent(key);
-            const filePath = getFilePath(decodedKey);
-            
-            try {
-              await fs.unlink(filePath);
-              
-              // Broadcast to other clients
-              wss.clients.forEach((client) => {
-                if (client !== ws && client.readyState === WebSocket.OPEN) {
-                  client.send(JSON.stringify({
-                    type: 'STORAGE_DELETED',
-                    key: decodedKey
-                  }));
-                }
-              });
-              
-              ws.send(JSON.stringify({
-                requestId: requestId,
-                success: true,
-                action: 'DELETE',
-                key: decodedKey
-              }));
-            } catch (error) {
-              ws.send(JSON.stringify({
-                requestId: requestId,
-                success: false,
-                error: error.message
-              }));
-            }
-            
-          } else if (action === 'GET') {
-            // GET: Get data
-            const decodedKey = decodeURIComponent(key);
-            const filePath = getFilePath(decodedKey);
-            
-            console.log(`[Server] 📥 GET request for: ${decodedKey}`);
-            
-            try {
-              const startTime = Date.now();
-              const content = await fs.readFile(filePath, 'utf8');
-              const readTime = Date.now() - startTime;
-              
-              const parseStartTime = Date.now();
-              const parsed = JSON.parse(content);
-              const parseTime = Date.now() - parseStartTime;
-              
-              let fileValue;
-              let fileTimestamp = 0;
-              
-              if (parsed && typeof parsed === 'object' && parsed.value !== undefined) {
-                fileValue = parsed.value;
-                fileTimestamp = parsed.timestamp || parsed._timestamp || 0;
-              } else {
-                fileValue = parsed;
-                fileTimestamp = 0;
-              }
-              
-              const stringifyStartTime = Date.now();
-              const response = JSON.stringify({
-                requestId: requestId,
-                success: true,
-                action: 'GET',
-                key: decodedKey,
-                value: fileValue,
-                timestamp: fileTimestamp
-              });
-              const stringifyTime = Date.now() - stringifyStartTime;
-              
-              const responseSize = Buffer.byteLength(response, 'utf8');
-              const responseSizeMB = (responseSize / 1024 / 1024).toFixed(2);
-              
-              const sendStartTime = Date.now();
-              
-              // Check if response is too large (warn but still send)
-              if (responseSize > 100 * 1024 * 1024) { // > 100MB
-                console.warn(`[Server] ⚠️ Large response for ${decodedKey}: ${responseSizeMB}MB`);
-              }
-              
-              ws.send(response);
-              const sendTime = Date.now() - sendStartTime;
-              
-              const totalTime = Date.now() - startTime;
-              console.log(`[Server] ✅ GET response sent for ${decodedKey} (size: ${responseSizeMB}MB, read: ${readTime}ms, parse: ${parseTime}ms, stringify: ${stringifyTime}ms, send: ${sendTime}ms, total: ${totalTime}ms)`);
-            } catch (error) {
-              // File doesn't exist, return empty
-              ws.send(JSON.stringify({
-                requestId: requestId,
-                success: true,
-                action: 'GET',
-                key: decodedKey,
-                value: {},
-                timestamp: 0
-              }));
-            }
-          }
-        } catch (error) {
-          ws.send(JSON.stringify({
-            requestId: requestId || null,
-            success: false,
-            error: error.message
-          }));
-        }
-      });
-      
-      ws.on('error', (error) => {
-        // Silent error handling
-      });
-    });
-    
-    console.log(`[Server] ✅ WebSocket server running on ws://0.0.0.0:${PORT}/ws`);
-  });

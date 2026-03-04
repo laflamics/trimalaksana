@@ -1,53 +1,103 @@
-import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import './styles/global.css';
 import { initTheme } from './utils/theme';
-
-// Initialize theme on app load
-initTheme();
 import './styles/common.css';
 import './styles/mobile.css';
 import { focusAppWindow } from './utils/actions';
 import { storageService } from './services/storage';
 
+// Initialize theme on app load
+initTheme();
+
 console.log('🚀 Starting React app...');
 
-// Set default WebSocket settings sebelum WebSocket client di-initialize
-if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+// Production-safe base URL configuration
+// Uses window.location.origin for both local and production environments
+const getProductionBaseUrl = (): string => {
+  if (typeof window === 'undefined') {
+    // Fallback for SSR/build time
+    return import.meta.env.VITE_API_URL || 'http://localhost:8888';
+  }
+  
+  // Check if running in Electron (file:// protocol)
+  if (window.location.protocol === 'file:') {
+    // For Electron, use localhost:8888 as default
+    return 'http://localhost:8888';
+  }
+  
+  // Runtime: use current origin (works for both local and Tailscale Funnel)
+  return window.location.origin;
+};
+
+// WebSocket URL configuration - ALWAYS use Tailscale Funnel for data sync
+const getProductionWebSocketUrl = (): string => {
+  // Always connect to Tailscale Funnel for data sync
+  // This ensures all devices sync to the same server
+  return 'wss://server-tljp.tail75a421.ts.net/ws';
+};
+
+// Initialize WebSocket and API configuration
+const initializeAppConfig = async (): Promise<void> => {
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+    return;
+  }
+  
+  // Check for server URL from query parameter or environment
+  const urlParams = new URLSearchParams(window.location.search);
+  const serverUrlParam = urlParams.get('serverUrl');
+  const envServerUrl = import.meta.env.VITE_SERVER_URL;
+  
+  if (serverUrlParam || envServerUrl) {
+    const serverUrl = serverUrlParam || envServerUrl;
+    console.log(`🔧 Setting server URL from parameter/env: ${serverUrl}`);
+    await storageService.setConfig({
+      type: 'server',
+      serverUrl: serverUrl
+    });
+  }
+  
+  const config = storageService.getConfig();
+  if (config.type !== 'server') {
+    return;
+  }
+  
+  // Configure WebSocket URL
+  const wsUrl = getProductionWebSocketUrl();
+  localStorage.setItem('websocket_url', wsUrl);
+  localStorage.setItem('websocket_enabled', 'true');
+  
+  // Configure API base URL
+  const baseUrl = getProductionBaseUrl();
+  localStorage.setItem('server_url', baseUrl);
+};
+
+// Initialize app configuration
+initializeAppConfig().then(() => {
+  // Add a small delay to ensure localStorage is fully updated
+  setTimeout(() => {
+    // Load WebSocket client after configuration is ready
+    import('./services/websocket-client').catch(error => {
+      console.error('❌ Failed to load WebSocket client:', error);
+    });
+  }, 200);
+});
+
+// Initialize storage service
+const initStorage = (): void => {
   const config = storageService.getConfig();
   if (config.type === 'server') {
-    if (!localStorage.getItem('websocket_url')) {
-      localStorage.setItem('websocket_url', 'ws://server-tljp.tail75a421.ts.net:8888/ws');
-    }
-    if (!localStorage.getItem('websocket_enabled')) {
-      localStorage.setItem('websocket_enabled', 'true');
-    }
-  }
-}
-
-// Import WebSocket client untuk memastikan dia di-initialize lebih awal
-import './services/websocket-client';
-
-// 🚀 NEW ARCHITECTURE: Tidak perlu auto-sync
-// Server adalah single source of truth, client langsung fetch dari server saat get()
-// Tidak perlu sync complex, langsung POST saat set()
-const initStorage = () => {
-  const config = storageService.getConfig();
-  if (config.type === 'server' && config.serverUrl) {
-    console.log('✅ Server mode: Server is single source of truth');
-    console.log(`✅ Server URL: ${config.serverUrl}`);
-    console.log('✅ Data will be fetched directly from server on get()');
-    console.log('✅ Data will be posted directly to server on set()');
+    console.log('✅ Server mode enabled');
+    console.log(`✅ Server URL: ${getProductionBaseUrl()}`);
   } else {
-    console.log('📦 Using local storage mode');
+    console.log('📦 Local storage mode');
   }
 };
 
-// Initialize storage (no auto-sync needed)
 initStorage();
 
+// React app initialization
 const rootElement = document.getElementById('root');
 
 if (!rootElement) {
@@ -56,12 +106,11 @@ if (!rootElement) {
 
 console.log('✅ Root element found');
 
+// Render React app without StrictMode to prevent double requests in development
 ReactDOM.createRoot(rootElement).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </React.StrictMode>
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
 );
 
 console.log('✅ React app rendered');

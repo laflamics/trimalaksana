@@ -3,7 +3,8 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService } from '../../../services/storage';
+import { storageService, StorageKeys } from '../../../services/storage';
+import { setupRealTimeSync, TRUCKING_SYNC_KEYS } from '../../../utils/real-time-sync-helper';
 import '../../../styles/common.css';
 
 interface StatusUpdate {
@@ -82,14 +83,25 @@ const StatusUpdates = () => {
 
   useEffect(() => {
     loadData();
+    
+    // Real-time listener untuk server updates
+    const cleanup = setupRealTimeSync({
+      keys: [TRUCKING_SYNC_KEYS.DELIVERY_ORDERS],
+      onUpdate: loadData,
+    });
+    
     // Optimasi: Refresh setiap 15 detik untuk status updates (sebelumnya 5 detik)
     // Balance antara real-time dan bandwidth
     const interval = setInterval(loadData, 15000); // 15 detik - cukup untuk status updates
-    return () => clearInterval(interval);
+    
+    return () => {
+      clearInterval(interval);
+      cleanup();
+    };
   }, []);
 
   const loadData = async () => {
-    let ordersData = await storageService.get<any[]>('trucking_delivery_orders') || [];
+    let ordersData = await storageService.get<any[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS) || [];
     
     // CRITICAL: Extract array from storage wrapper if needed
     if (ordersData && typeof ordersData === 'object' && 'value' in ordersData && Array.isArray(ordersData.value)) {
@@ -165,7 +177,7 @@ const StatusUpdates = () => {
         }
         return o;
       });
-      await storageService.set('trucking_delivery_orders', updatedOrders);
+      await storageService.set(StorageKeys.TRUCKING.DELIVERY_ORDERS, updatedOrders);
       setUpdateNote('');
       setSelectedOrder(null);
       loadData();

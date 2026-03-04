@@ -5,11 +5,13 @@ import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
-import { storageService, extractStorageValue } from '../../services/storage';
+import { storageService, extractStorageValue, StorageKeys } from '../../services/storage';
 import { filterActiveItems } from '../../utils/data-persistence-helper';
 import { getCurrentUser } from '../../utils/access-control-helper';
 import { logCreate } from '../../utils/activity-logger';
 import { useDialog } from '../../hooks/useDialog';
+import { useLanguage } from '../../hooks/useLanguage';
+import BlobService from '../../services/blob-service';
 import '../../styles/common.css';
 import './Inventory.css';
 import './Master.css';
@@ -18,6 +20,8 @@ interface InventoryItem {
   id: string;
   supplierName: string;
   codeItem: string;
+  item_code?: string; // New standardized field
+  type?: 'material' | 'product' | 'unknown'; // New standardized field
   kodeIpos?: string; // Kode Ipos untuk material
   description: string;
   kategori: string;
@@ -34,7 +38,7 @@ interface InventoryItem {
   anomaly?: string;
   anomalyDetail?: string;
   padCode?: string; // PAD Code untuk product (diambil dari master product)
-  stockDocumentation?: string; // Base64 atau path untuk dokumentasi stock (optional)
+  stockDocumentationId?: string; // MinIO fileId untuk dokumentasi stock (optional)
   // Tracking untuk anti-duplicate
   processedPOs?: string[]; // PO numbers yang sudah diproses (untuk material: RECEIVE dari GRN dan OUTGOING dari Production)
   processedSPKs?: string[]; // SPK numbers yang sudah diproses (untuk product: RECEIVE dari QC PASS dan OUTGOING dari Delivery)
@@ -59,6 +63,7 @@ interface Supplier {
 }
 
 const Inventory = () => {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -70,6 +75,8 @@ const Inventory = () => {
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [showReceiptDialog, setShowReceiptDialog] = useState(false);
   const [showAddInventoryDialog, setShowAddInventoryDialog] = useState(false);
+  const [showEditInventoryDialog, setShowEditInventoryDialog] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [addInventoryForm, setAddInventoryForm] = useState({
     selectedMaterialId: '',
     supplierName: '',
@@ -79,16 +86,39 @@ const Inventory = () => {
     satuan: 'PCS',
     price: '',
     stockPremonth: '',
-    stockDocumentation: '',
+    stockDocumentationId: '',
+  });
+  const [editInventoryForm, setEditInventoryForm] = useState({
+    supplierName: '',
+    codeItem: '',
+    kodeIpos: '',
+    description: '',
+    kategori: '',
+    satuan: 'PCS',
+    price: '',
+    stockP1: '',
+    stockP2: '',
+    stockDocumentationId: '',
   });
   const [materials, setMaterials] = useState<Material[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [stockDocFile, setStockDocFile] = useState<File | null>(null);
+  const [previewDocumentationId, setPreviewDocumentationId] = useState<string | null>(null);
   const { showAlert } = useDialog();
   const [receiptData, setReceiptData] = useState<{
     stockOpname: Array<{ date: string; qty: number; source: string }>;
     purchasing: Array<{ date: string; qty: number; grnNo: string; poNo: string; supplier: string }>;
   }>({ stockOpname: [], purchasing: [] });
+
+  // Helper function untuk get item code (support backward compatibility)
+  const getItemCode = (item: InventoryItem): string => {
+    return (item.item_code || item.codeItem || '').toString().trim();
+  };
+
+  // Helper function untuk get item type
+  const getItemType = (item: InventoryItem): 'material' | 'product' | 'unknown' => {
+    return item.type || 'unknown';
+  };
 
   useEffect(() => {
     loadInventory();
@@ -131,7 +161,7 @@ const Inventory = () => {
     }
   };
 
-  const handleStockDocUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleStockDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -141,23 +171,37 @@ const Inventory = () => {
       return;
     }
 
-    setStockDocFile(file);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64 = e.target?.result as string;
-      setAddInventoryForm({ ...addInventoryForm, stockDocumentation: base64 });
-    };
-    reader.readAsDataURL(file);
+    try {
+      // Validate file
+      const validation = BlobService.validateFile(file, 5, ['image/*', 'application/pdf']);
+      if (!validation.valid) {
+        showAlert(validation.error || 'Invalid file', 'Error');
+        return;
+      }
+
+      // Upload to MinIO
+      const result = await BlobService.uploadFile(file, 'packaging');
+      setStockDocFile(file);
+      setAddInventoryForm({ ...addInventoryForm, stockDocumentationId: result.fileId });
+      showAlert('Stock documentation uploaded successfully', 'Success');
+    } catch (error: any) {
+      showAlert(`Error uploading file: ${error.message}`, 'Error');
+    }
   };
 
   const handleAddInventory = async () => {
+    if (!addInventoryForm.kategori) {
+      showAlert('Pilih tipe item (Material atau Product).', 'Validation Error');
+      return;
+    }
+
     if (!addInventoryForm.codeItem.trim() || !addInventoryForm.description.trim()) {
       showAlert('Code Item dan Description wajib diisi.', 'Validation Error');
       return;
     }
 
-    if (!addInventoryForm.stockPremonth || parseFloat(addInventoryForm.stockPremonth) < 0) {
-      showAlert('Stock Premonth wajib diisi dan harus >= 0.', 'Validation Error');
+    if (addInventoryForm.stockPremonth === '') {
+      showAlert('Stock Premonth wajib diisi.', 'Validation Error');
       return;
     }
 
@@ -185,7 +229,7 @@ const Inventory = () => {
         supplierName: addInventoryForm.supplierName.trim(),
         codeItem: addInventoryForm.codeItem.trim(),
         description: addInventoryForm.description.trim(),
-        kategori: addInventoryForm.kategori || (activeTab === 'product' ? 'Product' : 'Material'),
+        kategori: addInventoryForm.kategori,
         satuan: addInventoryForm.satuan.trim() || 'PCS',
         price: parseFloat(addInventoryForm.price) || 0,
         stockPremonth: parseFloat(addInventoryForm.stockPremonth) || 0,
@@ -196,14 +240,14 @@ const Inventory = () => {
         lastUpdate: new Date().toISOString(),
         anomaly: '',
         anomalyDetail: '',
-        stockDocumentation: addInventoryForm.stockDocumentation || undefined,
+        stockDocumentationId: addInventoryForm.stockDocumentationId || undefined,
         processedPOs: [],
         processedSPKs: [],
         processedGRNs: [],
       };
 
       const updatedInventory = [...existingInventory, newInventoryItem];
-      await storageService.set('inventory', updatedInventory);
+      await storageService.set(StorageKeys.PACKAGING.INVENTORY, updatedInventory);
       await logCreate('INVENTORY', newInventoryItem.id, '/packaging/master/inventory', {
         codeItem: newInventoryItem.codeItem,
         description: newInventoryItem.description,
@@ -221,13 +265,93 @@ const Inventory = () => {
         satuan: 'PCS',
         price: '',
         stockPremonth: '',
-        stockDocumentation: '',
+        stockDocumentationId: '',
       });
       setStockDocFile(null);
       setShowAddInventoryDialog(false);
       loadInventory(); // Reload to show new item
     } catch (err: any) {
       setError(`Failed to add inventory: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditInventory = (item: InventoryItem) => {
+    setEditingItem(item);
+    setEditInventoryForm({
+      supplierName: item.supplierName || '',
+      codeItem: item.codeItem || '',
+      kodeIpos: item.kodeIpos || '',
+      description: item.description || '',
+      kategori: item.kategori || '',
+      satuan: item.satuan || 'PCS',
+      price: String(item.price || 0),
+      stockP1: String(item.stockP1 || 0),
+      stockP2: String(item.stockP2 || 0),
+      stockDocumentationId: item.stockDocumentationId || '',
+    });
+    setShowEditInventoryDialog(true);
+  };
+
+  const handleSaveEditInventory = async () => {
+    if (!editInventoryForm.codeItem.trim() || !editInventoryForm.description.trim()) {
+      showAlert('Code Item dan Description wajib diisi.', 'Validation Error');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setSuccessMessage('');
+    try {
+      const existingInventory = extractStorageValue(await storageService.get<InventoryItem[]>('inventory'));
+      
+      const updatedInventory = existingInventory.map((item: InventoryItem) => {
+        if (item.id === editingItem?.id) {
+          const stockP1 = parseFloat(editInventoryForm.stockP1) || 0;
+          const stockP2 = parseFloat(editInventoryForm.stockP2) || 0;
+          const stockPremonth = stockP1 + stockP2;
+          
+          return {
+            ...item,
+            supplierName: editInventoryForm.supplierName.trim(),
+            codeItem: editInventoryForm.codeItem.trim(),
+            kodeIpos: editInventoryForm.kodeIpos.trim() || undefined,
+            description: editInventoryForm.description.trim(),
+            kategori: editInventoryForm.kategori || item.kategori,
+            satuan: editInventoryForm.satuan.trim() || 'PCS',
+            price: parseFloat(editInventoryForm.price) || 0,
+            stockP1: stockP1,
+            stockP2: stockP2,
+            stockPremonth: stockPremonth,
+            nextStock: stockPremonth + (item.receive || 0) - (item.outgoing || 0) + (item.return || 0),
+            lastUpdate: new Date().toISOString(),
+            stockDocumentationId: editInventoryForm.stockDocumentationId || item.stockDocumentationId,
+          };
+        }
+        return item;
+      });
+
+      await storageService.set(StorageKeys.PACKAGING.INVENTORY, updatedInventory);
+      
+      setSuccessMessage('✅ Inventory item updated successfully!');
+      setShowEditInventoryDialog(false);
+      setEditingItem(null);
+      setEditInventoryForm({
+        supplierName: '',
+        codeItem: '',
+        kodeIpos: '',
+        description: '',
+        kategori: '',
+        satuan: 'PCS',
+        price: '',
+        stockP1: '',
+        stockP2: '',
+        stockDocumentationId: '',
+      });
+      loadInventory(); // Reload to show updated item
+    } catch (err: any) {
+      setError(`Failed to update inventory: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -299,22 +423,20 @@ const Inventory = () => {
       }
       
       // Calculate nextStock for each item
+      // IMPORTANT: Allow negative stock (minus) - no longer limiting outgoing to maxOutgoing
       const calculatedData = data.map(item => {
         const stockPremonth = item.stockPremonth || 0;
         const receiveQty = item.receive || 0;
         const outgoingQty = item.outgoing || 0;
         const returnQty = item.return || 0;
-        const maxOutgoing = stockPremonth + receiveQty + returnQty;
-        const adjustedOutgoing = Math.min(outgoingQty, maxOutgoing);
-        const hasAnomaly = outgoingQty > maxOutgoing;
+        // Calculate nextStock allowing negative values
+        const nextStock = stockPremonth + receiveQty - outgoingQty + returnQty;
         return {
           ...item,
-          outgoing: adjustedOutgoing,
-          nextStock: stockPremonth + receiveQty - adjustedOutgoing + returnQty,
-          anomaly: hasAnomaly ? 'OUTGOING_GT_RECEIVE' : item.anomaly,
-          anomalyDetail: hasAnomaly
-            ? `Outgoing ${outgoingQty} melebihi stock tersedia (${maxOutgoing}). Auto-adjust saat load.`
-            : item.anomalyDetail,
+          outgoing: outgoingQty,
+          nextStock: nextStock,
+          anomaly: item.anomaly,
+          anomalyDetail: item.anomalyDetail,
         };
       });
       setInventory(calculatedData);
@@ -351,23 +473,29 @@ const Inventory = () => {
     return { materialItems, productItems };
   }, [inventory]);
 
-  // Filter inventory based on search query + active tab
+  // Filter inventory based on search query + active tab, sorted by nextStock descending
   const filteredInventory = useMemo(() => {
     const baseData = activeTab === 'product' ? categorizeInventory.productItems : categorizeInventory.materialItems;
-    if (!searchQuery) return baseData;
-    const query = searchQuery.toLowerCase();
-    return baseData.filter(item =>
-      (item.codeItem || '').toLowerCase().includes(query) ||
-      (item.description || '').toLowerCase().includes(query) ||
-      (item.supplierName || '').toLowerCase().includes(query)
-    );
+    let filtered = baseData;
+    
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = baseData.filter(item =>
+        (item.codeItem || '').toLowerCase().includes(query) ||
+        (item.description || '').toLowerCase().includes(query) ||
+        (item.supplierName || '').toLowerCase().includes(query)
+      );
+    }
+    
+    // Sort by nextStock in descending order (highest stock first)
+    return filtered.sort((a, b) => (b.nextStock || 0) - (a.nextStock || 0));
   }, [categorizeInventory, activeTab, searchQuery]);
 
   // Handle Manual Reset
   const handleResetData = async () => {
     try {
       setLoading(true);
-      await storageService.set('inventory', []);
+      await storageService.set(StorageKeys.PACKAGING.INVENTORY, []);
       setInventory([]);
       setSuccessMessage('✅ Data inventory berhasil direset. Silakan import data baru dari Excel.');
       setError('');
@@ -468,7 +596,7 @@ const Inventory = () => {
   const handleImportExcel = () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.xlsx,.xls';
+    input.accept = '.xlsx,.xls,.ods,.csv';
     input.onchange = async (e: any) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -479,7 +607,7 @@ const Inventory = () => {
         // Read file as ArrayBuffer
         const arrayBuffer = await file.arrayBuffer();
         
-        // Use xlsx library
+        // Use xlsx library - supports .xlsx, .xls, .ods, .csv
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         
         // Get first sheet
@@ -545,21 +673,27 @@ const Inventory = () => {
               lastUpdateStr = mapColumn(row, ['Last Update', 'LAST UPDATE', 'last_update', 'LastUpdate']);
             } else {
               // Format untuk Product sesuai header user
+              // Support new format: Pad Code, Product_id, Date, Nama Item, Kategori, Harga Satuan, STOCK AWAL, Receive
+              const padCode = mapColumn(row, ['Pad Code', 'PAD CODE', 'PadCode', 'pad_code', 'PAD', 'pad']);
+              const productId = mapColumn(row, ['Product_id', 'PRODUCT_ID', 'Product ID', 'product_id', 'Product Code', 'product_code']);
+              const dateStr = mapColumn(row, ['Date', 'DATE', 'Tanggal', 'TANGGAL', 'date']);
+              
+              // Try new format first, fallback to old format
               supplierName = mapColumn(row, ['Customer', 'CUSTOMER', 'Supplier Name', 'SUPPLIER NAME', 'SUPPLIER', 'supplier_name', 'customer']);
-              codeItem = mapColumn(row, ['Code Item', 'CODE ITEM', 'CODE item', 'CODE', 'Code Item', 'code_item', 'Kode', 'code item']);
+              codeItem = productId || padCode || mapColumn(row, ['Code Item', 'CODE ITEM', 'CODE item', 'CODE', 'Code Item', 'code_item', 'Kode', 'code item']);
               kodeIpos = mapColumn(row, ['Kode Ipos', 'KODE IPOS', 'Kode IPOS', 'code_ipos', 'IPOS', 'kode ipos', 'code ipos']);
-              description = mapColumn(row, ['Description', 'DESCRIPTION', 'DESCRIPTION/Nama Item', 'Nama Item', 'Description', 'nama', 'Nama']);
+              description = mapColumn(row, ['Nama Item', 'NAMA ITEM', 'Description', 'DESCRIPTION', 'DESCRIPTION/Nama Item', 'Nama Item', 'Description', 'nama', 'Nama']);
               // kategori tidak dibaca dari Excel, akan di-force sesuai activeTab
               satuan = mapColumn(row, ['Satuan', 'SATUAN', 'Satuan', 'UOM', 'Unit', 'unit']);
-              priceStr = mapColumn(row, ['Harga', 'PRICE', 'Price', 'price', 'HARGA']);
-              stockP1Str = mapColumn(row, ['Stock P1', 'STOCK P1', 'Stock-P1', 'STOCK-P1', 'Stock-P1(Premonth)', 'STOCK-P1(PREMONTH)']);
+              priceStr = mapColumn(row, ['Harga Satuan', 'HARGA SATUAN', 'Harga', 'PRICE', 'Price', 'price', 'HARGA']);
+              stockP1Str = mapColumn(row, ['STOCK AWAL', 'STOCK AWAL', 'Stock Awal', 'Stock P1', 'STOCK P1', 'Stock-P1', 'STOCK-P1', 'Stock-P1(Premonth)', 'STOCK-P1(PREMONTH)']);
               stockP2Str = mapColumn(row, ['Stock P2', 'STOCK P2', 'Stock-P2', 'STOCK-P2', 'Stock-P2(Premonth)', 'STOCK-P2(PREMONTH)']);
               // stockStr tidak digunakan untuk Product, karena P1 + P2
               receiveStr = mapColumn(row, ['Receive', 'RECEIVE', 'receive', 'penerimaan', 'Penerimaan']);
               outgoingStr = mapColumn(row, ['Outgoing', 'OUTGOING', 'outgoing', 'keluar', 'Keluar']);
               returnStr = mapColumn(row, ['Return', 'RETURN', 'return']);
               nextStockStr = mapColumn(row, ['Next Stock', 'NEXT STOCK', 'next_stock', 'NextStock']);
-              lastUpdateStr = mapColumn(row, ['Last Update', 'LAST UPDATE', 'last_update', 'LastUpdate']);
+              lastUpdateStr = dateStr || mapColumn(row, ['Last Update', 'LAST UPDATE', 'last_update', 'LastUpdate']);
             }
 
             // Skip empty rows
@@ -682,7 +816,7 @@ const Inventory = () => {
         console.log(`[Inventory] Imported ${newItems.length} items, total ${deduplicated.length} items (after deduplication)`);
 
         // Save to storage
-        await storageService.set('inventory', deduplicated);
+        await storageService.set(StorageKeys.PACKAGING.INVENTORY, deduplicated);
         setInventory(deduplicated);
         
         let successMsg = `✅ Berhasil import ${newItems.length} item`;
@@ -703,6 +837,19 @@ const Inventory = () => {
   const handleExportExcel = () => {
     try {
       const dataToExport = filteredInventory.map(item => {
+        // Helper function to safely format date
+        const formatDateForExport = (dateStr: string | undefined): string => {
+          if (!dateStr) return '';
+          try {
+            const date = new Date(dateStr);
+            // Check if date is valid
+            if (isNaN(date.getTime())) return '';
+            return date.toISOString().split('T')[0];
+          } catch {
+            return '';
+          }
+        };
+
         if (activeTab === 'material') {
           // Format untuk Material sesuai header user
           const stockP1 = item.stockP1 || 0;
@@ -734,19 +881,19 @@ const Inventory = () => {
           
           return {
             'Customer': item.supplierName || '',
-        'Code Item': item.codeItem || '',
+            'Code Item': item.codeItem || '',
             'Kode Ipos': item.kodeIpos || '',
-        'Description': item.description || '',
-        'Kategori': item.kategori || '',
-        'Satuan': item.satuan || '',
+            'Description': item.description || '',
+            'Kategori': item.kategori || '',
+            'Satuan': item.satuan || '',
             'Harga': item.price || 0,
             'Stock P1': stockP1,
             'Stock P2': stockP2,
-        'Receive': item.receive || 0,
-        'Outgoing': item.outgoing || 0,
-        'Return': item.return || 0,
-        'Next Stock': item.nextStock || 0,
-            'Last Update': item.lastUpdate ? new Date(item.lastUpdate).toISOString().split('T')[0] : '',
+            'Receive': item.receive || 0,
+            'Outgoing': item.outgoing || 0,
+            'Return': item.return || 0,
+            'Next Stock': item.nextStock || 0,
+            'Last Update': formatDateForExport(item.lastUpdate),
           };
         }
       });
@@ -1239,24 +1386,15 @@ const Inventory = () => {
         const receiveQty = item.receive || 0;
         const outgoingQty = item.outgoing || 0;
         const returnQty = item.return || 0;
-        const maxOutgoing = stockPremonth + receiveQty + returnQty;
-        let adjustedOutgoing = outgoingQty;
-        let anomaly: string | undefined = item.anomaly;
-        let anomalyDetail: string | undefined = item.anomalyDetail;
-
-        if (outgoingQty > maxOutgoing) {
-          outgoingFixCount += 1;
-          adjustedOutgoing = maxOutgoing;
-          anomaly = 'OUTGOING_GT_RECEIVE';
-          anomalyDetail = `Outgoing ${outgoingQty} > tersedia ${maxOutgoing}. Sistem auto-adjust ketika recalculation.`;
-        }
+        // IMPORTANT: Allow negative stock (minus) - no longer limiting outgoing
+        const nextStock = stockPremonth + receiveQty - outgoingQty + returnQty;
 
         return {
           ...item,
-          outgoing: adjustedOutgoing,
-          nextStock: stockPremonth + receiveQty - adjustedOutgoing + returnQty,
-          anomaly,
-          anomalyDetail,
+          outgoing: outgoingQty,
+          nextStock: nextStock,
+          anomaly: item.anomaly,
+          anomalyDetail: item.anomalyDetail,
           lastUpdate: new Date().toISOString(),
         };
       });
@@ -1278,7 +1416,7 @@ const Inventory = () => {
       
 
       // Save dan update state
-      await storageService.set('inventory', deduplicated);
+      await storageService.set(StorageKeys.PACKAGING.INVENTORY, deduplicated);
       setInventory(deduplicated);
       
       let message = `✅ Inventory berhasil di-recalculate dari source data! Total items: ${recalculatedInventory.length}`;
@@ -1363,28 +1501,28 @@ const Inventory = () => {
     }
   };
 
-  const columns = [
+  const columns = useMemo(() => [
     { 
       key: 'supplierName', 
-      header: activeTab === 'material' ? 'SUPPLIER NAME' : 'Customer',
+      header: activeTab === 'material' ? t('master.supplierName') || 'SUPPLIER NAME' : t('master.customerName') || 'Customer',
     },
-    { key: 'codeItem', header: 'CODE ITEM' },
+    { key: 'codeItem', header: t('master.code') || 'CODE ITEM' },
     {
       key: 'kodeIpos',
       header: 'KODE IPOS',
       render: (item: InventoryItem) => item.kodeIpos || '-',
     },
-    { key: 'description', header: 'DESCRIPTION/NAMA ITEM' },
+    { key: 'description', header: t('common.description') || 'DESCRIPTION/NAMA ITEM' },
     { 
       key: 'padCode', 
       header: 'PAD CODE',
       render: (item: InventoryItem) => item.padCode || '-',
     },
-    { key: 'kategori', header: 'KATEGORI' },
-    { key: 'satuan', header: 'SATUAN/UOM' },
+    { key: 'kategori', header: t('master.category') || 'KATEGORI' },
+    { key: 'satuan', header: t('master.unit') || 'SATUAN/UOM' },
     {
       key: 'price',
-      header: 'PRICE',
+      header: t('master.price') || 'PRICE',
       render: (item: InventoryItem) => `Rp ${(item.price || 0).toLocaleString('id-ID')}`,
     },
     // Hide STOCK/Premonth di UI untuk Material dan Product (karena calculated dari P1 + P2)
@@ -1430,7 +1568,7 @@ const Inventory = () => {
     },
     {
       key: 'anomaly',
-      header: 'WARNING',
+      header: t('common.warning') || 'WARNING',
       render: (item: InventoryItem) => {
         if (!item.anomaly) return '-';
         return (
@@ -1442,12 +1580,12 @@ const Inventory = () => {
     },
     {
       key: 'return',
-      header: 'RETURN',
+      header: t('common.return') || 'RETURN',
       render: (item: InventoryItem) => (item.return || 0).toLocaleString('id-ID'),
     },
     {
       key: 'nextStock',
-      header: 'NEXT STOCK',
+      header: t('common.total') || 'NEXT STOCK',
       render: (item: InventoryItem) => {
         // Gunakan P1 + P2 sebagai stockPremonth untuk Material dan Product
         const stockPremonth = (item.stockP1 || 0) + (item.stockP2 || 0);
@@ -1459,7 +1597,31 @@ const Inventory = () => {
         );
       },
     },
-  ];
+    {
+      key: 'actions',
+      header: t('common.actions') || 'ACTIONS',
+      render: (item: InventoryItem) => (
+        <div style={{ display: 'flex', gap: '4px' }}>
+          {item.stockDocumentationId && (
+            <Button
+              variant="secondary"
+              onClick={() => setPreviewDocumentationId(item.stockDocumentationId || null)}
+              style={{ fontSize: '11px', padding: '4px 8px', minHeight: '28px' }}
+            >
+              👁️ View
+            </Button>
+          )}
+          <Button
+            variant="secondary"
+            onClick={() => handleEditInventory(item)}
+            style={{ fontSize: '11px', padding: '4px 8px', minHeight: '28px' }}
+          >
+            ✏️ Edit
+          </Button>
+        </div>
+      ),
+    },
+  ], [t, activeTab]);
 
   return (
     <div className="master-compact">
@@ -1488,7 +1650,7 @@ const Inventory = () => {
             onClick={() => setShowAddInventoryDialog(true)}
             style={{ fontSize: '14px', padding: '8px 16px', backgroundColor: 'var(--accent-color)', color: 'white' }}
           >
-            ➕ Add Inventory
+            ➕ Tambah Inventory
           </Button>
           <Button
             variant="primary"
@@ -1496,7 +1658,7 @@ const Inventory = () => {
             disabled={importLoading}
             style={{ fontSize: '14px', padding: '8px 16px' }}
           >
-            {importLoading ? 'Importing...' : '📤 Import Stock Opname'}
+            {importLoading ? 'Mengimpor...' : '📤 Import Stock Opname'}
           </Button>
         </div>
       </div>
@@ -1543,7 +1705,7 @@ const Inventory = () => {
                 whiteSpace: 'nowrap',
               }}
             >
-              🏭 Product ({categorizeInventory.productItems.length})
+              🏭 Produk ({categorizeInventory.productItems.length})
             </button>
           </div>
           <input
@@ -1643,30 +1805,30 @@ const Inventory = () => {
         )}
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-            Loading inventory...
+            Memuat inventory...
           </div>
         ) : filteredInventory.length === 0 ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-            {error ? 'Tidak ada data yang bisa ditampilkan karena terjadi error.' : searchQuery ? 'No items found matching your search.' : 'No inventory data. Click "Import Stock Opname" to import from Excel.'}
+            {error ? 'Tidak ada data yang bisa ditampilkan karena terjadi error.' : searchQuery ? 'Tidak ada item yang cocok dengan pencarian.' : 'Tidak ada data inventory. Klik "Import Stock Opname" untuk mengimpor dari Excel.'}
           </div>
         ) : (
           <Table
             columns={columns}
             data={filteredInventory}
-            emptyMessage="No inventory data available"
+            emptyMessage="Tidak ada data inventory"
             onRowClick={handleRowClick}
           />
         )}
         {filteredInventory.length > 0 && (
           <div style={{ marginTop: '16px', padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '4px' }}>
             <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary)' }}>
-              <strong>Total Items:</strong> {filteredInventory.length} item(s)
+              <strong>Total Item:</strong> {filteredInventory.length} item
               {searchQuery
-                ? ` (filtered from ${
+                ? ` (disaring dari ${
                     activeTab === 'product'
                       ? categorizeInventory.productItems.length
                       : categorizeInventory.materialItems.length
-                  } total ${activeTab === 'product' ? 'products' : 'materials'})`
+                  } total ${activeTab === 'product' ? 'produk' : 'material'})`
                 : ''}
             </p>
           </div>
@@ -1718,8 +1880,8 @@ const Inventory = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>
-                ➕ Add Inventory
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: 'var(--text-primary)' }}>
+                ➕ Tambah Inventory
               </h2>
               <button
                 onClick={() => setShowAddInventoryDialog(false)}
@@ -1742,84 +1904,161 @@ const Inventory = () => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Type Toggle: Material or Product */}
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)' }}>
-                  Pilih Material *
+                  Tipe Item *
                 </label>
-                <select
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => {
+                      setAddInventoryForm({
+                        ...addInventoryForm,
+                        selectedMaterialId: '',
+                        supplierName: '',
+                        codeItem: '',
+                        description: '',
+                        kategori: 'Material',
+                      });
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      borderRadius: '6px',
+                      border: addInventoryForm.kategori === 'Material' ? '2px solid var(--accent-color)' : '1px solid var(--border-color)',
+                      backgroundColor: addInventoryForm.kategori === 'Material' ? 'var(--accent-color)' : 'var(--bg-input)',
+                      color: addInventoryForm.kategori === 'Material' ? 'white' : 'var(--text-primary)',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    📦 Material
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAddInventoryForm({
+                        ...addInventoryForm,
+                        selectedMaterialId: '',
+                        supplierName: '',
+                        codeItem: '',
+                        description: '',
+                        kategori: 'Product',
+                      });
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      borderRadius: '6px',
+                      border: addInventoryForm.kategori === 'Product' ? '2px solid var(--accent-color)' : '1px solid var(--border-color)',
+                      backgroundColor: addInventoryForm.kategori === 'Product' ? 'var(--accent-color)' : 'var(--bg-input)',
+                      color: addInventoryForm.kategori === 'Product' ? 'white' : 'var(--text-primary)',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    📦 Product
+                  </button>
+                </div>
+              </div>
+
+              {/* Search/Filter for Material or Product */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)' }}>
+                  Cari {addInventoryForm.kategori} (Optional)
+                </label>
+                <Input
+                  placeholder={`Cari ${addInventoryForm.kategori} berdasarkan kode atau nama...`}
                   value={addInventoryForm.selectedMaterialId}
-                  onChange={(e) => handleMaterialSelect(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    borderRadius: '6px',
-                    border: '1px solid var(--border-color)',
-                    backgroundColor: 'var(--bg-input)',
-                    color: 'var(--text-primary)',
-                    fontSize: '14px',
-                  }}
-                >
-                  <option value="">-- Pilih Material --</option>
-                  {materials.map((material) => (
-                    <option key={material.id} value={material.id}>
-                      {material.kode} - {material.nama}
-                    </option>
+                  onChange={(value) => setAddInventoryForm({ ...addInventoryForm, selectedMaterialId: value })}
+                />
+                <div style={{ 
+                  marginTop: '8px', 
+                  maxHeight: '150px', 
+                  overflowY: 'auto',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '6px',
+                  backgroundColor: 'var(--bg-input)',
+                }}>
+                  {(addInventoryForm.kategori === 'Material' ? materials : []).filter(m => 
+                    !addInventoryForm.selectedMaterialId || 
+                    m.kode.toLowerCase().includes(addInventoryForm.selectedMaterialId.toLowerCase()) ||
+                    m.nama.toLowerCase().includes(addInventoryForm.selectedMaterialId.toLowerCase())
+                  ).slice(0, 10).map((material) => (
+                    <div
+                      key={material.id}
+                      onClick={() => handleMaterialSelect(material.id)}
+                      style={{
+                        padding: '10px 12px',
+                        borderBottom: '1px solid var(--border-color)',
+                        cursor: 'pointer',
+                        color: 'var(--text-primary)',
+                        fontSize: '13px',
+                        transition: 'background-color 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--bg-secondary)';
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                      }}
+                    >
+                      <strong>{material.kode}</strong> - {material.nama}
+                    </div>
                   ))}
-                </select>
+                  {(addInventoryForm.kategori === 'Material' ? materials : []).filter(m => 
+                    !addInventoryForm.selectedMaterialId || 
+                    m.kode.toLowerCase().includes(addInventoryForm.selectedMaterialId.toLowerCase()) ||
+                    m.nama.toLowerCase().includes(addInventoryForm.selectedMaterialId.toLowerCase())
+                  ).length === 0 && (
+                    <div style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontSize: '13px' }}>
+                      Tidak ada {addInventoryForm.kategori} yang cocok
+                    </div>
+                  )}
+                </div>
                 <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                  Pilih material untuk auto-fill data supplier, harga, dll
+                  Pilih dari list untuk auto-fill data (atau isi manual)
                 </p>
               </div>
 
               <Input
-                label="Supplier Name"
+                label="Supplier Name / Customer"
                 value={addInventoryForm.supplierName}
                 onChange={(value) => setAddInventoryForm({ ...addInventoryForm, supplierName: value })}
-                placeholder="Otomatis dari material (bisa diubah)"
-                disabled={!!addInventoryForm.selectedMaterialId}
+                placeholder={addInventoryForm.kategori === 'Material' ? 'Nama supplier' : 'Nama customer'}
               />
               <Input
                 label="Code Item *"
                 value={addInventoryForm.codeItem}
                 onChange={(value) => setAddInventoryForm({ ...addInventoryForm, codeItem: value })}
-                placeholder="Otomatis dari material (bisa diubah)"
-                disabled={!!addInventoryForm.selectedMaterialId}
+                placeholder={addInventoryForm.kategori === 'Material' ? 'MTRL-00001' : 'FG-00001'}
               />
               <Input
                 label="Description *"
                 value={addInventoryForm.description}
                 onChange={(value) => setAddInventoryForm({ ...addInventoryForm, description: value })}
-                placeholder="Otomatis dari material (bisa diubah)"
-                disabled={!!addInventoryForm.selectedMaterialId}
-              />
-              <Input
-                label="Kategori"
-                value={addInventoryForm.kategori}
-                onChange={(value) => setAddInventoryForm({ ...addInventoryForm, kategori: value })}
-                placeholder={activeTab === 'product' ? 'Product' : 'Material'}
-                disabled={!!addInventoryForm.selectedMaterialId}
+                placeholder="Deskripsi item"
               />
               <Input
                 label="Satuan"
                 value={addInventoryForm.satuan}
                 onChange={(value) => setAddInventoryForm({ ...addInventoryForm, satuan: value })}
                 placeholder="PCS"
-                disabled={!!addInventoryForm.selectedMaterialId}
               />
               <Input
                 label="Price"
                 type="number"
                 value={addInventoryForm.price}
                 onChange={(value) => setAddInventoryForm({ ...addInventoryForm, price: value })}
-                placeholder="Otomatis dari material (bisa diubah)"
-                disabled={!!addInventoryForm.selectedMaterialId}
+                placeholder="Harga satuan"
               />
               <Input
                 label="Stock Premonth *"
                 type="number"
                 value={addInventoryForm.stockPremonth}
                 onChange={(value) => setAddInventoryForm({ ...addInventoryForm, stockPremonth: value })}
-                placeholder="Masukkan stock awal"
+                placeholder="Masukkan stock awal (bisa negatif)"
               />
 
               <div>
@@ -1864,7 +2103,7 @@ const Inventory = () => {
                       satuan: 'PCS',
                       price: '',
                       stockPremonth: '',
-                      stockDocumentation: '',
+                      stockDocumentationId: '',
                     });
                     setStockDocFile(null);
                   }}
@@ -1879,6 +2118,244 @@ const Inventory = () => {
                   {loading ? 'Menyimpan...' : 'Simpan'}
                 </Button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Inventory Dialog */}
+      {showEditInventoryDialog && editingItem && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+          }}
+          onClick={() => setShowEditInventoryDialog(false)}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--bg-primary)',
+              borderRadius: '8px',
+              padding: '24px',
+              maxWidth: '600px',
+              width: '100%',
+              maxHeight: '80vh',
+              overflow: 'auto',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>
+                ✏️ Edit Inventory - {editingItem.codeItem}
+              </h2>
+              <button
+                onClick={() => setShowEditInventoryDialog(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: 'var(--text-secondary)',
+                  padding: '0',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <Input
+                label={activeTab === 'material' ? 'Supplier Name' : 'Customer'}
+                value={editInventoryForm.supplierName}
+                onChange={(v) => setEditInventoryForm({ ...editInventoryForm, supplierName: v })}
+                placeholder="Enter supplier/customer name"
+              />
+
+              <Input
+                label="Code Item *"
+                value={editInventoryForm.codeItem}
+                onChange={(v) => setEditInventoryForm({ ...editInventoryForm, codeItem: v })}
+                placeholder="Enter code item"
+              />
+
+              <Input
+                label="Kode Ipos"
+                value={editInventoryForm.kodeIpos}
+                onChange={(v) => setEditInventoryForm({ ...editInventoryForm, kodeIpos: v })}
+                placeholder="Enter kode ipos (optional)"
+              />
+
+              <Input
+                label="Description *"
+                value={editInventoryForm.description}
+                onChange={(v) => setEditInventoryForm({ ...editInventoryForm, description: v })}
+                placeholder="Enter description"
+              />
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <Input
+                  label="Satuan/UOM"
+                  value={editInventoryForm.satuan}
+                  onChange={(v) => setEditInventoryForm({ ...editInventoryForm, satuan: v })}
+                  placeholder="PCS"
+                />
+
+                <Input
+                  label="Price"
+                  type="number"
+                  value={editInventoryForm.price}
+                  onChange={(v) => setEditInventoryForm({ ...editInventoryForm, price: v })}
+                  placeholder="0"
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <Input
+                  label="Stock P1"
+                  type="number"
+                  value={editInventoryForm.stockP1}
+                  onChange={(v) => setEditInventoryForm({ ...editInventoryForm, stockP1: v })}
+                  placeholder="0"
+                />
+
+                <Input
+                  label="Stock P2"
+                  type="number"
+                  value={editInventoryForm.stockP2}
+                  onChange={(v) => setEditInventoryForm({ ...editInventoryForm, stockP2: v })}
+                  placeholder="0"
+                />
+              </div>
+
+              <div style={{ 
+                padding: '12px', 
+                backgroundColor: 'var(--bg-secondary)', 
+                borderRadius: '6px',
+                fontSize: '14px'
+              }}>
+                <strong>Total Stock Premonth:</strong> {
+                  (parseFloat(editInventoryForm.stockP1) || 0) + (parseFloat(editInventoryForm.stockP2) || 0)
+                } {editInventoryForm.satuan}
+              </div>
+
+              <div style={{ 
+                padding: '12px', 
+                backgroundColor: 'var(--warning-bg, #fff3cd)', 
+                borderRadius: '6px',
+                fontSize: '13px',
+                color: 'var(--warning-text, #856404)'
+              }}>
+                ⚠️ <strong>Note:</strong> Editing stock values will affect inventory calculations. 
+                Receive, Outgoing, and Return values are preserved.
+              </div>
+            </div>
+
+            <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <Button 
+                variant="secondary" 
+                onClick={() => setShowEditInventoryDialog(false)}
+                disabled={loading}
+              >
+                Batal
+              </Button>
+              <Button 
+                variant="primary" 
+                onClick={handleSaveEditInventory}
+                disabled={loading}
+              >
+                {loading ? 'Menyimpan...' : '💾 Simpan Perubahan'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stock Documentation Preview Modal */}
+      {previewDocumentationId && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+          onClick={() => setPreviewDocumentationId(null)}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--bg-primary)',
+              borderRadius: '8px',
+              padding: '20px',
+              maxWidth: '600px',
+              width: '90%',
+              maxHeight: '80vh',
+              overflow: 'auto',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>Stock Documentation</h2>
+              <button
+                onClick={() => setPreviewDocumentationId(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <img
+                src={BlobService.getDownloadUrl(previewDocumentationId, 'packaging')}
+                alt="Stock Documentation"
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '400px',
+                  borderRadius: '6px',
+                  objectFit: 'contain',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <Button
+                variant="secondary"
+                onClick={() => BlobService.downloadFile(previewDocumentationId, 'packaging')}
+              >
+                ⬇️ Download
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => setPreviewDocumentationId(null)}
+              >
+                Tutup
+              </Button>
             </div>
           </div>
         </div>

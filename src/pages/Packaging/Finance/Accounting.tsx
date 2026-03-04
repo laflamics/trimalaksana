@@ -3,8 +3,10 @@ import * as XLSX from 'xlsx';
 import Card from '../../../components/Card';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService } from '../../../services/storage';
+import DateRangeFilter from '../../../components/DateRangeFilter';
+import { storageService, extractStorageValue, StorageKeys } from '../../../services/storage';
 import { deletePackagingItem, reloadPackagingData, filterActiveItems } from '../../../utils/packaging-delete-helper';
+import { useLanguage } from '../../../hooks/useLanguage';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -27,6 +29,7 @@ interface Account {
 }
 
 const Accounting = () => {
+  const { t } = useLanguage();
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -135,7 +138,8 @@ const Accounting = () => {
   }, []);
 
   const loadEntries = async () => {
-    let data = await storageService.get<JournalEntry[]>('journalEntries') || [];
+    let dataRaw = await storageService.get<JournalEntry[]>('journalEntries');
+    let data = extractStorageValue(dataRaw);
     
     // 🚀 FIX: Filter deleted items langsung saat load
     const dataArray = Array.isArray(data) ? data : [];
@@ -144,9 +148,10 @@ const Accounting = () => {
     // Jika journal entries kosong (setelah filter), generate dari transaksi yang sudah ada
     if (activeDataArray.length === 0) {
       await generateJournalEntriesFromTransactions();
-      data = await storageService.get<JournalEntry[]>('journalEntries') || [];
+      const reloadedDataRaw = await storageService.get<JournalEntry[]>('journalEntries');
+      const reloadedData = extractStorageValue(reloadedDataRaw);
       // Filter lagi setelah generate
-      const reloadedDataArray = Array.isArray(data) ? data : [];
+      const reloadedDataArray = Array.isArray(reloadedData) ? reloadedData : [];
       const reloadedActiveData = filterActiveItems(reloadedDataArray);
       setEntries(reloadedActiveData.map((e, idx) => ({ ...e, no: idx + 1 })));
     } else {
@@ -158,21 +163,26 @@ const Accounting = () => {
   const generateJournalEntriesFromTransactions = async () => {
     try {
       // 🚀 FIX: Load existing entries dulu untuk prevent duplicate
-      const existingEntriesRaw = await storageService.get<JournalEntry[]>('journalEntries') || [];
-      const existingEntries = filterActiveItems(Array.isArray(existingEntriesRaw) ? existingEntriesRaw : []);
+      const existingEntriesRaw = await storageService.get<JournalEntry[]>('journalEntries');
+      const existingEntriesData = extractStorageValue(existingEntriesRaw);
+      const existingEntries = filterActiveItems(Array.isArray(existingEntriesData) ? existingEntriesData : []);
       
       // Jika sudah ada entries, skip generate (prevent duplicate)
       if (existingEntries.length > 0) {
         return;
       }
       
-      const [invoices, payments, purchaseOrders] = await Promise.all([
-        storageService.get<any[]>('invoices') || [],
-        storageService.get<any[]>('payments') || [],
-        storageService.get<any[]>('purchaseOrders') || [],
+      const [invoicesRaw, paymentsRaw, purchaseOrdersRaw] = await Promise.all([
+        storageService.get<any[]>('invoices'),
+        storageService.get<any[]>('payments'),
+        storageService.get<any[]>('purchaseOrders'),
       ]);
 
-      // 🚀 FIX: Filter deleted items dari transaksi
+      // 🚀 FIX: Extract and filter deleted items dari transaksi
+      const invoices = extractStorageValue(invoicesRaw);
+      const payments = extractStorageValue(paymentsRaw);
+      const purchaseOrders = extractStorageValue(purchaseOrdersRaw);
+      
       const invoicesArray = filterActiveItems(Array.isArray(invoices) ? invoices : []);
       const paymentsArray = filterActiveItems(Array.isArray(payments) ? payments : []);
       const purchaseOrdersArray = filterActiveItems(Array.isArray(purchaseOrders) ? purchaseOrders : []);
@@ -370,7 +380,7 @@ const Accounting = () => {
       });
 
       if (newEntries.length > 0) {
-        await storageService.set('journalEntries', newEntries);
+        await storageService.set(StorageKeys.PACKAGING.JOURNAL_ENTRIES, newEntries);
       }
     } catch (error: any) {
     }
@@ -431,7 +441,9 @@ const Accounting = () => {
   };
 
   const loadAccounts = async () => {
-    const data = await storageService.get<Account[]>('accounts') || [];
+    let dataRaw = await storageService.get<Account[]>('accounts');
+    let data = extractStorageValue(dataRaw);
+    
     if (!data || data.length === 0) {
       const defaultAccounts: Account[] = [
         { code: '1000', name: 'Cash', type: 'Asset', balance: 0 },
@@ -449,7 +461,7 @@ const Accounting = () => {
         { code: '6100', name: 'Administrative Expenses', type: 'Expense', balance: 0 },
         { code: '6200', name: 'Financial Expenses', type: 'Expense', balance: 0 },
       ];
-      await storageService.set('accounts', defaultAccounts);
+      await storageService.set(StorageKeys.PACKAGING.ACCOUNTS, defaultAccounts);
       setAccounts(defaultAccounts);
     } else {
       setAccounts(data);
@@ -470,7 +482,8 @@ const Accounting = () => {
       }
 
       // 🚀 FIX: Load current data dari storage (termasuk deleted items untuk merge)
-      const currentData = await storageService.get<JournalEntry[]>('journalEntries') || [];
+      const currentDataRaw = await storageService.get<JournalEntry[]>('journalEntries');
+      const currentData = extractStorageValue(currentDataRaw);
       const currentDataArray = Array.isArray(currentData) ? currentData : [];
       // Filter active entries untuk logic comparison
       const activeCurrentData = filterActiveItems(currentDataArray);
@@ -488,7 +501,7 @@ const Accounting = () => {
               } as JournalEntry
             : e
         );
-        await storageService.set('journalEntries', updated);
+        await storageService.set(StorageKeys.PACKAGING.JOURNAL_ENTRIES, updated);
         // Filter deleted items setelah save
         const activeUpdated = filterActiveItems(updated);
         setEntries(activeUpdated.map((e, idx) => ({ ...e, no: idx + 1 })));
@@ -563,7 +576,7 @@ const Accounting = () => {
         // Insert entry baru di posisi yang tepat (di sela-sela)
         updated.splice(insertIndex, 0, newEntry);
         
-        await storageService.set('journalEntries', updated);
+        await storageService.set(StorageKeys.PACKAGING.JOURNAL_ENTRIES, updated);
         setEntries(updated.map((e, idx) => ({ ...e, no: idx + 1 })));
       }
       
@@ -700,11 +713,12 @@ const Accounting = () => {
 
             if (newEntries.length > 0) {
               // 🚀 FIX: Load current data dari storage (termasuk deleted items untuk merge)
-              const currentData = await storageService.get<JournalEntry[]>('journalEntries') || [];
+              const currentDataRaw = await storageService.get<JournalEntry[]>('journalEntries');
+              const currentData = extractStorageValue(currentDataRaw);
               const currentDataArray = Array.isArray(currentData) ? currentData : [];
               const activeCurrentData = filterActiveItems(currentDataArray);
               const updated = [...activeCurrentData, ...newEntries];
-              await storageService.set('journalEntries', updated);
+              await storageService.set(StorageKeys.PACKAGING.JOURNAL_ENTRIES, updated);
               // Filter deleted items setelah save
               const activeUpdated = filterActiveItems(updated);
               setEntries(activeUpdated.map((e, idx) => ({ ...e, no: idx + 1 })));
@@ -724,15 +738,15 @@ const Accounting = () => {
     input.click();
   };
 
-  const columns = [
-    { key: 'no', header: 'No' },
-    { key: 'entryDate', header: 'Date' },
+  const columns = useMemo(() => [
+    { key: 'no', header: t('common.number') || 'No' },
+    { key: 'entryDate', header: t('common.date') || 'Date' },
     { key: 'reference', header: 'Reference' },
     { key: 'account', header: 'Account' },
-    { key: 'description', header: 'Description' },
+    { key: 'description', header: t('common.description') || 'Description' },
     { key: 'debit', header: 'Debit', render: (item: JournalEntry) => item.debit ? `Rp ${item.debit.toLocaleString('id-ID')}` : '-' },
     { key: 'credit', header: 'Credit', render: (item: JournalEntry) => item.credit ? `Rp ${item.credit.toLocaleString('id-ID')}` : '-' },
-    { key: 'actions', header: 'Actions', render: (item: JournalEntry) => (
+    { key: 'actions', header: t('common.actions') || 'Actions', render: (item: JournalEntry) => (
       <div style={{ display: 'flex', gap: '8px' }}>
         <Button onClick={() => { 
           setEditingEntry(item); 
@@ -746,7 +760,7 @@ const Accounting = () => {
           setCreditInputValue('');
           setFormData(item); 
           setShowForm(true); 
-        }} style={{ fontSize: '12px', padding: '4px 8px' }}>Edit</Button>
+        }} style={{ fontSize: '12px', padding: '4px 8px' }}>{t('common.edit') || 'Edit'}</Button>
         <Button variant="danger" onClick={() => {
           showConfirm(
             'Delete this entry?',
@@ -798,7 +812,7 @@ const Accounting = () => {
                       });
                       
                       // Save updated balance
-                      await storageService.set('journalEntries', updated);
+                      await storageService.set(StorageKeys.PACKAGING.JOURNAL_ENTRIES, updated);
                       setEntries(updated.map((e, idx) => ({ ...e, no: idx + 1 })));
                     }
                   }
@@ -816,35 +830,35 @@ const Accounting = () => {
             () => closeDialog(),
             'Delete Confirmation'
           );
-        }} style={{ fontSize: '12px', padding: '4px 8px' }}>Delete</Button>
+        }} style={{ fontSize: '12px', padding: '4px 8px' }}>{t('common.delete') || 'Delete'}</Button>
       </div>
     ) },
-  ];
+  ], [t, accounts]);
 
   return (
     <div className="module-compact">
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h2>Accounting - Journal Entries</h2>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <Input
-              type="text"
-              placeholder="Search entries..."
-              value={searchQuery}
-              onChange={(value) => setSearchQuery(value)}
-            />
-            <Input
-              type="date"
-              placeholder="From Date"
-              value={dateFrom}
-              onChange={(value) => setDateFrom(value)}
-            />
-            <Input
-              type="date"
-              placeholder="To Date"
-              value={dateTo}
-              onChange={(value) => setDateTo(value)}
-            />
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 200px', minWidth: '150px' }}>
+              <Input
+                type="text"
+                placeholder="Search entries..."
+                value={searchQuery}
+                onChange={(value) => setSearchQuery(value)}
+              />
+            </div>
+            <div style={{ flex: '1 1 400px', minWidth: '300px' }}>
+              <DateRangeFilter
+                onDateChange={(from, to) => {
+                  setDateFrom(from);
+                  setDateTo(to);
+                }}
+                defaultFrom={dateFrom}
+                defaultTo={dateTo}
+              />
+            </div>
             <Button onClick={() => { 
               setShowForm(true); 
               setEditingEntry(null); 

@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { packagingSync } from '../services/packaging-sync';
 import { materialAllocator } from '../services/material-allocator';
 import { workflowStateMachine, WorkflowEntity, WorkflowStatus } from '../services/workflow-state-machine';
+import { StorageKeys } from '../services/storage';
 
 export interface UsePackagingDataOptions {
   pageSize?: number;
@@ -285,35 +286,35 @@ function usePackagingData<T extends { id: string; status?: string }>(
  */
 
 export function useSalesOrders(options?: UsePackagingDataOptions) {
-  return usePackagingData('salesOrders', 'salesOrder', options);
+  return usePackagingData(StorageKeys.PACKAGING.SALES_ORDERS, 'salesOrder', options);
 }
 
 export function useSPK(options?: UsePackagingDataOptions) {
-  return usePackagingData('spk', 'spk', options);
+  return usePackagingData(StorageKeys.PACKAGING.SPK, 'spk', options);
 }
 
 export function usePurchaseOrders(options?: UsePackagingDataOptions) {
-  return usePackagingData('purchaseOrders', 'purchaseOrder', options);
+  return usePackagingData(StorageKeys.PACKAGING.PURCHASE_ORDERS, 'purchaseOrder', options);
 }
 
 export function useGRN(options?: UsePackagingDataOptions) {
-  return usePackagingData('grn', 'grn', options);
+  return usePackagingData(StorageKeys.PACKAGING.GRN, 'grn', options);
 }
 
 export function useProduction(options?: UsePackagingDataOptions) {
-  return usePackagingData('production', 'production', options);
+  return usePackagingData(StorageKeys.PACKAGING.PRODUCTION, 'production', options);
 }
 
 export function useQC(options?: UsePackagingDataOptions) {
-  return usePackagingData('qc', 'qc', options);
+  return usePackagingData(StorageKeys.PACKAGING.QC, 'qc', options);
 }
 
 export function useDelivery(options?: UsePackagingDataOptions) {
-  return usePackagingData('delivery', 'delivery', options);
+  return usePackagingData(StorageKeys.PACKAGING.DELIVERY, 'delivery', options);
 }
 
 export function useInvoices(options?: UsePackagingDataOptions) {
-  return usePackagingData('invoices', 'invoice', options);
+  return usePackagingData(StorageKeys.PACKAGING.INVOICES, 'invoice', options);
 }
 
 /**
@@ -374,7 +375,7 @@ export function useWorkflowStatus(entity: WorkflowEntity, id: string) {
     setLoading(true);
     try {
       // Get current state from storage
-      const storageKey = entity === 'salesOrder' ? 'salesOrders' : entity;
+      const storageKey = entity === 'salesOrder' ? StorageKeys.PACKAGING.SALES_ORDERS : entity;
       const data = await packagingSync.getData(storageKey);
       const item = data.find((d: any) => d.id === id);
       

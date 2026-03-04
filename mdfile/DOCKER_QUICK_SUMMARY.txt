@@ -1,0 +1,146 @@
+================================================================================
+                    DOCKER SETUP - QUICK SUMMARY
+================================================================================
+
+4 SERVICES RUNNING:
+
+1. storage-server (Node.js)
+   ├─ Port: 8888 (API & WebSocket)
+   ├─ Handles: /api/storage/*, /ws
+   ├─ Stores data in: PostgreSQL
+   ├─ Stores files in: MinIO
+   └─ Restart: auto
+
+2. postgres (PostgreSQL Database)
+   ├─ Port: 5432
+   ├─ Database: trimalaksana_db
+   ├─ User: trimalaksana / trimalaksana123
+   ├─ Data: postgres_data volume
+   └─ Restart: auto
+
+3. minio (S3-Compatible Storage)
+   ├─ API Port: 9000
+   ├─ Console Port: 9001
+   ├─ User: minioadmin / minioadmin123
+   ├─ Data: minio_data volume
+   └─ Restart: auto
+
+4. pgadmin (PostgreSQL UI)
+   ├─ Port: 5051
+   ├─ Email: admin@trimalaksana.com / admin123
+   ├─ Manages: PostgreSQL database
+   └─ Restart: auto
+
+================================================================================
+                            DATA FLOW
+================================================================================
+
+Laptop Dev (Linux)
+    ↓ (wss://)
+Tailscale Funnel (server-tljp.tail75a421.ts.net)
+    ↓
+PC Utama (Windows)
+    ├─ storage-server:8888 (Node.js)
+    │   ├─ PostgreSQL:5432 (database)
+    │   └─ MinIO:9000 (file storage)
+    ├─ pgAdmin:5051 (UI)
+    └─ MinIO Console:9001 (UI)
+
+================================================================================
+                          ACCESS POINTS
+================================================================================
+
+From PC Utama (Windows):
+  Node.js:        http://localhost:8888
+  PostgreSQL:     localhost:5432
+  MinIO API:      http://localhost:9000
+  MinIO Console:  http://localhost:9001
+  pgAdmin:        http://localhost:5051
+
+From Laptop Dev (Linux):
+  Node.js:        http://10.1.1.35:8888
+  PostgreSQL:     10.1.1.35:5432
+  MinIO API:      http://10.1.1.35:9000
+  MinIO Console:  http://10.1.1.35:9001
+  pgAdmin:        http://10.1.1.35:5051
+  Tailscale:      wss://server-tljp.tail75a421.ts.net/ws
+
+================================================================================
+                          CREDENTIALS
+================================================================================
+
+PostgreSQL:
+  User: trimalaksana
+  Pass: trimalaksana123
+  DB:   trimalaksana_db
+
+MinIO:
+  User: minioadmin
+  Pass: minioadmin123
+
+pgAdmin:
+  Email: admin@trimalaksana.com
+  Pass:  admin123
+
+================================================================================
+                          COMMANDS
+================================================================================
+
+Start services:
+  docker-compose -f docker-compose-migration.yml up -d
+
+Stop services:
+  docker-compose -f docker-compose-migration.yml down
+
+View logs:
+  docker-compose -f docker-compose-migration.yml logs
+
+View specific service logs:
+  docker-compose -f docker-compose-migration.yml logs storage-server
+  docker-compose -f docker-compose-migration.yml logs postgres
+  docker-compose -f docker-compose-migration.yml logs minio
+  docker-compose -f docker-compose-migration.yml logs pgadmin
+
+List containers:
+  docker ps
+
+Test Node.js:
+  curl http://10.1.1.35:8888/health
+
+Test Tailscale:
+  curl https://server-tljp.tail75a421.ts.net/health
+
+================================================================================
+                          VOLUMES
+================================================================================
+
+Named Volumes (Docker managed):
+  postgres_data  → PostgreSQL database files
+  minio_data     → MinIO storage files
+
+Bind Mounts (Host folders):
+  ../data        → /app/data (JSON files)
+  ../updates     → /app/updates (Update files)
+
+================================================================================
+                          STARTUP ORDER
+================================================================================
+
+1. PostgreSQL (no dependencies)
+2. MinIO (no dependencies)
+3. pgAdmin (depends_on: postgres)
+4. storage-server (depends_on: postgres, minio)
+
+================================================================================
+                          HEALTH CHECKS
+================================================================================
+
+PostgreSQL:
+  Command: pg_isready -U trimalaksana
+  Interval: 10s
+
+MinIO:
+  Command: curl -f http://localhost:9000/minio/health/live
+  Interval: 10s
+
+================================================================================

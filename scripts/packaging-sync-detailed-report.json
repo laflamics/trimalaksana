@@ -1,0 +1,115 @@
+{
+  "timestamp": "2026-02-07T22:12:38.738Z",
+  "summary": {
+    "total": 13,
+    "critical": 2,
+    "high": 4,
+    "medium": 7
+  },
+  "issues": [
+    {
+      "id": 1,
+      "severity": "CRITICAL",
+      "module": "Delivery Notes",
+      "issue": "deliveryNotes.json file missing",
+      "impact": "Delivery notes cannot be synced to server",
+      "recommendation": "Check if delivery.json should be renamed or if deliveryNotes.json needs to be created"
+    },
+    {
+      "id": 2,
+      "severity": "HIGH",
+      "module": "Invoices",
+      "issue": "Missing created/createdDate field in 245 records",
+      "impact": "Server sync may reject records without creation timestamp",
+      "recommendation": "Add created field based on timestamp or lastUpdate"
+    },
+    {
+      "id": 3,
+      "severity": "HIGH",
+      "module": "Customers",
+      "issue": "Missing timestamp and created fields in 248 records",
+      "impact": "Sync conflicts cannot be resolved without timestamps",
+      "recommendation": "Add timestamp and created fields to all customer records"
+    },
+    {
+      "id": 4,
+      "severity": "HIGH",
+      "module": "Products",
+      "issue": "Missing timestamp and created fields in 5530 records",
+      "impact": "Large dataset without timestamps will cause sync issues",
+      "recommendation": "Batch add timestamps to all product records"
+    },
+    {
+      "id": 5,
+      "severity": "MEDIUM",
+      "module": "Payments",
+      "issue": "Missing timestamp field (only _timestamp exists)",
+      "impact": "Timestamp field inconsistency may cause sync issues",
+      "recommendation": "Copy _timestamp to timestamp field"
+    },
+    {
+      "id": 6,
+      "severity": "HIGH",
+      "module": "Inventory",
+      "issue": "Missing timestamp and created fields in 350 records",
+      "impact": "Inventory sync cannot track changes",
+      "recommendation": "Add timestamp and created fields"
+    },
+    {
+      "id": 7,
+      "severity": "MEDIUM",
+      "module": "Goods Receipt Note",
+      "issue": "grn.json is empty",
+      "impact": "Cannot track received goods from suppliers",
+      "recommendation": "Check if data exists elsewhere or needs to be imported"
+    },
+    {
+      "id": 8,
+      "severity": "MEDIUM",
+      "module": "Production",
+      "issue": "production.json is empty",
+      "impact": "No production records available",
+      "recommendation": "Check if data exists elsewhere or needs to be imported"
+    },
+    {
+      "id": 9,
+      "severity": "MEDIUM",
+      "module": "Quality Control",
+      "issue": "qc.json is empty",
+      "impact": "No QC records available",
+      "recommendation": "Check if data exists elsewhere or needs to be imported"
+    },
+    {
+      "id": 10,
+      "severity": "MEDIUM",
+      "module": "SPK (Work Orders)",
+      "issue": "spk.json is empty",
+      "impact": "No work order records available",
+      "recommendation": "Check if data exists elsewhere or needs to be imported"
+    },
+    {
+      "id": 11,
+      "severity": "MEDIUM",
+      "module": "Sync Tracking",
+      "issue": "No sync metadata in major files",
+      "impact": "Cannot track which records are synced vs pending",
+      "recommendation": "Implement sync tracking with synced/syncedAt fields"
+    },
+    {
+      "id": 12,
+      "severity": "CRITICAL",
+      "module": "Sync Configuration",
+      "issue": "13 data types not included in sync configuration",
+      "impact": "These data types will NEVER sync to server",
+      "recommendation": "Add missing keys to syncToServer() dataKeys array in storage.ts"
+    },
+    {
+      "id": 13,
+      "severity": "MEDIUM",
+      "module": "File Naming",
+      "issue": "Inconsistent file naming conventions",
+      "impact": "Sync may fail to find correct files",
+      "recommendation": "Standardize file naming and update sync code accordingly"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-02-07T22:43:09.111Z",
+  "summary": {
+    "deliveryUsages": 0,
+    "deliveryNotesUsages": 0,
+    "filesUsingDelivery": 0,
+    "filesUsingDeliveryNotes": 0,
+    "criticalFilesToUpdate": 0
+  },
+  "issues": [],
+  "changeList": [
+    {
+      "file": "src/services/storage.ts",
+      "locations": [
+        "Line ~730: syncToServer() dataKeys array",
+        "Line ~820: syncFromServer() dataKeys array"
+      ],
+      "priority": "CRITICAL"
+    }
+  ],
+  "deliveryFiles": [],
+  "deliveryNotesFiles": []
+}

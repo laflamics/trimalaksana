@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
-import { storageService } from '../../services/storage';
+import { storageService, StorageKeys } from '../../services/storage';
+import BlobService from '../../services/blob-service';
 import '../../styles/common.css';
 import '../../styles/compact.css';
 
@@ -53,10 +54,10 @@ const TestAutomation = () => {
       setCurrentStep('Sales Order');
       addResult('Sales Order', 'running', 'Creating Sales Order...');
 
-      const customers = await storageService.get<any[]>('customers') || [];
-      const products = await storageService.get<any[]>('products') || [];
-      const materials = await storageService.get<any[]>('materials') || [];
-      const bomData = await storageService.get<any[]>('bom') || [];
+      const customers = await storageService.get<any[]>(StorageKeys.PACKAGING.CUSTOMERS) || [];
+      const products = await storageService.get<any[]>(StorageKeys.PACKAGING.PRODUCTS) || [];
+      const materials = await storageService.get<any[]>(StorageKeys.PACKAGING.MATERIALS) || [];
+      const bomData = await storageService.get<any[]>(StorageKeys.PACKAGING.BOM) || [];
 
       if (customers.length === 0 || products.length === 0) {
         addResult('Sales Order', 'error', 'Missing test data: customers or products');
@@ -114,8 +115,8 @@ const TestAutomation = () => {
         confirmedBy: 'Test Automation',
       };
 
-      const existingSOs = await storageService.get<any[]>('salesOrders') || [];
-      await storageService.set('salesOrders', [...existingSOs, salesOrder]);
+      const existingSOs = await storageService.get<any[]>(StorageKeys.PACKAGING.SALES_ORDERS) || [];
+      await storageService.set(StorageKeys.PACKAGING.SALES_ORDERS, [...existingSOs, salesOrder]);
 
       addResult('Sales Order', 'success', `Sales Order created: ${soNo}`, salesOrder);
       await wait(500);
@@ -141,7 +142,7 @@ const TestAutomation = () => {
       const day = String(now.getDate()).padStart(2, '0');
       const month = String(now.getMonth() + 1).padStart(2, '0');
       const year = String(now.getFullYear()).slice(-2);
-      const existingSPKs = await storageService.get<any[]>('spk') || [];
+      const existingSPKs = await storageService.get<any[]>(StorageKeys.PACKAGING.SPK) || [];
       
       // Generate random alphanumeric code (5 chars)
       const generateRandomCode = () => {
@@ -177,7 +178,7 @@ const TestAutomation = () => {
         notes: so.globalSpecNote || 'Test SPK notes from automation',
       };
 
-      await storageService.set('spk', [...existingSPKs, spk]);
+      await storageService.set(StorageKeys.PACKAGING.SPK, [...existingSPKs, spk]);
 
       addResult('Work Order (SPK)', 'success', `SPK created: ${spkNo}`, spk);
       await wait(500);
@@ -199,8 +200,8 @@ const TestAutomation = () => {
         return null;
       }
 
-      const suppliers = await storageService.get<any[]>('suppliers') || [];
-      const materials = await storageService.get<any[]>('materials') || [];
+      const suppliers = await storageService.get<any[]>(StorageKeys.PACKAGING.SUPPLIERS) || [];
+      const materials = await storageService.get<any[]>(StorageKeys.PACKAGING.MATERIALS) || [];
 
       if (suppliers.length === 0 || materials.length === 0) {
         addResult('Purchase Order', 'error', 'Missing test data: suppliers or materials');
@@ -224,7 +225,7 @@ const TestAutomation = () => {
         return null;
       }
 
-      const existingPOs = await storageService.get<any[]>('purchaseOrders') || [];
+      const existingPOs = await storageService.get<any[]>(StorageKeys.PACKAGING.PURCHASE_ORDERS) || [];
       const poNo = `PO-${Date.now()}`;
 
       const purchaseOrder = {
@@ -244,7 +245,7 @@ const TestAutomation = () => {
         notes: 'Test Purchase Order notes from automation',
       };
 
-      await storageService.set('purchaseOrders', [...existingPOs, purchaseOrder]);
+      await storageService.set(StorageKeys.PACKAGING.PURCHASE_ORDERS, [...existingPOs, purchaseOrder]);
 
       addResult('Purchase Order', 'success', `Purchase Order created: ${poNo}`, purchaseOrder);
       await wait(500);
@@ -266,16 +267,13 @@ const TestAutomation = () => {
         return null;
       }
 
-      const existingGRNs = await storageService.get<any[]>('grn') || [];
+      const existingGRNs = await storageService.get<any[]>(StorageKeys.PACKAGING.GRN) || [];
       const grnNo = `GRN-${Date.now()}`;
 
       // Create dummy file for upload
       const dummyFile = createDummyFile();
-      const fileBase64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(dummyFile);
-      });
+      const uploadResult = await BlobService.uploadFile(dummyFile, 'packaging');
+      const fileId = uploadResult.fileId;
 
       const grn = {
         id: Date.now().toString(),
@@ -292,11 +290,11 @@ const TestAutomation = () => {
         status: 'OPEN' as const,
         created: new Date().toISOString(),
         notes: 'Test GRN notes from automation',
-        suratJalan: fileBase64,
+        suratJalanId: fileId,
         suratJalanName: dummyFile.name,
       };
 
-      await storageService.set('grn', [...existingGRNs, grn]);
+      await storageService.set(StorageKeys.PACKAGING.GRN, [...existingGRNs, grn]);
 
       addResult('Goods Receipt', 'success', `GRN created: ${grnNo} (with file upload)`, grn);
       await wait(500);
@@ -318,7 +316,7 @@ const TestAutomation = () => {
         return null;
       }
 
-      const existingProductions = await storageService.get<any[]>('production') || [];
+      const existingProductions = await storageService.get<any[]>(StorageKeys.PACKAGING.PRODUCTION) || [];
       const productionNo = `PROD-${Date.now()}`;
 
       const production = {
@@ -342,7 +340,7 @@ const TestAutomation = () => {
         batches: [],
       };
 
-      await storageService.set('production', [...existingProductions, production]);
+      await storageService.set(StorageKeys.PACKAGING.PRODUCTION, [...existingProductions, production]);
 
       addResult('Production', 'success', `Production created: ${productionNo}`, production);
       await wait(500);
@@ -352,9 +350,9 @@ const TestAutomation = () => {
         setCurrentStep('Production Result');
         addResult('Production Result', 'running', 'Submitting Production Result...');
 
-        const bomData = await storageService.get<any[]>('bom') || [];
-        const materialsData = await storageService.get<any[]>('materials') || [];
-        const salesOrders = await storageService.get<any[]>('salesOrders') || [];
+        const bomData = await storageService.get<any[]>(StorageKeys.PACKAGING.BOM) || [];
+        const materialsData = await storageService.get<any[]>(StorageKeys.PACKAGING.MATERIALS) || [];
+        const salesOrders = await storageService.get<any[]>(StorageKeys.PACKAGING.SALES_ORDERS) || [];
         const soData = salesOrders.find((s: any) => s.soNo === production.soNo) || so;
 
         const productBOM = bomData.filter((b: any) => {
@@ -364,11 +362,8 @@ const TestAutomation = () => {
 
         // Create dummy files for upload
         const dummyFile = createDummyFile();
-        const fileBase64 = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(dummyFile);
-        });
+        const uploadResult = await BlobService.uploadFile(dummyFile, 'packaging');
+        const fileId = uploadResult.fileId;
 
         const materialsUsed = productBOM.map((bom: any) => {
           const material = materialsData.find((m: any) => 
@@ -394,10 +389,8 @@ const TestAutomation = () => {
           materials: materialsUsed,
           leftovers: [],
           docs: {
-            resultFiles: [{
-              name: dummyFile.name,
-              data: fileBase64,
-            }],
+            resultFileId: fileId,
+            resultFileName: dummyFile.name,
             inputTimestamp: new Date().toISOString(),
             isPartial: false,
           },
@@ -405,8 +398,8 @@ const TestAutomation = () => {
           created: new Date().toISOString(),
         };
 
-        const existingResults = await storageService.get<any[]>('productionResults') || [];
-        await storageService.set('productionResults', [...existingResults, productionResult]);
+        const existingResults = await storageService.get<any[]>(StorageKeys.PACKAGING.PRODUCTION_RESULTS) || [];
+        await storageService.set(StorageKeys.PACKAGING.PRODUCTION_RESULTS, [...existingResults, productionResult]);
 
         // Update production status to CLOSE
         const updatedProductions = existingProductions.map((p: any) =>
@@ -420,7 +413,7 @@ const TestAutomation = () => {
               }
             : p
         );
-        await storageService.set('production', updatedProductions);
+        await storageService.set(StorageKeys.PACKAGING.PRODUCTION, updatedProductions);
 
         addResult('Production Result', 'success', `Production Result submitted (with file upload)`, productionResult);
         await wait(500);
@@ -451,11 +444,8 @@ const TestAutomation = () => {
 
       // Create dummy files for upload
       const dummyFile = createDummyFile();
-      const fileBase64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(dummyFile);
-      });
+      const uploadResult = await BlobService.uploadFile(dummyFile, 'packaging');
+      const fileId = uploadResult.fileId;
 
       const qc = {
         id: Date.now().toString(),
@@ -470,10 +460,8 @@ const TestAutomation = () => {
         checkedBy: 'Test Automation',
         checkedDate: new Date().toISOString(),
         qcNote: 'Test QC note from automation - All items passed',
-        qcFiles: [{
-          name: dummyFile.name,
-          data: fileBase64,
-        }],
+        qcFileIds: [fileId],
+        qcFileNames: [dummyFile.name],
         created: new Date().toISOString(),
       };
 
@@ -504,11 +492,8 @@ const TestAutomation = () => {
 
       // Create dummy file for upload
       const dummyFile = createDummyFile();
-      const fileBase64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(dummyFile);
-      });
+      const uploadResult = await BlobService.uploadFile(dummyFile, 'packaging');
+      const fileId = uploadResult.fileId;
 
       const deliveryNote = {
         id: Date.now().toString(),
@@ -525,10 +510,8 @@ const TestAutomation = () => {
         status: 'DELIVERED' as const,
         created: new Date().toISOString(),
         notes: 'Test Delivery Note notes from automation',
-        deliveryFiles: [{
-          name: dummyFile.name,
-          data: fileBase64,
-        }],
+        deliveryFileIds: [fileId],
+        deliveryFileNames: [dummyFile.name],
       };
 
       await storageService.set('deliveryNotes', [...existingDNs, deliveryNote]);
@@ -586,7 +569,7 @@ const TestAutomation = () => {
         notes: 'Test Invoice notes from automation',
       };
 
-      await storageService.set('invoices', [...existingInvoices, invoice]);
+      await storageService.set(StorageKeys.PACKAGING.INVOICES, [...existingInvoices, invoice]);
 
       addResult('Invoice', 'success', `Invoice created: ${invoiceNo}`, invoice);
       await wait(500);
@@ -613,11 +596,8 @@ const TestAutomation = () => {
 
       // Create dummy file for upload
       const dummyFile = createDummyFile();
-      const fileBase64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(dummyFile);
-      });
+      const uploadResult = await BlobService.uploadFile(dummyFile, 'packaging');
+      const fileId = uploadResult.fileId;
 
       const payment = {
         id: Date.now().toString(),
@@ -630,7 +610,7 @@ const TestAutomation = () => {
         status: 'PAID' as const,
         created: new Date().toISOString(),
         notes: 'Test Payment Supplier notes from automation',
-        paymentProof: fileBase64,
+        paymentProofId: fileId,
         paymentProofName: dummyFile.name,
       };
 

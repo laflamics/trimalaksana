@@ -1,0 +1,3277 @@
+{
+  "value": [
+    {
+      "id": "inv_1770835039342_du45aphs1",
+      "invoiceNo": "0147/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-13",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "02/01/2026 SPO NO 8306061276 02/01/2026 SPO NO 8306061277 02/01/2026 SPO NO 8306061278 05/01/2026 SPO NO 8306061334 05/01/2026 SPO NO 8306061333 07/01/2026 SPO NO 8306061484 08/01/2026 SPO NO 8306061538 08/01/2026 SPO NO 8306061541 08/01/2026 SPO NO 8306061542",
+      "lines": [
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 3645000,
+          "total": 3645000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 618930,
+          "total": 618930,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1587000,
+          "total": 1587000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 920000,
+          "total": 920000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1725000,
+          "total": 1725000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1524000,
+          "total": 1524000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1524000,
+          "total": 1524000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 920000,
+          "total": 920000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 2300000,
+          "total": 2300000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 14763930,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 1624032.3,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 16387962.3,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-13",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039342_0spicmvwh",
+      "invoiceNo": "0148/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-13",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "09/01/2026 SPO NO 8306061581 09/01/2026 SPO NO 8306061582 09/01/2026 SPO NO 8306061584",
+      "lines": [
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 2070000,
+          "total": 2070000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1567500,
+          "total": 1567500,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 276000,
+          "total": 276000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 3913500,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 430485,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 4343985,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-13",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039343_h5m11g2bb",
+      "invoiceNo": "0149/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-13",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "02/01/2026 SPO NO 8308051031 05/01/2026 SPO NO 8308051031 07/01/2026 SPO NO 8308051032 08/01/2026 SPO NO 8308051032",
+      "lines": [
+        {
+          "itemSku": "TRW0004",
+          "itemName": "BIAYA PENGGANTIAN ONGKOS KULI",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 100000,
+          "total": 100000,
+          "discount": 0,
+          "soNo": "",
+          "product": "BIAYA PENGGANTIAN ONGKOS KULI"
+        },
+        {
+          "itemSku": "TRW0004",
+          "itemName": "BIAYA PENGGANTIAN ONGKOS KULI",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 50000,
+          "total": 50000,
+          "discount": 0,
+          "soNo": "",
+          "product": "BIAYA PENGGANTIAN ONGKOS KULI"
+        },
+        {
+          "itemSku": "TRW0004",
+          "itemName": "BIAYA PENGGANTIAN ONGKOS KULI",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 100000,
+          "total": 100000,
+          "discount": 0,
+          "soNo": "",
+          "product": "BIAYA PENGGANTIAN ONGKOS KULI"
+        },
+        {
+          "itemSku": "TRW0004",
+          "itemName": "BIAYA PENGGANTIAN ONGKOS KULI",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 66500,
+          "total": 66500,
+          "discount": 0,
+          "soNo": "",
+          "product": "BIAYA PENGGANTIAN ONGKOS KULI"
+        }
+      ],
+      "bom": {
+        "subtotal": 316500,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 0,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 316500,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-13",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039342_s19s3e1nz",
+      "invoiceNo": "0271/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-22",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "04/01/2026 SPO NO 8306061296",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 3200000,
+          "total": 3200000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 3200000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 352000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 3552000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-22",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039342_6myzg2mr7",
+      "invoiceNo": "0272/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-22",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "04/01/2026 SPO NO 8306061309",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 2000000,
+          "total": 2000000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 2000000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 220000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 2220000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-22",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039342_z3a9g0knx",
+      "invoiceNo": "0273/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-22",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "05/01/2026 SPO NO 8306061392",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 2300000,
+          "total": 2300000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 2300000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 253000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 2553000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-22",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039342_nne3pn0v1",
+      "invoiceNo": "0274/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-22",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "07/01/2026 SPO NO 8306061561",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 3000000,
+          "total": 3000000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 3000000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 330000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 3330000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-22",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039342_tvxstgkaa",
+      "invoiceNo": "0275/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-22",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "07/01/2026 SPO NO 8306061520",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 3000000,
+          "total": 3000000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 3000000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 330000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 3330000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-22",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039342_wvu5e4exz",
+      "invoiceNo": "0276/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-22",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "11/01/2026 SPO NO 8306061739",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 2000000,
+          "total": 2000000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 2000000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 220000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 2220000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-22",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039342_angrlal55",
+      "invoiceNo": "0277/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-22",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "12/01/2026 SPO NO 8306061766",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 3000000,
+          "total": 3000000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 3000000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 330000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 3330000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-22",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039342_hg9abxkqs",
+      "invoiceNo": "0278/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-22",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "12/01/2026 SPO NO 8306061786",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 2300000,
+          "total": 2300000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 2300000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 253000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 2553000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-22",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039342_037q71g96",
+      "invoiceNo": "0279/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-22",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "13/01/2026 SPO NO 8306061822",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 2000000,
+          "total": 2000000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 2000000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 220000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 2220000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-22",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039342_zy9dfsnjm",
+      "invoiceNo": "0280/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-22",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "14/01/2026 SPO NO 8306061885",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 2300000,
+          "total": 2300000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 2300000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 253000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 2553000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-22",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039342_d6sgpjian",
+      "invoiceNo": "0281/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-22",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "14/01/2026 SPO NO 8306061890",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 3200000,
+          "total": 3200000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 3200000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 352000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 3552000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-22",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039342_q1mvfmdfz",
+      "invoiceNo": "0282/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-22",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "18/01/2026 SPO NO 8306062004",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 3000000,
+          "total": 3000000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 3000000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 330000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 3330000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-22",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039342_jgfutdoe7",
+      "invoiceNo": "0283/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-22",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "19/01/2026 SPO NO 8306062056",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 2300000,
+          "total": 2300000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 2300000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 253000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 2553000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-22",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039342_3upnztgx5",
+      "invoiceNo": "0284/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-22",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "19/01/2026 SPO NO 8306062006",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 2500000,
+          "total": 2500000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 2500000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 275000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 2775000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-22",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039342_8qshz7b59",
+      "invoiceNo": "0285/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-22",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "20/01/2026 SPO NO 8306062122",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 2300000,
+          "total": 2300000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 2300000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 253000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 2553000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-22",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039343_pcgi5i1k6",
+      "invoiceNo": "0286/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-22",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "22 JANUARI 2026",
+      "lines": [
+        {
+          "itemSku": "TRW004",
+          "itemName": "PEMBAYARAN PENGGANTIAN KULI BONGKAR",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 175000,
+          "total": 175000,
+          "discount": 0,
+          "soNo": "",
+          "product": "PEMBAYARAN PENGGANTIAN KULI BONGKAR"
+        }
+      ],
+      "bom": {
+        "subtotal": 175000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 0,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 175000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-22",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039343_h2oqds3p4",
+      "invoiceNo": "0287/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-22",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "22 JANUARI 2026",
+      "lines": [
+        {
+          "itemSku": "TRW004",
+          "itemName": "PEMBAYARAN PENGGANTIAN KULI BONGKAR",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 175000,
+          "total": 175000,
+          "discount": 0,
+          "soNo": "",
+          "product": "PEMBAYARAN PENGGANTIAN KULI BONGKAR"
+        }
+      ],
+      "bom": {
+        "subtotal": 175000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 0,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 175000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-22",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039342_zioteajbv",
+      "invoiceNo": "0311/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-23",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "12/01/2026 SPO NO 8306061654 12/01/2026 SPO NO 8306061653 12/01/2026 SPO NO 8306061655 13/01/2026 SPO NO 8306061789 13/01/2026 SPO NO 8306061790 13/01/2026 SPO NO 8306061802 14/01/2026 SPO NO 8306061846 15/01/2026 SPO NO 8306061915 15/01/2026 SPO NO 8306061916",
+      "lines": [
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 2070000,
+          "total": 2070000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 3645000,
+          "total": 3645000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 538200,
+          "total": 538200,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1524000,
+          "total": 1524000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 2300000,
+          "total": 2300000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 470250,
+          "total": 470250,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1524000,
+          "total": 1524000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 3645000,
+          "total": 3645000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1150000,
+          "total": 1150000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 16866450,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 1855309.5,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 18721759.5,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-23",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039342_jka4rda0z",
+      "invoiceNo": "0312/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-23",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "19/01/2026 SPO NO 8306061978 19/01/2026 SPO NO 8306061983 19/01/2026 SPO NO 8306061987 19/01/2026 SPO NO 8306061988 19/01/2026 SPO NO 8306061989 19/01/2026 SPO NO 8306061990 20/01/2026 SPO NO 8306062070",
+      "lines": [
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 822000,
+          "total": 822000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 3645000,
+          "total": 3645000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1552500,
+          "total": 1552500,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1345500,
+          "total": 1345500,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 807300,
+          "total": 807300,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1252500,
+          "total": 1252500,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 2760000,
+          "total": 2760000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 12184800,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 1340328,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 13525128,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-23",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039343_elt15u17p",
+      "invoiceNo": "0313/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-23",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "14/01/2026 SPO NO 8308051118",
+      "lines": [
+        {
+          "itemSku": "TRW0004",
+          "itemName": "BIAYA PENGGANTIAN ONGKOS KULI",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 100000,
+          "total": 100000,
+          "discount": 0,
+          "soNo": "",
+          "product": "BIAYA PENGGANTIAN ONGKOS KULI"
+        }
+      ],
+      "bom": {
+        "subtotal": 100000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 0,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 100000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-23",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039341_ups8xid77",
+      "invoiceNo": "0389/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "KYORAKU BLOWMOLDING INDONESIA, PT",
+      "created": "2026-01-30",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "1.04/01/2026 CDD B 9834 HP PT. KBI (KARAWANG) - PT. YMPI (PASURUAN) 2.05/01/2026 CDD G8767 FC PT. KBI (KARAWANG) - PT. YMPI (PASURUAN) 3.14/01/2026 CDD G 8050 AC PT. KBI (KARAWANG) - PT. YMPI (PASURUAN) 4.23/01/2026 RITEL B 9877 FXX PT. YMPI (PASURUAN) - PT. KBI (KARAWANG)",
+      "lines": [
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 7395000,
+          "total": 7395000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 7380000,
+          "total": 7380000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 7444500,
+          "total": 7444500,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1406250,
+          "total": 1406250,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 23625750,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 2598832.5,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 26224582.5,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-30",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039343_roj1ytid2",
+      "invoiceNo": "0464/JL/CKRG/0226",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-30",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "21/01/2026 SPO NO 8306062138 23/01/2026 SPO NO 8306062226 26/01/2026 SPO NO 8306062289 28/01/2026 SPO NO 8306062462 28/01/2026 SPO NO 8306062465 29/01/2026 SPO NO 8306062514 30/01/2026 SPO NO 8306062559",
+      "lines": [
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 891000,
+          "total": 891000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 2760000,
+          "total": 2760000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1437000,
+          "total": 1437000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1437000,
+          "total": 1437000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1265000,
+          "total": 1265000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 891000,
+          "total": 891000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1437000,
+          "total": 1437000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 10118000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 1112980,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 11230980,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-30",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039343_yyhadlhxl",
+      "invoiceNo": "0370/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT. KAWATA INDONESIA",
+      "created": "2026-01-30",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "1.12/01/2026 KISO25120016 PICK UP CIKARANG - CIBITUNG 2.13/01/2026 KISO26010004 PICK UP CIKARANG - BOGOR 3.29/01/2026 KISO25100040 PICK UP CIKARANG - CIKAMPEK",
+      "lines": [
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 705000,
+          "total": 705000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1410000,
+          "total": 1410000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1292500,
+          "total": 1292500,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 3407500,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 374825,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 3782325,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-30",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039343_edb13vkyr",
+      "invoiceNo": "0374/JL/CKRG/0126",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "YAMAHA MUSICAL PRODUCTS INDONESIA, PT",
+      "created": "2026-01-30",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "1. 23/01/2026 RITEL B 9877 FXX PT.YMPI (PASURUAN) - PT. CAHAYA INTAN (JAKARTA)",
+      "lines": [
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1400000,
+          "total": 1400000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 1400000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 154000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 1554000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-30",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039343_8mukziwq5",
+      "invoiceNo": "0448/JL/CKRG/0226",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-31",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "21/01/2026 SPO NO 8306062172",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 2300000,
+          "total": 2300000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 2300000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 253000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 2553000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-31",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039343_r80ckm0w3",
+      "invoiceNo": "0449/JL/CKRG/0226",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-31",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "21/01/2026 SPO NO 8306062173",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 2300000,
+          "total": 2300000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 2300000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 253000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 2553000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-31",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039343_lgdfvv469",
+      "invoiceNo": "0450/JL/CKRG/0226",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-31",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "22/01/2026 SPO NO 8306062469",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 3200000,
+          "total": 3200000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 3200000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 352000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 3552000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-31",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039343_pkcwb0yij",
+      "invoiceNo": "0451/JL/CKRG/0226",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-31",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "25/01/2026 SPO NO 8306062300",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 2000000,
+          "total": 2000000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 2000000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 220000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 2220000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-31",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039343_kynl21os1",
+      "invoiceNo": "0452/JL/CKRG/0226",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-31",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "26/01/2026 SPO NO 8306062362",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 3200000,
+          "total": 3200000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 3200000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 352000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 3552000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-31",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039343_mxc0cfd52",
+      "invoiceNo": "0453/JL/CKRG/0226",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-31",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "26/01/2026 SPO NO 8306062361",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 3200000,
+          "total": 3200000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 3200000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 352000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 3552000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-31",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039343_hes10t5er",
+      "invoiceNo": "0454/JL/CKRG/0226",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-31",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "29/01/2026 SPO NO 8306062541",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 1500000,
+          "total": 1500000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 1500000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 165000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 1665000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-31",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039343_9kx2uljjx",
+      "invoiceNo": "0455/JL/CKRG/0226",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-31",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "31/01/2026 SPO NO 8306062623",
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 4800000,
+          "total": 4800000,
+          "discount": 0,
+          "soNo": "",
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 4800000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 528000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 5328000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-31",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1770835039343_kkl2j3knk",
+      "invoiceNo": "0456/JL/CKRG/0226",
+      "soNo": "",
+      "sjNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "created": "2026-01-31",
+      "status": "CLOSE",
+      "paymentStatus": "OPEN",
+      "notes": "31 JANUARI 2026",
+      "lines": [
+        {
+          "itemSku": "TRW004",
+          "itemName": "PEMBAYARAN PENGGANTIAN KULI BONGKAR",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 210000,
+          "total": 210000,
+          "discount": 0,
+          "soNo": "",
+          "product": "PEMBAYARAN PENGGANTIAN KULI BONGKAR"
+        }
+      ],
+      "bom": {
+        "subtotal": 210000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 0,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 210000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "invoiceDate": "2026-01-31",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281794_nlwg0hfzb",
+      "invoiceNo": "0634/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-13",
+      "topDate": "2026-02-13",
+      "notes": "02/02/2026 SPO NO 8306062589 02/02/2026 SPO NO 8306062590 02/02/2026 SPO NO 8306062594 05/02/2026 SPO NO 8306062854 05/02/2026 SPO NO 8306062852 06/02/2026 SPO NO 8306062885 06/02/2026 SPO NO 8306062891 06/02/2026 SPO NO 8306062882 09/02/2026 SPO NO 8306062939",
+      "timestamp": 1771553281794,
+      "lines": [
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1725000,
+          "total": 1725000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1524000,
+          "total": 1524000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 3645000,
+          "total": 3645000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1252500,
+          "total": 1252500,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 719000,
+          "total": 719000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1587000,
+          "total": 1587000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 662400,
+          "total": 662400,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1437000,
+          "total": 1437000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1524000,
+          "total": 1524000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 14075900,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 1548349,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 15624249,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-13",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281795_03bps7rtc",
+      "invoiceNo": "0635/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-13",
+      "topDate": "2026-02-13",
+      "notes": "09/02/2026 SPO NO 8306062955 09/02/2026 SPO NO 8306062952 10/02/2026 SPO NO 8306063037",
+      "timestamp": 1771553281795,
+      "lines": [
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 2225250,
+          "total": 2225250,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 1552500,
+          "total": 1552500,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        },
+        {
+          "itemSku": "TRW00002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 2714000,
+          "total": 2714000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 6491750,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 714092,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 7205842,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-13",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281795_pt7bn2gy7",
+      "invoiceNo": "0692/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-18",
+      "topDate": "2026-02-18",
+      "notes": "01/02/2026 SPO NO 8306062625",
+      "timestamp": 1771553281795,
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 2500000,
+          "total": 2500000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 2500000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 275000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 2775000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-18",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281795_o3jindyvf",
+      "invoiceNo": "0693/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-18",
+      "topDate": "2026-02-18",
+      "notes": "01/02/2026 SPO NO 8306062626",
+      "timestamp": 1771553281795,
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 2300000,
+          "total": 2300000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 2300000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 253000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 2553000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-18",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281795_rkjt2378p",
+      "invoiceNo": "0694/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-18",
+      "topDate": "2026-02-18",
+      "notes": "02/02/2026 SPO NO 8306062672",
+      "timestamp": 1771553281795,
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 3000000,
+          "total": 3000000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 3000000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 330000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 3330000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-18",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281795_j7qqouvx0",
+      "invoiceNo": "0695/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-18",
+      "topDate": "2026-02-18",
+      "notes": "03/02/2026 SPO NO 8306062745",
+      "timestamp": 1771553281795,
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 3000000,
+          "total": 3000000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 3000000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 330000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 3330000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-18",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281795_m3qgzqd46",
+      "invoiceNo": "0696/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-18",
+      "topDate": "2026-02-18",
+      "notes": "05/02/2026 SPO NO 8306062832",
+      "timestamp": 1771553281795,
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 2000000,
+          "total": 2000000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 2000000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 220000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 2220000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-18",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281795_o6uo0vh5v",
+      "invoiceNo": "0697/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-18",
+      "topDate": "2026-02-18",
+      "notes": "05/02/2026 SPO NO 8306062802",
+      "timestamp": 1771553281795,
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 2500000,
+          "total": 2500000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 2500000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 275000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 2775000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-18",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281795_ezlnh6c2k",
+      "invoiceNo": "0698/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-18",
+      "topDate": "2026-02-18",
+      "notes": "06/02/2026 SPO NO 8306062909",
+      "timestamp": 1771553281795,
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 3000000,
+          "total": 3000000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 3000000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 330000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 3330000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-18",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281795_0sjete4zz",
+      "invoiceNo": "0699/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-18",
+      "topDate": "2026-02-18",
+      "notes": "08/02/2026 SPO NO 8306062988",
+      "timestamp": 1771553281795,
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 1800000,
+          "total": 1800000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 1800000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 198000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 1998000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-18",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281796_wc2m3ms4v",
+      "invoiceNo": "0700/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-18",
+      "topDate": "2026-02-18",
+      "notes": "08/02/2026 SPO NO 8306062994",
+      "timestamp": 1771553281796,
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 3200000,
+          "total": 3200000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 3200000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 352000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 3552000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-18",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281796_6jpw94snn",
+      "invoiceNo": "0701/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-18",
+      "topDate": "2026-02-18",
+      "notes": "09/02/2026 SPO NO 8306063011",
+      "timestamp": 1771553281796,
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 1500000,
+          "total": 1500000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 1500000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 165000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 1665000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-18",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281796_6ppr1vjss",
+      "invoiceNo": "0702/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-18",
+      "topDate": "2026-02-18",
+      "notes": "11/02/2026 SPO NO 8306063140",
+      "timestamp": 1771553281796,
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 2500000,
+          "total": 2500000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 2500000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 275000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 2775000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-18",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281796_bbe1qqvoo",
+      "invoiceNo": "0703/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-18",
+      "topDate": "2026-02-18",
+      "notes": "11/02/2026 SPO NO 8306063144",
+      "timestamp": 1771553281796,
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 1500000,
+          "total": 1500000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 1500000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 165000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 1665000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-18",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281796_nuzq7w9dt",
+      "invoiceNo": "0704/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-18",
+      "topDate": "2026-02-18",
+      "notes": "12/02/2026 SPO NO 8306063185",
+      "timestamp": 1771553281796,
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 2000000,
+          "total": 2000000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 2000000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 220000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 2220000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-18",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281796_d32fdamqo",
+      "invoiceNo": "0705/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-18",
+      "topDate": "2026-02-18",
+      "notes": "12/02/2026 SPO NO 8306063187",
+      "timestamp": 1771553281796,
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 3200000,
+          "total": 3200000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 3200000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 352000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 3552000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-18",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281796_8w9va4gw6",
+      "invoiceNo": "0706/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-18",
+      "topDate": "2026-02-18",
+      "notes": "13/02/2026 SPO NO 8306063245",
+      "timestamp": 1771553281796,
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 3000000,
+          "total": 3000000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 3000000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 330000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 3330000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-18",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281796_hi32kfkos",
+      "invoiceNo": "0707/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-18",
+      "topDate": "2026-02-18",
+      "notes": "15/02/2026 SPO NO 8306063289",
+      "timestamp": 1771553281796,
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 1500000,
+          "total": 1500000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 1500000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 165000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 1665000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-18",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281796_dt54x5cvt",
+      "invoiceNo": "0708/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-18",
+      "topDate": "2026-02-18",
+      "notes": "15/02/2026 SPO NO 8306063306",
+      "timestamp": 1771553281796,
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 2500000,
+          "total": 2500000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 2500000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 275000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 2775000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-18",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281796_me1kstziw",
+      "invoiceNo": "0709/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-18",
+      "topDate": "2026-02-18",
+      "notes": "17/02/2026 SPO NO 8306063349",
+      "timestamp": 1771553281796,
+      "lines": [
+        {
+          "itemSku": "TRW0002",
+          "itemName": "JASA ANGKUTAN",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 2300000,
+          "total": 2300000,
+          "discount": 0,
+          "pot": 0,
+          "product": "JASA ANGKUTAN"
+        }
+      ],
+      "bom": {
+        "subtotal": 2300000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 253000,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 2553000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-18",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281796_w2riamjdl",
+      "invoiceNo": "0636/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-13",
+      "topDate": "2026-02-13",
+      "notes": "02/02/2026 SPO NO 8308051330 09/02/2026 SPO NO 8308051330",
+      "timestamp": 1771553281796,
+      "lines": [
+        {
+          "itemSku": "TRW0004",
+          "itemName": "BIAYA PENGGANTIAN ONGKOS KULI",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 76000,
+          "total": 76000,
+          "discount": 0,
+          "pot": 0,
+          "product": "BIAYA PENGGANTIAN ONGKOS KULI"
+        },
+        {
+          "itemSku": "TRW0004",
+          "itemName": "BIAYA PENGGANTIAN ONGKOS KULI",
+          "qty": 1,
+          "unit": "LOT",
+          "price": 300000,
+          "total": 300000,
+          "discount": 0,
+          "pot": 0,
+          "product": "BIAYA PENGGANTIAN ONGKOS KULI"
+        }
+      ],
+      "bom": {
+        "subtotal": 376000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 0,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 376000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-13",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281796_auap3bc9h",
+      "invoiceNo": "0710/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-18",
+      "topDate": "2026-02-18",
+      "notes": "18 FEBRUARI 2026",
+      "timestamp": 1771553281796,
+      "lines": [
+        {
+          "itemSku": "TRW004",
+          "itemName": "PEMBAYARAN PENGGANTIAN KULI BONGKAR",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 271500,
+          "total": 271500,
+          "discount": 0,
+          "pot": 0,
+          "product": "PEMBAYARAN PENGGANTIAN KULI BONGKAR"
+        }
+      ],
+      "bom": {
+        "subtotal": 271500,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 0,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 271500,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-18",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    },
+    {
+      "id": "inv_1771553281796_9b3l6zvm1",
+      "invoiceNo": "0711/JL/CKRG/0226",
+      "sjNo": "",
+      "doNo": "",
+      "customer": "PT WILMAR CAHAYA INDONESIA TBK",
+      "customerAddress": "",
+      "noFP": "",
+      "status": "OPEN",
+      "created": "2026-02-18",
+      "topDate": "2026-02-18",
+      "notes": "18 FEBRUARI 2026",
+      "timestamp": 1771553281796,
+      "lines": [
+        {
+          "itemSku": "TRW004",
+          "itemName": "PEMBAYARAN PENGGANTIAN KULI BONGKAR",
+          "qty": 1,
+          "unit": "UNIT",
+          "price": 300000,
+          "total": 300000,
+          "discount": 0,
+          "pot": 0,
+          "product": "PEMBAYARAN PENGGANTIAN KULI BONGKAR"
+        }
+      ],
+      "bom": {
+        "subtotal": 300000,
+        "discount": 0,
+        "discountPercent": 0,
+        "tax": 0,
+        "taxPercent": 11,
+        "biayaLain": 0,
+        "total": 300000,
+        "paymentTerms": "TOP",
+        "topDays": 30,
+        "sjNo": "",
+        "doNo": "",
+        "poData": {
+          "topDays": 30
+        }
+      },
+      "paymentTerms": "TOP",
+      "topDays": 30,
+      "templateType": "template1",
+      "invoiceDate": "2026-02-18",
+      "paidAmount": 0,
+      "paidDate": "",
+      "paymentProof": ""
+    }
+  ]
+}

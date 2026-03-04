@@ -1,17 +1,28 @@
 /**
- * WebSocket Client untuk CRUD operations (lebih cepat dari HTTP)
- * Menggunakan WebSocket untuk POST, DELETE, GET operations
+ * WebSocket Client untuk Real-Time Sync dan Event Broadcasting
+ * 
+ * ARCHITECTURE:
+ * - POST / PUT / DELETE → REST API (HTTP) → PostgreSQL
+ * - GET → REST API (HTTP) → PostgreSQL
+ * - Real-time sync → WebSocket → broadcast changes to other devices
+ * 
+ * WebSocket methods (post, delete, get) are DEPRECATED and kept only for backward compatibility.
+ * All data operations should use REST API via storageService or direct fetch calls.
  */
+
+import { StorageKeys } from './storage';
 
 class WebSocketClient {
   private ws: WebSocket | null = null;
   private wsUrl: string = '';
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private reconnectDelay = 1000;
+  private maxReconnectAttempts = 3; // Reduced from 5
+  private reconnectDelay = 2000; // Increased from 1000 to prevent spam
   private pendingRequests: Map<string, { resolve: Function; reject: Function }> = new Map();
   private messageId = 0;
   private storageListener: ((e: StorageEvent) => void) | null = null;
+  private lastErrorTime = 0; // Track last error to prevent spam
+  private connectionAttempted = false; // Track if we tried to connect
 
   constructor() {
     this.initialize();
@@ -19,112 +30,84 @@ class WebSocketClient {
   }
 
   private initialize() {
-    // Get WebSocket URL
-    // Default: try to detect from serverUrl if available
-    let defaultWsUrl = 'ws://server-tljp.tail75a421.ts.net:8888/ws';
-    const storageConfig = localStorage.getItem('storage_config');
-    if (storageConfig) {
-      try {
-        const config = JSON.parse(storageConfig);
-        if (config.serverUrl) {
-          const isHttps = config.serverUrl.startsWith('https://');
-          const isTailscaleFunnel = config.serverUrl.includes('.ts.net');
-          
-          if (isTailscaleFunnel && isHttps) {
-            // Tailscale Funnel with HTTPS - use wss:// without port
-            const hostname = config.serverUrl.replace(/^https?:\/\//, '').replace(/:\d+/, '');
-            defaultWsUrl = `wss://${hostname}/ws`;
-          } else if (isHttps) {
-            // HTTPS server - use wss:// with port
-            const url = new URL(config.serverUrl);
-            defaultWsUrl = `wss://${url.hostname}:${url.port || '443'}/ws`;
-          }
-        }
-      } catch (e) {
-        // Use default if parsing fails
-      }
-    }
+    // Get WebSocket URL from localStorage (set by Settings page)
+    // Default to Tailscale Funnel if not set
+    const storedWsUrl = localStorage.getItem('websocket_url');
+    this.wsUrl = storedWsUrl || 'wss://server-tljp.tail75a421.ts.net/ws';
     
-    this.wsUrl = localStorage.getItem('websocket_url') || defaultWsUrl;
-    console.log(`[WebSocketClient] 🚀 Initializing WebSocket client. URL: ${this.wsUrl}`);
-    
-    // Check if WebSocket is enabled (default: enabled jika belum ada setting)
-    const wsEnabled = localStorage.getItem('websocket_enabled');
-    console.log(`[WebSocketClient] 📋 WebSocket enabled: ${wsEnabled}`);
-    
-    if (wsEnabled === 'false') {
-      console.warn('[WebSocketClient] ⚠️ WebSocket is disabled, skipping connection');
-      return; // WebSocket explicitly disabled
-    }
-    
-    // Auto-enable jika belum ada setting (default enabled)
-    if (!wsEnabled) {
-      console.log('[WebSocketClient] ✅ Auto-enabling WebSocket (default enabled)');
-      localStorage.setItem('websocket_enabled', 'true');
-    }
+    // Store in localStorage for reference
+    localStorage.setItem('websocket_url', this.wsUrl);
+    localStorage.setItem('websocket_enabled', 'true');
 
+    console.log(`[WebSocketClient] 🔌 Initialized with URL: ${this.wsUrl}`);
+    
     this.connect();
+    
+    // Listen for WebSocket URL changes from Settings page
+    this.setupStorageListener();
   }
 
   private setupStorageListener() {
     // Listen untuk perubahan websocket_url dan websocket_enabled
     this.storageListener = (e: StorageEvent) => {
-      if (e.key === 'websocket_url' || e.key === 'websocket_enabled') {
-        // Reinitialize jika setting berubah
-        if (e.key === 'websocket_url') {
-          const newUrl = e.newValue || 'ws://server-tljp.tail75a421.ts.net:8888/ws';
-          if (newUrl !== this.wsUrl) {
-            this.wsUrl = newUrl;
-            this.reconnect();
+      if (e.key === 'websocket_url' && e.newValue) {
+        const newWsUrl = e.newValue;
+        if (newWsUrl !== this.wsUrl) {
+          console.log(`[WebSocketClient] 🔄 WebSocket URL changed from ${this.wsUrl} to ${newWsUrl}`);
+          this.wsUrl = newWsUrl;
+          // Reconnect with new URL
+          if (this.ws) {
+            this.ws.close();
           }
-        } else if (e.key === 'websocket_enabled') {
-          const enabled = e.newValue === 'true';
-          if (enabled && !this.isConnected()) {
-            this.connect();
-          } else if (!enabled && this.isConnected()) {
-            if (this.ws) {
-              this.ws.close();
-            }
+          this.reconnectAttempts = 0;
+          this.connect();
+        }
+      } else if (e.key === 'websocket_enabled') {
+        const enabled = e.newValue === 'true';
+        if (enabled && !this.isConnected()) {
+          console.log(`[WebSocketClient] 🔌 WebSocket enabled, connecting...`);
+          this.reconnectAttempts = 0;
+          this.connect();
+        } else if (!enabled && this.isConnected()) {
+          console.log(`[WebSocketClient] 🔌 WebSocket disabled, closing...`);
+          if (this.ws) {
+            this.ws.close();
           }
         }
       }
     };
     
     window.addEventListener('storage', this.storageListener);
-    
-    // Juga listen untuk perubahan di tab yang sama (via custom event)
-    window.addEventListener('local-storage-change', ((e: CustomEvent) => {
-      if (e.detail?.key === 'websocket_url' || e.detail?.key === 'websocket_enabled') {
-        if (e.detail?.key === 'websocket_url') {
-          const newUrl = e.detail?.newValue || 'ws://server-tljp.tail75a421.ts.net:8888/ws';
-          if (newUrl !== this.wsUrl) {
-            this.wsUrl = newUrl;
-            this.reconnect();
-          }
-        } else if (e.detail?.key === 'websocket_enabled') {
-          const enabled = e.detail?.newValue === 'true';
-          if (enabled && !this.isConnected()) {
-            this.connect();
-          } else if (!enabled && this.isConnected()) {
-            if (this.ws) {
-              this.ws.close();
-            }
-          }
-        }
-      }
-    }) as EventListener);
   }
 
   private connect() {
     try {
-      // Always get latest URL from localStorage before connecting
-      this.wsUrl = localStorage.getItem('websocket_url') || 'ws://server-tljp.tail75a421.ts.net:8888/ws';
-      console.log(`[WebSocketClient] 🔌 Connecting to: ${this.wsUrl}`);
-      this.ws = new WebSocket(this.wsUrl);
+      // Use WebSocket URL from localStorage (set by Settings page)
+      // Or use default Tailscale Funnel
+      const storedWsUrl = localStorage.getItem('websocket_url');
+      if (storedWsUrl) {
+        this.wsUrl = storedWsUrl;
+      } else {
+        this.wsUrl = 'wss://server-tljp.tail75a421.ts.net/ws';
+      }
+      
+      // Only log on first attempt (not spam on retries)
+      if (this.reconnectAttempts === 0) {
+        console.log(`[WebSocketClient] 🔌 Attempting connection to: ${this.wsUrl}`);
+      }
+      
+      try {
+        this.ws = new WebSocket(this.wsUrl);
+      } catch (wsConstructorError) {
+        console.error('[WebSocketClient] ❌ Failed to construct WebSocket:', wsConstructorError);
+        this.ws = null;
+        return;
+      }
       
       this.ws.onopen = () => {
         console.log('[WebSocketClient] ✅ WebSocket connected!');
         this.reconnectAttempts = 0;
+        this.connectionAttempted = false;
       };
       
       this.ws.onmessage = (event) => {
@@ -159,23 +142,27 @@ class WebSocketClient {
         }
       };
       
-      this.ws.onerror = (error) => {
-        console.error('[WebSocketClient] ❌ WebSocket error:', error);
+      this.ws.onerror = (event) => {
+        // Throttle error logging - max 1 error per 10 seconds
+        const now = Date.now();
+        if (now - this.lastErrorTime > 10000) {
+          console.log(`[WebSocketClient] ⚠️ WebSocket connection failed, will retry...`);
+          this.lastErrorTime = now;
+        }
         this.ws = null;
       };
       
       this.ws.onclose = (event) => {
-        console.log(`[WebSocketClient] 🔌 WebSocket closed. Code: ${event.code}, Reason: ${event.reason || 'none'}`);
         this.ws = null;
-        // Try to reconnect
+        // Try to reconnect with exponential backoff
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
           this.reconnectAttempts++;
-          console.log(`[WebSocketClient] 🔄 Reconnecting in ${this.reconnectDelay * this.reconnectAttempts}ms... (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+          const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1); // Exponential backoff
+          
+          // Silent reconnect - don't spam log
           setTimeout(() => {
             this.connect();
-          }, this.reconnectDelay * this.reconnectAttempts);
-        } else {
-          console.warn('[WebSocketClient] ⚠️ Max reconnection attempts reached');
+          }, delay);
         }
       };
     } catch (error) {
@@ -200,7 +187,15 @@ class WebSocketClient {
     
     // Determine timeout based on action and key
     // GET requests for large keys (products, materials, etc.) need longer timeout
-    const largeKeys = ['products', 'materials', 'bom', 'salesOrders', 'purchaseOrders', 'production', 'inventory'];
+    const largeKeys = [
+      StorageKeys.PACKAGING.PRODUCTS,
+      StorageKeys.PACKAGING.MATERIALS,
+      StorageKeys.PACKAGING.BOM,
+      StorageKeys.PACKAGING.SALES_ORDERS,
+      StorageKeys.PACKAGING.PURCHASE_ORDERS,
+      StorageKeys.PACKAGING.PRODUCTION,
+      StorageKeys.PACKAGING.INVENTORY
+    ];
     const isLargeKey = largeKeys.some(largeKey => key.includes(largeKey));
     const timeout = action === 'GET' && isLargeKey ? 60000 : // 60 seconds for large GET requests
                     action === 'GET' ? 30000 : // 30 seconds for regular GET requests
@@ -220,14 +215,12 @@ class WebSocketClient {
       };
       
       try {
-        console.log(`[WebSocketClient] 📤 Sending ${action} request for ${key} (timeout: ${timeout}ms)`);
         this.ws!.send(JSON.stringify(message));
         
         // Timeout based on action and key size
         setTimeout(() => {
           if (this.pendingRequests.has(requestId)) {
             this.pendingRequests.delete(requestId);
-            console.error(`[WebSocketClient] ⏱️ Request timeout for ${action} ${key} after ${timeout}ms`);
             reject(new Error(`WebSocket request timeout for ${action} ${key}`));
           }
         }, timeout);
@@ -239,48 +232,156 @@ class WebSocketClient {
   }
 
   /**
-   * POST/PUT data via WebSocket
+   * Helper: Get HTTP server URL from WebSocket URL (with caching)
+   */
+  private getHttpServerUrl(): string {
+    const wsUrl = localStorage.getItem('websocket_url');
+    
+    // If WebSocket URL is configured, convert it to HTTP
+    if (wsUrl) {
+      if (wsUrl.includes('ts.net')) {
+        // Tailscale Funnel: wss://server-tljp.tail75a421.ts.net/ws -> https://server-tljp.tail75a421.ts.net
+        return wsUrl
+          .replace(/^wss:\/\//, 'https://')
+          .replace(/^ws:\/\//, 'http://')
+          .replace(/\/ws$/, '');
+      } else {
+        // Direct IP: ws://10.1.1.35:9999/ws -> http://10.1.1.35:9999
+        return wsUrl
+          .replace(/^wss:\/\//, 'https://')
+          .replace(/^ws:\/\//, 'http://')
+          .replace(/\/ws$/, '');
+      }
+    }
+    
+    // Fallback to stored server_url if available
+    const storedUrl = localStorage.getItem('server_url');
+    if (storedUrl) {
+      return storedUrl;
+    }
+    
+    // Ultimate fallback: Use Tailscale Funnel as default with port 9999
+    return 'https://server-tljp.tail75a421.ts.net';
+  }
+
+  /**
+   * POST/PUT data via WebSocket with HTTP fallback
    */
   async post(key: string, value: any, timestamp?: number): Promise<any> {
-    const ready = await this.waitUntilReady();
-    if (!ready) {
-      throw new Error('WebSocket not available. Please enable WebSocket in settings.');
+    // Normalize key: remove business prefix if present
+    const normalizedKey = key.replace(/^(packaging\/|general-trading\/|trucking\/)/, '');
+    
+    // Try WebSocket if connected
+    if (this.isConnected()) {
+      try {
+        return await this.sendRequest('POST', normalizedKey, value, timestamp);
+      } catch (wsError) {
+        const errorMsg = wsError instanceof Error ? wsError.message : String(wsError);
+        console.log(`[WebSocketClient] POST via WebSocket failed, falling back to HTTP: ${errorMsg}`);
+      }
     }
+    
+    // Fallback to HTTP POST immediately
     try {
-      return await this.sendRequest('POST', key, value, timestamp);
-    } catch (error) {
-      throw error;
+      const serverUrl = this.getHttpServerUrl();
+      const url = `${serverUrl}/api/storage/${encodeURIComponent(normalizedKey)}`;
+      console.log(`[WebSocketClient] 📤 Falling back to HTTP POST for ${normalizedKey} (original: ${key}) to ${serverUrl}`);
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value, timestamp: timestamp || Date.now() })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`[WebSocketClient] ✅ Posted data via HTTP for ${normalizedKey}`);
+        return data;
+      } else {
+        throw new Error(`HTTP POST failed: ${response.status}`);
+      }
+    } catch (httpError) {
+      console.error(`[WebSocketClient] ❌ Both WebSocket and HTTP POST failed for ${normalizedKey}:`, httpError);
+      throw new Error(`Failed to post data: WebSocket unavailable and HTTP failed`);
     }
   }
 
   /**
-   * DELETE data via WebSocket
+   * DELETE data via WebSocket with HTTP fallback
    */
   async delete(key: string): Promise<any> {
-    const ready = await this.waitUntilReady();
-    if (!ready) {
-      throw new Error('WebSocket not available. Please enable WebSocket in settings.');
+    // Normalize key: remove business prefix if present
+    const normalizedKey = key.replace(/^(packaging\/|general-trading\/|trucking\/)/, '');
+    
+    // Try WebSocket if connected
+    if (this.isConnected()) {
+      try {
+        return await this.sendRequest('DELETE', normalizedKey);
+      } catch (wsError) {
+        const errorMsg = wsError instanceof Error ? wsError.message : String(wsError);
+        console.log(`[WebSocketClient] DELETE via WebSocket failed, falling back to HTTP: ${errorMsg}`);
+      }
     }
+    
+    // Fallback to HTTP DELETE immediately
     try {
-      return await this.sendRequest('DELETE', key);
-    } catch (error) {
-      throw error;
+      const serverUrl = this.getHttpServerUrl();
+      const url = `${serverUrl}/api/storage/${encodeURIComponent(normalizedKey)}`;
+      console.log(`[WebSocketClient] 🗑️ Falling back to HTTP DELETE for ${normalizedKey} (original: ${key}) to ${serverUrl}`);
+      
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`[WebSocketClient] ✅ Deleted data via HTTP for ${normalizedKey}`);
+        return data;
+      } else {
+        throw new Error(`HTTP DELETE failed: ${response.status}`);
+      }
+    } catch (httpError) {
+      console.error(`[WebSocketClient] ❌ Both WebSocket and HTTP DELETE failed for ${normalizedKey}:`, httpError);
+      throw new Error(`Failed to delete data: WebSocket unavailable and HTTP failed`);
     }
   }
 
   /**
-   * GET data via WebSocket
+   * GET data via WebSocket with HTTP fallback
    */
   async get(key: string): Promise<any> {
-    const ready = await this.waitUntilReady();
-    if (!ready) {
-      throw new Error('WebSocket not available. Please enable WebSocket in settings.');
+    // Normalize key: remove business prefix if present (packaging/, general-trading/, trucking/)
+    // Server expects keys without prefix
+    const normalizedKey = key.replace(/^(packaging\/|general-trading\/|trucking\/)/, '');
+    
+    // First, try WebSocket if available (non-blocking)
+    if (this.isConnected()) {
+      try {
+        const response = await this.sendRequest('GET', normalizedKey);
+        return response.value;
+      } catch (wsError) {
+        const errorMsg = wsError instanceof Error ? wsError.message : String(wsError);
+        console.log(`[WebSocketClient] GET via WebSocket failed, falling back to HTTP: ${errorMsg}`);
+      }
     }
+    
+    // Fallback to HTTP GET immediately (don't wait for WebSocket)
     try {
-      const response = await this.sendRequest('GET', key);
-      return response.value;
-    } catch (error) {
-      throw error;
+      const serverUrl = this.getHttpServerUrl();
+      const url = `${serverUrl}/api/storage/${encodeURIComponent(normalizedKey)}`;
+      console.log(`[WebSocketClient] 📡 Falling back to HTTP GET for ${normalizedKey} (original: ${key}) from ${serverUrl}`);
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`[WebSocketClient] ✅ Got data via HTTP for ${normalizedKey}`);
+        return data.value || data;
+      } else {
+        throw new Error(`HTTP GET failed: ${response.status}`);
+      }
+    } catch (httpError) {
+      console.error(`[WebSocketClient] ❌ Both WebSocket and HTTP GET failed for ${normalizedKey}:`, httpError);
+      throw new Error(`WebSocket not available and HTTP GET failed. Server offline?`);
     }
   }
 
@@ -295,39 +396,25 @@ class WebSocketClient {
     // Check if WebSocket is enabled
     const wsEnabled = localStorage.getItem('websocket_enabled');
     if (wsEnabled === 'false') {
-      console.warn('[WebSocketClient] ⚠️ WebSocket is disabled in settings');
       return false;
     }
     
-    const wsUrl = localStorage.getItem('websocket_url') || 'ws://server-tljp.tail75a421.ts.net:8888/ws';
-    console.log(`[WebSocketClient] 🔄 Waiting for WebSocket ready... URL: ${wsUrl}, Current state: ${this.ws ? this.ws.readyState : 'null'}`);
+    const wsUrl = localStorage.getItem('websocket_url') || 'wss://server-tljp.tail75a421.ts.net/ws';
     
     // Try to connect if not connecting or closed
     if (!this.ws || this.ws.readyState === WebSocket.CLOSED || this.ws.readyState === WebSocket.CLOSING) {
-      console.log('[WebSocketClient] 🔌 Attempting to connect...');
       this.connect();
     }
     
-    // Wait until connected or timeout
+    // Wait until connected or timeout (without spam logging)
     const startTime = Date.now();
-    let lastState = this.ws ? this.ws.readyState : -1;
     while (!this.isConnected() && (Date.now() - startTime) < timeout) {
-      const currentState = this.ws ? this.ws.readyState : -1;
-      
-      // Log state changes
-      if (currentState !== lastState) {
-        const stateNames = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'];
-        console.log(`[WebSocketClient] 📊 State changed: ${stateNames[currentState] || 'UNKNOWN'} (${currentState})`);
-        lastState = currentState;
-      }
-      
       // Check if WebSocket is still trying to connect
       if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
         // Still connecting, wait a bit more
         await new Promise(resolve => setTimeout(resolve, 200));
       } else if (!this.ws || this.ws.readyState === WebSocket.CLOSED || this.ws.readyState === WebSocket.CLOSING) {
         // Connection failed or closed, try to reconnect
-        console.log('[WebSocketClient] 🔄 Reconnecting...');
         this.connect();
         await new Promise(resolve => setTimeout(resolve, 500));
       } else {
@@ -336,14 +423,7 @@ class WebSocketClient {
       }
     }
     
-    const connected = this.isConnected();
-    if (connected) {
-      console.log('[WebSocketClient] ✅ WebSocket is ready!');
-    } else {
-      console.warn(`[WebSocketClient] ⚠️ WebSocket not ready after ${timeout}ms timeout`);
-    }
-    
-    return connected;
+    return this.isConnected();
   }
 
   /**

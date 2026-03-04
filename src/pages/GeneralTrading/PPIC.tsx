@@ -3,11 +3,13 @@ import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
+import DateRangeFilter from '../../components/DateRangeFilter';
 import DeliveryScheduleDialog from '../../components/DeliveryScheduleDialog';
 import NotificationBell from '../../components/NotificationBell';
-import { storageService, extractStorageValue } from '../../services/storage';
+import { storageService, extractStorageValue, StorageKeys } from '../../services/storage';
 import { deleteGTItem, reloadGTData, filterActiveItems } from '../../utils/gt-delete-helper';
 import { useDialog } from '../../hooks/useDialog';
+import { useLanguage } from '../../hooks/useLanguage';
 // import { openPrintWindow } from '../../utils/actions'; // Not used yet
 import '../../styles/common.css';
 import '../../styles/compact.css';
@@ -229,7 +231,7 @@ const SPKActionMenu = ({
 
 const PPIC = () => {
   const [activeTab, setActiveTab] = useState<'spk' | 'schedule' | 'outstanding'>('spk');
-  const [spkViewMode, setSpkViewMode] = useState<'cards' | 'table'>('cards');
+  const [spkViewMode, setSpkViewMode] = useState<'cards' | 'table'>('table');
   const [selectedDeliveryItem, setSelectedDeliveryItem] = useState<{
     soNo: string;
     customer: string;
@@ -238,6 +240,8 @@ const PPIC = () => {
   const [scheduleData, setScheduleData] = useState<any[]>([]);
   const [spkData, setSpkData] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [viewingSO, setViewingSO] = useState<any>(null);
   const [inventory, setInventory] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -364,14 +368,14 @@ const PPIC = () => {
 
       // Listen untuk perubahan yang relevan (sama seperti Packaging)
       if (
-        key === 'general-trading/gt_spk' ||
-        key === 'gt_spk' ||
-        key === 'general-trading/gt_schedule' ||
-        key === 'gt_schedule' ||
-        key === 'general-trading/gt_purchaseRequests' ||
-        key === 'gt_purchaseRequests' ||
-        key === 'general-trading/gt_salesOrders' ||
-        key === 'gt_salesOrders'
+        key === 'general-trading/' + StorageKeys.GENERAL_TRADING.SPK ||
+        key === StorageKeys.GENERAL_TRADING.SPK ||
+        key === 'general-trading/' + StorageKeys.GENERAL_TRADING.SCHEDULE ||
+        key === StorageKeys.GENERAL_TRADING.SCHEDULE ||
+        key === 'general-trading/' + StorageKeys.GENERAL_TRADING.PURCHASE_REQUESTS ||
+        key === StorageKeys.GENERAL_TRADING.PURCHASE_REQUESTS ||
+        key === 'general-trading/' + StorageKeys.GENERAL_TRADING.SALES_ORDERS ||
+        key === StorageKeys.GENERAL_TRADING.SALES_ORDERS
       ) {
         // CRITICAL: Skip reload jika baru saja create SPK lokal (untuk prevent SO hilang dari table list)
         const now = Date.now();
@@ -407,43 +411,35 @@ const PPIC = () => {
     };
   }, []);
 
-  // Helper function to load from localStorage directly (non-blocking) - sama seperti Packaging
-  const loadFromLocalStorage = (key: string): any[] => {
+  // Helper function to load from storage service (uses server in server mode)
+  const loadFromStorage = async (key: string): Promise<any[]> => {
     try {
-      // GT uses general-trading/ prefix
-      const storageKey = `general-trading/${key}`;
-      let valueStr = localStorage.getItem(storageKey);
-      if (!valueStr) {
-        // Try without prefix as fallback
-        valueStr = localStorage.getItem(key);
-      }
-      if (valueStr) {
-        const parsed = JSON.parse(valueStr);
-        const extracted = extractStorageValue(parsed);
-        return extracted;
-      }
+      // Use storageService which handles server mode correctly
+      const data = await storageService.get<any[]>(key);
+      const extracted = extractStorageValue(data);
+      return extracted;
     } catch (e) {
+      console.error(`Error loading ${key}:`, e);
     }
     return [];
   };
 
   const loadData = async () => {
-    // OPTIMIZATION: Load from localStorage FIRST (instant, non-blocking) - sama seperti Packaging
-    // Then sync from server in background if needed
-    // Ini mencegah background sync overwrite data dengan data lama
-    const spkRaw = loadFromLocalStorage('gt_spk');
-    const scheduleRaw = loadFromLocalStorage('gt_schedule');
-    const customersDataRaw = loadFromLocalStorage('gt_customers');
-    const productsDataRaw = loadFromLocalStorage('gt_products');
-    let salesOrdersDataRaw = loadFromLocalStorage('gt_salesOrders');
-    const inventoryDataRaw = loadFromLocalStorage('gt_inventory');
-    const purchaseOrdersDataRaw = loadFromLocalStorage('gt_purchaseOrders');
-    const deliveryNotesDataRaw = loadFromLocalStorage('gt_delivery');
-    const purchaseRequestsDataRaw = loadFromLocalStorage('gt_purchaseRequests');
+    // CRITICAL: Load from storage service (uses server in server mode, localStorage in local mode)
+    // This ensures we always get fresh data from the configured storage backend
+    const spkRaw = await loadFromStorage(StorageKeys.GENERAL_TRADING.SPK);
+    const scheduleRaw = await loadFromStorage(StorageKeys.GENERAL_TRADING.SCHEDULE);
+    const customersDataRaw = await loadFromStorage(StorageKeys.GENERAL_TRADING.CUSTOMERS);
+    const productsDataRaw = await loadFromStorage(StorageKeys.GENERAL_TRADING.PRODUCTS);
+    let salesOrdersDataRaw = await loadFromStorage(StorageKeys.GENERAL_TRADING.SALES_ORDERS);
+    const inventoryDataRaw = await loadFromStorage(StorageKeys.GENERAL_TRADING.INVENTORY);
+    const purchaseOrdersDataRaw = await loadFromStorage(StorageKeys.GENERAL_TRADING.PURCHASE_ORDERS);
+    const deliveryNotesDataRaw = await loadFromStorage(StorageKeys.GENERAL_TRADING.DELIVERY);
+    const purchaseRequestsDataRaw = await loadFromStorage(StorageKeys.GENERAL_TRADING.PURCHASE_REQUESTS);
     
     // Force reload key data if very few items detected (sama seperti Packaging)
     if (customersDataRaw.length <= 1) {
-      const fileData = await storageService.forceReloadFromFile<any[]>('gt_customers');
+      const fileData = await storageService.forceReloadFromFile<any[]>(StorageKeys.GENERAL_TRADING.CUSTOMERS);
       if (fileData && Array.isArray(fileData) && fileData.length > customersDataRaw.length) {
         // Update localStorage dengan data dari file
         const storageKey = 'general-trading/gt_customers';
@@ -456,7 +452,7 @@ const PPIC = () => {
     }
     
     if (productsDataRaw.length <= 1) {
-      const fileData = await storageService.forceReloadFromFile<any[]>('gt_products');
+      const fileData = await storageService.forceReloadFromFile<any[]>(StorageKeys.GENERAL_TRADING.PRODUCTS);
       if (fileData && Array.isArray(fileData) && fileData.length > productsDataRaw.length) {
         const storageKey = 'general-trading/gt_products';
         localStorage.setItem(storageKey, JSON.stringify({
@@ -472,7 +468,7 @@ const PPIC = () => {
     if (salesOrdersDataRaw.length <= 1) {
       // Coba load dari server via storageService.get() yang akan sync dari server
       try {
-        const serverData = await storageService.get<any[]>('gt_salesOrders');
+        const serverData = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.SALES_ORDERS);
         if (serverData && Array.isArray(serverData)) {
           const extracted = extractStorageValue(serverData) || [];
           if (extracted.length > salesOrdersDataRaw.length) {
@@ -488,7 +484,7 @@ const PPIC = () => {
         }
       } catch (error) {
         // Fallback ke force reload dari file jika server sync gagal
-        const fileData = await storageService.forceReloadFromFile<any[]>('gt_salesOrders');
+        const fileData = await storageService.forceReloadFromFile<any[]>(StorageKeys.GENERAL_TRADING.SALES_ORDERS);
         if (fileData && Array.isArray(fileData) && fileData.length > salesOrdersDataRaw.length) {
           const storageKey = 'general-trading/gt_salesOrders';
           localStorage.setItem(storageKey, JSON.stringify({
@@ -502,16 +498,14 @@ const PPIC = () => {
     }
     
     // Reload dari localStorage setelah force reload (jika ada)
-    const finalCustomersData = loadFromLocalStorage('gt_customers');
-    const finalProductsData = loadFromLocalStorage('gt_products');
-    const finalSalesOrdersData = loadFromLocalStorage('gt_salesOrders');
+    // Note: loadFromStorage is async, so we use the raw data that was already loaded
     
     // Filter out deleted items menggunakan helper function
     let spk = filterActiveItems(spkRaw);
     let schedule = filterActiveItems(scheduleRaw);
-    const customersData = filterActiveItems(finalCustomersData.length > 0 ? finalCustomersData : customersDataRaw);
-    const productsData = filterActiveItems(finalProductsData.length > 0 ? finalProductsData : productsDataRaw);
-    let salesOrdersData = filterActiveItems(finalSalesOrdersData.length > 0 ? finalSalesOrdersData : salesOrdersDataRaw);
+    const customersData = filterActiveItems(customersDataRaw);
+    const productsData = filterActiveItems(productsDataRaw);
+    let salesOrdersData = filterActiveItems(salesOrdersDataRaw);
     const inventoryData = filterActiveItems(inventoryDataRaw);
     const purchaseOrdersData = filterActiveItems(purchaseOrdersDataRaw);
     const deliveryNotesData = filterActiveItems(deliveryNotesDataRaw);
@@ -545,8 +539,8 @@ const PPIC = () => {
     // Ini memastikan flag ppicNotified tidak hilang saat refresh
     let preservedSalesOrders = currentSalesOrders;
     if (currentSalesOrders.length === 0) {
-      // Saat refresh, coba preserve dari localStorage yang mungkin lebih up-to-date
-      const preservedFromStorage = loadFromLocalStorage('gt_salesOrders');
+      // Saat refresh, coba preserve dari data yang sudah di-load
+      const preservedFromStorage = salesOrdersDataRaw;
       preservedSalesOrders = Array.isArray(preservedFromStorage) ? preservedFromStorage : [];
     }
     
@@ -644,12 +638,12 @@ const PPIC = () => {
     });
     
     if (updatedSPK) {
-      await storageService.set('gt_spk', updatedSpkList);
+      await storageService.set(StorageKeys.GENERAL_TRADING.SPK, updatedSpkList);
       spk = updatedSpkList;
     }
     
     // Process delivery notifications (untuk GRN stock ready)
-    const deliveryNotificationsRaw = await storageService.get<any[]>('gt_deliveryNotifications') || [];
+    const deliveryNotificationsRaw = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.DELIVERY_NOTIFICATIONS) || [];
     const deliveryNotifications = extractStorageValue(deliveryNotificationsRaw) || [];
     let updatedDeliveryNotifications = [...deliveryNotifications];
     
@@ -720,7 +714,7 @@ const PPIC = () => {
     });
     
     if (hasAutoFulfilled) {
-      await storageService.set('gt_spk', autoFulfilledSpkList);
+      await storageService.set(StorageKeys.GENERAL_TRADING.SPK, autoFulfilledSpkList);
       spk = autoFulfilledSpkList;
     }
     
@@ -764,7 +758,7 @@ const PPIC = () => {
   // Sync notifications dari schedule data (untuk memastikan semua batch punya notifikasi)
   const syncNotificationsFromSchedule = async (scheduleList: any[], spkDataFromStorage: any[]) => {
     try {
-      const deliveryNotificationsRaw = await storageService.get<any[]>('gt_deliveryNotifications') || [];
+      const deliveryNotificationsRaw = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.DELIVERY_NOTIFICATIONS) || [];
       const deliveryNotifications = extractStorageValue(deliveryNotificationsRaw) || [];
       const newNotifications: any[] = [];
       
@@ -873,7 +867,7 @@ const PPIC = () => {
       
       // Save notifications jika ada yang baru
       if (newNotifications.length > 0) {
-        await storageService.set('gt_deliveryNotifications', [...deliveryNotifications, ...newNotifications]);
+        await storageService.set(StorageKeys.GENERAL_TRADING.DELIVERY_NOTIFICATIONS, [...deliveryNotifications, ...newNotifications]);
       }
     } catch (error) {
       // Silent fail
@@ -931,6 +925,20 @@ const PPIC = () => {
       );
     }
     
+    // Date filter
+    if (dateFrom) {
+      filtered = filtered.filter((group: any) => {
+        const groupDate = group.spks[0]?.created || '';
+        return groupDate >= dateFrom;
+      });
+    }
+    if (dateTo) {
+      filtered = filtered.filter((group: any) => {
+        const groupDate = group.spks[0]?.created || '';
+        return groupDate <= dateTo;
+      });
+    }
+    
     if (activeTab === 'outstanding') {
       filtered = filtered.filter((group: any) => group.status === 'OPEN');
     }
@@ -940,7 +948,7 @@ const PPIC = () => {
       const dateB = b.spks[0]?.created || '';
       return dateB.localeCompare(dateA);
     });
-  }, [groupedSpkData, searchQuery, activeTab]);
+  }, [groupedSpkData, searchQuery, activeTab, dateFrom, dateTo]);
 
   // Flatten SPK data untuk table view (Excel-like) - setiap SPK jadi row terpisah
   const flattenedSpkData = useMemo(() => {
@@ -1039,7 +1047,7 @@ const PPIC = () => {
     }
     
     try {
-      const existingSpk = extractStorageValue(await storageService.get<any[]>('gt_spk')) || [];
+      const existingSpk = extractStorageValue(await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.SPK)) || [];
       const newSPKs: any[] = [];
       
       for (const item of itemsToCreate) {
@@ -1117,7 +1125,7 @@ const PPIC = () => {
       }
       
       // SIMPLE: Save SPKs - langsung update state dan storage
-      const currentSPKsRaw = await storageService.get<any[]>('gt_spk') || [];
+      const currentSPKsRaw = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.SPK) || [];
       const currentSPKs = extractStorageValue(currentSPKsRaw) || [];
       const updatedSPKs = [...currentSPKs, ...newSPKs];
       
@@ -1133,7 +1141,7 @@ const PPIC = () => {
       
       // CRITICAL: Force immediate sync ke server untuk create SPK
       // Ini memastikan data langsung tersedia di device lain
-      await storageService.set('gt_spk', updatedSPKs, true);
+      await storageService.set(StorageKeys.GENERAL_TRADING.SPK, updatedSPKs, true);
       
       // Reset dan close
       setSelectedItemsForSPK({});
@@ -1217,11 +1225,13 @@ const PPIC = () => {
           }
           return s;
         });
-        await storageService.set('gt_spk', updatedSpkData);
+        await storageService.set(StorageKeys.GENERAL_TRADING.SPK, updatedSpkData);
         setSpkData(updatedSpkData);
         
         showAlert(`Stock cukup untuk SPK ${spkNo}!\n\nAvailable: ${availableStock}\nRequired: ${requiredQty}\n\nTidak perlu membuat PR.`, 'Information');
-        loadData();
+        // CRITICAL: Jangan panggil loadData() di sini!
+        // Event listener akan auto-trigger jika ada perubahan dari storage
+        // Memanggil loadData() hanya akan reload ulang semua data dan menyebabkan notifikasi flickering
         return;
       }
       
@@ -1251,7 +1261,7 @@ const PPIC = () => {
         return code;
       };
       
-      const existingPRsRaw = await storageService.get<any[]>('gt_purchaseRequests') || [];
+      const existingPRsRaw = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PURCHASE_REQUESTS) || [];
       const existingPRs = extractStorageValue(existingPRsRaw) || [];
       let prNo = '';
       let isUnique = false;
@@ -1323,7 +1333,7 @@ const PPIC = () => {
       // CRITICAL: Force immediate sync ke server untuk create PR
       // Ini memastikan PR langsung muncul di Purchasing di device lain
       console.log(`[GT PPIC] 📤 Creating PR and POST to server: ${prNo}`);
-      await storageService.set('gt_purchaseRequests', updatedPRs, true);
+      await storageService.set(StorageKeys.GENERAL_TRADING.PURCHASE_REQUESTS, updatedPRs, true);
       console.log(`[GT PPIC] ✅ PR created and synced to server: ${prNo}`);
       setPurchaseRequests(updatedPRs);
       
@@ -1332,7 +1342,7 @@ const PPIC = () => {
       let notificationSent = false;
       try {
         // CRITICAL: Get current notifications dengan proper extraction
-        const purchasingNotificationsRaw = await storageService.get<any[]>('gt_purchasingNotifications');
+        const purchasingNotificationsRaw = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PURCHASING_NOTIFICATIONS);
         let purchasingNotifications = extractStorageValue(purchasingNotificationsRaw) || [];
         
         // CRITICAL: Ensure array format
@@ -1379,7 +1389,7 @@ const PPIC = () => {
           });
           
           // CRITICAL: immediateSync = true untuk POST ke server
-          await storageService.set('gt_purchasingNotifications', updatedNotifications, true);
+          await storageService.set(StorageKeys.GENERAL_TRADING.PURCHASING_NOTIFICATIONS, updatedNotifications, true);
           
           console.log(`[GT PPIC] ✅ Purchasing notification POSTED to server: ${prNo} (${updatedNotifications.length} total notifications)`);
           
@@ -1387,7 +1397,7 @@ const PPIC = () => {
           // Wait a bit for server sync to complete
           await new Promise(resolve => setTimeout(resolve, 500));
           
-          const verifyRaw = await storageService.get<any[]>('gt_purchasingNotifications');
+          const verifyRaw = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PURCHASING_NOTIFICATIONS);
           const verifyNotifications = extractStorageValue(verifyRaw) || [];
           const verifyNotif = verifyNotifications.find((n: any) => n && n.prNo === prNo);
           
@@ -1419,22 +1429,16 @@ const PPIC = () => {
       
       setCreatingPR(prev => ({ ...prev, [spkNo]: false }));
       
-      // Sama seperti Packaging PPIC: panggil loadData() setelah create PR
-      // loadData() akan reload semua data dari storage termasuk salesOrders dan purchaseRequests
-      // Event listener akan handle debounce untuk prevent multiple reloads
-        // CRITICAL: Skip event listener untuk 2 detik setelah create PR
-        // Ini mencegah loadData() trigger yang menyebabkan SO hilang dari table list
-        skipReloadRef.current = {
-          skipUntil: Date.now() + 2000, // Skip reload selama 2 detik
-          reason: 'createPR'
-        };
-        
-        const notificationMessage = notificationSent 
-          ? `PR berhasil dibuat untuk SPK ${spkNo}!\n\nPR No: ${prNo}\nProduct: ${spk.product}\nShortage Qty: ${shortageQty} ${spk.unit}\n\n📧 Notification sent to Purchasing`
-          : `PR berhasil dibuat untuk SPK ${spkNo}!\n\nPR No: ${prNo}\nProduct: ${spk.product}\nShortage Qty: ${shortageQty} ${spk.unit}\n\n⚠️ Warning: Notification to Purchasing may not have been sent. Please check.`;
-        
-        showAlert(notificationMessage, 'Success');
-      loadData();
+      const notificationMessage = notificationSent 
+        ? `PR berhasil dibuat untuk SPK ${spkNo}!\n\nPR No: ${prNo}\nProduct: ${spk.product}\nShortage Qty: ${shortageQty} ${spk.unit}\n\n📧 Notification sent to Purchasing`
+        : `PR berhasil dibuat untuk SPK ${spkNo}!\n\nPR No: ${prNo}\nProduct: ${spk.product}\nShortage Qty: ${shortageQty} ${spk.unit}\n\n⚠️ Warning: Notification to Purchasing may not have been sent. Please check.`;
+      
+      showAlert(notificationMessage, 'Success');
+      
+      // CRITICAL: Jangan panggil loadData() di sini!
+      // State sudah di-update langsung via setPurchaseRequests()
+      // Event listener akan auto-trigger jika ada perubahan dari storage
+      // Memanggil loadData() hanya akan reload ulang semua data yang sudah ada dan menyebabkan refresh
     } catch (error: any) {
       setCreatingPR(prev => ({ ...prev, [spk.spkNo]: false }));
       showAlert(`Error creating PR: ${error.message}`, 'Error');
@@ -1493,7 +1497,7 @@ const PPIC = () => {
   // Helper function untuk proceed save delivery schedule
   const proceedSaveDeliverySchedule = async (data: { spkDeliveries: { spkNo: string; deliveryBatches: any[] }[] }) => {
     let updated = [...scheduleData];
-    const deliveryNotificationsRaw = await storageService.get<any[]>('gt_deliveryNotifications') || [];
+    const deliveryNotificationsRaw = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.DELIVERY_NOTIFICATIONS) || [];
     const deliveryNotifications = extractStorageValue(deliveryNotificationsRaw) || [];
     let newNotifications: any[] = [];
     
@@ -1607,7 +1611,7 @@ const PPIC = () => {
             }
             return s;
           });
-          await storageService.set('gt_spk', updatedSpkData);
+          await storageService.set(StorageKeys.GENERAL_TRADING.SPK, updatedSpkData);
           setSpkData(updatedSpkData);
         }
         
@@ -1640,7 +1644,7 @@ const PPIC = () => {
     
     // CRITICAL: Force immediate sync ke server untuk save delivery schedule
     // Ini memastikan data langsung tersedia di device lain
-    await storageService.set('gt_schedule', updated, true);
+    await storageService.set(StorageKeys.GENERAL_TRADING.SCHEDULE, updated, true);
     setScheduleData(updated);
     
     // CRITICAL: Skip event listener untuk 2 detik setelah save delivery schedule
@@ -1653,7 +1657,7 @@ const PPIC = () => {
     if (newNotifications.length > 0) {
       // CRITICAL: Force immediate sync ke server untuk delivery notifications
       // Ini memastikan notifikasi langsung muncul di Delivery Note di device lain
-      await storageService.set('gt_deliveryNotifications', [...deliveryNotifications, ...newNotifications], true);
+      await storageService.set(StorageKeys.GENERAL_TRADING.DELIVERY_NOTIFICATIONS, [...deliveryNotifications, ...newNotifications], true);
       showAlert(`Delivery schedule saved successfully untuk ${data.spkDeliveries.length} SPK(s)\n\n📧 ${newNotifications.length} notification(s) sent to Delivery Note\n\n💡 Stock akan dicek saat create Delivery Note.`, 'Success');
     } else {
       showAlert(`Delivery schedule saved untuk ${data.spkDeliveries.length} SPK(s)`, 'Success');
@@ -1676,8 +1680,8 @@ const PPIC = () => {
     // Check if SPK has related data (schedule, delivery, etc.)
     try {
       const [scheduleListRaw, deliveryListRaw] = await Promise.all([
-        storageService.get<any[]>('gt_schedule'),
-        storageService.get<any[]>('gt_delivery'),
+        storageService.get<any[]>(StorageKeys.GENERAL_TRADING.SCHEDULE),
+        storageService.get<any[]>(StorageKeys.GENERAL_TRADING.DELIVERY),
       ]);
 
       const scheduleList = scheduleListRaw || [];
@@ -1717,7 +1721,7 @@ const PPIC = () => {
             console.log('[GT PPIC] handleDeleteSPK called for:', spkNo, spk.id);
             
             // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
-            const deleteResult = await deleteGTItem('gt_spk', spk.id, 'id');
+            const deleteResult = await deleteGTItem(StorageKeys.GENERAL_TRADING.SPK, spk.id, 'id');
             if (!deleteResult.success) {
               console.error('[GT PPIC] Delete failed:', deleteResult.error);
               showAlert(`❌ Error deleting SPK ${spkNo}: ${deleteResult.error || 'Unknown error'}`, 'Error');
@@ -1725,7 +1729,7 @@ const PPIC = () => {
             }
             
             // Reload SPK data dengan helper (handle race condition)
-            const activeSpkData = await reloadGTData('gt_spk', setSpkData);
+            const activeSpkData = await reloadGTData(StorageKeys.GENERAL_TRADING.SPK, setSpkData);
             setSpkData(activeSpkData);
             
             // Reload all data untuk refresh UI
@@ -2128,7 +2132,7 @@ const PPIC = () => {
                     setSalesOrders(updatedSalesOrders);
                     // CRITICAL: Force immediate sync ke server untuk confirm notifikasi
                     // Ini memastikan data langsung tersedia di device lain
-                    await storageService.set('gt_salesOrders', updatedSalesOrders, true);
+                    await storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updatedSalesOrders, true);
                   } else {
                     // Pastikan flag ppicNotified tetap true
                     if (!existingSO.ppicNotified) {
@@ -2139,7 +2143,7 @@ const PPIC = () => {
                       );
                       setSalesOrders(updatedSalesOrders);
                       // CRITICAL: Force immediate sync ke server untuk confirm notifikasi
-                      await storageService.set('gt_salesOrders', updatedSalesOrders, true);
+                      await storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updatedSalesOrders, true);
                     }
                   }
                   setViewingSO(notification.so);
@@ -2155,7 +2159,7 @@ const PPIC = () => {
                       );
                       setSalesOrders(updatedSalesOrders);
                       // CRITICAL: Force immediate sync ke server untuk confirm notifikasi
-                      await storageService.set('gt_salesOrders', updatedSalesOrders, true);
+                      await storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updatedSalesOrders, true);
                     }
                     setViewingSO(so);
                   } else {
@@ -2199,6 +2203,16 @@ const PPIC = () => {
               value={searchQuery}
               onChange={setSearchQuery}
               placeholder="Search by SO No, SPK No, Customer..."
+            />
+          </div>
+          <div style={{ flex: '0 0 400px', minWidth: '350px' }}>
+            <DateRangeFilter
+              onDateChange={(from, to) => {
+                setDateFrom(from);
+                setDateTo(to);
+              }}
+              defaultFrom={dateFrom}
+              defaultTo={dateTo}
             />
           </div>
         </div>

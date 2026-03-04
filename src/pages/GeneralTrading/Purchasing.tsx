@@ -1,35 +1,26 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';      
 import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
+import DateRangeFilter from '../../components/DateRangeFilter';
 import NotificationBell from '../../components/NotificationBell';
-import { storageService, extractStorageValue } from '../../services/storage';
-import { deleteGTItem, reloadGTData, filterActiveItems } from '../../utils/gt-delete-helper';
+import { storageService, extractStorageValue, StorageKeys } from '../../services/storage';
+import { filterActiveItems } from '../../utils/data-persistence-helper';
+import { deletePackagingItem, deletePackagingItems, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import { generatePOHtml } from '../../pdf/po-pdf-template';
 import { generatePOSheetHtml } from '../../pdf/po-sheet-template';
+import { generatePRHtml } from '../../pdf/pr-pdf-template';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
-import * as XLSX from 'xlsx';
+import { useLanguage } from '../../hooks/useLanguage';
 import { useDialog } from '../../hooks/useDialog';
+import BlobService from '../../services/blob-service';
+import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
+import { logCreate, logUpdate, logDelete } from '../../utils/activity-logger';
 import '../../styles/common.css';
 import '../../styles/compact.css';
-import './Purchasing.css';
-
-// CRITICAL: Safe .some() helper to prevent TypeError
-const safeSome = (array: any, predicate: (item: any) => boolean): boolean => {
-  if (!Array.isArray(array)) {
-    console.error('[GT Purchasing] safeSome: array is not an array:', typeof array);
-    return false;
-  }
-  try {
-    return array.some(predicate);
-  } catch (error) {
-    console.error('[GT Purchasing] safeSome: error in .some() operation:', error);
-    return false;
-  }
-};
 
 interface PurchaseOrder {
   id: string;
@@ -39,11 +30,11 @@ interface PurchaseOrder {
   spkNo?: string;
   sourcePRId?: string;
   productItem: string;
-  productId?: string;
+  product_id?: string;
+  productId?: string; // Deprecated - use product_id
   qty: number;
   price: number;
   total: number;
-  discountPercent?: number; // Discount percentage
   paymentTerms: 'TOP' | 'COD' | 'CBD';
   topDays: number;
   status: 'DRAFT' | 'OPEN' | 'CLOSE';
@@ -63,16 +54,14 @@ interface Supplier {
   telepon?: string;
 }
 
-interface product {
+interface Product {
   id: string;
   kode: string;
   product_id?: string;
   nama: string;
-  priceMtr?: number;
-  harga?: number;
-  supplier?: string;
-  unit?: string;
-  deskripsi?: string;
+  satuan: string;
+  hargaFg?: number;
+  hargaSales?: number;
 }
 
 interface PurchaseRequest {
@@ -83,7 +72,8 @@ interface PurchaseRequest {
   customer: string;
   product: string;
   items: Array<{
-    productId: string;
+    product_id: string;
+    productId?: string; // Deprecated - use product_id
     productName: string;
     productKode: string;
     supplier: string;
@@ -147,10 +137,28 @@ const POActionMenu = ({
 
   useEffect(() => {
     if (showMenu && buttonRef.current) {
-      const buttonRect = buttonRef.current.getBoundingClientRect();
-      setMenuPosition({
-        top: buttonRect.bottom + 4,
-        right: window.innerWidth - buttonRect.right,
+      // Use requestAnimationFrame to ensure menu is rendered before calculating position
+      requestAnimationFrame(() => {
+        if (!buttonRef.current) return;
+        const buttonRect = buttonRef.current.getBoundingClientRect();
+        const menuHeight = 250; // Estimated menu height
+        const spaceBelow = window.innerHeight - buttonRect.bottom;
+        const spaceAbove = buttonRect.top;
+        const gap = 0; // No gap for tight positioning
+        
+        // If not enough space below but enough space above, position above
+        if (spaceBelow < menuHeight && spaceAbove > menuHeight) {
+          setMenuPosition({
+            top: buttonRect.top - menuHeight - gap,
+            right: window.innerWidth - buttonRect.right,
+          });
+        } else {
+          // Default: position below with small gap
+          setMenuPosition({
+            top: buttonRect.bottom + gap,
+            right: window.innerWidth - buttonRect.right,
+          });
+        }
       });
     }
   }, [showMenu]);
@@ -203,7 +211,7 @@ const POActionMenu = ({
                   onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
                   onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                 >
-                  👁️ View Detail PO Sheet
+                  👁️ View Detail PR
                 </button>
               )}
               {onViewDetailPOFull && (
@@ -345,7 +353,7 @@ const POActionMenu = ({
               🔄 Update Status
             </button>
           )}
-          {onDelete && item.status !== 'CLOSE' && (
+          {onDelete && (
             <button
               onClick={() => { onDelete(); setShowMenu(false); }}
               style={{
@@ -358,6 +366,9 @@ const POActionMenu = ({
                 cursor: 'pointer',
                 fontSize: '11px',
                 borderRadius: '4px',
+                borderTop: '1px solid var(--border-color)',
+                marginTop: '4px',
+                paddingTop: '8px',
               }}
               onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -387,37 +398,51 @@ const POActionMenu = ({
 };
 
 const Purchasing = () => {
+  const { t } = useLanguage();
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [products, setproducts] = useState<product[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
-  
-  // CRITICAL: Flag untuk skip event listener setelah confirm notifikasi lokal
-  // Ini mencegah loadPurchaseRequests() trigger yang menyebabkan PR hilang dari table list
-  const skipReloadRef = useRef<{ skipUntil: number; reason: string }>({ skipUntil: 0, reason: '' });
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<PurchaseOrder | null>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editFormData, setEditFormData] = useState<Partial<PurchaseOrder>>({});
+  const [editSupplierInputValue, setEditSupplierInputValue] = useState('');
+  const [editProductInputValue, setEditProductInputValue] = useState('');
+  const [editQtyInputValue, setEditQtyInputValue] = useState('');
+  const [editPriceInputValue, setEditPriceInputValue] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'outstanding'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [selectedPR, setSelectedPR] = useState<PurchaseRequest | null>(null);
   const [viewPdfData, setViewPdfData] = useState<{ html: string; poNo: string } | null>(null);
+  const [viewPRPdfData, setViewPRPdfData] = useState<{ html: string; prNo: string } | null>(null);
   const [selectedPOForReceipt, setSelectedPOForReceipt] = useState<PurchaseOrder | null>(null);
+  const [showMergePODialog, setShowMergePODialog] = useState(false);
+  const [selectedPOsForMerge, setSelectedPOsForMerge] = useState<string[]>([]);
   const [grnList, setGrnList] = useState<any[]>([]);
   const [financeNotifications, setFinanceNotifications] = useState<any[]>([]);
-  const [productInputValue, setproductInputValue] = useState('');
+  const [spkData, setSpkData] = useState<any[]>([]);
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(50); // 50 items per page untuk performa optimal
+  const [tableCurrentPage, setTableCurrentPage] = useState(1);
+  const [productInputValue, setProductInputValue] = useState('');
   const [supplierInputValue, setSupplierInputValue] = useState('');
+  const [showSupplierDialog, setShowSupplierDialog] = useState(false);
+  const [supplierDialogSearch, setSupplierDialogSearch] = useState('');
+  const [showProductDialog, setShowProductDialog] = useState(false);
+  const [productDialogSearch, setProductDialogSearch] = useState('');
   const [qtyInputValue, setQtyInputValue] = useState('');
   const [priceInputValue, setPriceInputValue] = useState('');
   const [formData, setFormData] = useState<Partial<PurchaseOrder>>({
     supplier: '',
     soNo: '',
     productItem: '',
-    productId: '', // Tambahkan productId (SKU) ke formData
     qty: 0,
     price: 0,
     total: 0,
-    discountPercent: 0,
     paymentTerms: 'TOP',
     topDays: 30,
     receiptDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -426,10 +451,50 @@ const Purchasing = () => {
     score: '',
     keterangan: '',
   });
-  const [discountInputValue, setDiscountInputValue] = useState<string>('');
   
   // Custom Dialog - menggunakan hook terpusat
-  const { showAlert, showConfirm, showPrompt, DialogComponent } = useDialog();
+  const { showAlert, showConfirm, closeDialog, DialogComponent } = useDialog();
+  
+  // Ref untuk track if GRN save is in progress (prevent race condition)
+  const grnSavingRef = useRef<boolean>(false);
+
+  // Filtered suppliers for dialog
+  const filteredSuppliersForDialog = useMemo(() => {
+    // CRITICAL: Ensure suppliers is always an array
+    const suppliersArray = Array.isArray(suppliers) ? suppliers : [];
+    
+    let filtered = suppliersArray;
+    if (supplierDialogSearch) {
+      const query = supplierDialogSearch.toLowerCase();
+      filtered = suppliersArray.filter(s => {
+        if (!s) return false;
+        const code = (s.kode || '').toLowerCase();
+        const name = (s.nama || '').toLowerCase();
+        return code.includes(query) || name.includes(query);
+      });
+    }
+    // Limit to 200 items for performance
+    return filtered.slice(0, 200);
+  }, [supplierDialogSearch, suppliers]);
+
+  // Filtered products for dialog
+  const filteredProductsForDialog = useMemo(() => {
+    // CRITICAL: Ensure products is always an array
+    const productsArray = Array.isArray(products) ? products : [];
+    
+    let filtered = productsArray;
+    if (productDialogSearch) {
+      const query = productDialogSearch.toLowerCase();
+      filtered = productsArray.filter(p => {
+        if (!p) return false;
+        const code = (p.product_id || p.kode || '').toLowerCase();
+        const name = (p.nama || '').toLowerCase();
+        return code.includes(query) || name.includes(query);
+      });
+    }
+    // Limit to 200 items for performance
+    return filtered.slice(0, 200);
+  }, [productDialogSearch, products]);
 
   // Helper function untuk remove leading zero dari input angka
   const removeLeadingZero = (value: string): string => {
@@ -451,199 +516,75 @@ const Purchasing = () => {
     return value;
   };
 
+  // Helper function untuk get product_id (support backward compatibility)
+  const getProductId = (item: any): string => {
+    return (item.product_id || item.kode || '').toString().trim();
+  };
+
+  // Helper function untuk find product by ID (support backward compatibility)
+  const findProductById = (productId: string): Product | undefined => {
+    if (!productId) return undefined;
+    return products.find(p => 
+      (p.product_id || p.kode || '').toString().trim() === productId
+    );
+  };
+
   useEffect(() => {
-    let debounceTimer: NodeJS.Timeout | null = null;
-    let isLoading = false; // Guard untuk prevent loop
-    
-    const loadAll = async () => {
-      // Guard untuk prevent multiple simultaneous loads
-      if (isLoading) {
-        return;
-      }
-      isLoading = true;
-      try {
-      // Load orders first (untuk enrich PO dengan spkNo)
-      await loadOrders();
-      // Then load PRs (untuk auto-update PR status berdasarkan PO yang sudah ada)
-      await loadPurchaseRequests();
-      // Load other data
-      loadSuppliers();
-      loadproducts();
-      loadGRN();
-      } finally {
-        isLoading = false;
-      }
-    };
-    loadAll();
-    
-    // Listen untuk storage changes (untuk refresh data ketika ada perubahan)
-    const handleStorageChange = (e: CustomEvent) => {
-      const key = e.detail?.key || '';
-      
-      // CRITICAL: Skip reload jika baru saja confirm notifikasi lokal (untuk prevent PR hilang dari table list)
-      const now = Date.now();
-      if (now < skipReloadRef.current.skipUntil) {
-        return; // Skip reload untuk perubahan lokal
-      }
-      
-      // CRITICAL: Skip jika sedang loading untuk prevent loop
-      if (isLoading) {
-        return;
-      }
-      
-      // CRITICAL: Listen untuk semua format key (dengan dan tanpa prefix) untuk memastikan PR dari PPIC langsung muncul
-      // CRITICAL: JANGAN listen untuk gt_products karena akan trigger loop (products tidak perlu reload dari event)
-      if (key === 'gt_purchaseOrders' || key === 'gt_purchaseRequests' || key === 'gt_grn' || 
-          key === 'general-trading/gt_purchaseRequests' || key === 'general-trading/gt_purchaseOrders' ||
-          key === 'gt_purchasingNotifications' || key === 'general-trading/gt_purchasingNotifications') {
-        // CRITICAL: Debounce untuk prevent multiple rapid calls
-        if (debounceTimer) {
-          clearTimeout(debounceTimer);
-        }
-        debounceTimer = setTimeout(() => {
-          if (key === 'gt_grn' || key === 'general-trading/gt_grn') {
-          loadGRN();
-        } else {
-          loadAll();
-        }
-          debounceTimer = null;
-        }, 300); // 300ms debounce
-      }
-    };
-    
-    window.addEventListener('app-storage-changed', handleStorageChange as EventListener);
-    
-    return () => {
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
-      }
-      window.removeEventListener('app-storage-changed', handleStorageChange as EventListener);
-    };
+    loadOrders();
+    loadSuppliers();
+    loadProducts();
+    loadPurchaseRequests();
+    loadGRN();
+    loadSPKData();
   }, []);
+  
+  const loadSPKData = async () => {
+    try {
+      const dataRaw = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.SPK);
+      const data = Array.isArray(dataRaw) ? dataRaw : [];
+      setSpkData(data);
+    } catch (error) {
+      setSpkData([]);
+    }
+  };
 
   const loadGRN = async () => {
     try {
-      const dataRaw = await storageService.get<any[]>('gt_grn');
-      const data = extractStorageValue(dataRaw) || [];
-      setGrnList(Array.isArray(data) ? data : []);
+      const dataRaw = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.GRN);
+      const data = Array.isArray(dataRaw) ? dataRaw : [];
+      setGrnList(data);
     } catch (error) {
       setGrnList([]);
     }
   };
 
   const loadSuppliers = async () => {
-    const data = await storageService.get<Supplier[]>('gt_suppliers') || [];
-    setSuppliers(data);
+    const data = await storageService.get<Supplier[]>(StorageKeys.GENERAL_TRADING.SUPPLIERS) || [];
+    // CRITICAL: Filter deleted items using helper function
+    const activeSuppliers = filterActiveItems(data);
+    setSuppliers(activeSuppliers);
   };
 
-  const loadproducts = async () => {
-    // CRITICAL: Remove console.log untuk prevent spam
-    let dataRaw = await storageService.get<product[]>('gt_products') || [];
-    
-    // CRITICAL: Extract dengan proper extraction untuk handle nested structure
-    let data = extractStorageValue(dataRaw) || [];
-    
-    // CRITICAL: Ensure data is always an array
-    if (!Array.isArray(data)) {
-      data = [];
-    }
-    
-    // If we have very few products, try force reload from file
-    if (data.length <= 1) {
-      const fileData = await storageService.forceReloadFromFile<product[]>('gt_products');
-      const extractedFileData = extractStorageValue(fileData) || [];
-      if (Array.isArray(extractedFileData) && extractedFileData.length > data.length) {
-        data = extractedFileData;
-      }
-    }
-    
-    // Filter out deleted items menggunakan helper function
+  const loadProducts = async () => {
+    const data = await storageService.get<Product[]>(StorageKeys.GENERAL_TRADING.PRODUCTS) || [];
+    // CRITICAL: Filter deleted items using helper function
     const activeProducts = filterActiveItems(data);
-    setproducts(activeProducts);
+    setProducts(activeProducts);
   };
 
   const loadOrders = async () => {
     try {
-      let [poDataRaw, financeNotifDataRaw, salesOrdersRaw] = await Promise.all([
-        storageService.get<PurchaseOrder[]>('gt_purchaseOrders'),
-        storageService.get<any[]>('gt_financeNotifications'),
-        storageService.get<any[]>('gt_salesOrders'),
+      const [poDataRaw, financeNotifDataRaw] = await Promise.all([
+        storageService.get<PurchaseOrder[]>(StorageKeys.GENERAL_TRADING.PURCHASE_ORDERS),
+        storageService.get<any[]>(StorageKeys.GENERAL_TRADING.FINANCE_NOTIFICATIONS),
       ]);
+      const poData = Array.isArray(poDataRaw) ? poDataRaw : [];
+      const financeNotifData = Array.isArray(financeNotifDataRaw) ? financeNotifDataRaw : [];
       
-      // Force reload sales orders if very few detected
-      if (Array.isArray(salesOrdersRaw) && salesOrdersRaw.length <= 1) {
-        console.log('[GT Purchasing] Few sales orders detected, trying force reload from file...');
-        const fileData = await storageService.forceReloadFromFile<any[]>('gt_salesOrders');
-        if (fileData && Array.isArray(fileData) && fileData.length > salesOrdersRaw.length) {
-          console.log(`[GT Purchasing] Force reload successful: ${fileData.length} sales orders from file`);
-          salesOrdersRaw = fileData;
-        }
-      }
+      // Filter out deleted items (tombstone pattern) - prevent deleted PO from showing
+      const activePOs = filterActiveItems(poData);
       
-      // Filter out deleted items menggunakan helper function
-      let poData = filterActiveItems(Array.isArray(poDataRaw) ? poDataRaw : []);
-      const financeNotifData = filterActiveItems(Array.isArray(financeNotifDataRaw) ? financeNotifDataRaw : []);
-      const salesOrders = filterActiveItems(Array.isArray(salesOrdersRaw) ? salesOrdersRaw : []);
-      
-      // Enrich PO dengan spkNo dari SO jika belum ada
-      let poDataUpdated = false;
-      poData = poData.map((po: PurchaseOrder) => {
-        if (!po.spkNo && po.soNo) {
-          const so = salesOrders.find((s: any) => s.soNo === po.soNo);
-          if (so && so.items && so.items.length > 0) {
-            // Cari item yang match dengan product di PO
-            const matchingItem = so.items.find((item: any) => 
-              (item.productName || item.productKode || '').toString().trim().toLowerCase() === 
-              (po.productItem || po.productId || '').toString().trim().toLowerCase()
-            );
-            if (matchingItem && matchingItem.spkNo) {
-              poDataUpdated = true;
-              return { ...po, spkNo: matchingItem.spkNo };
-            } else if (so.items[0] && so.items[0].spkNo) {
-              // Fallback: ambil spkNo dari item pertama
-              poDataUpdated = true;
-              return { ...po, spkNo: so.items[0].spkNo };
-            }
-          }
-        }
-        return po;
-      });
-      
-      // Auto-reopen PO yang sudah CLOSE tapi masih ada outstanding qty
-      const grnData = extractStorageValue(await storageService.get<any[]>('gt_grn')) || [];
-      let poStatusUpdated = false;
-      poData = poData.map((po: PurchaseOrder) => {
-        if (po.status === 'CLOSE') {
-          // Cek apakah masih ada outstanding qty
-          const grnsForPO = grnData.filter((grn: any) => {
-            const grnPO = (grn.poNo || '').toString().trim();
-            const currentPO = (po.poNo || '').toString().trim();
-            return grnPO === currentPO;
-          });
-          
-          const totalReceived = grnsForPO.reduce((sum: number, grn: any) => {
-            const qty = parseFloat(String(grn.qtyReceived || '0')) || 0;
-            return sum + qty;
-          }, 0);
-          
-          const poQty = parseFloat(String(po.qty || '0')) || 0;
-          const remainingQty = poQty - totalReceived;
-          
-          // Jika masih ada outstanding qty, reopen ke OPEN
-          if (remainingQty > 0 && poQty > 0) {
-            poStatusUpdated = true;
-            return { ...po, status: 'OPEN' as const };
-          }
-        }
-        return po;
-      });
-      
-      // Save updated PO data jika ada perubahan
-      if (poDataUpdated || poStatusUpdated) {
-        await storageService.set('gt_purchaseOrders', poData);
-      }
-      
-      setOrders(poData);
+      setOrders(activePOs);
       setFinanceNotifications(financeNotifData);
     } catch (error) {
       setOrders([]);
@@ -652,152 +593,10 @@ const Purchasing = () => {
   };
 
   const loadPurchaseRequests = async () => {
-    // CRITICAL: Force reload dari server untuk memastikan PR terbaru dari PPIC selalu di-load
-    // Ini memastikan PR yang dibuat di PPIC langsung muncul di Purchasing
-    let dataRaw = await storageService.get<PurchaseRequest[]>('gt_purchaseRequests') || [];
-    
-    // CRITICAL: Extract dengan proper extraction untuk handle nested structure
-    let data = extractStorageValue(dataRaw) || [];
-    
-    // CRITICAL: Ensure data is always an array
-    if (!Array.isArray(data)) {
-      console.warn('[GT Purchasing] loadPurchaseRequests: data is not an array, resetting to empty array');
-      data = [];
-    }
-    
-    // CRITICAL: Jika data sedikit atau tidak ada, force reload dari server
-    if (data.length <= 1) {
-      try {
-        // Coba load dari server via storageService.get() yang akan sync dari server
-        const serverDataRaw = await storageService.get<PurchaseRequest[]>('gt_purchaseRequests');
-        const serverData = extractStorageValue(serverDataRaw) || [];
-        if (Array.isArray(serverData) && serverData.length > data.length) {
-          data = serverData;
-        }
-      } catch (error) {
-        // Fallback ke force reload dari file jika server sync gagal
-        const fileData = await storageService.forceReloadFromFile<PurchaseRequest[]>('gt_purchaseRequests');
-        const extractedFileData = extractStorageValue(fileData) || [];
-        if (Array.isArray(extractedFileData) && extractedFileData.length > data.length) {
-          data = extractedFileData;
-        }
-      }
-    }
-    
-    const poDataRaw = await storageService.get<PurchaseOrder[]>('gt_purchaseOrders') || [];
-    const poData = extractStorageValue(poDataRaw) || [];
-    
-    // CRITICAL: Ensure poData is always an array
-    const poDataArray = Array.isArray(poData) ? poData : [];
-    
-    // Helper untuk normalize string (trim, lowercase)
-    const normalize = (str: string | undefined | null): string => {
-      return (str || '').toString().trim().toLowerCase();
-    };
-    
-    // Auto-update PR status menjadi PO_CREATED jika sudah ada PO yang match
-    let prDataUpdated = false;
-    const updatedPRs = data.map((pr: PurchaseRequest) => {
-      // Skip jika sudah PO_CREATED
-      if (pr.status === 'PO_CREATED') return pr;
-      
-      // Cek apakah sudah ada PO untuk PR ini
-      // IMPORTANT: Gunakan normalize yang sama seperti di pendingPRs untuk konsistensi
-      const hasPO = safeSome(poDataArray, (po: PurchaseOrder) => {
-        // Match berdasarkan sourcePRId
-        if (po.sourcePRId && normalize(po.sourcePRId) === normalize(pr.id)) {
-          return true;
-        }
-        // Match berdasarkan spkNo (case-insensitive, trimmed)
-        if (po.spkNo && pr.spkNo && normalize(po.spkNo) === normalize(pr.spkNo)) {
-          return true;
-        }
-        // Match berdasarkan soNo + product (fallback)
-        if (po.soNo && pr.soNo && normalize(po.soNo) === normalize(pr.soNo)) {
-          const prProduct = (pr.product || (pr.items && pr.items.length > 0 ? pr.items[0].productName : '') || '').toString().trim().toLowerCase();
-          const poProduct = (po.productItem || po.productId || '').toString().trim().toLowerCase();
-          if (prProduct && poProduct && (prProduct === poProduct || prProduct.includes(poProduct) || poProduct.includes(prProduct))) {
-            return true;
-          } else if (!prProduct || !poProduct) {
-            // Match jika salah satu product kosong
-            return true;
-          }
-        }
-        return false;
-      });
-      
-      // Update status jika sudah ada PO
-      if (hasPO && pr.status === 'PENDING') {
-        prDataUpdated = true;
-        return { ...pr, status: 'PO_CREATED' as const };
-      }
-      
-      return pr;
-    });
-    
-    // Save updated PR data jika ada perubahan
-    if (prDataUpdated) {
-      await storageService.set('gt_purchaseRequests', updatedPRs);
-    }
-    
-    // Remove duplicates - keep only the first occurrence
-    // IMPORTANT: Use normalize untuk konsistensi dengan pendingPRs
-    // Cek berdasarkan: spkNo (prioritas), atau kombinasi soNo + customer jika spkNo tidak ada
-    const seen = new Set<string>();
-    const seenSoCustomer = new Set<string>(); // Track soNo+customer untuk detect duplicate dengan PR yang punya spkNo
-    const unique = updatedPRs.filter(pr => {
-      // Prioritas 1: spkNo (jika ada)
-      if (pr.spkNo) {
-        const spkKey = normalize(pr.spkNo);
-        if (seen.has(spkKey)) {
-          return false; // Duplicate
-        }
-        seen.add(spkKey);
-        
-        // Juga tambahkan kombinasi spkNo + soNo jika soNo ada
-        if (pr.soNo) {
-          const combinedKey = `${spkKey}|${normalize(pr.soNo)}`;
-          seen.add(combinedKey);
-          
-          // Track soNo+customer untuk detect duplicate dengan PR tanpa spkNo
-          if (pr.customer) {
-            const soCustomerKey = `${normalize(pr.soNo)}|${normalize(pr.customer)}`;
-            seenSoCustomer.add(soCustomerKey);
-          }
-        }
-        return true;
-      }
-      
-      // Prioritas 2: kombinasi soNo + customer (jika spkNo tidak ada)
-      if (pr.soNo && pr.customer) {
-        const soCustomerKey = `${normalize(pr.soNo)}|${normalize(pr.customer)}`;
-        // Cek apakah sudah ada PR dengan spkNo yang punya soNo+customer yang sama
-        if (seenSoCustomer.has(soCustomerKey)) {
-          return false; // Duplicate - sudah ada PR dengan spkNo yang punya soNo+customer sama
-        }
-        if (seen.has(soCustomerKey)) {
-          return false; // Duplicate
-        }
-        seen.add(soCustomerKey);
-        seenSoCustomer.add(soCustomerKey);
-        return true;
-      }
-      
-      // Fallback: id (jika spkNo dan soNo tidak ada)
-      const idKey = normalize(pr.id);
-      if (seen.has(idKey)) {
-        return false; // Duplicate
-      }
-      seen.add(idKey);
-      return true;
-    });
-    
-    // If duplicates were found, save cleaned data
-    if (unique.length !== updatedPRs.length) {
-      await storageService.set('gt_purchaseRequests', unique);
-    }
-    
-    setPurchaseRequests(unique);
+    let data = await storageService.get<PurchaseRequest[]>(StorageKeys.GENERAL_TRADING.PURCHASE_REQUESTS) || [];
+    // Ensure data is always an array
+    data = Array.isArray(data) ? data : [];
+    setPurchaseRequests(data);
   };
 
   const getSupplierInputDisplayValue = () => {
@@ -834,7 +633,7 @@ const Purchasing = () => {
     }
   };
 
-  const getproductInputDisplayValue = () => {
+  const getProductInputDisplayValue = () => {
     if (productInputValue !== undefined && productInputValue !== '') {
       return productInputValue;
     }
@@ -848,8 +647,8 @@ const Purchasing = () => {
     return '';
   };
 
-  const handleproductInputChange = (text: string) => {
-    setproductInputValue(text);
+  const handleProductInputChange = (text: string) => {
+    setProductInputValue(text);
     if (!text) {
       setFormData({
         ...formData,
@@ -867,15 +666,12 @@ const Purchasing = () => {
       return label === normalized || code === normalized || name === normalized;
     });
     if (matchedproduct) {
-      const productPrice = matchedproduct.priceMtr || matchedproduct.harga || 0;
+      const productPrice = matchedproduct.hargaSales || matchedproduct.hargaFg || 0;
       const roundedPrice = Math.ceil(productPrice);
       const roundedTotal = Math.ceil((formData.qty || 0) * roundedPrice);
-      // Untuk GT, SKU = codeItem = product_id atau kode (bukan product_id)
-      const productId = (matchedproduct as any).product_id || matchedproduct.kode || matchedproduct.product_id || '';
       setFormData({
         ...formData,
         productItem: matchedproduct.nama,
-        productId: productId, // Set productId (SKU = codeItem) saat product dipilih
         price: roundedPrice,
         total: roundedTotal,
       });
@@ -883,7 +679,6 @@ const Purchasing = () => {
       setFormData({
         ...formData,
         productItem: text,
-        productId: '', // Clear productId jika tidak match
         price: 0,
         total: 0,
       });
@@ -892,7 +687,7 @@ const Purchasing = () => {
 
   const handleCreate = () => {
     setEditingItem(null);
-    setproductInputValue('');
+    setProductInputValue('');
     setSupplierInputValue('');
     setQtyInputValue('');
     setPriceInputValue('');
@@ -900,18 +695,70 @@ const Purchasing = () => {
       supplier: '',
       soNo: '',
       productItem: '',
-      productId: '', // Reset productId (SKU)
       qty: 0,
       price: 0,
       total: 0,
       paymentTerms: 'TOP',
       topDays: 30,
       receiptDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      quality: '',
-      score: '',
-      keterangan: '',
     });
     setShowForm(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editFormData.supplier || !editFormData.productItem || !editFormData.qty || editFormData.qty <= 0) {
+      showAlert('Please fill all required fields (Supplier, product, Qty)', 'Validation Error');
+      return;
+    }
+    if (!(editFormData.soNo && editFormData.soNo.trim()) && !(editFormData.purchaseReason && editFormData.purchaseReason.trim())) {
+      showAlert('Isi "Reason pembelian" jika tidak link ke SO/SPK.', 'Validation Error');
+      return;
+    }
+    try {
+      if (!editingItem) return;
+      // Update existing PO
+      const updatedPO: PurchaseOrder = {
+        ...editingItem,
+        supplier: editFormData.supplier || '',
+        soNo: editFormData.soNo || '',
+        purchaseReason: editFormData.purchaseReason || '',
+        productItem: editFormData.productItem || '',
+        qty: editFormData.qty || 0,
+        price: Math.ceil(editFormData.price || 0),
+        total: Math.ceil((editFormData.qty || 0) * (editFormData.price || 0)),
+        paymentTerms: editFormData.paymentTerms || 'TOP',
+        topDays: (editFormData.paymentTerms === 'COD' || editFormData.paymentTerms === 'CBD') ? 0 : (editFormData.topDays || 30),
+        receiptDate: editFormData.receiptDate || new Date().toISOString().split('T')[0],
+        quality: editFormData.quality || '',
+        score: editFormData.score || '',
+        keterangan: editFormData.keterangan || '',
+      };
+      const ordersArray = Array.isArray(orders) ? orders : [];
+      const updated = ordersArray.map(o => o.id === editingItem.id ? updatedPO : o);
+      await storageService.set(StorageKeys.GENERAL_TRADING.PURCHASE_ORDERS, updated);
+      setOrders(updated);
+      // Log activity
+      try {
+        await logUpdate('PURCHASE_ORDER', editingItem.id, '/packaging/purchasing', {
+          poNo: editingItem.poNo,
+          supplier: updatedPO.supplier,
+          productItem: updatedPO.productItem,
+          qty: updatedPO.qty,
+        });
+      } catch (logError) {
+        // Silent fail
+      }
+      showAlert(`PO updated: ${editingItem.poNo}`, 'Success');
+      setShowEditDialog(false);
+      setEditingItem(null);
+      setEditFormData({});
+      setEditSupplierInputValue('');
+      setEditProductInputValue('');
+      setEditQtyInputValue('');
+      setEditPriceInputValue('');
+    } catch (error: any) {
+      showAlert(`Error saving PO: ${error.message}`, 'Error');
+    }
   };
 
   const handleSave = async () => {
@@ -925,81 +772,26 @@ const Purchasing = () => {
     }
     try {
       if (editingItem) {
-        // Update existing PO
-        // Untuk GT, productItem = productItem (product name)
-        const subtotal = Math.ceil((formData.qty || 0) * (formData.price || 0));
-        const total = Math.ceil(subtotal * (1 - (formData.discountPercent || 0) / 100));
-        const updatedPO: PurchaseOrder = {
-          ...editingItem,
-          supplier: formData.supplier || '',
-          soNo: formData.soNo || '',
-          purchaseReason: formData.purchaseReason || '',
-          productItem: formData.productItem || '', // Backward compatibility
-          productId: formData.productId || editingItem?.productId || '', // Pastikan productId (SKU) tersimpan
-          qty: formData.qty || 0,
-          price: Math.ceil(formData.price || 0),
-          total,
-          discountPercent: formData.discountPercent || 0,
-          paymentTerms: formData.paymentTerms || 'TOP',
-          topDays: (formData.paymentTerms === 'COD' || formData.paymentTerms === 'CBD') ? 0 : (formData.topDays || 30),
-          receiptDate: formData.receiptDate || new Date().toISOString().split('T')[0],
-          quality: formData.quality || '',
-          score: formData.score || '',
-          keterangan: formData.keterangan || '',
-        };
-        // Tambahkan productItem dan productName untuk GT
-        (updatedPO as any).productItem = formData.productItem || '';
-        (updatedPO as any).productName = formData.productItem || '';
-        (updatedPO as any).productId = formData.productId || editingItem?.productId || '';
-        const updated = orders.map(o => o.id === editingItem.id ? updatedPO : o);
-        await storageService.set('gt_purchaseOrders', updated);
-        setOrders(updated);
-        showAlert(`PO updated: ${editingItem.poNo}`, 'Success');
+        // Should not happen - edit should use handleSaveEdit
+        return;
       } else {
         // Create new PO with random number
-        // Untuk GT, productItem = productItem (product name)
         const now = new Date();
         const year = String(now.getFullYear()).slice(-2);
         const month = String(now.getMonth() + 1).padStart(2, '0');
         const day = String(now.getDate()).padStart(2, '0');
         const randomCode = Math.random().toString(36).substr(2, 5).toUpperCase();
         const poNo = `PO-${year}${month}${day}-${randomCode}`;
-        const subtotal = Math.ceil((formData.qty || 0) * (formData.price || 0));
-        const total = Math.ceil(subtotal * (1 - (formData.discountPercent || 0) / 100));
-        // Ambil spkNo dari formData atau dari SO jika soNo ada
-        let spkNo = (formData as any).spkNo || '';
-        if (!spkNo && formData.soNo) {
-          // Coba ambil spkNo dari SO
-          const salesOrders = await storageService.get<any[]>('gt_salesOrders') || [];
-          const so = salesOrders.find((s: any) => s.soNo === formData.soNo);
-          if (so && so.items && so.items.length > 0) {
-            // Ambil spkNo dari item pertama yang match dengan product
-            const matchingItem = so.items.find((item: any) => 
-              (item.productName || item.productKode || '').toString().trim().toLowerCase() === 
-              (formData.productItem || formData.productId || '').toString().trim().toLowerCase()
-            );
-            if (matchingItem && matchingItem.spkNo) {
-              spkNo = matchingItem.spkNo;
-            } else if (so.items[0] && so.items[0].spkNo) {
-              // Fallback: ambil spkNo dari item pertama
-              spkNo = so.items[0].spkNo;
-            }
-          }
-        }
-        
         const newPO: PurchaseOrder = {
           id: Date.now().toString(),
           poNo,
           supplier: formData.supplier || '',
           soNo: formData.soNo || '',
-          spkNo: spkNo || undefined, // Pastikan spkNo disimpan jika ada
           purchaseReason: formData.purchaseReason || '',
-          productItem: formData.productItem || '', // Backward compatibility
-          productId: formData.productId || '', // Pastikan productId (SKU) tersimpan
+          productItem: formData.productItem || '',
           qty: formData.qty || 0,
           price: Math.ceil(formData.price || 0),
-          total,
-          discountPercent: formData.discountPercent || 0,
+          total: Math.ceil((formData.qty || 0) * (formData.price || 0)),
           paymentTerms: formData.paymentTerms || 'TOP',
           topDays: (formData.paymentTerms === 'COD' || formData.paymentTerms === 'CBD') ? 0 : (formData.topDays || 30),
           status: 'OPEN',
@@ -1009,53 +801,51 @@ const Purchasing = () => {
           score: formData.score || '',
           keterangan: formData.keterangan || '',
         };
-        // Tambahkan productItem dan productName untuk GT
-        (newPO as any).productItem = formData.productItem || '';
-        (newPO as any).productName = formData.productItem || '';
-        (newPO as any).productId = formData.productId || '';
-        
-        // Jika PO dibuat untuk SPK/SO yang ada di PR, update PR status
-        // IMPORTANT: Gunakan normalize untuk matching (sama seperti di pendingPRs)
-        if (formData.spkNo || formData.soNo) {
-          // Helper untuk normalize string (trim, lowercase)
-          const normalize = (str: string | undefined | null): string => {
-            return (str || '').toString().trim().toLowerCase();
-          };
-          
-          const relatedPR = purchaseRequests.find((pr: PurchaseRequest) => {
-            if (pr.status !== 'PENDING') return false;
-            // Match berdasarkan spkNo (prioritas) - gunakan normalize
-            if (formData.spkNo && pr.spkNo && normalize(pr.spkNo) === normalize(formData.spkNo)) {
-              return true;
-            }
-            // Match berdasarkan soNo (fallback) - gunakan normalize
-            if (formData.soNo && pr.soNo && normalize(pr.soNo) === normalize(formData.soNo)) {
-              return true;
-            }
-            return false;
-          });
-          if (relatedPR) {
-            const updatedPRs = purchaseRequests.map((pr: PurchaseRequest) =>
-              pr.id === relatedPR.id ? { ...pr, status: 'PO_CREATED' as const } : pr
-            );
-            await storageService.set('gt_purchaseRequests', updatedPRs);
-            setPurchaseRequests(updatedPRs);
-            // PR status updated to PO_CREATED
-          }
-        }
-        
-        const updated = [...orders, newPO];
-        await storageService.set('gt_purchaseOrders', updated);
+        const ordersArray = Array.isArray(orders) ? orders : [];
+        const updated = [...ordersArray, newPO];
+        await storageService.set(StorageKeys.GENERAL_TRADING.PURCHASE_ORDERS, updated);
         setOrders(updated);
         
-        // IMPORTANT: Refresh PR data untuk update status setelah PO dibuat
-        await loadPurchaseRequests();
+        // Log activity
+        try {
+          await logCreate('PURCHASE_ORDER', newPO.id, '/packaging/purchasing', {
+            poNo: newPO.poNo,
+            supplier: newPO.supplier,
+            productItem: newPO.productItem,
+            qty: newPO.qty,
+            soNo: newPO.soNo,
+            spkNo: newPO.spkNo,
+          });
+        } catch (logError) {
+          // Silent fail
+        }
+        
+        // Update PR status jika PO dibuat manual dengan spkNo yang match
+        // IMPORTANT: Hanya update berdasarkan spkNo, BUKAN soNo (karena 1 SO bisa punya banyak SPK dengan PR berbeda)
+        if (newPO.spkNo) {
+          const prArray = Array.isArray(purchaseRequests) ? purchaseRequests : [];
+          const normalize = (str: string) => (str || '').toString().trim().toLowerCase();
+          
+          const updatedPRs = prArray.map(pr => {
+            // Match berdasarkan spkNo saja (tidak boleh match berdasarkan soNo karena terlalu luas)
+            if (newPO.spkNo && normalize(pr.spkNo || '') === normalize(newPO.spkNo) && pr.status === 'PENDING') {
+              return { ...pr, status: 'PO_CREATED' as const };
+            }
+            return pr;
+          });
+          
+          // Check if any PR was updated
+          const hasUpdatedPR = (Array.isArray(updatedPRs) && updatedPRs.some((pr, idx) => pr.status === 'PO_CREATED' && prArray[idx].status === 'PENDING')) || false;
+          if (hasUpdatedPR) {
+            await storageService.set(StorageKeys.GENERAL_TRADING.PURCHASE_REQUESTS, updatedPRs);
+            setPurchaseRequests(updatedPRs);
+          }
+        }
         
         showAlert(`PO created: ${poNo}`, 'Success');
       }
       setShowForm(false);
-      setEditingItem(null);
-      setproductInputValue('');
+      setProductInputValue('');
       setSupplierInputValue('');
       setQtyInputValue('');
       setPriceInputValue('');
@@ -1066,13 +856,11 @@ const Purchasing = () => {
         qty: 0,
         price: 0,
         total: 0,
-        discountPercent: 0,
         paymentTerms: 'TOP',
         topDays: 30,
         receiptDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         purchaseReason: '',
       });
-      setDiscountInputValue('');
     } catch (error: any) {
       showAlert(`Error saving PO: ${error.message}`, 'Error');
     }
@@ -1088,7 +876,7 @@ const Purchasing = () => {
     // Load product data untuk mendapatkan kode/description
     const productData = products.find(m => 
       m.nama === item.productItem || 
-      (item.productId && (m.product_id || m.kode) === item.productId)
+      (item.product_id && (m.product_id || m.kode) === item.product_id)
     );
 
     // Prepare enriched lines
@@ -1097,8 +885,8 @@ const Purchasing = () => {
       itemSku: productData?.kode || productData?.product_id || '-',
       qty: item.qty || 0,
       price: item.price || 0,
-      unit: productData?.unit || 'PCS',
-      description: productData?.deskripsi || productData?.nama || item.productItem || '',
+      unit: productData?.satuan || 'PCS',
+      description: productData?.nama || item.productItem || '',
     }];
 
     // Calculate totals
@@ -1114,8 +902,9 @@ const Purchasing = () => {
       address: companySettings?.address || 'Jl. Raya Bekasi Km. 28, Cikarang, Bekasi 17530',
     };
 
-    // Load logo menggunakan utility function dengan multiple fallback paths
-    const logo = await loadLogoAsBase64();
+    // Logo menggunakan logo-loader utility untuk kompatibilitas development, production, dan Electron
+    // Support noxtiz.png, noxtiz.ico, dan Logo.gif
+    let logo = await loadLogoAsBase64();
 
     // Prepare detail object
     const detail = {
@@ -1176,31 +965,33 @@ const Purchasing = () => {
         pic = currentUser.fullName || currentUser.username || '-';
       }
     } catch (e) {
-      console.error('Error getting current user:', e);
     }
 
     // Load product data untuk mendapatkan kode/description
     const productData = products.find(m => 
       m.nama === item.productItem || 
-      (item.productId && (m.product_id || m.kode) === item.productId)
+      (item.product_id && (m.product_id || m.kode) === item.product_id)
     );
 
     // Prepare items array untuk table
     const items = [{
       no: 1,
       item: item.productItem || '-',
-      quality: item.quality || productData?.deskripsi || '', // Gunakan quality dari PO, fallback ke deskripsi
+      quality: item.quality || productData?.nama || '', // Gunakan quality dari PO, fallback ke nama
       score: item.score !== undefined && item.score !== null ? item.score : '', // Gunakan score dari PO
       qty: item.qty || 0,
-      unit: productData?.unit || 'PCS',
+      unit: productData?.satuan || 'PCS',
       price: item.price || 0,
-      keterangan: item.keterangan || item.purchaseReason || productData?.deskripsi || '', // Gunakan keterangan dari PO, fallback ke purchaseReason
+      keterangan: item.keterangan || item.purchaseReason || productData?.nama || '', // Gunakan keterangan dari PO, fallback ke purchaseReason
     }];
 
     // Load company info from settings
     const companySettings = await storageService.get<{ companyName: string; address: string }>('companySettings');
     const companyName = companySettings?.companyName || 'PT TRIMA LAKSANA JAYA PRATAMA';
     const companyAddress = companySettings?.address || 'Jl. Raya Bekasi Km. 28, Cikarang, Bekasi 17530';
+
+    // Logo menggunakan logo-loader utility
+    let logo = await loadLogoAsBase64();
 
     // Generate HTML using sheet template
     return generatePOSheetHtml({
@@ -1213,6 +1004,7 @@ const Purchasing = () => {
       items,
       companyName,
       companyAddress,
+      logo: logo,
       page: 1,
       totalPages: 1,
     });
@@ -1284,26 +1076,24 @@ const Purchasing = () => {
     setEditingItem(item);
     const supplier = suppliers.find(s => s.nama === item.supplier);
     if (supplier) {
-      setSupplierInputValue(`${supplier.kode} - ${supplier.nama}`);
+      setEditSupplierInputValue(`${supplier.kode} - ${supplier.nama}`);
     } else {
-      setSupplierInputValue(item.supplier);
+      setEditSupplierInputValue(item.supplier);
     }
     const product = products.find(m => m.nama === item.productItem);
     if (product) {
-      setproductInputValue(`${product.product_id || product.kode} - ${product.nama}`);
+      setEditProductInputValue(`${product.product_id || product.kode} - ${product.nama}`);
     } else {
-      setproductInputValue(item.productItem);
+      setEditProductInputValue(item.productItem);
     }
-    setQtyInputValue('');
-    setPriceInputValue('');
-    setDiscountInputValue(item.discountPercent && item.discountPercent > 0 ? String(item.discountPercent) : '');
-    setFormData({
+    setEditQtyInputValue('');
+    setEditPriceInputValue('');
+    setEditFormData({
       supplier: item.supplier,
       soNo: item.soNo,
       purchaseReason: item.purchaseReason || '',
       productItem: item.productItem,
       qty: item.qty,
-      discountPercent: item.discountPercent || 0,
       price: item.price,
       total: item.total,
       paymentTerms: item.paymentTerms,
@@ -1313,54 +1103,85 @@ const Purchasing = () => {
       score: item.score || '',
       keterangan: item.keterangan || '',
     });
-    setShowForm(true);
+    setShowEditDialog(true);
   };
 
-  const handleCreateGRN = (item: PurchaseOrder) => {
-    // Allow create GRN jika masih ada outstanding qty, meskipun status CLOSE
-    // Cek total qty yang sudah diterima
-    const existingGRNs = grnList.filter((grn: any) => 
-      (grn.poNo || '').toString().trim() === (item.poNo || '').toString().trim()
-    );
-    const totalReceived = existingGRNs.reduce((sum: number, grn: any) => sum + (grn.qtyReceived || 0), 0);
-    const remainingQty = item.qty - totalReceived;
-    
-    if (remainingQty <= 0) {
-      showAlert(`Cannot create GRN from PO: ${item.poNo}\n\nAll items have been received (${totalReceived}/${item.qty}).`, 'Cannot Create GRN');
+  const handleCreateGRN = async (item: PurchaseOrder) => {
+    if (item.status !== 'OPEN') {
+      showAlert(`Cannot create GRN from PO: ${item.poNo}\n\nPO must be OPEN (approved) first.`, 'Cannot Create GRN');
       return;
     }
     
-    setSelectedPOForReceipt(item);
+    // Pre-load GRN data sebelum dialog dibuka untuk performa lebih cepat
+    try {
+      const grnData = await storageService.get<any[]>('grnPackaging') || [];
+      const grnDataArray = Array.isArray(grnData) ? grnData : [];
+      const grnsForPO = grnDataArray.filter((grn: any) => 
+        (grn.poNo || '').toString().trim() === (item.poNo || '').toString().trim()
+      );
+      const totalReceived = grnsForPO.reduce((sum: number, grn: any) => sum + (grn.qtyReceived || 0), 0);
+      
+      // Set PO dengan pre-loaded data
+      setSelectedPOForReceipt({
+        ...item,
+        _preloadedGRNData: {
+          totalReceived,
+          grnsForPO,
+        }
+      } as any);
+    } catch (error) {
+      // Jika error, tetap buka dialog tanpa pre-loaded data
+      setSelectedPOForReceipt(item);
+    }
   };
 
-  const handleSaveReceipt = async (receiptData: { qtyReceived: number; receivedDate: string; notes?: string; suratJalan?: string; suratJalanName?: string; invoiceNo?: string; invoiceFile?: string; invoiceFileName?: string }) => {
+  const handleSaveReceipt = async (receiptData: {
+    qtyReceived: number; receivedDate: string; notes?: string; suratJalan?: string; suratJalanId?: string; suratJalanName?: string; invoiceNo?: string; invoiceFile?: string; invoiceFileId?: string; invoiceFileName?: string; sitePlan?: string 
+}) => {
+    // CRITICAL: Prevent race condition - if already saving, return immediately
+    if (grnSavingRef.current) {
+      console.warn('[GRN] Save already in progress, ignoring duplicate request');
+      return;
+    }
+    
     if (!selectedPOForReceipt) return;
 
     try {
+      // Mark as saving
+      grnSavingRef.current = true;
+      
+      // IMPORTANT: Validate PO is not deleted (tombstone protection)
+      if ((selectedPOForReceipt as any).deleted === true || (selectedPOForReceipt as any).deletedAt) {
+        showAlert('PO ini sudah dihapus. Tidak bisa membuat GRN untuk PO yang sudah dihapus.', 'Error');
+        grnSavingRef.current = false;
+        return;
+      }
+      
       const item = selectedPOForReceipt;
       const qtyReceived = Math.ceil(receiptData.qtyReceived || item.qty);
       const receivedDate = receiptData.receivedDate || new Date().toISOString().split('T')[0];
 
       if (qtyReceived <= 0) {
         showAlert('Quantity received must be greater than 0', 'Validation Error');
+        grnSavingRef.current = false;
         return;
       }
 
       // GRN Partial Handling: Cek total qtyReceived dari semua GRN untuk PO ini
-      const grnPackagingRecords = extractStorageValue(await storageService.get<any[]>('gt_grn'));
+      const grnPackagingRecords = extractStorageValue(await storageService.get<any[]>('grnPackaging'));
       
       const existingGRNsForPO = grnPackagingRecords.filter((grn: any) => {
         const grnPO = (grn.poNo || '').toString().trim();
         const currentPO = (item.poNo || '').toString().trim();
-        return grnPO === currentPO;
+        const match = grnPO === currentPO;
+        return match;
       });
       
       const totalQtyReceived = existingGRNsForPO.reduce((sum: number, grn: any) => sum + (grn.qtyReceived || 0), 0);
-      const remainingQtyBeforeNewGRN = item.qty - totalQtyReceived;
+      const remainingQty = item.qty - totalQtyReceived;
       
       // Auto-fix: Jika total GRN melebihi PO qty (data corrupt), hapus GRN yang berlebihan
       if (totalQtyReceived > item.qty && existingGRNsForPO.length > 0) {
-        
         // Tampilkan konfirmasi ke user
         const grnList = existingGRNsForPO.map(g => `• ${g.grnNo}: ${g.qtyReceived} (${g.receivedDate})`).join('\n');
         showConfirm(
@@ -1379,32 +1200,44 @@ const Purchasing = () => {
               return grnPO !== currentPO;
             });
             
-            await storageService.set('gt_grn', cleanedGRNs);
+            await storageService.set(StorageKeys.GENERAL_TRADING.GRN, cleanedGRNs);
             
-            // Note: storageService.set() already triggers sync automatically, no need for manual sync
+            // Force sync to server immediately
+            if ((storageService as any).syncToServer) {
+              await (storageService as any).syncToServer();
+            }
             
             showAlert(`✅ Berhasil hapus ${existingGRNsForPO.length} GRN corrupt untuk PO ${item.poNo}.\n\nData sudah di-sync ke server.\n\nSilakan create GRN baru.`, 'Success');
             setSelectedPOForReceipt(null);
-            loadOrders();
+            // CRITICAL: Jangan panggil loadOrders() di sini!
+            // Event listener akan auto-trigger jika ada perubahan dari storage
+            // Memanggil loadOrders() hanya akan reload ulang semua data dan menyebabkan notifikasi flickering
           },
           () => {
             setSelectedPOForReceipt(null);
+            grnSavingRef.current = false;
           },
           '🧹 Clean Up Corrupt GRN Data'
         );
+        grnSavingRef.current = false;
         return;
       }
 
-      // Validasi: qtyReceived tidak boleh melebihi remaining qty
-      if (qtyReceived > remainingQtyBeforeNewGRN) {
+      // Validasi: qtyReceived tidak boleh melebihi remaining qty + 10% toleransi
+      const maxAllowedQty = item.qty * 1.1; // 10% toleransi dari qty ordered
+      const maxAllowedWithExisting = maxAllowedQty - totalQtyReceived;
+      
+      if (qtyReceived > maxAllowedWithExisting) {
+        const maxTotal = Math.ceil(maxAllowedQty);
         showAlert(
-          `⚠️ Quantity received (${qtyReceived}) melebihi sisa yang belum diterima!\n\n` +
+          `⚠️ Quantity received (${qtyReceived}) melebihi batas maksimal!\n\n` +
           `Qty Ordered: ${item.qty}\n` +
           `Total Sudah Diterima: ${totalQtyReceived}\n` +
-          `Sisa: ${remainingQtyBeforeNewGRN}\n\n` +
-          `Maksimal yang bisa diterima: ${remainingQtyBeforeNewGRN}`,
+          `Maksimal Total (dengan toleransi 10%): ${maxTotal}\n` +
+          `Maksimal yang bisa diterima sekarang: ${Math.ceil(maxAllowedWithExisting)}`,
           'Validation Error'
         );
+        grnSavingRef.current = false;
         return;
       }
 
@@ -1416,18 +1249,18 @@ const Purchasing = () => {
       const randomCode = Math.random().toString(36).substr(2, 5).toUpperCase();
       const grnNo = `GRN-${year}${month}${day}-${randomCode}`;
       
-      // Check duplicate GRN - hanya cek berdasarkan grnNo (karena grnNo sudah unique)
-      // JANGAN cek berdasarkan poNo + qtyReceived + receivedDate karena user bisa membuat multiple GRN dengan qty yang sama pada tanggal yang sama untuk partial receipt
+      // Check duplicate GRN untuk prevent save duplicate
       const duplicateGRN = grnPackagingRecords.find((grn: any) => 
-        grn.grnNo === grnNo
+        grn.grnNo === grnNo || 
+        (grn.poNo === item.poNo && grn.qtyReceived === qtyReceived && grn.receivedDate === receivedDate)
       );
       
       if (duplicateGRN) {
-        showAlert(`⚠️ GRN duplicate terdeteksi!\n\nGRN ${duplicateGRN.grnNo} sudah ada.\n\nTidak bisa membuat GRN dengan nomor yang sama.`, 'Duplicate Detected');
+        showAlert(`⚠️ GRN duplicate terdeteksi!\n\nGRN ${duplicateGRN.grnNo} dengan qty ${duplicateGRN.qtyReceived} untuk PO ${item.poNo} sudah ada.\n\nTidak bisa membuat GRN duplicate.`, 'Duplicate Detected');
+        grnSavingRef.current = false;
         return;
       }
       
-      // Untuk GT, simpan product name dan productId (SKU)
       const newGRN = {
         id: Date.now().toString(),
         grnNo: grnNo,
@@ -1435,226 +1268,196 @@ const Purchasing = () => {
         soNo: item.soNo,
         spkNo: item.spkNo,
         supplier: item.supplier,
-        productItem: item.productItem, // Backward compatibility
-        productName: item.productItem, // GT: product name (alias untuk productItem)
-        productId: item.productId || '',
+        productItem: item.productItem,
+        product_id: getProductId(item),
+        productId: getProductId(item), // Backward compatibility
         qtyOrdered: item.qty,
         qtyReceived: qtyReceived,
         status: 'OPEN', // GRN langsung OPEN setelah barang diterima
         receivedDate: receivedDate,
         notes: receiptData.notes || '',
-        suratJalan: receiptData.suratJalan || '',
+        suratJalanId: receiptData.suratJalanId || '',
         suratJalanName: receiptData.suratJalanName || '',
         invoiceNo: receiptData.invoiceNo || '',
-        invoiceFile: receiptData.invoiceFile || '',
+        invoiceFileId: receiptData.invoiceFileId || '',
         invoiceFileName: receiptData.invoiceFileName || '',
+        sitePlan: receiptData.sitePlan || 'Site Plan 1',
         created: new Date().toISOString(),
       };
       
       // IMPORTANT: Load dan save ke key yang SAMA!
-      const currentGRN = extractStorageValue(await storageService.get<any[]>('gt_grn'));
+      const currentGRN = extractStorageValue(await storageService.get<any[]>('grnPackaging')) || [];
+      const currentGRNArray = Array.isArray(currentGRN) ? currentGRN : [];
       
-      // Prevent duplicate before save - hanya cek berdasarkan grnNo (karena grnNo sudah unique dengan random code)
-      // JANGAN cek berdasarkan poNo + qtyReceived + receivedDate karena user bisa membuat multiple GRN dengan qty yang sama pada tanggal yang sama untuk partial receipt
-      const isDuplicate = safeSome(currentGRN, (grn: any) => 
-        grn.grnNo === newGRN.grnNo
-      );
+      // Prevent duplicate before save
+      const isDuplicate = (Array.isArray(currentGRNArray) && currentGRNArray.some((grn: any) => 
+        grn.grnNo === newGRN.grnNo || 
+        (grn.poNo === newGRN.poNo && 
+         grn.qtyReceived === newGRN.qtyReceived && 
+         grn.receivedDate === newGRN.receivedDate &&
+         Math.abs(new Date(grn.created).getTime() - new Date(newGRN.created).getTime()) < 5000) // 5 sec threshold
+      )) || false;
       
       if (isDuplicate) {
-        showAlert('⚠️ GRN duplicate terdeteksi! Tidak bisa save.\n\nKemungkinan double-click atau GRN dengan nomor yang sama sudah ada.', 'Error');
+        showAlert('⚠️ GRN duplicate terdeteksi! Tidak bisa save.\n\nKemungkinan double-click atau data sudah ada.', 'Error');
+        grnSavingRef.current = false;
         return;
       }
       
-      const updatedGRNs = Array.isArray(currentGRN) ? [...currentGRN, newGRN] : [newGRN];
+      const updatedGRNs = Array.isArray(currentGRNArray) ? [...currentGRNArray, newGRN] : [newGRN];
+      // Save GRN dengan immediateSync untuk pastikan langsung sync ke server
+      await storageService.set(StorageKeys.GENERAL_TRADING.GRN, updatedGRNs, true); // immediateSync = true untuk pastikan langsung sync ke server
       
-      // Save GRN immediately untuk UI responsiveness dengan immediateSync untuk pastikan langsung sync ke server
-      await storageService.set('gt_grn', updatedGRNs, true); // immediateSync = true untuk pastikan langsung sync ke server
-      
-      // Update grnList immediately untuk UI responsiveness
       setGrnList(Array.isArray(updatedGRNs) ? updatedGRNs : []);
       
-      // Update PO status: CLOSE hanya jika semua qty benar-benar sudah diterima (tidak ada outstanding)
-      // IMPORTANT: Reload GRN data untuk memastikan kita menggunakan data terbaru setelah save
-      const latestGRNs = extractStorageValue(await storageService.get<any[]>('gt_grn'));
-      const latestGRNsForPO = latestGRNs.filter((grn: any) => {
-        const grnPO = (grn.poNo || '').toString().trim();
-        const currentPO = (item.poNo || '').toString().trim();
-        return grnPO === currentPO;
-      });
+      // Update PO status: CLOSE jika total qtyReceived >= qtyOrdered
+      const updatedGRNsForPO = [...existingGRNsForPO, newGRN];
+      const newTotalQtyReceived = updatedGRNsForPO.reduce((sum: number, grn: any) => sum + (grn.qtyReceived || 0), 0);
       
-      const newTotalQtyReceived = latestGRNsForPO.reduce((sum: number, grn: any) => {
-        const qty = parseFloat(String(grn.qtyReceived || '0')) || 0;
-        return sum + qty;
-      }, 0);
-      
-      const itemQty = parseFloat(String(item.qty || '0')) || 0;
-      const remainingQty = itemQty - newTotalQtyReceived;
-      
-      // Hanya close jika remainingQty === 0 (tepat 0, semua sudah diterima) DAN itemQty > 0
-      // JANGAN gunakan <= karena bisa terjadi rounding error atau data corrupt
-      if (remainingQty === 0 && itemQty > 0 && newTotalQtyReceived > 0) {
+      if (newTotalQtyReceived >= item.qty) {
         // Semua product sudah diterima, update PO status menjadi CLOSE
-        const updatedOrders = orders.map((po: any) =>
+        const ordersArray = Array.isArray(orders) ? orders : [];
+        const updatedOrders = ordersArray.map((po: any) =>
           po.poNo === item.poNo ? { ...po, status: 'CLOSE' as const } : po
         );
-        await storageService.set('gt_purchaseOrders', updatedOrders);
-        setOrders(updatedOrders);
-      } else if (remainingQty > 0) {
-        // Masih ada outstanding qty, PASTIKAN status tetap OPEN (force update jika CLOSE)
-        const updatedOrders = orders.map((po: any) => {
-          if (po.poNo === item.poNo) {
-            // Jika status CLOSE tapi masih ada outstanding, reopen ke OPEN
-            if (po.status === 'CLOSE') {
-              return { ...po, status: 'OPEN' as const };
-            }
-            // Jika sudah OPEN, tetap OPEN
-            return po;
-          }
-          return po;
-        });
-        // Selalu update jika ada perubahan
-        await storageService.set('gt_purchaseOrders', updatedOrders);
+        await storageService.set(StorageKeys.GENERAL_TRADING.PURCHASE_ORDERS, updatedOrders);
         setOrders(updatedOrders);
       }
       
-      // NOTE: Delivery notification sekarang dibuat dari PPIC setelah delivery schedule dibuat
-      // dengan validasi inventory stock. Tidak lagi dibuat dari GRN atau PO status.
-      
-      // Update inventory - product received (OTOMATIS MASUK KE INVENTORY dari GRN)
-      const inventory = extractStorageValue(await storageService.get<any[]>('gt_inventory'));
-      const productId = (item.productId || '').toString().trim(); // Di GT, productId = productId
+      // Update inventory - product received (OTOMATIS MASUK KE INVENTORY)
+      const inventory = extractStorageValue(await storageService.get<any[]>('inventory'));
+      const productId = getProductId(item);
       
       if (!productId) {
-        showAlert('⚠️ Product ID tidak ditemukan. Inventory tidak dapat di-update.', 'Warning');
+        showAlert('⚠️ product ID tidak ditemukan. Inventory tidak dapat di-update.', 'Warning');
       } else {
         // Cari product di master untuk mendapatkan kode yang benar
-        const products = extractStorageValue(await storageService.get<any[]>('gt_products'));
-        const product = products.find((p: any) => 
-          ((p.product_id || p.kode || '').toString().trim()) === productId
-        );
+        const products = extractStorageValue(await storageService.get<any[]>('products')) || [];
+        const product = findProductById(productId);
         
         if (!product) {
-          showAlert(`⚠️ Product tidak ditemukan di master data: ${productId}\n\nInventory tidak dapat di-update.`, 'Warning');
+          showAlert(`⚠️ product tidak ditemukan di master data: ${productId}\n\nInventory tidak dapat di-update.`, 'Warning');
         } else {
-          // Jika product adalah turunan, gunakan parent product code untuk inventory
-          // Inventory selalu menggunakan parent product code untuk product turunan
-          let codeItem = (product.product_id || product.kode || productId).toString().trim();
-          
-          if (product.isTurunan && product.parentProductId) {
-            const parentProduct = products.find((p: any) => p.id === product.parentProductId);
-            if (parentProduct && parentProduct.kode) {
-              codeItem = parentProduct.kode;
-              console.log(`[GRN Inventory] Product ${productId} adalah turunan, menggunakan parent code ${codeItem} untuk inventory`);
-            }
-          }
+          // Gunakan product_id atau kode dari master sebagai codeItem
+          const codeItem = (product.product_id || product.kode || productId).toString().trim();
           
           // Cari existing inventory dengan codeItem (coba beberapa cara matching)
-          let existingProduct = inventory.find((inv: any) => 
-            (inv.codeItem || '').toString().trim() === codeItem
+          const inventoryArray = Array.isArray(inventory) ? inventory : [];
+          let existingproduct = inventoryArray.find((inv: any) => 
+            (inv.item_code || inv.codeItem || '').toString().trim() === codeItem
           );
           
-          // Jika tidak ketemu, coba match dengan product_id atau kode (tapi tetap gunakan codeItem yang sudah di-resolve)
-          // Note: codeItem sudah di-resolve ke parent jika turunan, jadi tidak perlu fallback ke productId asli
-          if (!existingProduct) {
-            // Fallback: coba match dengan codeItem yang sudah di-resolve (parent jika turunan)
-            existingProduct = inventory.find((inv: any) => {
-              const invCode = (inv.codeItem || '').toString().trim();
-              return invCode === codeItem; // Gunakan codeItem yang sudah di-resolve
+          // Jika tidak ketemu, coba match dengan product_id atau kode
+          if (!existingproduct) {
+            existingproduct = inventoryArray.find((inv: any) => {
+              const invCode = (inv.item_code || inv.codeItem || '').toString().trim();
+              return invCode === productId || 
+                     (product.product_id && invCode === product.product_id.toString().trim()) ||
+                     (product.kode && invCode === product.kode.toString().trim());
             });
           }
           
           // Get price dari PO (Purchase Order) - bukan dari master product
           // item.price sudah price per unit, bukan total!
           const pricePerUnit = item.price || 0;
-          const grnNo = newGRN.grnNo || '';
+          const poNo = item.poNo || '';
           
-          // ANTI-DUPLICATE: Cek apakah GRN number sudah pernah diproses untuk product ini
-          let inventoryUpdateSkipped = false;
-          if (existingProduct && grnNo) {
-            const processedGRNs = existingProduct.processedGRNs || [];
-            if (processedGRNs.includes(grnNo)) {
-              console.warn(`⚠️ [GRN Inventory] GRN ${grnNo} sudah pernah diproses untuk product ${codeItem}. Skip update.`);
-              showAlert(`⚠️ GRN ${grnNo} sudah pernah diproses untuk product ini.\n\nInventory tidak di-update untuk menghindari double counting.`, 'Warning');
-              inventoryUpdateSkipped = true;
-              // Jangan return, lanjutkan untuk membuat notifikasi delivery
+          // ANTI-DUPLICATE: Cek apakah PO number sudah pernah diproses untuk product ini
+          if (existingproduct && poNo) {
+            const processedPOs = existingproduct.processedPOs || [];
+            if (processedPOs.includes(poNo)) {
+              showAlert(`⚠️ PO ${poNo} sudah pernah diproses untuk product ini.\n\nInventory tidak di-update untuk menghindari double counting.`, 'Warning');
+              return;
             }
           }
           
-          if (!inventoryUpdateSkipped) {
-            if (existingProduct) {
-              // Update existing inventory - tambah receive
+          if (existingproduct) {
+            // Update existing inventory - tambah stock
             // Update price dengan price dari PO (jika ada)
-            const oldReceive = existingProduct.receive || 0;
-            const oldStockPremonth = existingProduct.stockPremonth || 0;
-            const oldOutgoing = existingProduct.outgoing || 0;
+            const oldReceive = existingproduct.receive || 0;
+            const oldStockPremonth = existingproduct.stockPremonth || 0;
+            const oldOutgoing = existingproduct.outgoing || 0;
+            const oldReturn = existingproduct.return || 0;
             const newReceive = oldReceive + qtyReceived;
-            // Rumus GT: premonth + received - outgoing = next stock
-            const newNextStock = oldStockPremonth + newReceive - oldOutgoing;
+            const newNextStock = oldStockPremonth + newReceive - oldOutgoing + oldReturn;
             
             // Update price dengan price dari PO (jika PO punya price per unit)
             // pricePerUnit sudah price per unit dari PO, langsung pakai
-            const updatedPrice = pricePerUnit > 0 ? pricePerUnit : (existingProduct.price || product.price || product.hargaSales || 0);
+            const updatedPrice = pricePerUnit > 0 ? pricePerUnit : (existingproduct.price || product.hargaFg || product.hargaSales || 0);
             
-            // Tambahkan GRN number ke processedGRNs untuk anti-duplicate
-            const processedGRNs = existingProduct.processedGRNs || [];
-            if (grnNo && !processedGRNs.includes(grnNo)) {
-              processedGRNs.push(grnNo);
+            // Tambahkan PO number ke processedPOs untuk anti-duplicate
+            const processedPOs = existingproduct.processedPOs || [];
+            if (poNo && !processedPOs.includes(poNo)) {
+              processedPOs.push(poNo);
+            }
+            
+            // IMPORTANT: Track SPK yang menerima product dari GRN ini (untuk product allocation)
+            // product dari GRN untuk 1 SPK tidak boleh digunakan oleh SPK lain
+            const spkNo = (item.spkNo || '').toString().trim();
+            const allocatedSPKs = existingproduct.allocatedSPKs || [];
+            if (spkNo && !allocatedSPKs.includes(spkNo)) {
+              allocatedSPKs.push(spkNo);
             }
             
             const updatedInventory = inventory.map((inv: any) =>
-              inv.id === existingProduct.id
+              inv.id === existingproduct.id
                 ? { 
                     ...inv, 
                     receive: newReceive, 
                     price: updatedPrice, // Update price dari PO
                     nextStock: newNextStock,
-                    processedGRNs: processedGRNs, // Track GRN yang sudah diproses
+                    processedPOs: processedPOs, // Track PO yang sudah diproses
+                    allocatedSPKs: allocatedSPKs, // Track SPK yang menerima product dari GRN
+                    sitePlan: receiptData.sitePlan || 'Site Plan 1', // Site Plan dari GRN
                     lastUpdate: new Date().toISOString() 
                   }
                 : inv
             );
-            await storageService.set('gt_inventory', updatedInventory);
+            await storageService.set(StorageKeys.GENERAL_TRADING.INVENTORY, updatedInventory);
             showAlert(`✅ Inventory updated: ${item.productItem}\n\nStock: ${newNextStock} ${product.satuan || 'PCS'}\nPrice: Rp ${updatedPrice.toLocaleString('id-ID')}`, 'Success');
-            } else {
-              // Create new inventory entry for product
+          } else {
+            // Create new inventory entry for product
             // Price diambil dari PO, bukan dari master product
-            const productPrice = pricePerUnit > 0 ? pricePerUnit : (product.price || product.hargaSales || 0);
+            const productPrice = pricePerUnit > 0 ? pricePerUnit : (product.hargaFg || product.hargaSales || 0);
+            // IMPORTANT: Track SPK yang menerima product dari GRN ini (untuk product allocation)
+            // Jika tidak ada SPK (PO tanpa SO), allocatedSPKs tetap empty array (product bisa digunakan untuk SPK manapun)
+            const spkNo = (item.spkNo || '').toString().trim();
+            const allocatedSPKs = spkNo ? [spkNo] : [];
             
             const newInventoryEntry = {
               id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
               supplierName: item.supplier || '',
               codeItem: codeItem,
               description: product.nama || item.productItem,
-              kategori: product.kategori || 'Product',
+              kategori: 'product',
               satuan: product.satuan || 'PCS',
               price: productPrice, // Price dari PO
               stockPremonth: 0,
               receive: qtyReceived,
               outgoing: 0,
               return: 0,
-              nextStock: 0 + qtyReceived - 0, // stockPremonth + receive - outgoing (rumus GT)
-              processedGRNs: grnNo ? [grnNo] : [], // Track GRN yang sudah diproses
+              nextStock: 0 + qtyReceived - 0 + 0, // stockPremonth + receive - outgoing + return
+              processedPOs: poNo ? [poNo] : [], // Track PO yang sudah diproses
+              allocatedSPKs: allocatedSPKs, // Track SPK yang menerima product (empty jika PO tanpa SO)
+              sitePlan: receiptData.sitePlan || 'Site Plan 1', // Site Plan dari GRN
               lastUpdate: new Date().toISOString(),
             };
             inventory.push(newInventoryEntry);
-            await storageService.set('gt_inventory', inventory);
+            await storageService.set(StorageKeys.GENERAL_TRADING.INVENTORY, inventory);
             showAlert(`✅ New inventory entry created: ${item.productItem}\n\nStock: ${qtyReceived} ${product.satuan || 'PCS'}\nPrice: Rp ${productPrice.toLocaleString('id-ID')} (from PO)`, 'Success');
-            }
           }
         }
       }
       
-      // Auto-create journal entries untuk GRN (Debit Inventory, Credit AP) - non-blocking
+      // Auto-create journal entries untuk GRN (Debit Inventory, Credit AP)
       // Best practice: Journal entry dibuat saat barang diterima (GRN)
-      // Jalankan di background untuk tidak block UI
-      setTimeout(async () => {
-        try {
-          const journalEntries = await storageService.get<any[]>('gt_journalEntries') || [];
-          const accounts = await storageService.get<any[]>('gt_accounts') || [];
-          
-          // Pastikan accounts ada
-          if (accounts.length === 0) {
-            const defaultAccounts = [
+      try {
+        const journalEntries = await storageService.get<any[]>('journalEntries') || [];
+        const accounts = await storageService.get<any[]>('accounts') || [];
+        
+        // Pastikan accounts ada
+        if (accounts.length === 0) {
+          const defaultAccounts = [
             { code: '1000', name: 'Cash', type: 'Asset', balance: 0 },
             { code: '1100', name: 'Accounts Receivable', type: 'Asset', balance: 0 },
             { code: '1200', name: 'Inventory', type: 'Asset', balance: 0 },
@@ -1670,22 +1473,22 @@ const Purchasing = () => {
             { code: '6100', name: 'Administrative Expenses', type: 'Expense', balance: 0 },
             { code: '6200', name: 'Financial Expenses', type: 'Expense', balance: 0 },
           ];
-          await storageService.set('gt_accounts', defaultAccounts);
+          await storageService.set(StorageKeys.GENERAL_TRADING.ACCOUNTS, defaultAccounts);
         }
         
         const entryDate = receivedDate;
         const poTotal = item.total || 0;
         
         // Cek apakah sudah ada journal entry untuk GRN ini (prevent duplicate)
-        const journalEntriesArray = Array.isArray(journalEntries) ? journalEntries : [];
-        const hasGRNEntry = safeSome(journalEntriesArray, (entry: any) =>
-          entry && entry.reference === newGRN.grnNo &&
+        const hasGRNEntry = (Array.isArray(journalEntries) && journalEntries.some((entry: any) =>
+          entry.reference === newGRN.grnNo &&
           (entry.account === '1200' || entry.account === '2000')
-        );
+        )) || false;
         
         if (!hasGRNEntry && poTotal > 0) {
-          const inventoryAccount = accounts.find((a: any) => a.code === '1200') || { code: '1200', name: 'Inventory' };
-          const apAccount = accounts.find((a: any) => a.code === '2000') || { code: '2000', name: 'Accounts Payable' };
+          const accountsArray = Array.isArray(accounts) ? accounts : [];
+          const inventoryAccount = accountsArray.find((a: any) => a.code === '1200') || { code: '1200', name: 'Inventory' };
+          const apAccount = accountsArray.find((a: any) => a.code === '2000') || { code: '2000', name: 'Accounts Payable' };
           
           // Debit Inventory, Credit AP
           const newEntries = [
@@ -1716,110 +1519,292 @@ const Purchasing = () => {
             no: baseLength + idx + 1,
           }));
           
-          await storageService.set('gt_journalEntries', [...journalEntries, ...entriesWithNo]);
-          console.log(`✅ Journal entries created for GRN ${newGRN.grnNo}: Inventory +${poTotal}, AP +${poTotal}`);
-          }
-        } catch (error: any) {
-          console.error('Error creating journal entries for GRN:', error);
-          // Jangan block proses, hanya log error (non-blocking)
+          await storageService.set(StorageKeys.GENERAL_TRADING.JOURNAL_ENTRIES, [...journalEntries, ...entriesWithNo]);
         }
-      }, 200);
+      } catch (error: any) {
+        // Jangan block proses, hanya log error (non-blocking)
+      }
       
       // PO tetap OPEN, akan di-close setelah payment di Finance
       // Tidak auto-close PO setelah GRN dibuat
 
-      // Create notification untuk Finance - Supplier Payment (setelah GRN, ready untuk payment)
-      try {
-        const notifications = await storageService.get<any[]>('gt_financeNotifications') || [];
-        console.log(`[GT Purchasing] Creating finance notification for GRN ${newGRN.grnNo}`);
-        console.log(`[GT Purchasing] Existing notifications: ${notifications.length}`);
+      // Create notification untuk Finance - Supplier Payment
+      const notifications = extractStorageValue(await storageService.get<any[]>('financeNotifications')) || [];
+      const notificationsArray = Array.isArray(notifications) ? notifications : [];
+      
+      // IMPORTANT: Cek duplikasi notification sebelum create (cek berdasarkan PO dan GRN)
+      const existingNotification = notificationsArray.find((notif: any) => {
+        const notifPONo = (notif.poNo || '').toString().trim();
+        const notifGRNNo = (notif.grnNo || '').toString().trim();
+        const currentPONo = (item.poNo || '').toString().trim();
+        const currentGRNNo = (newGRN.grnNo || '').toString().trim();
         
-        // Check if notification already exists
-        const existingPaymentNotif = notifications.find((n: any) => 
-          n.poNo === item.poNo && n.type === 'SUPPLIER_PAYMENT' && n.grnNo === newGRN.grnNo
-        );
-        
-        if (!existingPaymentNotif) {
-          // Calculate total per GRN (partial receipt support)
-          // Total = (qtyReceived * unitPrice) - discount
-          const unitPrice = item.price || 0;
-          const subtotal = Math.ceil(qtyReceived * unitPrice);
-          const discountPercent = item.discountPercent || 0;
-          const discountAmount = subtotal * discountPercent / 100;
-          const grnTotal = Math.ceil(subtotal - discountAmount);
-          
-          const newNotification = {
-            id: `payment-${Date.now()}-${item.poNo}-${newGRN.grnNo}`,
-            type: 'SUPPLIER_PAYMENT',
-            poNo: item.poNo,
-            supplier: item.supplier,
-            soNo: item.soNo || '',
-            spkNo: item.spkNo || '',
-            grnNo: newGRN.grnNo,
-            productItem: item.productItem || '', // Backward compatibility
-            productName: item.productItem || '', // GT: product name
-            productId: item.productId || '', // GT: productId
-            qty: qtyReceived, // Qty yang diterima di GRN ini
-            total: grnTotal, // Total per GRN (bukan total PO)
-            unitPrice: unitPrice, // Unit price untuk reference
-            discountPercent: discountPercent, // Discount untuk reference
-            receivedDate: receivedDate,
-            suratJalan: receiptData.suratJalan || '',
-            suratJalanName: receiptData.suratJalanName || '',
-            invoiceNo: receiptData.invoiceNo || '',
-            invoiceFile: receiptData.invoiceFile || '',
-            invoiceFileName: receiptData.invoiceFileName || '',
-            purchaseReason: item.purchaseReason || '',
-            status: 'PENDING',
-            created: new Date().toISOString(),
-          };
-          
-          console.log(`[GT Purchasing] Creating new finance notification:`, newNotification);
-          await storageService.set('gt_financeNotifications', [...notifications, newNotification]);
-          console.log(`[GT Purchasing] ✅ Finance notification created successfully for GRN ${newGRN.grnNo}`);
-        } else {
-          console.log(`[GT Purchasing] Finance notification already exists for GRN ${newGRN.grnNo}`);
-        }
-      } catch (error: any) {
-        console.error(`[GT Purchasing] ❌ Error creating finance notification for GRN ${newGRN.grnNo}:`, error);
-        // Show error to user instead of silent fail
-        showAlert(`Error creating finance notification: ${error.message}`, 'Error');
+        // Match jika PO sama DAN GRN sama (atau GRN kosong di existing tapi PO sama)
+        return (
+          notifPONo === currentPONo && 
+          (notifGRNNo === currentGRNNo || (!notifGRNNo && currentGRNNo) || (notifGRNNo && !currentGRNNo))
+        ) && notif.type === 'SUPPLIER_PAYMENT';
+      });
+      
+      if (existingNotification) {
+        // Update existing notification dengan data terbaru jika perlu
+        const updatedNotifications = notificationsArray.map((notif: any) => {
+          if (notif.id === existingNotification.id) {
+            // Update dengan data terbaru (GRN, qty, dll)
+            return {
+              ...notif,
+              grnNo: newGRN.grnNo,
+              qty: qtyReceived,
+              productItem: item.productItem || notif.productItem,
+              receivedDate: receivedDate,
+              suratJalanId: receiptData.suratJalanId || notif.suratJalanId || '',
+              suratJalanName: receiptData.suratJalanName || notif.suratJalanName || '',
+              invoiceNo: receiptData.invoiceNo || notif.invoiceNo || '',
+              invoiceFileId: receiptData.invoiceFileId || notif.invoiceFileId || '',
+              invoiceFileName: receiptData.invoiceFileName || notif.invoiceFileName || '',
+            };
+          }
+          return notif;
+        });
+        await storageService.set(StorageKeys.GENERAL_TRADING.FINANCE_NOTIFICATIONS, updatedNotifications);
+      } else {
+        // Buat notification baru jika belum ada
+        const newNotification = {
+          id: Date.now().toString(),
+          type: 'SUPPLIER_PAYMENT',
+          poNo: item.poNo,
+          supplier: item.supplier,
+          soNo: item.soNo,
+          spkNo: item.spkNo,
+          grnNo: newGRN.grnNo,
+          productItem: item.productItem,
+          qty: qtyReceived,
+          total: item.total,
+          receivedDate: receivedDate,
+          suratJalanId: receiptData.suratJalanId || '',
+          suratJalanName: receiptData.suratJalanName || '',
+          invoiceNo: receiptData.invoiceNo || '',
+          invoiceFileId: receiptData.invoiceFileId || '',
+          invoiceFileName: receiptData.invoiceFileName || '',
+          purchaseReason: item.purchaseReason || '',
+          status: 'PENDING',
+          created: new Date().toISOString(),
+        };
+        await storageService.set(StorageKeys.GENERAL_TRADING.FINANCE_NOTIFICATIONS, [...notifications, newNotification]);
       }
 
       // Update Production notification - product sudah diterima
-      const productionNotifications = extractStorageValue(await storageService.get<any[]>('gt_productionNotifications'));
-      let notificationUpdated = false;
-      const updatedProductionNotifications = productionNotifications.map((n: any) => {
-        // Update notification jika SPK/SO sama dengan GRN ini
-        // Match berdasarkan spkNo atau soNo
-        const matchesSPK = item.spkNo && n.spkNo && (
-          n.spkNo === item.spkNo || 
-          n.spkNo.startsWith(item.spkNo.split('-')[0] + '-') ||
-          item.spkNo.startsWith(n.spkNo.split('-')[0] + '-')
-        );
-        const matchesSO = item.soNo && n.soNo && n.soNo === item.soNo;
+      // IMPORTANT: Filter deleted notifications untuk prevent data resurrection
+      const productionNotificationsRaw = extractStorageValue(await storageService.get<any[]>('productionNotifications'));
+      const productionNotifications = filterActiveItems(productionNotificationsRaw);
+      
+      // Helper function untuk normalize SPK number (remove batch suffix untuk matching)
+      const normalizeSPK = (spk: string) => {
+        if (!spk) return '';
+        // Remove batch suffix seperti -A, -B, dll
+        return spk.replace(/-[A-Z]$/, '').trim();
+      };
+      
+      // Helper untuk enrich notifikasi dengan product requirements
+      const enrichNotificationWithproducts = async (notif: any) => {
+        // Jika sudah ada productRequirements, skip
+        if (notif.productRequirements && Array.isArray(notif.productRequirements) && notif.productRequirements.length > 0) {
+          return notif;
+        }
         
-        if (matchesSPK || matchesSO) {
+        const normalizeKey = (value: any) => (value ?? '').toString().trim().toLowerCase();
+        const toNumber = (value: any) => {
+          if (typeof value === 'number' && !Number.isNaN(value)) return value;
+          const parsed = parseFloat(value);
+          return Number.isNaN(parsed) ? 0 : parsed;
+        };
+        
+        // Load BOM dan products
+        const bomList = extractStorageValue(await storageService.get<any[]>('bom')) || [];
+        const productsList = extractStorageValue(await storageService.get<any[]>('products')) || [];
+        
+        const bomListArray = Array.isArray(bomList) ? bomList : [];
+        const productsListArray = Array.isArray(productsList) ? productsList : [];
+        
+        const productKey = normalizeKey(notif.productId || notif.product || notif.productCode);
+        if (!productKey) return notif;
+        
+        const bomForProduct = bomListArray.filter((bom: any) => {
+          const bomProductKey = normalizeKey(bom.product_id || bom.kode);
+          return bomProductKey === productKey;
+        });
+        
+        if (bomForProduct.length === 0) return notif;
+        
+        const qtyNeeded = toNumber(notif.qty || notif.target || notif.targetQty);
+        if (qtyNeeded <= 0) return notif;
+        
+        // Build product requirements dari BOM
+        const productRequirements: any[] = [];
+        bomForProduct.forEach((bom: any) => {
+          const productKey = normalizeKey(bom.product_id || bom.kode || bom.productId);
+          if (!productKey) return;
+          
+          const ratio = toNumber(bom.ratio || 1) || 1;
+          const requiredQty = Math.max(Math.ceil(qtyNeeded * ratio), 0);
+          if (requiredQty === 0) return;
+          
+          // Cari product name dari products list
+          const product = productsListArray.find((m: any) => 
+            normalizeKey(m.product_id || m.kode) === productKey
+          );
+          
+          productRequirements.push({
+            productId: productKey,
+            productName: product?.nama || product?.name || product?.product_name || bom.product_name || productKey,
+            productCode: product?.kode || product?.product_id || productKey,
+            ratio: ratio,
+            requiredQty: requiredQty,
+            unit: product?.satuan || product?.unit || bom.unit || 'PCS',
+          });
+        });
+        
+        return {
+          ...notif,
+          productRequirements: productRequirements,
+        };
+      };
+      
+      let notificationUpdated = false;
+      const updatedProductionNotifications = await Promise.all(productionNotifications.map(async (n: any) => {
+        // Update notification jika SPK sama dengan GRN ini
+        // IMPORTANT: Hanya match berdasarkan SPK, JANGAN match berdasarkan SO saja!
+        // Karena 1 SO bisa punya multiple SPK dengan product berbeda
+        const grnSPK = (item.spkNo || '').toString().trim();
+        const notifSPK = (n.spkNo || '').toString().trim();
+        
+        // Match SPK: exact match atau match setelah normalize (remove batch suffix)
+        // Tapi HARUS ada SPK di kedua sisi, tidak boleh match hanya karena SO sama
+        const matchesSPK = grnSPK && notifSPK && (
+          grnSPK === notifSPK || // Exact match
+          normalizeSPK(grnSPK) === normalizeSPK(notifSPK) || // Same base (e.g., SPK-251211-IJ423-A vs SPK-251211-IJ423-B)
+          grnSPK.startsWith(normalizeSPK(notifSPK) + '-') || // GRN SPK adalah batch dari notification SPK
+          notifSPK.startsWith(normalizeSPK(grnSPK) + '-') // Notification SPK adalah batch dari GRN SPK
+        );
+        
+        // JANGAN match berdasarkan SO saja! Ini terlalu luas dan bisa update notification yang salah
+        // const matchesSO = grnSO && notifSO && grnSO === notifSO; // ❌ REMOVED
+        
+        if (matchesSPK) {
           notificationUpdated = true;
-          return {
+          
+          // Enrich dengan product requirements jika belum ada
+          const enrichedNotif = await enrichNotificationWithproducts({
             ...n,
             productStatus: 'RECEIVED',
             status: 'READY_TO_PRODUCE',
             grnNo: newGRN.grnNo,
-          };
+            lastUpdate: new Date().toISOString(),
+          });
+          
+          return enrichedNotif;
         }
-        return n;
-      });
+        
+        // Enrich notifikasi yang tidak match juga (untuk notifikasi lain yang mungkin belum punya product requirements)
+        return await enrichNotificationWithproducts(n);
+      }));
       
       // Jika tidak ada notification yang match, buat notification baru untuk Production
-      if (!notificationUpdated && (item.spkNo || item.soNo)) {
+      // IMPORTANT: Hanya create jika ada SPK, JANGAN create hanya berdasarkan SO!
+      // IMPORTANT: Pastikan tidak ada duplikasi - cek dulu apakah notification sudah ada
+      if (!notificationUpdated && item.spkNo) {
+        // Cek apakah notification sudah ada untuk SPK ini (untuk avoid double notification)
+        const grnSPKNormalized = normalizeSPK(item.spkNo || '');
+        const prodNotifArray = Array.isArray(updatedProductionNotifications) ? updatedProductionNotifications : [];
+        const existingNotif = prodNotifArray.find((n: any) => {
+          const notifSPK = (n.spkNo || '').toString().trim();
+          if (!notifSPK) return false;
+          return (
+            notifSPK === item.spkNo || 
+            normalizeSPK(notifSPK) === grnSPKNormalized ||
+            notifSPK.startsWith(grnSPKNormalized + '-') ||
+            (grnSPKNormalized && notifSPK.startsWith(grnSPKNormalized))
+          );
+        });
+        
+        if (existingNotif) {
+          notificationUpdated = true; // Mark as updated untuk skip create
+        }
+      }
+      
+      if (!notificationUpdated && item.spkNo) {
         // Cari SPK data untuk mendapatkan info lengkap
-        const spkData = extractStorageValue(await storageService.get<any[]>('spk'));
-        const relatedSPK = spkData.find((s: any) => 
-          (item.spkNo && s.spkNo === item.spkNo) || (item.soNo && s.soNo === item.soNo)
-        );
+        const spkData = extractStorageValue(await storageService.get<any[]>('spk')) || [];
+        const spkDataArray = Array.isArray(spkData) ? spkData : [];
+        
+        // Cari SPK dengan matching yang lebih fleksibel (handle batch suffix)
+        const grnSPKNormalized = normalizeSPK(item.spkNo || '');
+        const relatedSPK = spkDataArray.find((s: any) => {
+          const sSPK = (s.spkNo || '').toString().trim();
+          
+          // Match SPK: exact atau normalized (batch dari SPK yang sama)
+          const spkMatch = item.spkNo && sSPK && (
+            sSPK === item.spkNo || 
+            normalizeSPK(sSPK) === grnSPKNormalized ||
+            sSPK.startsWith(grnSPKNormalized + '-') ||
+            (grnSPKNormalized && sSPK.startsWith(grnSPKNormalized))
+          );
+          
+          // JANGAN match berdasarkan SO saja! Hanya match berdasarkan SPK
+          return spkMatch;
+        });
         
         if (relatedSPK) {
+          // Enrich dengan product requirements dari BOM
+          const normalizeKey = (value: any) => (value ?? '').toString().trim().toLowerCase();
+          const toNumber = (value: any) => {
+            if (typeof value === 'number' && !Number.isNaN(value)) return value;
+            const parsed = parseFloat(value);
+            return Number.isNaN(parsed) ? 0 : parsed;
+          };
+          
+          // Load BOM dan products untuk enrich product requirements
+          const bomList = extractStorageValue(await storageService.get<any[]>('bom')) || [];
+          const productsList = extractStorageValue(await storageService.get<any[]>('products')) || [];
+          
+          const bomListArray = Array.isArray(bomList) ? bomList : [];
+          const productsListArray = Array.isArray(productsList) ? productsList : [];
+          
+          const productKey = normalizeKey(relatedSPK.kode || relatedSPK.product_id || '');
+          const qtyNeeded = toNumber(relatedSPK.qty || 0);
+          
+          // Build product requirements dari BOM
+          const productRequirements: any[] = [];
+          if (productKey && qtyNeeded > 0) {
+            const bomForProduct = bomListArray.filter((bom: any) => {
+              const bomProductKey = normalizeKey(bom.product_id || bom.kode);
+              return bomProductKey === productKey;
+            });
+            
+            bomForProduct.forEach((bom: any) => {
+              const productKey = normalizeKey(bom.product_id || bom.kode || bom.productId);
+              if (!productKey) return;
+              
+              const ratio = toNumber(bom.ratio || 1) || 1;
+              const requiredQty = Math.max(Math.ceil(qtyNeeded * ratio), 0);
+              if (requiredQty === 0) return;
+              
+              // Cari product name dari products list
+              const product = productsListArray.find((m: any) => 
+                normalizeKey(m.product_id || m.kode) === productKey
+              );
+              
+              productRequirements.push({
+                productId: productKey,
+                productName: product?.nama || product?.name || product?.product_name || bom.product_name || productKey,
+                productCode: product?.kode || product?.product_id || productKey,
+                ratio: ratio,
+                requiredQty: requiredQty,
+                unit: product?.satuan || product?.unit || bom.unit || 'PCS',
+              });
+            });
+          }
+          
           const newProductionNotification = {
             id: Date.now().toString(),
             type: 'PRODUCTION_SCHEDULE',
@@ -1827,11 +1812,12 @@ const Purchasing = () => {
             soNo: relatedSPK.soNo || item.soNo || '',
             customer: relatedSPK.customer || '',
             product: relatedSPK.product || '',
-            productId: relatedSPK.product_id || relatedSPK.kode || '',
+            productId: relatedSPK.kode || relatedSPK.product_id || '',
             qty: relatedSPK.qty || 0,
             productStatus: 'RECEIVED',
             status: 'READY_TO_PRODUCE',
             grnNo: newGRN.grnNo,
+            productRequirements: productRequirements, // Tambahkan product requirements
             created: new Date().toISOString(),
           };
           updatedProductionNotifications.push(newProductionNotification);
@@ -1840,12 +1826,12 @@ const Purchasing = () => {
       }
       
       if (notificationUpdated) {
-        await storageService.set('gt_productionNotifications', updatedProductionNotifications);
-        console.log(`✅ Production notification updated: product RECEIVED, status READY_TO_PRODUCE for SPK/SO: ${item.spkNo || item.soNo}`);
+        await storageService.set(StorageKeys.GENERAL_TRADING.PRODUCTION_NOTIFICATIONS, updatedProductionNotifications);
       }
       
       // Update receipt date di PO
-      const updatedOrders = orders.map((order) =>
+      const ordersArray = Array.isArray(orders) ? orders : [];
+      const updatedOrders = ordersArray.map((order) =>
         order.id === item.id
           ? {
               ...order,
@@ -1854,19 +1840,20 @@ const Purchasing = () => {
             }
           : order
       );
-      await storageService.set('gt_purchaseOrders', updatedOrders);
+      await storageService.set(StorageKeys.GENERAL_TRADING.PURCHASE_ORDERS, updatedOrders);
       setOrders(updatedOrders);
       
-      // NOTE: Delivery notification sekarang dibuat dari PPIC setelah delivery schedule dibuat
-      // dengan validasi inventory stock. Tidak lagi dibuat dari GRN.
+      // CRITICAL: Jangan panggil loadOrders() di sini!
+      // setOrders() sudah update state, dan event listener akan auto-trigger jika ada perubahan dari storage
+      // Memanggil loadOrders() hanya akan reload ulang semua data dan menyebabkan notifikasi flickering
       
-      // Reload orders untuk update UI
-      await loadOrders();
-      
-      showAlert(`GRN created: ${newGRN.grnNo}\n\n✅ Inventory updated (+${qtyReceived})\n📧 Notification sent to Finance - Supplier Payment tab\n\n💡 Delivery notification akan dibuat dari PPIC setelah delivery schedule dibuat dengan validasi stock.`, 'Success');
+      showAlert(`GRN created: ${newGRN.grnNo}\n\n✅ Inventory updated (+${qtyReceived})\n📧 Notification sent to Finance - Supplier Payment tab\n📧 Production notification updated - product received\n\n✅ Production dapat dimulai sekarang!`, 'Success');
       setSelectedPOForReceipt(null);
     } catch (error: any) {
       showAlert(`Error creating GRN: ${error.message}`, 'Error');
+    } finally {
+      // CRITICAL: Always reset saving flag to allow future saves
+      grnSavingRef.current = false;
     }
   };
 
@@ -1889,53 +1876,54 @@ const Purchasing = () => {
   };
 
   const handleUpdateStatus = async (item: PurchaseOrder) => {
-    showPrompt(
-      `Update status for PO: ${item.poNo}\n\nCurrent: ${item.status}\n\nEnter new status (DRAFT/OPEN/CLOSE):`,
-      item.status,
-      async (newStatus) => {
-        if (newStatus && newStatus !== item.status && ['DRAFT', 'OPEN', 'CLOSE'].includes(newStatus)) {
-          try {
-            const updated = orders.map(o =>
-              o.id === item.id ? { ...o, status: newStatus as any } : o
-            );
-            await storageService.set('gt_purchaseOrders', updated);
-            setOrders(updated);
-            
-            // NOTE: Delivery notification sekarang dibuat dari PPIC setelah delivery schedule dibuat
-            // dengan validasi inventory stock. Tidak lagi dibuat dari PO status CLOSE.
-        
-            showAlert(`Status updated to: ${newStatus}`, 'Success');
-          } catch (error: any) {
-            showAlert(`Error updating status: ${error.message}`, 'Error');
-          }
-        } else {
-          showAlert('Invalid status. Please enter DRAFT, OPEN, or CLOSE', 'Validation Error');
-        }
-      },
-      () => {},
-      'Update PO Status'
-    );
+    const newStatus = prompt(`Update status for PO: ${item.poNo}\n\nCurrent: ${item.status}\n\nEnter new status (DRAFT/OPEN/CLOSE):`, item.status);
+    if (newStatus && newStatus !== item.status && ['DRAFT', 'OPEN', 'CLOSE'].includes(newStatus)) {
+      try {
+        const ordersArray = Array.isArray(orders) ? orders : [];
+        const updated = ordersArray.map(o =>
+          o.id === item.id ? { ...o, status: newStatus as any } : o
+        );
+        await storageService.set(StorageKeys.GENERAL_TRADING.PURCHASE_ORDERS, updated);
+        setOrders(updated);
+        showAlert(`Status updated to: ${newStatus}`, 'Success');
+      } catch (error: any) {
+        showAlert(`Error updating status: ${error.message}`, 'Error');
+      }
+    }
   };
 
-  // Sort orders by created date (terbaru di atas)
+  // Sort orders: Terbaru di atas, CLOSE di bawah
   const sortedOrders = useMemo(() => {
     // Ensure orders is always an array
     const ordersArray = Array.isArray(orders) ? orders : [];
     return [...ordersArray].sort((a, b) => {
+      // Priority 1: CLOSE status di bawah, yang lain di atas
+      const statusOrder: Record<string, number> = { 'CLOSE': 1, 'OPEN': 0, 'DRAFT': 0, 'CONFIRMED': 0 };
+      const statusDiff = (statusOrder[a.status] || 0) - (statusOrder[b.status] || 0);
+      if (statusDiff !== 0) return statusDiff;
+      
+      // Priority 2: Yang paling baru di atas (berdasarkan created date)
       const dateA = new Date(a.created).getTime();
       const dateB = new Date(b.created).getTime();
       return dateB - dateA; // Descending (newest first)
     });
   }, [orders]);
 
-  // Filter orders berdasarkan search query
+  // Filter orders berdasarkan search query dan date range
   const filteredOrders = useMemo(() => {
-    // Ensure sortedOrders is always an array
-    let filtered = Array.isArray(sortedOrders) ? sortedOrders : [];
+    let filtered = sortedOrders;
     
     // Tab filter - Outstanding tab hanya show status OPEN
     if (activeTab === 'outstanding') {
       filtered = filtered.filter(item => item.status === 'OPEN');
+    }
+    
+    // Date filter
+    if (dateFrom) {
+      filtered = filtered.filter(order => order.created >= dateFrom);
+    }
+    if (dateTo) {
+      filtered = filtered.filter(order => order.created <= dateTo);
     }
     
     if (!searchQuery) return filtered;
@@ -1946,11 +1934,18 @@ const Purchasing = () => {
         (item.poNo || '').toLowerCase().includes(query) ||
         (item.supplier || '').toLowerCase().includes(query) ||
         (item.soNo || '').toLowerCase().includes(query) ||
+        (item.spkNo || '').toLowerCase().includes(query) ||
         (item.productItem || '').toLowerCase().includes(query) ||
         (item.status || '').toLowerCase().includes(query)
       );
     });
-  }, [sortedOrders, searchQuery, activeTab]);
+  }, [sortedOrders, searchQuery, activeTab, dateFrom, dateTo]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+    setTableCurrentPage(1);
+  }, [searchQuery, activeTab, viewMode, dateFrom, dateTo]);
 
   const handleExportExcel = async () => {
     try {
@@ -2013,8 +2008,8 @@ const Purchasing = () => {
           { key: 'supplier', header: 'Supplier', width: 30 },
           { key: 'soNo', header: 'SO No', width: 20 },
           { key: 'spkNo', header: 'SPK No', width: 20 },
-          { key: 'productItem', header: 'Product', width: 40 },
-          { key: 'productId', header: 'SKU', width: 20 },
+          { key: 'productItem', header: 'product Item', width: 40 },
+          { key: 'productId', header: 'product ID', width: 20 },
           { key: 'qty', header: 'Qty', width: 12, format: 'number' },
           { key: 'price', header: 'Price', width: 18, format: 'currency' },
           { key: 'total', header: 'Total', width: 18, format: 'currency' },
@@ -2059,7 +2054,7 @@ const Purchasing = () => {
           { key: 'supplier', header: 'Supplier', width: 30 },
           { key: 'soNo', header: 'SO No', width: 20 },
           { key: 'spkNo', header: 'SPK No', width: 20 },
-          { key: 'productItem', header: 'Product', width: 40 },
+          { key: 'productItem', header: 'product Item', width: 40 },
           { key: 'qty', header: 'Qty', width: 12, format: 'number' },
           { key: 'price', header: 'Price', width: 18, format: 'currency' },
           { key: 'total', header: 'Total', width: 18, format: 'currency' },
@@ -2118,15 +2113,15 @@ const Purchasing = () => {
       }
 
       if (wb.SheetNames.length === 0) {
-        showAlert('No data available to export', 'Export Error');
+        showAlert('No data available to export', 'Error');
         return;
       }
 
       const fileName = `Purchase_Orders_Complete_${new Date().toISOString().split('T')[0]}.xlsx`;
       XLSX.writeFile(wb, fileName);
-      showAlert(`✅ Exported complete purchase orders data (${poDataExport.length} PO, ${outstandingPO.length} outstanding) to ${fileName}`, 'Export Success');
+      showAlert(`✅ Exported complete purchase orders data (${poDataExport.length} PO, ${outstandingPO.length} outstanding) to ${fileName}`, 'Success');
     } catch (error: any) {
-      showAlert(`Error exporting to Excel: ${error.message}`, 'Export Error');
+      showAlert(`Error exporting to Excel: ${error.message}`, 'Error');
     }
   };
 
@@ -2142,31 +2137,6 @@ const Purchasing = () => {
     return rowColors[soIndex % rowColors.length];
   };
 
-  // Get button color based on PO No (theme-aware selang-seling)
-  const getButtonColor = (poNo: string): { backgroundColor: string; color: string } => {
-    const uniquePOs = Array.from(new Set(filteredOrders.map(o => o.poNo)));
-    const poIndex = uniquePOs.indexOf(poNo);
-    const theme = document.documentElement.getAttribute('data-theme');
-    
-    // Light theme: subtle colors, Dark theme: darker colors
-    const buttonColors = theme === 'light' 
-      ? [
-          { backgroundColor: '#e3f2fd', color: '#1976d2' }, // Blue
-          { backgroundColor: '#f3e5f5', color: '#7b1fa2' }, // Purple
-          { backgroundColor: '#e8f5e9', color: '#388e3c' }, // Green
-          { backgroundColor: '#fff3e0', color: '#f57c00' }, // Orange
-        ]
-      : [
-          { backgroundColor: '#1e3a5f', color: '#90caf9' }, // Blue
-          { backgroundColor: '#3d2a4a', color: '#ce93d8' }, // Purple
-          { backgroundColor: '#2d4a2d', color: '#81c784' }, // Green
-          { backgroundColor: '#4a3a2a', color: '#ffb74d' }, // Orange
-        ];
-    
-    const index = poIndex >= 0 ? poIndex : 0;
-    return buttonColors[index % buttonColors.length];
-  };
-  
   // Format date helper
   const formatDateSimple = (dateStr?: string) => {
     if (!dateStr) return '-';
@@ -2190,15 +2160,6 @@ const Purchasing = () => {
         <strong style={{ color: '#2e7d32', fontSize: '13px' }}>{item.poNo}</strong>
       ),
     },
-    {
-      key: 'status',
-      header: 'Status',
-      render: (item: PurchaseOrder) => (
-        <span className={`status-badge status-${item.status.toLowerCase()}`} style={{ fontSize: '11px' }}>
-          {item.status}
-        </span>
-      ),
-    },
     { 
       key: 'supplier', 
       header: 'Supplier',
@@ -2214,124 +2175,63 @@ const Purchasing = () => {
       ),
     },
     { 
-      key: 'productItem', 
-      header: 'Product',
+      key: 'spkNo', 
+      header: 'SPK No',
       render: (item: PurchaseOrder) => {
-        // Cari dari PR jika ada sourcePRId dan productItem kosong
-        let displayName = item.productItem || item.productId || '';
-        if (!displayName && item.sourcePRId) {
-          const pr = purchaseRequests.find((p: any) => p.id === item.sourcePRId);
-          if (pr && pr.items && pr.items.length > 0) {
-            // Cari item yang match dengan PO (berdasarkan qty atau price)
-            const matchedItem = pr.items.find((itm: any) => 
-              (itm.qty || itm.requiredQty || 0) === item.qty || 
-              Math.abs((itm.price || 0) - (item.price || 0)) < 0.01
-            ) || pr.items[0];
-            // PR items bisa punya productName/productKode (dari PR lama) atau productName/productKode (dari SO baru)
-            displayName = (matchedItem as any).productName || (matchedItem as any).productName || (matchedItem as any).productKode || (matchedItem as any).productKode || '';
-          }
-        }
+        const spkNo = item.spkNo || '';
+        if (!spkNo) return <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>-</span>;
         return (
-          <span style={{ fontSize: '13px' }}>
-            {displayName || '-'}
-          </span>
+          <strong style={{ fontSize: '12px', color: '#1976d2' }}>{spkNo}</strong>
         );
       },
     },
     {
-      key: 'productId',
-      header: 'SKU',
-      render: (item: PurchaseOrder) => {
-        // Untuk GT, productId = productId (SKU)
-        let sku = (item as any).productId || item.productId || '';
-        
-        // Jika kosong, cari dari PR
-        if (!sku && item.sourcePRId) {
-          const pr = purchaseRequests.find((p: any) => p.id === item.sourcePRId);
-          if (pr && pr.items && pr.items.length > 0) {
-            const matchedItem = pr.items.find((itm: any) => 
-              (itm.qty || itm.requiredQty || 0) === item.qty || 
-              Math.abs((itm.price || 0) - (item.price || 0)) < 0.01
-            ) || pr.items[0];
-            sku = (matchedItem as any).productId || (matchedItem as any).productKode || (matchedItem as any).productId || (matchedItem as any).productKode || '';
-          }
-        }
-        
-        // Jika masih kosong, cari dari master products berdasarkan productItem
-        if (!sku && item.productItem) {
-          const product = products.find((m: any) => 
-            (m.nama || '').toString().trim().toLowerCase() === (item.productItem || '').toString().trim().toLowerCase() ||
-            (m.productItem || '').toString().trim().toLowerCase() === (item.productItem || '').toString().trim().toLowerCase()
-          );
-          if (product) {
-            sku = (product as any).product_id || (product as any).kode || (product as any).product_id || '';
-          }
-        }
-        
-        return (
-          <span style={{ fontSize: '12px', color: '#1976d2', fontWeight: '500', fontFamily: 'monospace' }}>
-            {sku || '-'}
-          </span>
-        );
-      },
+      key: 'status',
+      header: 'Status',
+      render: (item: PurchaseOrder) => (
+        <span className={`status-badge status-${item.status.toLowerCase()}`} style={{ fontSize: '11px' }}>
+          {item.status}
+        </span>
+      ),
     },
-    { 
-      key: 'qty', 
+    {
+      key: 'receiptDate',
+      header: 'Receipt Date',
+      render: (item: PurchaseOrder) => (
+        <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+          {formatDateSimple(item.receiptDate)}
+        </span>
+      ),
+    },
+    {
+      key: 'productItem',
+      header: 'product/Item',
+      render: (item: PurchaseOrder) => (
+        <span style={{ fontSize: '13px' }}>{item.productItem}</span>
+      ),
+    },
+    {
+      key: 'qty',
       header: 'Qty Order',
-      render: (item: PurchaseOrder) => {
-        const itemQty = parseFloat(String(item.qty || '0')) || 0;
-        return (
-          <span style={{ fontSize: '13px', textAlign: 'right', display: 'block' }}>
-            {itemQty.toLocaleString('id-ID')}
-          </span>
-        );
-      },
+      render: (item: PurchaseOrder) => (
+        <span style={{ fontSize: '13px', textAlign: 'right', display: 'block' }}>
+          {Number(item.qty || 0).toLocaleString('id-ID')}
+        </span>
+      ),
     },
     {
       key: 'qtyReceived',
       header: 'Qty Actual Receipt',
       render: (item: PurchaseOrder) => {
-        // Cek total qty yang sudah diterima dari GRN
-        const grnListArray = Array.isArray(grnList) ? grnList : [];
-        const itemPoNo = (item.poNo || '').toString().trim();
-        
-        const existingGRNs = grnListArray.filter((grn: any) => {
-          const grnPoNo = (grn.poNo || '').toString().trim();
-          return grnPoNo === itemPoNo && grnPoNo !== '';
+        const grnPackagingRecords = Array.isArray(grnList) ? grnList : [];
+        const grnsForPO = grnPackagingRecords.filter((grn: any) => {
+          const grnPO = (grn.poNo || '').toString().trim();
+          const currentPO = (item.poNo || '').toString().trim();
+          return grnPO === currentPO;
         });
-        
-        const totalReceived = existingGRNs.reduce((sum: number, grn: any) => {
-          const qty = parseFloat(String(grn.qtyReceived || '0')) || 0;
-          return sum + qty;
-        }, 0);
-        
-        const itemQty = parseFloat(String(item.qty || '0')) || 0;
-        const remainingQty = itemQty - totalReceived;
-        
-        // Hanya tampilkan "Complete" jika benar-benar ada GRN dan totalReceived >= itemQty
-        if (totalReceived > 0 && remainingQty > 0) {
-          // Partial receipt - tampilkan info outstanding
-          return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <span style={{ fontSize: '13px', textAlign: 'right', display: 'block', color: '#2e7d32' }}>
-                {totalReceived.toLocaleString('id-ID')}
-              </span>
-              <span style={{ fontSize: '10px', color: '#ff9800', fontWeight: '600' }}>
-                ⏳ {remainingQty} outstanding
-              </span>
-            </div>
-          );
-        } else if (totalReceived >= itemQty && itemQty > 0 && existingGRNs.length > 0) {
-          // All received - hanya jika ada GRN yang valid
-          return (
-            <span style={{ fontSize: '13px', textAlign: 'right', display: 'block', color: '#4caf50' }}>
-              {totalReceived.toLocaleString('id-ID')}
-            </span>
-          );
-        }
-        // Belum ada receipt - tampilkan 0
+        const totalReceived = grnsForPO.reduce((sum: number, grn: any) => sum + (Number(grn.qtyReceived) || 0), 0);
         return (
-          <span style={{ fontSize: '13px', textAlign: 'right', display: 'block', color: 'var(--text-secondary)' }}>
+          <span style={{ fontSize: '13px', textAlign: 'right', display: 'block', color: totalReceived > 0 ? '#2e7d32' : 'var(--text-secondary)' }}>
             {totalReceived.toLocaleString('id-ID')}
           </span>
         );
@@ -2351,25 +2251,18 @@ const Purchasing = () => {
       header: 'Total',
       render: (item: PurchaseOrder) => {
         // Hitung total berdasarkan qtyReceived jika sudah ada GRN, atau qty order jika belum
-        const grnListArray = Array.isArray(grnList) ? grnList : [];
-        const itemPoNo = (item.poNo || '').toString().trim();
-        
-        const existingGRNs = grnListArray.filter((grn: any) => {
-          const grnPoNo = (grn.poNo || '').toString().trim();
-          return grnPoNo === itemPoNo && grnPoNo !== '';
+        const grnPackagingRecords = Array.isArray(grnList) ? grnList : [];
+        const grnsForPO = grnPackagingRecords.filter((grn: any) => {
+          const grnPO = (grn.poNo || '').toString().trim();
+          const currentPO = (item.poNo || '').toString().trim();
+          return grnPO === currentPO;
         });
-        
-        const totalReceived = existingGRNs.reduce((sum: number, grn: any) => {
-          const qty = parseFloat(String(grn.qtyReceived || '0')) || 0;
-          return sum + qty;
-        }, 0);
+        const totalReceived = grnsForPO.reduce((sum: number, grn: any) => sum + (Number(grn.qtyReceived) || 0), 0);
         
         // Jika sudah ada GRN, gunakan qtyReceived untuk hitung total
         const qtyForTotal = totalReceived > 0 ? totalReceived : (item.qty || 0);
         const unitPrice = item.price || 0;
-        const discountPercent = item.discountPercent || 0;
-        const subtotal = Math.ceil(qtyForTotal * unitPrice);
-        const calculatedTotal = Math.ceil(subtotal * (1 - discountPercent / 100));
+        const calculatedTotal = Math.ceil(qtyForTotal * unitPrice);
         
         return (
           <strong style={{ fontSize: '13px', color: '#2e7d32', textAlign: 'right', display: 'block' }}>
@@ -2403,13 +2296,108 @@ const Purchasing = () => {
       ),
     },
     {
-      key: 'receiptDate',
-      header: 'Receipt Date',
-      render: (item: PurchaseOrder) => (
-        <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-          {formatDateSimple(item.receiptDate)}
-        </span>
-      ),
+      key: 'invoiceNo',
+      header: 'Invoice No',
+      render: (item: PurchaseOrder) => {
+        const grnPackagingRecords = Array.isArray(grnList) ? grnList : [];
+        const grnsForPO = grnPackagingRecords.filter((grn: any) => {
+          const grnPO = (grn.poNo || '').toString().trim();
+          const currentPO = (item.poNo || '').toString().trim();
+          return grnPO === currentPO;
+        });
+        
+        if (grnsForPO.length === 0) {
+          return <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>-</span>;
+        }
+        
+        // Collect all invoice numbers from GRNs
+        const invoiceNumbers = grnsForPO
+          .map((grn: any) => grn.invoiceNo)
+          .filter((inv: string) => inv && inv.trim());
+        
+        if (invoiceNumbers.length === 0) {
+          return <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>-</span>;
+        }
+        
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            {invoiceNumbers.map((invNo: string, idx: number) => (
+              <span key={idx} style={{ fontSize: '12px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                {invNo}
+              </span>
+            ))}
+          </div>
+        );
+      },
+    },
+    {
+      key: 'uploadedFiles',
+      header: 'Uploaded Files',
+      render: (item: PurchaseOrder) => {
+        const grnPackagingRecords = Array.isArray(grnList) ? grnList : [];
+        const grnsForPO = grnPackagingRecords.filter((grn: any) => {
+          const grnPO = (grn.poNo || '').toString().trim();
+          const currentPO = (item.poNo || '').toString().trim();
+          return grnPO === currentPO;
+        });
+        
+        if (grnsForPO.length === 0) {
+          return <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>-</span>;
+        }
+        
+        // Collect all uploaded files from GRNs
+        const uploadedFiles: Array<{ type: string; name: string; data: string }> = [];
+        grnsForPO.forEach((grn: any) => {
+          if (grn.suratJalan && grn.suratJalanName) {
+            uploadedFiles.push({ type: 'SJ', name: grn.suratJalanName, data: grn.suratJalan });
+          }
+          if (grn.invoiceFile && grn.invoiceFileName) {
+            uploadedFiles.push({ type: 'INV', name: grn.invoiceFileName, data: grn.invoiceFile });
+          }
+        });
+        
+        if (uploadedFiles.length === 0) {
+          return <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>No files</span>;
+        }
+        
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {uploadedFiles.map((file, idx) => (
+              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ 
+                  fontSize: '10px', 
+                  padding: '2px 6px', 
+                  borderRadius: '3px',
+                  backgroundColor: file.type === 'SJ' ? '#e3f2fd' : '#fff3e0',
+                  color: file.type === 'SJ' ? '#1976d2' : '#f57c00',
+                  fontWeight: '600'
+                }}>
+                  {file.type}
+                </span>
+                <a
+                  href={file.data}
+                  download={file.name}
+                  style={{ 
+                    fontSize: '11px', 
+                    color: '#1976d2',
+                    textDecoration: 'none',
+                    maxWidth: '150px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}
+                  title={file.name}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
+                >
+                  📎 {file.name}
+                </a>
+              </div>
+            ))}
+          </div>
+        );
+      },
     },
     {
       key: 'created',
@@ -2425,14 +2413,14 @@ const Purchasing = () => {
       header: 'Actions',
       render: (item: PurchaseOrder) => {
         const grnPackagingRecords = Array.isArray(grnList) ? grnList : [];
-        const hasGRN = safeSome(grnPackagingRecords, (grn: any) => {
+        const hasGRN = grnPackagingRecords.some((grn: any) => {
           const grnPO = (grn.poNo || '').toString().trim();
           const currentPO = (item.poNo || '').toString().trim();
           return grnPO === currentPO;
         });
         
         const financeNotificationsArray = Array.isArray(financeNotifications) ? financeNotifications : [];
-        const hasPendingFinance = safeSome(financeNotificationsArray, (notif: any) => {
+        const hasPendingFinance = financeNotificationsArray.some((notif: any) => {
           const notifPO = (notif.poNo || '').toString().trim();
           const currentPO = (item.poNo || '').toString().trim();
           return notifPO === currentPO && notif.status === 'PENDING';
@@ -2457,118 +2445,60 @@ const Purchasing = () => {
     },
   ];
 
-  // Filter PENDING PR and remove duplicates (by spkNo)
-  // Also exclude PRs that already have PO created (by checking orders)
+  // Filter PENDING PR (exclude yang sudah punya PO)
   const pendingPRs = useMemo(() => {
-    // CRITICAL: Ensure purchaseRequests is always an array to prevent .filter() error
-    if (!Array.isArray(purchaseRequests)) {
-      return [];
-    }
+    // Ensure purchaseRequests is always an array
+    const prArray = Array.isArray(purchaseRequests) ? purchaseRequests : [];
+    const ordersArray = Array.isArray(orders) ? orders : [];
     
-    // Helper untuk normalize string (trim, lowercase)
-    const normalize = (str: string | undefined | null): string => {
-      return (str || '').toString().trim().toLowerCase();
-    };
+    // Helper function untuk normalize string (trim, lowercase)
+    const normalize = (str: string) => (str || '').toString().trim().toLowerCase();
     
-    const pending = purchaseRequests.filter(pr => {
+    // Filter PR yang status PENDING dan belum punya PO
+    return prArray.filter(pr => {
       // Skip jika status bukan PENDING
-      if (pr.status !== 'PENDING') {
-        return false;
-      }
+      if (pr.status !== 'PENDING') return false;
       
-      // Cek apakah sudah ada PO untuk PR ini (berdasarkan sourcePRId, spkNo, atau soNo)
-      const hasPO = safeSome(orders, (po: PurchaseOrder) => {
-        // Match berdasarkan sourcePRId (jika PO dibuat dari PR)
-        if (po.sourcePRId && normalize(po.sourcePRId) === normalize(pr.id)) {
-          return true;
-        }
-        // Match berdasarkan spkNo (case-insensitive, trimmed)
-        if (po.spkNo && pr.spkNo && normalize(po.spkNo) === normalize(pr.spkNo)) {
-          return true;
-        }
-        // Match berdasarkan soNo (fallback, jika spkNo tidak match)
-        if (po.soNo && pr.soNo && normalize(po.soNo) === normalize(pr.soNo)) {
-          // Double check: pastikan product juga match (untuk menghindari false positive)
-          const prProduct = (pr.product || (pr.items && pr.items.length > 0 ? pr.items[0].productName : '') || '').toString().trim().toLowerCase();
-          const poProduct = (po.productItem || po.productId || '').toString().trim().toLowerCase();
-          if (prProduct && poProduct && (prProduct === poProduct || prProduct.includes(poProduct) || poProduct.includes(prProduct))) {
-            return true;
-          } else if (!prProduct || !poProduct) {
-            // Jika salah satu product kosong, tetap match berdasarkan soNo saja
-            return true;
-          }
-        }
-        return false;
+      // Cek apakah sudah ada PO untuk PR ini
+      // Match berdasarkan sourcePRId (jika PO dibuat dari PR)
+      const hasPOBySourcePRId = ordersArray.some(po => {
+        const poSourcePRId = normalize(po.sourcePRId || '');
+        const prId = normalize(pr.id || '');
+        return poSourcePRId && prId && poSourcePRId === prId;
       });
       
-      // Hanya tampilkan jika belum ada PO
-      return !hasPO;
-    });
-    
-    // Remove duplicates - keep only the first occurrence
-    // Cek berdasarkan: spkNo (prioritas), atau kombinasi soNo + customer jika spkNo tidak ada
-    const seen = new Set<string>();
-    const seenSoCustomer = new Set<string>(); // Track soNo+customer untuk detect duplicate dengan PR yang punya spkNo
-    const unique = pending.filter(pr => {
-      // Prioritas 1: spkNo (jika ada)
-      if (pr.spkNo) {
-        const spkKey = normalize(pr.spkNo);
-        if (seen.has(spkKey)) {
-          return false; // Duplicate
-        }
-        seen.add(spkKey);
-        
-        // Juga tambahkan kombinasi spkNo + soNo jika soNo ada
-        if (pr.soNo) {
-          const combinedKey = `${spkKey}|${normalize(pr.soNo)}`;
-          seen.add(combinedKey);
-          
-          // Track soNo+customer untuk detect duplicate dengan PR tanpa spkNo
-          if (pr.customer) {
-            const soCustomerKey = `${normalize(pr.soNo)}|${normalize(pr.customer)}`;
-            seenSoCustomer.add(soCustomerKey);
-          }
-        }
-        return true;
+      if (hasPOBySourcePRId) {
+        return false;
       }
       
-      // Prioritas 2: kombinasi soNo + customer (jika spkNo tidak ada)
-      if (pr.soNo && pr.customer) {
-        const soCustomerKey = `${normalize(pr.soNo)}|${normalize(pr.customer)}`;
-        // Cek apakah sudah ada PR dengan spkNo yang punya soNo+customer yang sama
-        if (seenSoCustomer.has(soCustomerKey)) {
-          return false; // Duplicate - sudah ada PR dengan spkNo yang punya soNo+customer sama
-        }
-        if (seen.has(soCustomerKey)) {
-          return false; // Duplicate
-        }
-        seen.add(soCustomerKey);
-        seenSoCustomer.add(soCustomerKey);
-        return true;
+      // Match berdasarkan spkNo (jika PO dibuat manual dengan spkNo yang sama)
+      // IMPORTANT: Cek per SPK, bukan per SO (karena 1 SO bisa punya banyak SPK dengan PR berbeda)
+      const hasPOBySpkNo = ordersArray.some(po => {
+        const poSpkNo = normalize(po.spkNo || '');
+        const prSpkNo = normalize(pr.spkNo || '');
+        return poSpkNo && prSpkNo && poSpkNo === prSpkNo;
+      });
+      
+      if (hasPOBySpkNo) {
+        return false;
       }
       
-      // Fallback: id (jika spkNo dan soNo tidak ada)
-      const idKey = normalize(pr.id);
-      if (seen.has(idKey)) {
-        return false; // Duplicate
-      }
-      seen.add(idKey);
+      // NOTE: TIDAK boleh filter berdasarkan soNo karena terlalu luas!
+      // 1 SO bisa punya banyak SPK dengan PR berbeda, jadi jika ada PO untuk 1 SPK,
+      // PR untuk SPK lain dengan SO yang sama tidak boleh di-exclude
+      // Filter berdasarkan soNo dihapus untuk mencegah PR hilang salah
+      
+      // PR masih pending dan belum punya PO
       return true;
     });
-    
-    return unique;
   }, [purchaseRequests, orders]);
 
-  // Format notifications untuk NotificationBell
+  // Transform pendingPRs into notification format
   const prNotifications = useMemo(() => {
-    // CRITICAL: Ensure pendingPRs is always an array to prevent .map() error
-    if (!Array.isArray(pendingPRs)) {
-      return [];
-    }
     return pendingPRs.map((pr) => ({
       id: pr.id,
-      title: `PR ${pr.prNo}`,
-      message: `SPK: ${pr.spkNo} | SO: ${pr.soNo} | Customer: ${pr.customer} | ${(pr.items || []).length} item(s)`,
+      title: `Purchase Request ${pr.prNo}`,
+      message: `SPK: ${pr.spkNo} | SO: ${pr.soNo} | Customer: ${pr.customer}`,
       timestamp: pr.created,
       pr: pr,
     }));
@@ -2579,6 +2509,103 @@ const Purchasing = () => {
     setSelectedPR(pr);
   };
 
+  const generatePRHtmlContent = async (pr: PurchaseRequest) => {
+    // Load company info from settings
+    const companySettings = await storageService.get<{ companyName: string; address: string }>('companySettings');
+    const company = {
+      companyName: companySettings?.companyName || 'PT TRIMA LAKSANA JAYA PRATAMA',
+      address: companySettings?.address || 'Jl. Raya Bekasi Km. 28, Cikarang, Bekasi 17530',
+    };
+
+    // Logo menggunakan logo-loader utility
+    let logo = await loadLogoAsBase64();
+
+    // Prepare enriched lines dari PR items
+    // Pastikan harga selalu ada, jika tidak ada di item, cari dari master product
+    const productsData = await storageService.get<any[]>('products') || [];
+    const enrichedLines = (pr.items || []).map((item: any) => {
+      // Jika price tidak ada atau 0, cari dari master product
+      let itemPrice = item.price || 0;
+      if (!itemPrice || itemPrice === 0) {
+        const productId = (item.product_id || item.productKode || '').toString().trim();
+        const product = productsData.find((m: any) => {
+          const mId = (m.product_id || m.kode || '').toString().trim();
+          return mId === productId;
+        });
+        if (product) {
+          itemPrice = product.hargaFg || product.hargaSales || (product as any).hargaSales || 0;
+        }
+      }
+      
+      return {
+        itemName: item.productName || '-',
+        itemSku: item.productKode || item.product_id || '-',
+        qty: item.qty || item.shortageQty || 0,
+        price: Math.ceil(itemPrice), // Pastikan harga selalu ada dan bulatkan ke atas
+        unit: item.unit || 'PCS',
+        description: item.productName || '',
+      };
+    });
+
+    // Calculate total
+    const total = enrichedLines.reduce((sum: number, line: any) => sum + (line.qty * line.price), 0);
+
+    // Prepare detail object
+    const detail = {
+      prNo: pr.prNo,
+      createdAt: pr.created,
+      spkNo: pr.spkNo,
+      soNo: pr.soNo,
+    };
+
+    // Generate HTML using template
+    return generatePRHtml({
+      logo,
+      company,
+      detail,
+      customer: pr.customer || '-',
+      product: pr.product || '-',
+      enrichedLines,
+      total,
+    });
+  };
+
+  const handleViewPR = async (pr: PurchaseRequest) => {
+    try {
+      const html = await generatePRHtmlContent(pr);
+      setViewPRPdfData({ html, prNo: pr.prNo });
+    } catch (error: any) {
+      showAlert(`Error generating PR preview: ${error.message}`, 'Error');
+    }
+  };
+
+  const handleSavePRToPDF = async () => {
+    if (!viewPRPdfData) return;
+
+    try {
+      const electronAPI = (window as any).electronAPI;
+      const fileName = `${viewPRPdfData.prNo}.pdf`;
+
+      // Check if Electron API is available (for file picker)
+      if (electronAPI && typeof electronAPI.savePdf === 'function') {
+        // Electron: Use file picker to select save location, then convert HTML to PDF and save
+        const result = await electronAPI.savePdf(viewPRPdfData.html, fileName);
+        if (result.success) {
+          showAlert(`PDF saved successfully to:\n${result.path}`, 'Success');
+          setViewPRPdfData(null);
+        } else if (!result.canceled) {
+          showAlert(`Error saving PDF: ${result.error || 'Unknown error'}`, 'Error');
+        }
+        // If canceled, do nothing (user closed dialog)
+      } else {
+        // Browser: Open print dialog, user can select "Save as PDF"
+        openPrintWindow(viewPRPdfData.html);
+      }
+    } catch (error: any) {
+      showAlert(`Error: ${error.message || 'Unknown error'}`, 'Error');
+    }
+  };
+
   const handleApprovePR = async (pr: PurchaseRequest, selectedSuppliers: { [key: string]: string }, paymentTerms: string, topDays: number) => {
     try {
       const newPOs: PurchaseOrder[] = [];
@@ -2587,29 +2614,19 @@ const Purchasing = () => {
       const finalTopDays = (paymentTerms === 'COD' || paymentTerms === 'CBD') ? 0 : (topDays || 30);
       
       for (const item of pr.items) {
-        // Normalize productId untuk handle berbagai format (backward compatibility)
-        const itemAny = item as any;
-        const productId = item.productId || itemAny.materialId || '';
-        const productName = item.productName || itemAny.materialName || itemAny.product || productId || 'Unknown Product';
-        const productKode = item.productKode || itemAny.materialKode || productId || '';
-        
-        const supplierName = selectedSuppliers[productId] || item.supplier;
+        const productId = getProductId(item);
+        const supplierName = selectedSuppliers[productId] || selectedSuppliers[item.product_id] || item.supplier;
         if (!supplierName) {
-          const displayName = productName || productId || 'Unknown Product';
-          showAlert(`Supplier belum dipilih untuk product: ${displayName}${productId ? ` (${productId})` : ''}`, 'Validation Error');
+          showAlert(`Supplier belum dipilih untuk product: ${item.productName}`, 'Validation Error');
           return;
         }
 
         // Re-load price dari master product jika price = 0
         let itemPrice = item.price;
         if (!itemPrice || itemPrice === 0) {
-          const product = products.find((m: any) => {
-            const mId = (m.product_id || m.kode || '').toString().trim();
-            const itemId = productId || productKode || '';
-            return mId === itemId;
-          });
+          const product = findProductById(getProductId(item));
           if (product) {
-            itemPrice = product.priceMtr || product.harga || (product as any).hargaSales || 0;
+            itemPrice = product.hargaFg || product.hargaSales || (product as any).hargaSales || 0;
           }
         }
 
@@ -2620,25 +2637,6 @@ const Purchasing = () => {
         const day = String(now.getDate()).padStart(2, '0');
         const randomCode = Math.random().toString(36).substr(2, 5).toUpperCase();
         const poNo = `PO-${year}${month}${day}-${randomCode}`;
-        
-        // Get qty - prioritas: shortageQty > qty > calculated
-        let finalQty = 0;
-        if (item.shortageQty !== undefined && item.shortageQty !== null && item.shortageQty > 0) {
-          finalQty = item.shortageQty;
-        } else if (item.qty !== undefined && item.qty !== null && item.qty > 0) {
-          finalQty = item.qty;
-        } else {
-          // Fallback: coba hitung dari requiredQty - availableStock
-          const requiredQty = item.requiredQty || 0;
-          const availableStock = item.availableStock || 0;
-          finalQty = Math.max(0, requiredQty - availableStock);
-        }
-        
-        if (finalQty <= 0) {
-          showAlert(`Error: Qty untuk product ${productName} tidak valid (${finalQty}). Silakan cek data PR.`, 'Validation Error');
-          return;
-        }
-        
         const newPO: PurchaseOrder = {
           id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
           poNo,
@@ -2647,49 +2645,243 @@ const Purchasing = () => {
           spkNo: pr.spkNo,
           sourcePRId: pr.id,
           purchaseReason: '',
-          productItem: productName, // Backward compatibility
-          productId: productId,
-          qty: finalQty,
+          productItem: item.productName,
+          product_id: getProductId(item),
+          productId: getProductId(item), // Backward compatibility
+          qty: item.qty,
           price: Math.ceil(itemPrice),
-          total: Math.ceil(finalQty * Math.ceil(itemPrice)),
+          total: Math.ceil(item.qty * Math.ceil(itemPrice)),
           paymentTerms: paymentTerms as any,
           topDays: finalTopDays,
           status: 'OPEN',
           receiptDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
           created: new Date().toISOString(),
         };
-        // Tambahkan productItem dan productName untuk GT
-        (newPO as any).productItem = productName;
-        (newPO as any).productName = productName;
-        (newPO as any).productId = productId;
         newPOs.push(newPO);
       }
 
       // Save POs
-      const updatedOrders = [...orders, ...newPOs];
-      await storageService.set('gt_purchaseOrders', updatedOrders);
+      const ordersArray = Array.isArray(orders) ? orders : [];
+      const updatedOrders = [...ordersArray, ...newPOs];
+      await storageService.set(StorageKeys.GENERAL_TRADING.PURCHASE_ORDERS, updatedOrders);
       setOrders(updatedOrders);
 
       // Update PR status to PO_CREATED
-      const updatedPRs = purchaseRequests.map(p => 
+      const prArray = Array.isArray(purchaseRequests) ? purchaseRequests : [];
+      const updatedPRs = prArray.map(p => 
         p.id === pr.id ? { ...p, status: 'PO_CREATED' as const } : p
       );
-      await storageService.set('gt_purchaseRequests', updatedPRs);
+      await storageService.set(StorageKeys.GENERAL_TRADING.PURCHASE_REQUESTS, updatedPRs);
       setPurchaseRequests(updatedPRs);
 
       showAlert(`PO berhasil dibuat dari PR ${pr.prNo}!\n\n${newPOs.length} Purchase Order telah dibuat.`, 'Success');
       setSelectedPR(null);
-      loadOrders();
-      loadPurchaseRequests();
+      // CRITICAL: Jangan panggil loadOrders() dan loadPurchaseRequests() di sini!
+      // setOrders() dan setPurchaseRequests() sudah update state
+      // Event listener akan auto-trigger jika ada perubahan dari storage
+      // Memanggil load functions hanya akan reload ulang semua data dan menyebabkan notifikasi flickering
     } catch (error: any) {
       showAlert(`Error creating PO from PR: ${error.message}`, 'Error');
     }
   };
 
+  // Merge PO: Validasi apakah PO yang sudah ada bisa di-merge (product sama dan supplier sama)
+  const validateMergeablePOs = (poIds: string[]): { valid: boolean; error?: string; mergeableGroups?: any[] } => {
+    if (poIds.length < 2) {
+      return { valid: false, error: 'Minimal pilih 2 PO untuk di-merge' };
+    }
+
+    const selectedPOs = orders.filter(po => poIds.includes(po.id));
+    
+    // Filter hanya PO dengan status OPEN (yang belum CLOSE)
+    const openPOs = selectedPOs.filter(po => po.status === 'OPEN');
+    if (openPOs.length < 2) {
+      return { valid: false, error: 'Minimal 2 PO dengan status OPEN untuk di-merge' };
+    }
+
+    // Helper untuk normalize product ID
+    const normalizeproductId = (id: string | undefined): string => {
+      return (id || '').toString().trim().toLowerCase();
+    };
+
+    // Helper untuk normalize supplier
+    const normalizeSupplier = (supplier: string | undefined): string => {
+      return (supplier || '').toString().trim().toLowerCase();
+    };
+
+    // Group PO berdasarkan productId dan supplier
+    const groups: { [key: string]: PurchaseOrder[] } = {};
+    
+    openPOs.forEach(po => {
+      const productId = normalizeproductId(po.productId);
+      const supplier = normalizeSupplier(po.supplier);
+      const key = `${productId}_${supplier}`;
+      
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push(po);
+    });
+
+    // Cek apakah ada group yang bisa di-merge (minimal 2 PO)
+    const mergeableGroups: any[] = [];
+    Object.entries(groups).forEach(([key, pos]) => {
+      if (pos.length >= 2) {
+        const [productId, supplier] = key.split('_');
+        const product = products.find(m => 
+          normalizeproductId(m.product_id || m.kode) === productId
+        );
+        
+        mergeableGroups.push({
+          key,
+          productId: pos[0].productId,
+          productName: pos[0].productItem || product?.nama || productId,
+          supplier: pos[0].supplier,
+          pos: pos.map(po => ({
+            id: po.id,
+            poNo: po.poNo,
+            spkNo: po.spkNo,
+            soNo: po.soNo,
+            qty: po.qty,
+            price: po.price,
+            total: po.total,
+          })),
+          totalQty: pos.reduce((sum, po) => sum + (po.qty || 0), 0),
+          totalAmount: pos.reduce((sum, po) => sum + (po.total || 0), 0),
+          avgPrice: pos.reduce((sum, po) => sum + (po.price || 0), 0) / pos.length,
+        });
+      }
+    });
+
+    if (mergeableGroups.length === 0) {
+      return { 
+        valid: false, 
+        error: 'Tidak ada PO yang bisa di-merge. Pastikan PO memiliki product dan supplier yang sama, dan status OPEN.' 
+      };
+    }
+
+    return { valid: true, mergeableGroups };
+  };
+
+  // Handle merge PO dari multiple PO yang sudah ada
+  const handleMergePO = async () => {
+    try {
+      if (selectedPOsForMerge.length < 2) {
+        showAlert('Minimal pilih 2 PO untuk di-merge', 'Validation Error');
+        return;
+      }
+
+      const validation = validateMergeablePOs(selectedPOsForMerge);
+      if (!validation.valid) {
+        showAlert(validation.error || 'Validasi merge gagal', 'Validation Error');
+        return;
+      }
+
+      if (!validation.mergeableGroups || validation.mergeableGroups.length === 0) {
+        showAlert('Tidak ada PO yang bisa di-merge', 'Validation Error');
+        return;
+      }
+
+      // Untuk setiap group yang bisa di-merge, buat 1 PO baru dan hapus PO lama
+      const newPOs: PurchaseOrder[] = [];
+      const poIdsToDelete: string[] = [];
+
+      for (const group of validation.mergeableGroups) {
+        // Generate PO number baru
+        const now = new Date();
+        const year = String(now.getFullYear()).slice(-2);
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const randomCode = Math.random().toString(36).substr(2, 5).toUpperCase();
+        const poNo = `PO-${year}${month}${day}-${randomCode}`;
+
+        // Get first PO for reference data
+        const firstPO = orders.find(po => po.id === group.pos[0].id);
+        if (!firstPO) continue;
+
+        // Calculate average price
+        const finalPrice = Math.ceil(group.avgPrice);
+
+        // Combine SPK numbers
+        const combinedSpkNo = group.pos
+          .map((p: any) => p.spkNo)
+          .filter((spk: string) => spk)
+          .join(', ');
+
+        // Combine SO numbers
+        const combinedSoNo = Array.from(new Set(group.pos.map((p: any) => p.soNo).filter((so: string) => so))).join(', ');
+
+        const mergedPO: PurchaseOrder = {
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+          poNo,
+          supplier: group.supplier,
+          soNo: combinedSoNo || firstPO.soNo,
+          spkNo: combinedSpkNo || firstPO.spkNo,
+          sourcePRId: firstPO.sourcePRId, // Keep original PR ID if exists
+          purchaseReason: `Merged from ${group.pos.length} POs: ${group.pos.map((p: any) => p.poNo).join(', ')}`,
+          productItem: group.productName,
+          productId: group.productId,
+          qty: group.totalQty,
+          price: finalPrice,
+          total: group.totalAmount,
+          paymentTerms: firstPO.paymentTerms,
+          topDays: firstPO.topDays,
+          status: 'OPEN',
+          receiptDate: firstPO.receiptDate,
+          created: new Date().toISOString(),
+        };
+
+        newPOs.push(mergedPO);
+        
+        // Mark PO untuk dihapus
+        group.pos.forEach((po: any) => {
+          if (!poIdsToDelete.includes(po.id)) {
+            poIdsToDelete.push(po.id);
+          }
+        });
+      }
+
+      if (newPOs.length === 0) {
+        showAlert('Tidak ada PO yang berhasil dibuat', 'Error');
+        return;
+      }
+
+      // Delete PO lama menggunakan tombstone pattern (prevent data resurrection)
+      const deleteResults = await deletePackagingItems('purchaseOrders', poIdsToDelete, 'id');
+      
+      if (deleteResults.failed > 0) {
+        showAlert(`Warning: ${deleteResults.failed} PO gagal dihapus. ${deleteResults.success} PO berhasil dihapus.`, 'Warning');
+      }
+      
+      // Tambahkan PO baru (setelah tombstone deletion)
+      const currentOrders = await storageService.get<PurchaseOrder[]>('purchaseOrders') || [];
+      const activeOrders = filterActiveItems(currentOrders);
+      const updatedOrders = [...activeOrders, ...newPOs];
+      
+      await storageService.set(StorageKeys.GENERAL_TRADING.PURCHASE_ORDERS, updatedOrders);
+      
+      // Update state dengan filtered active items (exclude tombstones)
+      setOrders(filterActiveItems(updatedOrders));
+
+      showAlert(
+        `PO berhasil di-merge!\n\n${newPOs.length} Purchase Order baru telah dibuat dari ${poIdsToDelete.length} PO yang di-merge.`,
+        'Success'
+      );
+
+      // Reset and close
+      setSelectedPOsForMerge([]);
+      setShowMergePODialog(false);
+      // CRITICAL: Jangan panggil loadOrders() di sini!
+      // setOrders() sudah update state
+      // Event listener akan auto-trigger jika ada perubahan dari storage
+      // Memanggil loadOrders() hanya akan reload ulang semua data dan menyebabkan notifikasi flickering
+    } catch (error: any) {
+      showAlert(`Error merging PO: ${error.message}`, 'Error');
+    }
+  };
+
   const handleDeletePO = async (item: PurchaseOrder) => {
     try {
-      console.log('[GT Purchasing] handleDeletePO called for:', item?.poNo, item?.id);
-      
       if (!item || !item.poNo) {
         showAlert('PO tidak valid. Mohon coba lagi.', 'Error');
         return;
@@ -2697,58 +2889,59 @@ const Purchasing = () => {
       
       // Validate item.id exists
       if (!item.id) {
-        console.error('[GT Purchasing] PO missing ID:', item);
-        showAlert(`❌ Error: PO "${item.poNo}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        showAlert(`❌ Error: PO ${item.poNo} tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
         return;
       }
 
       const poNo = item.poNo.toString().trim();
-      // Defensive check: pastikan grnList dan financeNotifications adalah array
-      const grnListArray = Array.isArray(grnList) ? grnList : [];
-      const financeNotificationsArray = Array.isArray(financeNotifications) ? financeNotifications : [];
-      
-      const hasGRN = safeSome(grnListArray, (grn: any) => grn && (grn.poNo || '').toString().trim() === poNo);
-      if (hasGRN) {
-        showAlert(`Tidak bisa menghapus PO ${poNo}.\n\nGRN sudah dibuat untuk PO ini. Silakan hapus GRN terlebih dahulu jika ingin membatalkan PO.`, 'Cannot Delete');
-        return;
-      }
+    // Defensive check: pastikan grnList dan financeNotifications adalah array
+    const grnListArray = Array.isArray(grnList) ? grnList : [];
+    const financeNotificationsArray = Array.isArray(financeNotifications) ? financeNotifications : [];
+    
+    const hasGRN = grnListArray.some((grn: any) => grn && (grn.poNo || '').toString().trim() === poNo);
+    if (hasGRN) {
+      showAlert(`Tidak bisa menghapus PO ${poNo}.\n\nGRN sudah dibuat untuk PO ini. Silakan hapus GRN terlebih dahulu jika ingin membatalkan PO.`, 'Cannot Delete');
+      return;
+    }
 
-      const hasPendingFinance = safeSome(financeNotificationsArray, (notif: any) => {
-        if (!notif) return false;
-        const notifPo = (notif.poNo || '').toString().trim();
-        const notifStatus = (notif.status || 'PENDING').toString().toUpperCase();
-        return notifPo === poNo && notifStatus !== 'CLOSE';
-      });
-      if (hasPendingFinance) {
-        showAlert(`Tidak bisa menghapus PO ${poNo}.\n\nFinance sudah menerima notifikasi pembayaran supplier untuk PO ini. Batalkan pembayaran terlebih dahulu.`, 'Cannot Delete');
-        return;
-      }
+    const hasPendingFinance = financeNotificationsArray.some((notif: any) => {
+      if (!notif) return false;
+      const notifPo = (notif.poNo || '').toString().trim();
+      const notifStatus = (notif.status || 'PENDING').toString().toUpperCase();
+      return notifPo === poNo && notifStatus !== 'CLOSE';
+    });
+    if (hasPendingFinance) {
+      showAlert(`Tidak bisa menghapus PO ${poNo}.\n\nFinance sudah menerima notifikasi pembayaran supplier untuk PO ini. Batalkan pembayaran terlebih dahulu.`, 'Cannot Delete');
+      return;
+    }
 
       showConfirm(
-        `Hapus PO ${poNo}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini akan:\n• Menghapus PO dari daftar\n• Menghapus notifikasi Finance terkait\n• Mengembalikan PR ke status APPROVED (jika ada)\n\nPastikan tidak ada proses lanjutan untuk PO ini.\n\nTindakan ini tidak bisa dibatalkan.`,
+        `Hapus PO ${poNo}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini akan:\n• Menghapus PO dari daftar\n• Menghapus notifikasi Finance terkait\n• Mengembalikan PR ke status APPROVED (jika ada)\n\nPastikan tidak ada proses lanjutan untuk PO ini.`,
         async () => {
           try {
-            // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
-            const deleteResult = await deleteGTItem('gt_purchaseOrders', item.id, 'id');
+            // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
+            const deleteResult = await deletePackagingItem('purchaseOrders', item.id, 'id');
             
             if (!deleteResult.success) {
-              console.error('[GT Purchasing] Delete failed:', deleteResult.error);
-              showAlert(`❌ Error deleting PO ${item.poNo}: ${deleteResult.error || 'Unknown error'}`, 'Error');
+              showAlert(`❌ Error deleting PO ${poNo}: ${deleteResult.error || 'Unknown error'}`, 'Error');
               return;
             }
             
-            // Reload data dengan helper (handle race condition)
-            const updatedOrders = await reloadGTData('gt_purchaseOrders', setOrders);
-            setOrders(updatedOrders);
+            // Reload orders dengan helper (handle race condition)
+            await reloadPackagingData('purchaseOrders', setOrders);
 
-          let updatedPRs = purchaseRequests;
+          // Ensure purchaseRequests is always an array
+          const prArray = Array.isArray(purchaseRequests) ? purchaseRequests : [];
+          let updatedPRs = prArray;
           let prChanged = false;
           const normalizeId = (value: any) => (value || '').toString().trim();
 
           const revertPRStatus = (targetId: string) => {
-            const stillHasPO = safeSome(updatedOrders, (po: any) => po && normalizeId(po.sourcePRId) === targetId);
+            // Check against active orders (after tombstone deletion)
+            const currentOrders = filterActiveItems(orders);
+            const stillHasPO = currentOrders.some((po: PurchaseOrder) => normalizeId(po.sourcePRId) === targetId);
             if (stillHasPO) return;
-            updatedPRs = purchaseRequests.map(pr => {
+            updatedPRs = prArray.map(pr => {
               if (pr.id === targetId && pr.status === 'PO_CREATED') {
                 prChanged = true;
                 return { ...pr, status: 'APPROVED' as const };
@@ -2760,44 +2953,43 @@ const Purchasing = () => {
           if (item.sourcePRId) {
             revertPRStatus(normalizeId(item.sourcePRId));
           } else if (item.spkNo) {
-            const candidate = purchaseRequests.find(pr => pr.spkNo === item.spkNo && pr.status === 'PO_CREATED');
+            const candidate = prArray.find(pr => pr.spkNo === item.spkNo && pr.status === 'PO_CREATED');
             if (candidate) {
               const candidateId = candidate.id;
-              const stillHasPO = safeSome(updatedOrders, (po: any) => {
-                if (!po) return false;
+              const currentOrders = filterActiveItems(orders);
+              const stillHasPO = currentOrders.some((po: PurchaseOrder) => {
                 if (normalizeId(po.sourcePRId) === candidateId) return true;
                 return (po.spkNo || '').toString().trim() === (item.spkNo || '').toString().trim();
               });
               if (!stillHasPO) {
-                updatedPRs = purchaseRequests.map(pr => pr.id === candidateId ? { ...pr, status: 'APPROVED' as const } : pr);
+                updatedPRs = prArray.map(pr => pr.id === candidateId ? { ...pr, status: 'APPROVED' as const } : pr);
                 prChanged = true;
               }
             }
           }
 
           if (prChanged) {
-            await storageService.set('gt_purchaseRequests', updatedPRs);
+            await storageService.set(StorageKeys.GENERAL_TRADING.PURCHASE_REQUESTS, updatedPRs);
             setPurchaseRequests(updatedPRs);
           }
 
           const updatedFinanceNotif = financeNotifications.filter((notif: any) => (notif.poNo || '').toString().trim() !== poNo);
           if (updatedFinanceNotif.length !== financeNotifications.length) {
-            await storageService.set('gt_financeNotifications', updatedFinanceNotif);
+            await storageService.set(StorageKeys.GENERAL_TRADING.FINANCE_NOTIFICATIONS, updatedFinanceNotif);
             setFinanceNotifications(updatedFinanceNotif);
           }
 
-          showAlert(`✅ PO ${poNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.\n\nPR terkait sudah dikembalikan ke status APPROVED.`, 'Success');
-        } catch (error: any) {
-          console.error('[GT Purchasing] Error deleting PO:', error);
-          showAlert(`❌ Error deleting PO: ${error.message}`, 'Error');
-        }
-      },
-      undefined,
-      'Safe Delete Confirmation'
-    );
+            showAlert(`✅ PO ${poNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.\n\nPR terkait sudah dikembalikan ke status APPROVED.`, 'Success');
+          } catch (error: any) {
+            showAlert(`❌ Error deleting PO: ${error.message}`, 'Error');
+          }
+        },
+        () => {
+        },
+        'Safe Delete Confirmation'
+      );
     } catch (error: any) {
-      console.error('[GT Purchasing] Error in handleDeletePO:', error);
-      showAlert(`Error: ${error.message}`, 'Error');
+      showAlert(`❌ Error: ${error.message}`, 'Error');
     }
   };
 
@@ -2809,38 +3001,8 @@ const Purchasing = () => {
           {pendingPRs.length > 0 && (
             <NotificationBell
               notifications={prNotifications}
-              onNotificationClick={async (notification) => {
-                // CRITICAL: Saat user klik notifikasi, langsung update state dan pastikan PR muncul di table list
+              onNotificationClick={(notification) => {
                 if (notification.pr) {
-                  // CRITICAL: Skip event listener untuk 2 detik setelah confirm notifikasi
-                  // Ini mencegah loadPurchaseRequests() trigger yang menyebabkan PR hilang dari table list
-                  skipReloadRef.current = {
-                    skipUntil: Date.now() + 2000, // Skip reload selama 2 detik
-                    reason: 'confirmPRNotification'
-                  };
-                  
-                  // Pastikan PR ada di purchaseRequests state
-                  const existingPR = purchaseRequests.find((p: any) => p.id === notification.pr.id || p.prNo === notification.pr.prNo);
-                  if (!existingPR) {
-                    // Jika PR belum ada di state, tambahkan langsung
-                    const updatedPRs = [...purchaseRequests, notification.pr];
-                    setPurchaseRequests(updatedPRs);
-                    // CRITICAL: Force immediate sync ke server untuk confirm notifikasi
-                    // Ini memastikan data langsung tersedia di device lain
-                    await storageService.set('gt_purchaseRequests', updatedPRs, true);
-                  } else {
-                    // Pastikan status tetap PENDING
-                    if (existingPR.status !== 'PENDING') {
-                      const updatedPRs = purchaseRequests.map((p: any) => 
-                        p.id === notification.pr.id || p.prNo === notification.pr.prNo
-                          ? { ...p, status: 'PENDING' }
-                          : p
-                      );
-                      setPurchaseRequests(updatedPRs);
-                      // CRITICAL: Force immediate sync ke server untuk confirm notifikasi
-                      await storageService.set('gt_purchaseRequests', updatedPRs, true);
-                    }
-                  }
                   handleCreatePOFromPR(notification.pr);
                 }
               }}
@@ -2849,59 +3011,46 @@ const Purchasing = () => {
             />
           )}
           <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
+          <Button variant="secondary" onClick={() => setShowMergePODialog(true)}>🔀 Merge PO</Button>
           <Button onClick={handleCreate}>+ Create PO</Button>
         </div>
       </div>
 
-      {showForm && (
-        <Card title={editingItem ? `Edit Purchase Order - ${editingItem.poNo}` : "Create New Purchase Order"} className="mb-4">
-          {editingItem && (
-            <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px' }}>
-              <div><strong>PO No:</strong> {editingItem.poNo}</div>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                Status: {editingItem.status} | Created: {new Date(editingItem.created).toLocaleDateString('id-ID')}
-              </div>
-            </div>
-          )}
+      {showForm && !editingItem && (
+        <Card title="Create New Purchase Order" className="mb-4">
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
               Supplier *
             </label>
-            <input
-              type="text"
-              list={`supplier-list-${editingItem?.id || 'new'}`}
-              value={getSupplierInputDisplayValue()}
-              onChange={(e) => {
-                handleSupplierInputChange(e.target.value);
-              }}
-              onBlur={(e) => {
-                const value = e.target.value;
-                const matchedSupplier = suppliers.find(s => {
-                  const label = `${s.kode || ''}${s.kode ? ' - ' : ''}${s.nama || ''}`;
-                  return label === value;
-                });
-                if (matchedSupplier) {
-                  setFormData({ ...formData, supplier: matchedSupplier.nama });
-                }
-              }}
-              placeholder="-- Pilih Supplier --"
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-              }}
-            />
-            <datalist id={`supplier-list-${editingItem?.id || 'new'}`}>
-              {suppliers.map(s => (
-                <option key={s.id} value={`${s.kode} - ${s.nama}`}>
-                  {s.kode} - {s.nama}
-                </option>
-              ))}
-            </datalist>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                value={getSupplierInputDisplayValue()}
+                onChange={(e) => {
+                  handleSupplierInputChange(e.target.value);
+                }}
+                placeholder="-- Pilih Supplier --"
+                readOnly
+                onClick={() => setShowSupplierDialog(true)}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                }}
+              />
+              <Button
+                variant="secondary"
+                onClick={() => setShowSupplierDialog(true)}
+                style={{ fontSize: '12px', padding: '8px 16px' }}
+              >
+                Select
+              </Button>
+            </div>
           </div>
           <Input
             label={editingItem ? "SO No (Linked - Cannot Edit)" : "SO No (Optional)"}
@@ -2919,49 +3068,38 @@ const Purchasing = () => {
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
               product/Item *
             </label>
-            <input
-              type="text"
-              list={`product-list-${editingItem?.id || 'new'}`}
-              value={getproductInputDisplayValue()}
-              onChange={(e) => {
-                handleproductInputChange(e.target.value);
-              }}
-              onBlur={(e) => {
-                const value = e.target.value;
-                const matchedproduct = products.find(m => {
-                  const label = `${m.product_id || m.kode || ''}${m.product_id || m.kode ? ' - ' : ''}${m.nama || ''}`;
-                  return label === value;
-                });
-                if (matchedproduct) {
-                  const productPrice = matchedproduct.priceMtr || matchedproduct.harga || 0;
-                  const roundedPrice = Math.ceil(productPrice);
-                  const roundedTotal = Math.ceil((formData.qty || 0) * roundedPrice);
-                setFormData({
-                  ...formData,
-                    productItem: matchedproduct.nama,
-                  price: roundedPrice,
-                  total: roundedTotal,
-                });
-                }
-              }}
-              placeholder="-- Pilih Product --"
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-              }}
-            />
-            <datalist id={`product-list-${editingItem?.id || 'new'}`}>
-              {products.map(m => (
-                <option key={m.id} value={`${m.product_id || m.kode} - ${m.nama}`}>
-                  {m.product_id || m.kode} - {m.nama}
-                </option>
-              ))}
-            </datalist>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                value={getProductInputDisplayValue()}
+                placeholder="-- Pilih Product --"
+                readOnly
+                onClick={() => {
+                  setProductDialogSearch('');
+                  setShowProductDialog(true);
+                }}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                }}
+              />
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setProductDialogSearch('');
+                  setShowProductDialog(true);
+                }}
+                style={{ fontSize: '12px', padding: '8px 16px' }}
+              >
+                🔍
+              </Button>
+            </div>
           </div>
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
@@ -3016,8 +3154,7 @@ const Purchasing = () => {
                   setQtyInputValue('');
                 } else {
                   const qty = Number(val);
-                  const subtotal = Math.ceil(qty * (formData.price || 0));
-                  const total = Math.ceil(subtotal * (1 - (formData.discountPercent || 0) / 100));
+                  const total = Math.ceil(qty * (formData.price || 0)); // Bulatkan ke atas
                   setFormData({
                     ...formData,
                     qty,
@@ -3036,8 +3173,7 @@ const Purchasing = () => {
                   setQtyInputValue(newVal);
                   input.value = newVal;
                   const qty = Number(newVal);
-                  const subtotal = Math.ceil(qty * (formData.price || 0));
-                  const total = Math.ceil(subtotal * (1 - (formData.discountPercent || 0) / 100));
+                  const total = Math.ceil(qty * (formData.price || 0));
                   setFormData({
                     ...formData,
                     qty,
@@ -3092,13 +3228,12 @@ const Purchasing = () => {
                 const cleaned = removeLeadingZero(val);
                 setPriceInputValue(cleaned);
                 const price = cleaned === '' ? 0 : Math.ceil(Number(cleaned) || 0); // Bulatkan ke atas
-                const subtotal = Math.ceil((formData.qty || 0) * price);
-                const total = Math.ceil(subtotal * (1 - (formData.discountPercent || 0) / 100));
-                setFormData({
-                  ...formData,
-                  price,
-                  total,
-                });
+              const total = Math.ceil((formData.qty || 0) * price); // Bulatkan ke atas
+              setFormData({
+                ...formData,
+                price,
+                total,
+              });
             }}
               onBlur={(e) => {
                 const val = e.target.value;
@@ -3111,8 +3246,7 @@ const Purchasing = () => {
                   setPriceInputValue('');
                 } else {
                   const price = Math.ceil(Number(val)); // Bulatkan ke atas
-                  const subtotal = Math.ceil((formData.qty || 0) * price);
-                  const total = Math.ceil(subtotal * (1 - (formData.discountPercent || 0) / 100));
+                  const total = Math.ceil((formData.qty || 0) * price); // Bulatkan ke atas
                   setFormData({
                     ...formData,
                     price,
@@ -3131,8 +3265,7 @@ const Purchasing = () => {
                   setPriceInputValue(newVal);
                   input.value = newVal;
                   const price = Math.ceil(Number(newVal));
-                  const subtotal = Math.ceil((formData.qty || 0) * price);
-                  const total = Math.ceil(subtotal * (1 - (formData.discountPercent || 0) / 100));
+                  const total = Math.ceil((formData.qty || 0) * price);
                   setFormData({
                     ...formData,
                     price,
@@ -3154,104 +3287,8 @@ const Purchasing = () => {
           </div>
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Discount (%)
+              Total: Rp {Math.ceil((formData.qty || 0) * (formData.price || 0)).toLocaleString('id-ID', { maximumFractionDigits: 0 })}
             </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={discountInputValue !== '' ? discountInputValue : (formData.discountPercent !== undefined && formData.discountPercent !== null && formData.discountPercent !== 0 ? String(formData.discountPercent) : '')}
-              onFocus={(e) => {
-                const currentDiscount = formData.discountPercent;
-                if (currentDiscount === 0 || currentDiscount === undefined || currentDiscount === null) {
-                  setDiscountInputValue('');
-                  e.target.value = '';
-                } else {
-                  setDiscountInputValue(String(currentDiscount));
-                }
-              }}
-              onMouseDown={(e) => {
-                const currentDiscount = formData.discountPercent;
-                if (currentDiscount === 0 || currentDiscount === undefined || currentDiscount === null) {
-                  setDiscountInputValue('');
-                  (e.target as HTMLInputElement).value = '';
-                }
-              }}
-              onChange={(e) => {
-                const val = e.target.value;
-                const cleaned = removeLeadingZero(val);
-                setDiscountInputValue(cleaned);
-                const discount = cleaned === '' ? 0 : Number(cleaned) || 0;
-                const subtotal = Math.ceil((formData.qty || 0) * (formData.price || 0));
-                const total = Math.ceil(subtotal * (1 - discount / 100));
-                setFormData({ ...formData, discountPercent: discount, total });
-              }}
-              onBlur={(e) => {
-                const val = e.target.value;
-                if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
-                  const subtotal = Math.ceil((formData.qty || 0) * (formData.price || 0));
-                  setFormData({ ...formData, discountPercent: 0, total: subtotal });
-                  setDiscountInputValue('');
-                  } else {
-                    const numVal = Number(val);
-                    if (numVal > 100) {
-                      setFormData({ ...formData, discountPercent: 100, total: 0 });
-                      setDiscountInputValue('100');
-                    } else {
-                      const subtotal = Math.ceil((formData.qty || 0) * (formData.price || 0));
-                      const total = Math.ceil(subtotal * (1 - numVal / 100));
-                      setFormData({ ...formData, discountPercent: numVal, total });
-                      setDiscountInputValue('');
-                    }
-                  }
-              }}
-              onKeyDown={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = input.value;
-                if ((currentVal === '' || currentVal === '0') && /^[1-9]$/.test(e.key)) {
-                  e.preventDefault();
-                  const newVal = e.key;
-                  setDiscountInputValue(newVal);
-                  input.value = newVal;
-                  const subtotal = Math.ceil((formData.qty || 0) * (formData.price || 0));
-                  const total = Math.ceil(subtotal * (1 - Number(newVal) / 100));
-                  setFormData({ ...formData, discountPercent: Number(newVal), total });
-                }
-              }}
-              placeholder="0"
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0' }}>
-              <span style={{ color: 'var(--text-primary)', fontWeight: '500' }}>Sub Total:</span>
-              <span style={{ color: 'var(--text-primary)' }}>
-                Rp {Math.ceil((formData.qty || 0) * (formData.price || 0)).toLocaleString('id-ID', { maximumFractionDigits: 0 })}
-              </span>
-            </div>
-            {(formData.discountPercent || 0) > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0' }}>
-                <span style={{ color: 'var(--text-primary)', fontWeight: '500' }}>
-                  Discount ({formData.discountPercent}%):
-                </span>
-                <span style={{ color: '#ff9800' }}>
-                  - Rp {Math.ceil((formData.qty || 0) * (formData.price || 0) * (formData.discountPercent || 0) / 100).toLocaleString('id-ID', { maximumFractionDigits: 0 })}
-                </span>
-              </div>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: '2px solid var(--border)', marginTop: '8px' }}>
-              <span style={{ color: 'var(--text-primary)', fontWeight: 'bold' }}>Total:</span>
-              <span style={{ color: 'var(--text-primary)', fontWeight: 'bold' }}>
-                Rp {(formData.total || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 })}
-              </span>
-            </div>
           </div>
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
@@ -3340,7 +3377,7 @@ const Purchasing = () => {
             <Button onClick={() => { 
               setShowForm(false); 
               setEditingItem(null);
-              setproductInputValue('');
+              setProductInputValue('');
               setSupplierInputValue('');
               setQtyInputValue('');
               setPriceInputValue('');
@@ -3368,156 +3405,614 @@ const Purchasing = () => {
         </Card>
       )}
 
-      <Card>
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px' }}>
-          <div className="tab-container" style={{ marginBottom: 0, flex: '1 1 auto' }}>
-            <button
-              className={`tab-button ${activeTab === 'all' ? 'active' : ''}`}
-              onClick={() => setActiveTab('all')}
-            >
-              All Purchase Orders
-            </button>
-            <button
-              className={`tab-button ${activeTab === 'outstanding' ? 'active' : ''}`}
-              onClick={() => setActiveTab('outstanding')}
-            >
-              Outstanding ({orders.filter(o => o.status === 'OPEN').length})
-            </button>
-          </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <Button
-              variant="secondary"
-              onClick={() => setViewMode(viewMode === 'cards' ? 'table' : 'cards')}
-              style={{ padding: '6px 12px', fontSize: '12px' }}
-            >
-              {viewMode === 'cards' ? '📋 Table' : '🃏 Cards'}
-            </Button>
-            <div style={{ flex: '0 0 280px', minWidth: '240px' }}>
-              <Input
-                label="Search"
-                value={searchQuery}
-                onChange={setSearchQuery}
-                placeholder="Search by PO No, Supplier, SO No..."
-              />
-            </div>
-          </div>
+      <Card style={{ position: 'sticky', top: 0, zIndex: 100, marginBottom: '16px' }}>
+        <div className="tab-container">
+          <button
+            className={`tab-button ${activeTab === 'all' ? 'active' : ''}`}
+            onClick={() => setActiveTab('all')}
+          >
+            All Purchase Orders
+          </button>
+          <button
+            className={`tab-button ${activeTab === 'outstanding' ? 'active' : ''}`}
+            onClick={() => setActiveTab('outstanding')}
+          >
+            Outstanding ({(Array.isArray(orders) ? orders : []).filter(o => o.status === 'OPEN').length})
+          </button>
         </div>
         <div className="tab-content">
-          {viewMode === 'cards' ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '12px' }}>
-              {filteredOrders.length === 0 ? (
-                <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
-                  {activeTab === 'outstanding' ? 'No outstanding purchase orders' : (searchQuery ? "No PO data found matching your search" : "No PO data")}
-                </div>
-              ) : (
-                filteredOrders.map((item: PurchaseOrder) => {
-                  const grnListArray = Array.isArray(grnList) ? grnList : [];
-                  const financeNotificationsArray = Array.isArray(financeNotifications) ? financeNotifications : [];
+          <div style={{ marginBottom: '16px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 300px', minWidth: '200px' }}>
+              <Input
+                label="Search & Filter"
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Search by PO No, Supplier, SO No, SPK No, product, Status..."
+              />
+            </div>
+            <div style={{ flex: '1 1 400px', minWidth: '300px' }}>
+              <DateRangeFilter
+                onDateChange={(from, to) => {
+                  setDateFrom(from);
+                  setDateTo(to);
+                }}
+                defaultFrom={dateFrom}
+                defaultTo={dateTo}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <Button
+                variant={viewMode === 'table' ? 'primary' : 'secondary'}
+                onClick={() => setViewMode('table')}
+                style={{ fontSize: '12px', padding: '6px 12px' }}
+              >
+                📊 Table
+              </Button>
+              <Button
+                variant={viewMode === 'cards' ? 'primary' : 'secondary'}
+                onClick={() => setViewMode('cards')}
+                style={{ fontSize: '12px', padding: '6px 12px' }}
+              >
+                🃏 Cards
+              </Button>
+            </div>
+          </div>
+          {viewMode === 'table' ? (
+          <>
+          <Table 
+            columns={columns} 
+            data={filteredOrders.slice((tableCurrentPage - 1) * itemsPerPage, tableCurrentPage * itemsPerPage)}
+            emptyMessage={activeTab === 'outstanding' ? 'No outstanding purchase orders' : (searchQuery ? "No PO data found matching your search" : "No PO data")}
+            getRowStyle={(item: PurchaseOrder) => ({
+              backgroundColor: getRowColor(item.soNo),
+            })}
+          />
+          
+          {/* Pagination Controls untuk Table View */}
+          {filteredOrders.length > itemsPerPage && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: '8px',
+              marginTop: '16px',
+              flexWrap: 'wrap',
+            }}>
+              <Button
+                variant="secondary"
+                onClick={() => setTableCurrentPage(Math.max(1, tableCurrentPage - 1))}
+                disabled={tableCurrentPage === 1}
+                style={{ padding: '6px 12px', fontSize: '12px' }}
+              >
+                ← Previous
+              </Button>
+              
+              {(() => {
+                const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+                const pages: (number | string)[] = [];
+                if (totalPages <= 5) {
+                  for (let i = 1; i <= totalPages; i++) pages.push(i);
+                } else {
+                  pages.push(1);
+                  if (tableCurrentPage > 3) pages.push('...');
                   
-                  const hasGRN = safeSome(grnListArray, (grn: any) => grn && grn.poNo === item.poNo);
-                  const existingGRNs = grnListArray.filter((grn: any) => 
-                    grn && (grn.poNo || '').toString().trim() === (item.poNo || '').toString().trim()
-                  );
-                  const totalReceived = existingGRNs.reduce((sum: number, grn: any) => sum + (grn.qtyReceived || 0), 0);
-                  const remainingQty = item.qty - totalReceived;
-                  const hasOutstandingQty = remainingQty > 0;
-                  const buttonColors = getButtonColor(item.poNo || '');
-                  const hasPendingFinance = safeSome(financeNotificationsArray, (notif: any) => {
-                    if (!notif) return false;
-                    const notifPo = (notif.poNo || '').toString().trim();
-                    const currentPo = (item.poNo || '').toString().trim();
-                    return (
-                      notif.type === 'SUPPLIER_PAYMENT' &&
-                      notifPo !== '' &&
-                      notifPo === currentPo &&
-                      (notif.status || 'PENDING').toUpperCase() !== 'CLOSE'
-                    );
-                  });
+                  const startPage = Math.max(2, tableCurrentPage - 1);
+                  const endPage = Math.min(totalPages - 1, tableCurrentPage + 1);
                   
+                  for (let i = startPage; i <= endPage; i++) {
+                    pages.push(i);
+                  }
+                  
+                  if (tableCurrentPage < totalPages - 2) pages.push('...');
+                  pages.push(totalPages);
+                }
+                
+                return pages.map((page, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => typeof page === 'number' && setTableCurrentPage(page)}
+                    disabled={page === '...'}
+                    style={{
+                      padding: '6px 10px',
+                      border: page === tableCurrentPage ? '2px solid var(--primary-color)' : '1px solid var(--border-color)',
+                      backgroundColor: page === tableCurrentPage ? 'var(--primary-color)' : 'var(--bg-primary)',
+                      color: page === tableCurrentPage ? '#fff' : 'var(--text-primary)',
+                      borderRadius: '4px',
+                      cursor: page === '...' ? 'default' : 'pointer',
+                      fontSize: '12px',
+                      fontWeight: page === tableCurrentPage ? '600' : '400',
+                      opacity: page === '...' ? 0.5 : 1,
+                    }}
+                  >
+                    {page}
+                  </button>
+                ));
+              })()}
+              
+              <Button
+                variant="secondary"
+                onClick={() => setTableCurrentPage(Math.min(Math.ceil(filteredOrders.length / itemsPerPage), tableCurrentPage + 1))}
+                disabled={tableCurrentPage >= Math.ceil(filteredOrders.length / itemsPerPage)}
+                style={{ padding: '6px 12px', fontSize: '12px' }}
+              >
+                Next →
+              </Button>
+            </div>
+          )}
+          
+          <div style={{
+            textAlign: 'center',
+            marginTop: '8px',
+            fontSize: '12px',
+            color: 'var(--text-secondary)',
+          }}>
+            Page {tableCurrentPage} of {Math.ceil(filteredOrders.length / itemsPerPage)} ({filteredOrders.length} total)
+          </div>
+          </>
+          ) : (
+          <>
+          <div style={{ 
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px'
+          }}>
+            {filteredOrders.length === 0 ? (
+              <div style={{ 
+                textAlign: 'center', 
+                padding: '40px', 
+                color: 'var(--text-secondary)' 
+              }}>
+                {activeTab === 'outstanding' ? 'No outstanding purchase orders' : (searchQuery ? "No PO data found matching your search" : "No PO data")}
+              </div>
+            ) : (
+              (() => {
+                // Pagination untuk card view
+                const startIndex = (currentPage - 1) * itemsPerPage;
+                const endIndex = startIndex + itemsPerPage;
+                const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
+                
+                return paginatedOrders.map((item: PurchaseOrder, idx: number) => {
+                const relatedSPKs = spkData.filter((spk: any) => 
+                  (spk.soNo || '').toString().trim() === (item.soNo || '').toString().trim()
+                );
+                const hasGRN = (Array.isArray(grnList) && grnList.some((grn: any) => grn && grn.poNo === item.poNo)) || false;
+                const hasPendingFinance = (Array.isArray(financeNotifications) && financeNotifications.some((notif: any) => {
+                  if (!notif) return false;
+                  const notifPo = (notif.poNo || '').toString().trim();
+                  const currentPo = (item.poNo || '').toString().trim();
                   return (
-                    <Card key={item.id} style={{ padding: '12px', fontSize: '12px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '1' }}>
-                          <span className={`status-badge status-${item.status?.toLowerCase() || 'open'}`} style={{ fontSize: '10px', padding: '2px 6px', flexShrink: 0 }}>
-                            {item.status || 'OPEN'}
+                    notif.type === 'SUPPLIER_PAYMENT' &&
+                    notifPo !== '' &&
+                    notifPo === currentPo &&
+                    (notif.status || 'PENDING').toUpperCase() !== 'CLOSE'
+                  );
+                })) || false;
+                
+                // Warna selang-seling untuk PO card - lebih jelas perbedaannya
+                const cardBgColors = [
+                  'var(--bg-primary)', // Default
+                  'rgba(33, 150, 243, 0.25)', // Light blue - lebih jelas
+                  'rgba(76, 175, 80, 0.25)', // Light green - lebih jelas
+                  'rgba(255, 152, 0, 0.25)', // Light orange - lebih jelas
+                  'rgba(156, 39, 176, 0.25)', // Light purple - lebih jelas
+                ];
+                const cardBgColor = cardBgColors[idx % cardBgColors.length];
+                
+                return (
+                  <div
+                    key={item.id}
+                    style={{
+                      backgroundColor: cardBgColor,
+                      borderRadius: '8px',
+                      padding: '1px',
+                    }}
+                  >
+                    <Card>
+                      {/* PO Header */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', gap: '8px' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>PO No</div>
+                          <div style={{ fontSize: '20px', fontWeight: 600 }}>{item.poNo}</div>
+                          <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{item.supplier}</div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                          <span className={`status-badge status-${item.status.toLowerCase()}`} style={{ fontSize: '12px' }}>
+                            {item.status}
                           </span>
-                          <div>
-                            <strong style={{ color: '#2e7d32', fontSize: '13px' }}>{item.poNo}</strong>
-                            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                              {item.supplier}
-                            </div>
-                          </div>
                         </div>
                       </div>
-                      
-                      <div style={{ marginBottom: '8px', fontSize: '11px' }}>
-                        <div><strong>SO:</strong> {item.soNo || '-'}</div>
-                        <div><strong>Product:</strong> {item.productItem || '-'}</div>
-                        <div><strong>SKU:</strong> {(item as any).productId || '-'}</div>
-                        <div><strong>Qty:</strong> {item.qty} {totalReceived > 0 && (
-                          <span style={{ color: remainingQty > 0 ? '#ff9800' : '#4caf50', fontSize: '10px' }}>
-                            (✓ {totalReceived} / ⏳ {remainingQty})
-                          </span>
-                        )}</div>
-                        <div><strong>Price:</strong> Rp {Math.ceil(item.price).toLocaleString('id-ID')}</div>
-                        <div><strong>Total:</strong> Rp {Math.ceil(item.total).toLocaleString('id-ID')}</div>
-                        <div><strong>Payment:</strong> {item.paymentTerms} {item.paymentTerms === 'TOP' && `(${item.topDays} days)`}</div>
-                        <div><strong>Receipt Date:</strong> {new Date(item.receiptDate).toLocaleDateString('id-ID')}</div>
+                    
+                      {/* product Info - Compact */}
+                      <div style={{ 
+                        padding: '6px',
+                        backgroundColor: 'var(--bg-secondary)',
+                        borderRadius: '4px',
+                        fontSize: '10px',
+                        border: '1px solid var(--border-color)',
+                        marginTop: '8px',
+                      }}>
+                        <div style={{ fontSize: '9px', color: 'var(--text-secondary)', marginBottom: '2px' }}>product</div>
+                        <div style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-primary)', wordBreak: 'break-word', lineHeight: '1.3', marginBottom: '4px' }}>
+                          {item.productItem}
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', fontSize: '9px', color: 'var(--text-secondary)' }}>
+                          <div><strong>Qty:</strong> {item.qty}</div>
+                          <div><strong>Price:</strong> Rp {Math.ceil(item.price).toLocaleString('id-ID')}</div>
+                          <div><strong>Total:</strong> Rp {Math.ceil(item.total).toLocaleString('id-ID')}</div>
+                        </div>
+                        {item.purchaseReason && (
+                          <div style={{ marginTop: '4px', fontSize: '9px', color: 'var(--text-secondary)', wordBreak: 'break-word' }}>
+                            <strong>Reason:</strong> {item.purchaseReason}
+                          </div>
+                        )}
                       </div>
                       
-                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-color)', justifyContent: 'flex-start' }}>
-                        <Button
-                          variant="secondary"
-                          onClick={() => handleViewDetailPOSheet(item)}
+                      {/* Related SPKs - Compact */}
+                      {relatedSPKs.length > 0 && (
+                        <div style={{ 
+                          padding: '6px',
+                          backgroundColor: 'var(--bg-secondary)',
+                          borderRadius: '4px',
+                          fontSize: '10px',
+                          border: '1px solid var(--border-color)',
+                          marginTop: '8px',
+                        }}>
+                          <div style={{ fontSize: '9px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                            Related SPKs ({relatedSPKs.length})
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                            {relatedSPKs.slice(0, 3).map((spk: any, spkIdx: number) => (
+                              <div key={spk.id || spkIdx} style={{ 
+                                padding: '3px 6px',
+                                backgroundColor: 'var(--bg-primary)',
+                                borderRadius: '4px',
+                                border: '1px solid var(--border-color)',
+                                fontSize: '9px',
+                              }}>
+                                <div style={{ fontWeight: 'bold', color: '#1976d2' }}>{spk.spkNo}</div>
+                                <div style={{ fontSize: '8px', color: 'var(--text-secondary)' }}>{spk.product}</div>
+                              </div>
+                            ))}
+                            {relatedSPKs.length > 3 && (
+                              <div style={{ 
+                                padding: '3px 6px',
+                                fontSize: '9px',
+                                color: 'var(--text-secondary)',
+                                alignSelf: 'center',
+                              }}>
+                                +{relatedSPKs.length - 3} more
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Invoice Numbers - Compact */}
+                      {(() => {
+                        const grnPackagingRecords = Array.isArray(grnList) ? grnList : [];
+                        const grnsForPO = grnPackagingRecords.filter((grn: any) => {
+                          const grnPO = (grn.poNo || '').toString().trim();
+                          const currentPO = (item.poNo || '').toString().trim();
+                          return grnPO === currentPO;
+                        });
+                        
+                        // Collect all invoice numbers from GRNs
+                        const invoiceNumbers = grnsForPO
+                          .map((grn: any) => grn.invoiceNo)
+                          .filter((inv: string) => inv && inv.trim());
+                        
+                        if (invoiceNumbers.length === 0) return null;
+                        
+                        return (
+                          <div style={{ 
+                            padding: '6px',
+                            backgroundColor: 'var(--bg-secondary)',
+                            borderRadius: '4px',
+                            fontSize: '10px',
+                            border: '1px solid var(--border-color)',
+                            marginTop: '8px',
+                          }}>
+                            <div style={{ fontSize: '9px', color: 'var(--text-secondary)', marginBottom: '4px', fontWeight: '600' }}>
+                              🧾 Invoice Number(s)
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                              {invoiceNumbers.map((invNo: string, idx: number) => (
+                                <span key={idx} style={{ 
+                                  fontSize: '11px', 
+                                  padding: '3px 8px', 
+                                  borderRadius: '4px',
+                                  backgroundColor: 'var(--bg-primary)',
+                                  color: 'var(--text-primary)',
+                                  fontWeight: '600',
+                                  border: '1px solid var(--border-color)'
+                                }}>
+                                  {invNo}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      
+                      {/* Uploaded Files - Compact */}
+                      {(() => {
+                        const grnPackagingRecords = Array.isArray(grnList) ? grnList : [];
+                        const grnsForPO = grnPackagingRecords.filter((grn: any) => {
+                          const grnPO = (grn.poNo || '').toString().trim();
+                          const currentPO = (item.poNo || '').toString().trim();
+                          return grnPO === currentPO;
+                        });
+                        
+                        // Collect all uploaded files from GRNs
+                        const uploadedFiles: Array<{ type: string; name: string; data: string; invoiceNo?: string }> = [];
+                        grnsForPO.forEach((grn: any) => {
+                          if (grn.suratJalan && grn.suratJalanName) {
+                            uploadedFiles.push({ type: 'SJ', name: grn.suratJalanName, data: grn.suratJalan });
+                          }
+                          if (grn.invoiceFile && grn.invoiceFileName) {
+                            uploadedFiles.push({ 
+                              type: 'INV', 
+                              name: grn.invoiceFileName, 
+                              data: grn.invoiceFile,
+                              invoiceNo: grn.invoiceNo || undefined
+                            });
+                          }
+                        });
+                        
+                        if (uploadedFiles.length === 0) return null;
+                        
+                        return (
+                          <div style={{ 
+                            padding: '6px',
+                            backgroundColor: 'var(--bg-secondary)',
+                            borderRadius: '4px',
+                            fontSize: '10px',
+                            border: '1px solid var(--border-color)',
+                            marginTop: '8px',
+                          }}>
+                            <div style={{ fontSize: '9px', color: 'var(--text-secondary)', marginBottom: '4px', fontWeight: '600' }}>
+                              📎 Uploaded Files ({uploadedFiles.length})
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {uploadedFiles.map((file, idx) => (
+                                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                  <span style={{ 
+                                    fontSize: '9px', 
+                                    padding: '2px 6px', 
+                                    borderRadius: '3px',
+                                    backgroundColor: file.type === 'SJ' ? '#e3f2fd' : '#fff3e0',
+                                    color: file.type === 'SJ' ? '#1976d2' : '#f57c00',
+                                    fontWeight: '700',
+                                    minWidth: '30px',
+                                    textAlign: 'center'
+                                  }}>
+                                    {file.type}
+                                  </span>
+                                  <a
+                                    href={file.data}
+                                    download={file.name}
+                                    style={{ 
+                                      fontSize: '10px', 
+                                      color: '#1976d2',
+                                      textDecoration: 'none',
+                                      flex: 1,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      fontWeight: '500'
+                                    }}
+                                    title={file.name}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                    }}
+                                  >
+                                    {file.name}
+                                  </a>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      
+                      {/* Payment Info - Compact */}
+                      <div style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        fontSize: '9px',
+                        color: 'var(--text-secondary)',
+                        paddingTop: '6px',
+                        borderTop: '1px solid var(--border-color)',
+                        marginTop: '8px',
+                      }}>
+                        <div>
+                          <strong>Payment:</strong> {item.paymentTerms}
+                          {item.paymentTerms !== 'COD' && item.paymentTerms !== 'CBD' && item.topDays > 0 && (
+                            <span> ({item.topDays} days)</span>
+                          )}
+                        </div>
+                        {item.receiptDate && (
+                          <div>
+                            <strong>Received:</strong> {new Date(item.receiptDate).toLocaleDateString('id-ID')}
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Actions - Compact */}
+                      <div style={{ 
+                        display: 'flex',
+                        gap: '4px',
+                        flexWrap: 'wrap',
+                        marginTop: '8px',
+                      }}>
+                        <Button 
+                          variant="secondary" 
+                          onClick={() => handleViewDetailPOSheet(item)} 
                           style={{ fontSize: '10px', padding: '4px 8px', minHeight: '24px' }}
                         >
                           View
                         </Button>
-                        {item.status !== 'CLOSE' && (
-                          <Button
-                            variant="secondary"
-                            onClick={() => handleEdit(item)}
+                        <Button 
+                          variant="secondary" 
+                          onClick={() => handleEdit(item)} 
+                          style={{ fontSize: '10px', padding: '4px 8px', minHeight: '24px' }}
+                        >
+                          Edit
+                        </Button>
+                        {!hasGRN && item.status === 'OPEN' && (
+                          <Button 
+                            variant="primary" 
+                            onClick={() => handleCreateGRN(item)} 
                             style={{ fontSize: '10px', padding: '4px 8px', minHeight: '24px' }}
                           >
-                            Edit
+                            Create GRN
                           </Button>
                         )}
-                        {hasOutstandingQty && (
-                          <Button
-                            variant="secondary"
-                            onClick={() => handleCreateGRN(item)}
-                            style={{ fontSize: '10px', padding: '4px 8px', minHeight: '24px', backgroundColor: buttonColors.backgroundColor, color: buttonColors.color }}
+                        {hasGRN && (
+                          <Button 
+                            variant="success" 
+                            disabled
+                            style={{ fontSize: '10px', padding: '4px 8px', minHeight: '24px', opacity: 0.7 }}
                           >
-                            {hasGRN ? `GRN (${remainingQty} left)` : 'GRN'}
+                            GRN✓
                           </Button>
-                        )}
-                        {hasGRN && !hasOutstandingQty && (
-                          <span style={{ fontSize: '10px', color: 'var(--success)', fontStyle: 'italic', padding: '4px 8px' }}>
-                            Complete
-                          </span>
                         )}
                         {hasPendingFinance && (
-                          <span style={{ fontSize: '10px', color: '#ff9800', fontWeight: '600', padding: '4px 8px' }}>
-                            💰 Payment Pending
-                          </span>
+                          <Button 
+                            variant="secondary" 
+                            disabled
+                            style={{ 
+                              fontSize: '10px', 
+                              padding: '4px 8px', 
+                              minHeight: '24px', 
+                              opacity: 0.7,
+                              backgroundColor: 'var(--warning)',
+                              color: '#fff'
+                            }}
+                          >
+                            Finance
+                          </Button>
                         )}
                       </div>
                     </Card>
-                  );
-                })
-              )}
-            </div>
-          ) : (
-            <div className="purchasing-table" style={{ overflowX: 'auto', margin: '-16px', padding: '16px', fontSize: '11px' }}>
-              <Table 
-                columns={columns} 
-                data={filteredOrders}
-                emptyMessage={activeTab === 'outstanding' ? 'No outstanding purchase orders' : (searchQuery ? "No PO data found matching your search" : "No PO data")}
-                getRowStyle={(item: PurchaseOrder) => ({
-                  backgroundColor: getRowColor(item.soNo),
-                })}
-              />
-            </div>
+                  </div>
+                );
+              })
+              })()
+            )}
+          </div>
+          
+          {/* Pagination Controls untuk Card View */}
+          {viewMode === 'cards' && filteredOrders.length > itemsPerPage && (
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center', 
+              gap: '12px',
+              marginTop: '20px',
+              padding: '16px',
+              backgroundColor: 'var(--bg-secondary)',
+              borderRadius: '8px',
+              border: '1px solid var(--border-color)'
+            }}>
+              <Button
+                variant="secondary"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                style={{ fontSize: '12px', padding: '6px 12px' }}
+              >
+                ← Prev
+              </Button>
+              
+              <div style={{ 
+                display: 'flex', 
+                gap: '4px', 
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                justifyContent: 'center',
+                maxWidth: '600px'
+              }}>
+                {(() => {
+                  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+                  const pages: (number | string)[] = [];
+                  
+                  // Always show first page
+                  pages.push(1);
+                  
+                  // Show ellipsis if needed
+                  if (currentPage > 4) {
+                    pages.push('...');
+                  }
+                  
+                  // Show pages around current
+                  const startPage = Math.max(2, currentPage - 1);
+                  const endPage = Math.min(totalPages - 1, currentPage + 1);
+                  
+                  for (let i = startPage; i <= endPage; i++) {
+                    if (i !== 1 && i !== totalPages) {
+                      pages.push(i);
+                    }
+                  }
+                  
+                  // Show ellipsis if needed
+                  if (currentPage < totalPages - 3) {
+                    pages.push('...');
+                  }
+                  
+                  // Always show last page
+                  if (totalPages > 1) {
+                    pages.push(totalPages);
+                  }
+                  
+                  // Remove duplicates
+                  const uniquePages = Array.from(new Set(pages));
+                  
+                  return uniquePages.map((page, idx) => {
+                    if (page === '...') {
+                      return (
+                        <span key={`ellipsis-${idx}`} style={{ color: 'var(--text-secondary)', padding: '0 4px' }}>
+                          ...
+                        </span>
+                      );
+                    }
+                    return (
+                      <Button
+                        key={page}
+                        variant={currentPage === page ? 'primary' : 'secondary'}
+                        onClick={() => setCurrentPage(page as number)}
+                        style={{ 
+                          fontSize: '11px', 
+                          padding: '4px 8px',
+                          minWidth: '32px'
+                        }}
+                      >
+                        {page}
+                      </Button>
+                    );
+                  });
+                })()}
+              </div>
+              
+              <div style={{ 
+                fontSize: '12px', 
+                color: 'var(--text-secondary)',
+                padding: '0 8px'
+              }}>
+                Page {currentPage} of {Math.ceil(filteredOrders.length / itemsPerPage)} 
+                ({filteredOrders.length} total)
+              </div>
+              
+              <Button
+                variant="secondary"
+                onClick={() => setCurrentPage(prev => Math.min(Math.ceil(filteredOrders.length / itemsPerPage), prev + 1))}
+                disabled={currentPage >= Math.ceil(filteredOrders.length / itemsPerPage)}
+                style={{ fontSize: '12px', padding: '6px 12px' }}
+              >
+                Next →
+              </Button>
+          </div>
+          )}
+          </>
           )}
         </div>
       </Card>
@@ -3530,11 +4025,195 @@ const Purchasing = () => {
           products={products}
           onClose={() => setSelectedPR(null)}
           onApprove={handleApprovePR}
-          onSupplierCreated={async () => {
-            // Reload suppliers setelah create supplier baru
-            await loadSuppliers();
-          }}
+          onViewPR={handleViewPR}
         />
+      )}
+
+      {/* Merge PO Dialog */}
+      {showMergePODialog && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+        }} onClick={() => setShowMergePODialog(false)}>
+          <Card 
+            title="Merge Purchase Order" 
+            style={{ 
+              width: '90%', 
+              maxWidth: '800px', 
+              maxHeight: '90vh',
+              overflow: 'auto',
+              zIndex: 10001,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>
+              Pilih PO yang sudah ada untuk di-merge menjadi 1 PO. PO hanya bisa di-merge jika memiliki product dan supplier yang sama, dan status OPEN.
+            </div>
+
+            <div style={{ marginBottom: '16px', maxHeight: '400px', overflowY: 'auto' }}>
+              {(() => {
+                // Filter PO yang bisa di-merge (status OPEN)
+                const mergeablePOs = orders.filter(po => po.status === 'OPEN');
+                
+                if (mergeablePOs.length === 0) {
+                  return (
+                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                      Tidak ada PO dengan status OPEN yang bisa di-merge
+                    </div>
+                  );
+                }
+
+                return (
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
+                        <th style={{ padding: '8px', textAlign: 'left', width: '40px' }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedPOsForMerge.length === mergeablePOs.length && mergeablePOs.length > 0}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedPOsForMerge(mergeablePOs.map(po => po.id));
+                              } else {
+                                setSelectedPOsForMerge([]);
+                              }
+                            }}
+                          />
+                        </th>
+                        <th style={{ padding: '8px', textAlign: 'left' }}>PO No</th>
+                        <th style={{ padding: '8px', textAlign: 'left' }}>SPK No</th>
+                        <th style={{ padding: '8px', textAlign: 'left' }}>product</th>
+                        <th style={{ padding: '8px', textAlign: 'left' }}>Supplier</th>
+                        <th style={{ padding: '8px', textAlign: 'right' }}>Qty</th>
+                        <th style={{ padding: '8px', textAlign: 'right' }}>Price</th>
+                        <th style={{ padding: '8px', textAlign: 'right' }}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mergeablePOs.map((po) => {
+                        const isSelected = selectedPOsForMerge.includes(po.id);
+                        return (
+                          <tr 
+                            key={po.id}
+                            style={{ 
+                              borderBottom: '1px solid var(--border-color)',
+                              backgroundColor: isSelected ? 'var(--bg-hover)' : 'transparent',
+                              cursor: 'pointer',
+                            }}
+                            onClick={() => {
+                              if (isSelected) {
+                                setSelectedPOsForMerge(selectedPOsForMerge.filter(id => id !== po.id));
+                              } else {
+                                setSelectedPOsForMerge([...selectedPOsForMerge, po.id]);
+                              }
+                            }}
+                          >
+                            <td style={{ padding: '8px' }}>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  if (e.target.checked) {
+                                    setSelectedPOsForMerge([...selectedPOsForMerge, po.id]);
+                                  } else {
+                                    setSelectedPOsForMerge(selectedPOsForMerge.filter(id => id !== po.id));
+                                  }
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: '8px' }}>{po.poNo}</td>
+                            <td style={{ padding: '8px' }}>{po.spkNo || '-'}</td>
+                            <td style={{ padding: '8px' }}>{po.productItem}</td>
+                            <td style={{ padding: '8px' }}>{po.supplier}</td>
+                            <td style={{ padding: '8px', textAlign: 'right' }}>{po.qty}</td>
+                            <td style={{ padding: '8px', textAlign: 'right' }}>
+                              {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(po.price)}
+                            </td>
+                            <td style={{ padding: '8px', textAlign: 'right' }}>
+                              {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(po.total)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                );
+              })()}
+            </div>
+
+            {selectedPOsForMerge.length > 0 && (
+              <div style={{ 
+                marginBottom: '16px', 
+                padding: '12px', 
+                backgroundColor: 'var(--bg-secondary)', 
+                borderRadius: '4px',
+                border: '1px solid var(--border-color)',
+              }}>
+                <div style={{ fontWeight: '600', marginBottom: '8px' }}>
+                  Preview Merge ({selectedPOsForMerge.length} PO selected):
+                </div>
+                {(() => {
+                  const validation = validateMergeablePOs(selectedPOsForMerge);
+                  if (!validation.valid) {
+                    return (
+                      <div style={{ color: 'var(--error)', fontSize: '14px' }}>
+                        ⚠️ {validation.error}
+                      </div>
+                    );
+                  }
+                  if (validation.mergeableGroups) {
+                    return (
+                      <div>
+                        {validation.mergeableGroups.map((group: any, idx: number) => (
+                          <div key={idx} style={{ marginBottom: '8px', fontSize: '14px' }}>
+                            <div style={{ fontWeight: '500' }}>
+                              Group {idx + 1}: {group.productName} - {group.supplier}
+                            </div>
+                            <div style={{ marginLeft: '16px', color: 'var(--text-secondary)' }}>
+                              {group.pos.length} PO → Total Qty: {group.totalQty} → 
+                              Total: {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(group.totalAmount)}
+                            </div>
+                            <div style={{ marginLeft: '16px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                              PO yang akan dihapus: {group.pos.map((p: any) => p.poNo).join(', ')}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <Button 
+                variant="secondary" 
+                onClick={() => {
+                  setShowMergePODialog(false);
+                  setSelectedPOsForMerge([]);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleMergePO}
+                disabled={selectedPOsForMerge.length < 2}
+              >
+                Merge PO ({selectedPOsForMerge.length} selected)
+              </Button>
+            </div>
+          </Card>
+        </div>
       )}
 
       {/* Receipt/GRN Dialog */}
@@ -3546,7 +4225,7 @@ const Purchasing = () => {
         />
       )}
 
-      {/* PDF Preview Dialog */}
+      {/* PDF Preview Dialog untuk PO */}
       {viewPdfData && (
         <div className="dialog-overlay" onClick={() => setViewPdfData(null)}>
           <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90%', width: '1200px', maxHeight: '90vh', overflow: 'auto' }}>
@@ -3578,6 +4257,321 @@ const Purchasing = () => {
           </div>
         </div>
       )}
+
+      {/* Edit PO Dialog */}
+      {showEditDialog && editingItem && (
+        <EditPODialog
+          po={editingItem}
+          suppliers={suppliers}
+          products={products}
+          formData={editFormData}
+          setFormData={setEditFormData}
+          supplierInputValue={editSupplierInputValue}
+          setSupplierInputValue={setEditSupplierInputValue}
+          productInputValue={editProductInputValue}
+          setProductInputValue={setEditProductInputValue}
+          qtyInputValue={editQtyInputValue}
+          setQtyInputValue={setEditQtyInputValue}
+          priceInputValue={editPriceInputValue}
+          setPriceInputValue={setEditPriceInputValue}
+          onClose={() => {
+            setShowEditDialog(false);
+            setEditingItem(null);
+            setEditFormData({});
+            setEditSupplierInputValue('');
+            setEditProductInputValue('');
+            setEditQtyInputValue('');
+            setEditPriceInputValue('');
+          }}
+          onSave={handleSaveEdit}
+          removeLeadingZero={removeLeadingZero}
+        />
+      )}
+
+      {/* PDF Preview Dialog untuk PR */}
+      {viewPRPdfData && (
+        <div className="dialog-overlay" onClick={() => setViewPRPdfData(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90%', width: '1200px', maxHeight: '90vh', overflow: 'auto' }}>
+            <Card className="dialog-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h2>Preview PR - {viewPRPdfData.prNo}</h2>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <Button variant="primary" onClick={handleSavePRToPDF}>
+                    💾 Save to PDF
+                  </Button>
+                  <Button variant="secondary" onClick={() => {
+                    setViewPRPdfData(null);
+                    closeDialog();
+                  }}>
+                    Close
+                  </Button>
+                </div>
+              </div>
+              <div style={{ border: '1px solid var(--border-color)', borderRadius: '6px', overflow: 'hidden' }}>
+                <iframe
+                  srcDoc={viewPRPdfData.html}
+                  style={{
+                    width: '100%',
+                    height: '70vh',
+                    border: 'none',
+                    backgroundColor: '#fff',
+                  }}
+                  title="PR Preview"
+                />
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+      
+      {/* Supplier Selection Dialog */}
+      {showSupplierDialog && (
+        <div className="dialog-overlay" onClick={() => {
+          setShowSupplierDialog(false);
+          setSupplierDialogSearch('');
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <Card
+              title="Select Supplier"
+              className="dialog-card"
+            >
+              <div style={{ marginBottom: '16px' }}>
+                <input
+                  type="text"
+                  value={supplierDialogSearch}
+                  onChange={(e) => setSupplierDialogSearch(e.target.value)}
+                  placeholder="Search by supplier code or name..."
+                  autoFocus
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+              <div style={{ 
+                maxHeight: '60vh', 
+                overflowY: 'auto',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+              }}>
+                {filteredSuppliersForDialog.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    No suppliers found
+                  </div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-tertiary)', zIndex: 10 }}>
+                      <tr>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Code</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Name</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Address</th>
+                        <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid var(--border)' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredSuppliersForDialog.map(supplier => {
+                        const handleSelect = () => {
+                          setFormData({ ...formData, supplier: supplier.nama });
+                          setSupplierInputValue(`${supplier.kode} - ${supplier.nama}`);
+                          setShowSupplierDialog(false);
+                          setSupplierDialogSearch('');
+                        };
+                        return (
+                          <tr
+                            key={supplier.id || supplier.kode}
+                            style={{
+                              borderBottom: '1px solid var(--border)',
+                              cursor: 'pointer',
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--hover-bg)'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                            onClick={handleSelect}
+                          >
+                            <td style={{ padding: '12px' }}>{supplier.kode || '-'}</td>
+                            <td style={{ padding: '12px' }}>{supplier.nama || '-'}</td>
+                            <td style={{ padding: '12px' }}>{supplier.alamat || '-'}</td>
+                            <td style={{ padding: '12px', textAlign: 'center' }}>
+                              <Button
+                                variant="primary"
+                                onClick={() => handleSelect()}
+                                style={{ fontSize: '12px', padding: '4px 12px' }}
+                              >
+                                Select
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+                  Showing {filteredSuppliersForDialog.length} of {supplierDialogSearch ? suppliers.filter(s => {
+                    const query = supplierDialogSearch.toLowerCase();
+                    const code = (s.kode || '').toLowerCase();
+                    const name = (s.nama || '').toLowerCase();
+                    return code.includes(query) || name.includes(query);
+                  }).length : suppliers.length} supplier{filteredSuppliersForDialog.length !== 1 ? 's' : ''}
+                  {filteredSuppliersForDialog.length >= 200 && (
+                    <span style={{ color: '#ff9800', marginLeft: '8px' }}>
+                      (Limited to 200. Use search to narrow down)
+                    </span>
+                  )}
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowSupplierDialog(false);
+                    setSupplierDialogSearch('');
+                  }}
+                >
+                  Close
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* product Selection Dialog */}
+      {showProductDialog && (
+        <div className="dialog-overlay" onClick={() => {
+          setShowProductDialog(false);
+          setProductDialogSearch('');
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <Card
+              title="Select product"
+              className="dialog-card"
+            >
+              <div style={{ marginBottom: '16px' }}>
+                <input
+                  type="text"
+                  value={productDialogSearch}
+                  onChange={(e) => setProductDialogSearch(e.target.value)}
+                  placeholder="Search by product code or name..."
+                  autoFocus
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+              <div style={{ 
+                maxHeight: '60vh', 
+                overflowY: 'auto',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+              }}>
+                {filteredProductsForDialog.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    No products found
+                  </div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-tertiary)', zIndex: 10 }}>
+                      <tr>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Code</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Name</th>
+                        <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Unit</th>
+                        <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid var(--border)' }}>Price</th>
+                        <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid var(--border)' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredProductsForDialog.map(product => {
+                        const price = product.hargaFg || product.hargaSales || 0;
+                        const handleSelect = () => {
+                          const productPrice = product.hargaFg || product.hargaSales || 0;
+                          const roundedPrice = Math.ceil(productPrice);
+                          const roundedTotal = Math.ceil((formData.qty || 0) * roundedPrice);
+                          setFormData({
+                            ...formData,
+                            productItem: product.nama,
+                            price: roundedPrice,
+                            total: roundedTotal,
+                          });
+                          setProductInputValue(`${product.product_id || product.kode} - ${product.nama}`);
+                          setShowProductDialog(false);
+                          setProductDialogSearch('');
+                        };
+                        return (
+                          <tr
+                            key={product.id || product.kode}
+                            style={{
+                              borderBottom: '1px solid var(--border)',
+                              cursor: 'pointer',
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--hover-bg)'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                            onClick={handleSelect}
+                          >
+                            <td style={{ padding: '12px' }}>{product.product_id || product.kode || '-'}</td>
+                            <td style={{ padding: '12px' }}>{product.nama || '-'}</td>
+                            <td style={{ padding: '12px' }}>{product.satuan || product.satuan || 'PCS'}</td>
+                            <td style={{ padding: '12px', textAlign: 'right' }}>
+                              {price > 0 ? new Intl.NumberFormat('id-ID', { 
+                                style: 'currency', 
+                                currency: 'IDR',
+                                minimumFractionDigits: 0 
+                              }).format(price) : '-'}
+                            </td>
+                            <td style={{ padding: '12px', textAlign: 'center' }}>
+                              <Button
+                                variant="primary"
+                                onClick={() => handleSelect()}
+                                style={{ fontSize: '12px', padding: '4px 12px' }}
+                              >
+                                Select
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+                  Showing {filteredProductsForDialog.length} of {productDialogSearch ? products.filter(m => {
+                    const query = productDialogSearch.toLowerCase();
+                    const code = (m.product_id || m.kode || '').toLowerCase();
+                    const name = (m.nama || '').toLowerCase();
+                    return code.includes(query) || name.includes(query);
+                  }).length : products.length} product{filteredProductsForDialog.length !== 1 ? 's' : ''}
+                  {filteredProductsForDialog.length >= 200 && (
+                    <span style={{ color: '#ff9800', marginLeft: '8px' }}>
+                      (Limited to 200. Use search to narrow down)
+                    </span>
+                  )}
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowProductDialog(false);
+                    setProductDialogSearch('');
+                  }}
+                >
+                  Close
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
       
       {/* Custom Dialog - menggunakan hook terpusat */}
       <DialogComponent />
@@ -3586,30 +4580,57 @@ const Purchasing = () => {
 };
 
 // PR Approval Dialog Component
-const PRApprovalDialog = ({ pr, suppliers, products, onClose, onApprove, onSupplierCreated }: any) => {
+const PRApprovalDialog = ({ pr, suppliers, products, onClose, onApprove, onViewPR }: any) => {
   const [selectedSuppliers, setSelectedSuppliers] = useState<{ [key: string]: string }>({});
   const [supplierInputValues, setSupplierInputValues] = useState<{ [key: string]: string }>({});
   const [paymentTerms, setPaymentTerms] = useState('TOP');
   const [topDays, setTopDays] = useState('30');
   const [editedItems, setEditedItems] = useState<{ [key: string]: { price?: number; requiredQty?: number; shortageQty?: number } }>({});
-  const [showCreateSupplierDialog, setShowCreateSupplierDialog] = useState(false);
-  const [creatingSupplierForProductId, setCreatingSupplierForProductId] = useState<string>('');
-  const [newSupplierForm, setNewSupplierForm] = useState<{ kode: string; nama: string; alamat?: string; telepon?: string }>({
-    kode: '',
-    nama: '',
-    alamat: '',
-    telepon: '',
+  
+  // Custom Dialog state untuk PRApprovalDialog
+  const [dialogState, setDialogState] = useState<{
+    show: boolean;
+    type: 'alert' | 'confirm';
+    title: string;
+    message: string;
+    onConfirm?: () => void;
+    onCancel?: () => void;
+  }>({
+    show: false,
+    type: 'alert',
+    title: '',
+    message: '',
   });
   
-  // Custom Dialog - menggunakan hook terpusat
-  const { showAlert, DialogComponent: PRApprovalDialogComponent } = useDialog();
+  const showAlert = (message: string, title: string = 'Information') => {
+    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
+      (window as any).setDialogOpen(true);
+    }
+    setDialogState({
+      show: true,
+      type: 'alert',
+      title,
+      message,
+    });
+  };
+  
+  const closeDialog = () => {
+    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
+      (window as any).setDialogOpen(false);
+    }
+    setDialogState({
+      show: false,
+      type: 'alert',
+      title: '',
+      message: '',
+    });
+  };
   
   // Re-load price dari master product jika price = 0
   const getproductPrice = (item: any) => {
-    const productId = item.productId || item.materialId || '';
     // Jika ada edited price, gunakan yang di-edit
-    if (editedItems[productId]?.price !== undefined) {
-      return editedItems[productId].price || 0;
+    if (editedItems[item.product_id]?.price !== undefined) {
+      return editedItems[item.product_id].price || 0;
     }
     
     // Jika price sudah ada dan > 0, gunakan price yang ada
@@ -3618,15 +4639,13 @@ const PRApprovalDialog = ({ pr, suppliers, products, onClose, onApprove, onSuppl
     }
     
     // Jika price = 0, coba ambil dari master product
-    const product = products?.find((m: any) => {
-      const mId = (m.product_id || m.kode || '').toString().trim();
-      const itemId = productId || (item.productKode || item.materialKode || '');
-      return mId === itemId;
-    });
+    const product = products?.find((m: any) => 
+      (m.product_id || m.kode || '').toString().trim() === (item.product_id || item.productKode || '').toString().trim()
+    );
     
     if (product) {
-      // Prioritas: priceMtr > harga > hargaSales
-      return product.priceMtr || product.harga || (product as any).hargaSales || 0;
+      // Prioritas: hargaFg > harga > hargaSales
+      return product.hargaFg || product.hargaSales || (product as any).hargaSales || 0;
     }
     
     return item.price || 0;
@@ -3634,23 +4653,16 @@ const PRApprovalDialog = ({ pr, suppliers, products, onClose, onApprove, onSuppl
   
   // Get required qty (bisa di-edit)
   const getRequiredQty = (item: any) => {
-    const productId = item.productId || item.materialId || '';
-    if (editedItems[productId]?.requiredQty !== undefined) {
-      return editedItems[productId].requiredQty || 0;
+    if (editedItems[item.product_id]?.requiredQty !== undefined) {
+      return editedItems[item.product_id].requiredQty || 0;
     }
-    // Fallback: jika requiredQty tidak ada, gunakan qty dari SPK atau item.qty
-    return item.requiredQty || item.qty || 0;
+    return item.requiredQty || 0;
   };
   
   // Get shortage qty (calculated from required - available)
   const getShortageQty = (item: any) => {
     const requiredQty = getRequiredQty(item);
     const availableStock = item.availableStock || 0;
-    // Jika shortageQty sudah ada, gunakan itu (lebih akurat)
-    if (item.shortageQty !== undefined && item.shortageQty !== null) {
-      return item.shortageQty;
-    }
-    // Kalau tidak, hitung dari required - available
     return Math.max(0, requiredQty - availableStock);
   };
   
@@ -3700,118 +4712,55 @@ const PRApprovalDialog = ({ pr, suppliers, products, onClose, onApprove, onSuppl
     }
   };
 
-  // Use ref to track PR ID to prevent resetting user input when same PR is open
-  const prIdRef = useRef<string>('');
-
   useEffect(() => {
-    // Only initialize if this is a new PR (different PR ID)
-    const currentPrId = pr?.id || pr?.prNo || '';
-    if (prIdRef.current === currentPrId && currentPrId !== '') {
-      return; // Skip if same PR is still open (user is typing)
-    }
-
-    // Mark this PR as initialized
-    prIdRef.current = currentPrId;
-
     // Initialize selected suppliers from PR items (supplier dari master product)
     const initialSuppliers: { [key: string]: string } = {};
     const initialInputValues: { [key: string]: string } = {};
     pr.items.forEach((item: any) => {
-      // Normalize productId untuk handle berbagai format
-      const productId = item.productId || item.materialId || '';
-      
       // Prioritas: supplier dari item > supplier dari master product
       let supplier = item.supplier;
       
       // Jika tidak ada supplier di item, cari dari master product
       if (!supplier) {
-        const product = products?.find((m: any) => {
-          const mId = (m.product_id || m.kode || '').toString().trim();
-          const itemId = productId || (item.productKode || item.materialKode || '');
-          return mId === itemId;
-        });
-        if (product && (product as any).supplier) {
-          supplier = (product as any).supplier;
+        const product = products?.find((m: any) => 
+          (m.product_id || m.kode || '').toString().trim() === (item.product_id || item.productKode || '').toString().trim()
+        );
+        if (product && product.supplier) {
+          supplier = product.supplier;
         }
       }
       
-      if (supplier && productId) {
-        initialSuppliers[productId] = supplier;
-        const supplierObj = suppliers?.find((s: any) => s.nama === supplier);
-        if (supplierObj) {
-          initialInputValues[productId] = supplierObj.nama;
-        } else {
-          initialInputValues[productId] = supplier;
-        }
+      if (supplier) {
+        initialSuppliers[item.product_id] = supplier;
+        initialInputValues[item.product_id] = supplier;
       }
     });
     setSelectedSuppliers(initialSuppliers);
     setSupplierInputValues(initialInputValues);
-  }, [pr?.id, pr?.prNo, products, suppliers]); // Only depend on PR ID, not entire pr object
+  }, [pr, products]);
 
   const handleApprove = () => {
     // Validate all suppliers selected
     for (const item of pr.items) {
-      // Normalize productId untuk handle berbagai format
-      const itemAny = item as any;
-      const productId = item.productId || itemAny.materialId || '';
-      const productName = item.productName || itemAny.materialName || itemAny.product || productId || 'Unknown Product';
-      
-      if (!selectedSuppliers[productId]) {
-        const displayName = productName || productId || 'Unknown Product';
-        showAlert(`Harap pilih supplier untuk product: ${displayName}${productId ? ` (${productId})` : ''}`, 'Validation Error');
+      if (!selectedSuppliers[item.product_id]) {
+        showAlert(`Harap pilih supplier untuk product: ${item.productName}`, 'Validation Error');
         return;
       }
     }
     
     // Prepare items with edited values
     const updatedItems = pr.items.map((item: any) => {
-      // Normalize productId untuk handle berbagai format
-      const productId = item.productId || item.materialId || '';
-      const edited = editedItems[productId] || {};
-      
-      // Get requiredQty - prioritas: edited > item.requiredQty > item.qty
-      const requiredQty = edited.requiredQty !== undefined 
-        ? edited.requiredQty 
-        : (item.requiredQty !== undefined && item.requiredQty !== null 
-            ? item.requiredQty 
-            : (item.qty || 0));
-      
-      const availableStock = item.availableStock !== undefined && item.availableStock !== null 
-        ? item.availableStock 
-        : 0;
-      
-      // Calculate shortageQty - prioritas: item.shortageQty > calculated
-      let shortageQty = item.shortageQty;
-      if (shortageQty === undefined || shortageQty === null) {
-        shortageQty = Math.max(0, requiredQty - availableStock);
-      }
-      
-      // Ensure shortageQty > 0 untuk PO
-      if (shortageQty <= 0 && requiredQty > 0) {
-        shortageQty = requiredQty; // Fallback: gunakan requiredQty jika shortageQty <= 0
-      }
-      
+      const edited = editedItems[item.product_id] || {};
+      const requiredQty = edited.requiredQty !== undefined ? edited.requiredQty : item.requiredQty;
+      const availableStock = item.availableStock || 0;
+      const shortageQty = Math.max(0, requiredQty - availableStock);
       const price = edited.price !== undefined ? edited.price : getproductPrice(item);
-      
-      // Debug log
-      console.log('[PRApprovalDialog] Updated item:', {
-        productId,
-        productName: item.productName || item.materialName,
-        requiredQty,
-        availableStock,
-        shortageQty,
-        itemQty: item.qty,
-        price,
-      });
       
       return {
         ...item,
-        productId: productId, // Ensure normalized productId
         requiredQty: requiredQty,
-        availableStock: availableStock,
         shortageQty: shortageQty,
-        qty: shortageQty, // Update qty untuk PO - gunakan shortageQty
+        qty: shortageQty, // Update qty untuk PO
         price: price,
       };
     });
@@ -3848,11 +4797,6 @@ const PRApprovalDialog = ({ pr, suppliers, products, onClose, onApprove, onSuppl
                 </thead>
                 <tbody>
                   {pr.items.map((item: any, idx: number) => {
-                    // Normalize productId untuk handle berbagai format
-                    const productId = item.productId || item.materialId || '';
-                    const productName = item.productName || item.materialName || item.product || '-';
-                    const productKode = item.productKode || item.materialKode || productId || '-';
-                    
                     const requiredQty = getRequiredQty(item);
                     const shortageQty = getShortageQty(item);
                     const productPrice = getproductPrice(item);
@@ -3861,8 +4805,8 @@ const PRApprovalDialog = ({ pr, suppliers, products, onClose, onApprove, onSuppl
                     return (
                       <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
                         <td style={{ padding: '8px' }}>
-                          <div><strong>{productName}</strong></div>
-                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{productKode}</div>
+                          <div><strong>{item.productName}</strong></div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{item.productKode}</div>
                         </td>
                         <td style={{ padding: '8px', textAlign: 'right' }}>
                           <input
@@ -3871,14 +4815,14 @@ const PRApprovalDialog = ({ pr, suppliers, products, onClose, onApprove, onSuppl
                             onChange={(e) => {
                               const value = e.target.value;
                               if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                                updateEditedItem(productId, 'requiredQty', value === '' ? 0 : Number(value));
+                                updateEditedItem(item.product_id, 'requiredQty', value === '' ? 0 : Number(value));
                               }
                             }}
                             onBlur={(e) => {
                               const value = e.target.value;
                               const numValue = value === '' ? 0 : Number(value);
                               if (isNaN(numValue) || numValue < 0) {
-                                updateEditedItem(productId, 'requiredQty', item.requiredQty || item.qty || 0);
+                                updateEditedItem(item.product_id, 'requiredQty', item.requiredQty || 0);
                               }
                             }}
                             style={{
@@ -3907,19 +4851,17 @@ const PRApprovalDialog = ({ pr, suppliers, products, onClose, onApprove, onSuppl
                             onChange={(e) => {
                               const value = e.target.value;
                               if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                                updateEditedItem(productId, 'price', value === '' ? 0 : Number(value));
+                                updateEditedItem(item.product_id, 'price', value === '' ? 0 : Number(value));
                               }
                             }}
                             onBlur={(e) => {
                               const value = e.target.value;
                               const numValue = value === '' ? 0 : Number(value);
                               if (isNaN(numValue) || numValue < 0) {
-                                const defaultPrice = item.price || (products?.find((m: any) => {
-                                  const mId = (m.product_id || m.kode || '').toString().trim();
-                                  const itemId = productId || productKode || '';
-                                  return mId === itemId;
-                                })?.priceMtr || 0);
-                                updateEditedItem(productId, 'price', defaultPrice);
+                                const defaultPrice = item.price || (products?.find((m: any) => 
+                                  (m.product_id || m.kode || '').toString().trim() === (item.product_id || item.productKode || '').toString().trim()
+                                )?.hargaFg || 0);
+                                updateEditedItem(item.product_id, 'price', defaultPrice);
                               }
                             }}
                             style={{
@@ -3945,49 +4887,46 @@ const PRApprovalDialog = ({ pr, suppliers, products, onClose, onApprove, onSuppl
                           )}
                         </td>
                         <td style={{ padding: '8px' }}>
-                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                            <input
-                              type="text"
-                              list={`supplier-list-pr-${productId}`}
-                              value={getSupplierInputDisplayValue(productId)}
-                              onChange={(e) => {
-                                handleSupplierInputChange(productId, e.target.value);
-                              }}
-                              onBlur={(e) => {
-                                const value = e.target.value;
-                                const matchedSupplier = suppliers?.find((s: any) => s.nama === value);
-                                if (matchedSupplier) {
-                                  setSelectedSuppliers(prev => ({ ...prev, [productId]: matchedSupplier.nama }));
-                                }
-                              }}
-                              placeholder="-- Pilih Supplier --"
-                              style={{
-                                flex: 1,
-                                padding: '6px 8px',
-                                border: '1px solid var(--border-color)',
-                                borderRadius: '4px',
-                                backgroundColor: 'var(--bg-tertiary)',
-                                color: 'var(--text-primary)',
-                                fontSize: '12px',
-                              }}
-                            />
-                            <datalist id={`supplier-list-pr-${productId}`}>
-                              {suppliers?.map((s: any) => (
-                                <option key={s.id} value={s.nama}>{s.nama}</option>
-                              ))}
-                            </datalist>
-                            <Button
-                              variant="secondary"
-                              onClick={() => {
-                                setCreatingSupplierForProductId(productId);
-                                setNewSupplierForm({ kode: '', nama: supplierInputValues[productId] || '', alamat: '', telepon: '' });
-                                setShowCreateSupplierDialog(true);
-                              }}
-                              style={{ fontSize: '11px', padding: '6px 10px', whiteSpace: 'nowrap' }}
-                            >
-                              ➕ Create
-                            </Button>
-                          </div>
+                          <input
+                            type="text"
+                            list={`supplier-list-pr-${item.product_id}`}
+                            value={getSupplierInputDisplayValue(item.product_id)}
+                            onChange={(e) => {
+                              handleSupplierInputChange(item.product_id, e.target.value);
+                            }}
+                            onBlur={(e) => {
+                              const value = e.target.value.trim();
+                              if (!value) return;
+                              // Try exact match first
+                              let matchedSupplier = suppliers?.find((s: any) => s.nama === value);
+                              // If no exact match, try case-insensitive match
+                              if (!matchedSupplier) {
+                                matchedSupplier = suppliers?.find((s: any) => s.nama.toLowerCase() === value.toLowerCase());
+                              }
+                              // If still no match, try partial match
+                              if (!matchedSupplier) {
+                                matchedSupplier = suppliers?.find((s: any) => s.nama.toLowerCase().includes(value.toLowerCase()));
+                              }
+                              if (matchedSupplier) {
+                                setSelectedSuppliers(prev => ({ ...prev, [item.product_id]: matchedSupplier.nama }));
+                              }
+                            }}
+                            placeholder="-- Pilih Supplier --"
+                            style={{
+                              width: '100%',
+                              padding: '6px 8px',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '4px',
+                              backgroundColor: 'var(--bg-tertiary)',
+                              color: 'var(--text-primary)',
+                              fontSize: '12px',
+                            }}
+                          />
+                          <datalist id={`supplier-list-pr-${item.product_id}`}>
+                            {suppliers?.map((s: any) => (
+                              <option key={s.id} value={s.nama}>{s.nama}</option>
+                            ))}
+                          </datalist>
                         </td>
                       </tr>
                     );
@@ -4037,6 +4976,11 @@ const PRApprovalDialog = ({ pr, suppliers, products, onClose, onApprove, onSuppl
             </div>
 
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              {onViewPR && (
+                <Button variant="secondary" onClick={() => onViewPR(pr)}>
+                  👁️ View PR
+                </Button>
+              )}
               <Button variant="secondary" onClick={onClose}>Cancel</Button>
               <Button variant="primary" onClick={handleApprove}>Approve & Create PO</Button>
             </div>
@@ -4045,152 +4989,33 @@ const PRApprovalDialog = ({ pr, suppliers, products, onClose, onApprove, onSuppl
       </div>
       
       {/* Custom Dialog for PRApprovalDialog */}
-      <PRApprovalDialogComponent />
-      
-      {/* Create Supplier Dialog */}
-      {showCreateSupplierDialog && (
-        <div className="dialog-overlay" onClick={() => setShowCreateSupplierDialog(false)} style={{ zIndex: 10002 }}>
+      {dialogState.show && (
+        <div className="dialog-overlay" onClick={dialogState.type === 'alert' ? closeDialog : undefined} style={{ zIndex: 10001 }}>
           <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
-            <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)' }}>
-              Create New Supplier
-            </h3>
+            <div style={{ marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)' }}>
+                {dialogState.title}
+              </h3>
+            </div>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 500 }}>
-                  Supplier Code *
-                </label>
-                <input
-                  type="text"
-                  value={newSupplierForm.kode}
-                  onChange={(e) => setNewSupplierForm({ ...newSupplierForm, kode: e.target.value })}
-                  placeholder="Auto-generate jika kosong"
-                  style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: '4px', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '14px' }}
-                />
-              </div>
-              
-              <div>
-                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 500 }}>
-                  Supplier Name *
-                </label>
-                <input
-                  type="text"
-                  value={newSupplierForm.nama}
-                  onChange={(e) => setNewSupplierForm({ ...newSupplierForm, nama: e.target.value })}
-                  placeholder="Nama Supplier"
-                  style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: '4px', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '14px' }}
-                />
-              </div>
-              
-              <div>
-                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 500 }}>
-                  Address
-                </label>
-                <input
-                  type="text"
-                  value={newSupplierForm.alamat || ''}
-                  onChange={(e) => setNewSupplierForm({ ...newSupplierForm, alamat: e.target.value })}
-                  placeholder="Alamat Supplier"
-                  style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: '4px', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '14px' }}
-                />
-              </div>
-              
-              <div>
-                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 500 }}>
-                  Phone
-                </label>
-                <input
-                  type="text"
-                  value={newSupplierForm.telepon || ''}
-                  onChange={(e) => setNewSupplierForm({ ...newSupplierForm, telepon: e.target.value })}
-                  placeholder="Telepon Supplier"
-                  style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: '4px', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '14px' }}
-                />
-              </div>
+            <div style={{ marginBottom: '24px', fontSize: '14px', color: 'var(--text-primary)', whiteSpace: 'pre-line' }}>
+              {dialogState.message}
             </div>
             
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <Button variant="secondary" onClick={() => {
-                setShowCreateSupplierDialog(false);
-                setCreatingSupplierForProductId('');
-                setNewSupplierForm({ kode: '', nama: '', alamat: '', telepon: '' });
+              {dialogState.type === 'confirm' && (
+                <Button variant="secondary" onClick={() => {
+                  if (dialogState.onCancel) dialogState.onCancel();
+                  closeDialog();
+                }}>
+                  Cancel
+                </Button>
+              )}
+              <Button variant="primary" onClick={() => {
+                if (dialogState.onConfirm) dialogState.onConfirm();
+                if (dialogState.type === 'alert') closeDialog();
               }}>
-                Cancel
-              </Button>
-              <Button variant="primary" onClick={async () => {
-                if (!newSupplierForm.nama || newSupplierForm.nama.trim() === '') {
-                  showAlert('Supplier Name harus diisi', 'Validation Error');
-                  return;
-                }
-                
-                try {
-                  // Generate kode jika kosong
-                  let supplierKode = newSupplierForm.kode.trim();
-                  if (!supplierKode) {
-                    // Generate kode dari nama (ambil 3-4 karakter pertama, uppercase)
-                    const nameParts = newSupplierForm.nama.trim().split(' ').filter(p => p.length > 0);
-                    if (nameParts.length > 0) {
-                      supplierKode = nameParts.map(p => p.substring(0, 2).toUpperCase()).join('').substring(0, 6);
-                    } else {
-                      supplierKode = newSupplierForm.nama.trim().substring(0, 6).toUpperCase();
-                    }
-                    
-                    // Pastikan kode unik
-                    let finalKode = supplierKode;
-                    let counter = 1;
-                    while (safeSome(suppliers || [], (s: any) => (s.kode || '').toString().trim() === finalKode)) {
-                      finalKode = `${supplierKode}${counter}`;
-                      counter++;
-                    }
-                    supplierKode = finalKode;
-                  }
-                  
-                  // Cek apakah supplier dengan nama yang sama sudah ada
-                  const existingSupplier = suppliers?.find((s: any) => 
-                    (s.nama || '').toString().trim().toLowerCase() === newSupplierForm.nama.trim().toLowerCase()
-                  );
-                  
-                  if (existingSupplier) {
-                    showAlert(`Supplier dengan nama "${newSupplierForm.nama}" sudah ada!`, 'Validation Error');
-                    return;
-                  }
-                  
-                  // Create new supplier
-                  const newSupplier: Supplier = {
-                    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-                    kode: supplierKode,
-                    nama: newSupplierForm.nama.trim(),
-                    alamat: newSupplierForm.alamat?.trim() || '',
-                    telepon: newSupplierForm.telepon?.trim() || '',
-                  };
-                  
-                  // Save to storage
-                  const currentSuppliers = await storageService.get<Supplier[]>('gt_suppliers') || [];
-                  const updatedSuppliers = [...currentSuppliers, newSupplier];
-                  await storageService.set('gt_suppliers', updatedSuppliers);
-                  
-                  // Update suppliers list dan pilih supplier baru
-                  if (onSupplierCreated) {
-                    await onSupplierCreated(newSupplier);
-                  }
-                  
-                  // Auto-select supplier baru untuk product ini
-                  if (creatingSupplierForProductId) {
-                    setSelectedSuppliers(prev => ({ ...prev, [creatingSupplierForProductId]: newSupplier.nama }));
-                    setSupplierInputValues(prev => ({ ...prev, [creatingSupplierForProductId]: newSupplier.nama }));
-                  }
-                  
-                  // Close dialog
-                  setShowCreateSupplierDialog(false);
-                  setCreatingSupplierForProductId('');
-                  setNewSupplierForm({ kode: '', nama: '', alamat: '', telepon: '' });
-                  
-                  showAlert(`Supplier "${newSupplier.nama}" berhasil dibuat dan dipilih!`, 'Success');
-                } catch (error: any) {
-                  showAlert(`Error creating supplier: ${error.message}`, 'Error');
-                }
-              }}>
-                Create & Select
+                {dialogState.type === 'alert' ? 'OK' : 'Confirm'}
               </Button>
             </div>
           </div>
@@ -4200,82 +5025,103 @@ const PRApprovalDialog = ({ pr, suppliers, products, onClose, onApprove, onSuppl
   );
 };
 
-// Receipt/GRN Dialog Component
-const ReceiptDialog = ({ po, onClose, onSave }: { po: PurchaseOrder; onClose: () => void; onSave: (data: { qtyReceived: number; receivedDate: string; notes?: string; suratJalan?: string; suratJalanName?: string; invoiceNo?: string; invoiceFile?: string; invoiceFileName?: string }) => void }) => {
+// Receipt/GRN Dialog Component - OPTIMIZED dengan pre-loaded data dan memoization
+const ReceiptDialog = React.memo(({ po, onClose, onSave }: { po: PurchaseOrder & { _preloadedGRNData?: { totalReceived: number; grnsForPO: any[] } }; onClose: () => void; onSave: (data: { qtyReceived: number; receivedDate: string; notes?: string; suratJalanId?: string; suratJalanName?: string; invoiceNo?: string; invoiceFileId?: string; invoiceFileName?: string; sitePlan?: string }) => void }) => {
+  // Use pre-loaded data jika ada, jika tidak baru load
+  const preloadedData = (po as any)._preloadedGRNData;
+  const initialTotalReceived = preloadedData?.totalReceived || 0;
+  
   const [qtyReceived, setQtyReceived] = useState<string>('');
   const [receivedDate, setReceivedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState<string>('');
+  const [sitePlan, setSitePlan] = useState<string>('Site Plan 1');
   const [suratJalanFile, setSuratJalanFile] = useState<File | null>(null);
   const [invoiceNo, setInvoiceNo] = useState<string>('');
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
-  const [existingGRNs, setExistingGRNs] = useState<any[]>([]);
-  const [totalReceived, setTotalReceived] = useState<number>(0);
-  const [remainingQty, setRemainingQty] = useState<number>(po.qty);
+  const [totalReceived, setTotalReceived] = useState<number>(initialTotalReceived);
+  const [maxAllowedQty, setMaxAllowedQty] = useState<number>(() => {
+    // Calculate immediately from pre-loaded data
+    if (preloadedData) {
+      const maxTotal = Math.ceil(po.qty * 1.1);
+      return Math.max(0, maxTotal - preloadedData.totalReceived);
+    }
+    return po.qty;
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(!preloadedData);
+  const [isSaving, setIsSaving] = useState<boolean>(false); // Track saving state to prevent double-click
   
-  // Load existing GRNs untuk PO ini
+  // Custom Dialog - menggunakan hook terpusat
+  const { showAlert, DialogComponent: ReceiptDialogComponent } = useDialog();
+  
+  // Calculate values from pre-loaded data immediately (synchronous)
   useEffect(() => {
+    if (preloadedData) {
+      const total = preloadedData.totalReceived;
+      setTotalReceived(total);
+      
+      // Calculate max allowed with 10% tolerance
+      const maxTotal = Math.ceil(po.qty * 1.1);
+      const maxRemaining = maxTotal - total;
+      setMaxAllowedQty(maxRemaining > 0 ? maxRemaining : 0);
+      
+      // Set default qtyReceived ke remaining qty jika masih ada
+      const remaining = po.qty - total;
+      if (remaining > 0) {
+        setQtyReceived(remaining.toString());
+      } else if (maxRemaining > 0) {
+        setQtyReceived(maxRemaining.toString());
+      } else {
+        setQtyReceived('0');
+      }
+      setIsLoading(false);
+    }
+  }, [preloadedData, po.qty]);
+  
+  // Load existing GRNs hanya jika tidak ada pre-loaded data
+  useEffect(() => {
+    if (preloadedData) return; // Skip jika sudah ada pre-loaded data
+    
+    let isMounted = true;
     const loadGRNs = async () => {
       try {
-        const grnData = await storageService.get<any[]>('gt_grn') || [];
+        const grnData = await storageService.get<any[]>('grnPackaging') || [];
         const grnsForPO = grnData.filter((grn: any) => 
           (grn.poNo || '').toString().trim() === (po.poNo || '').toString().trim()
         );
-        setExistingGRNs(grnsForPO);
         const total = grnsForPO.reduce((sum: number, grn: any) => sum + (grn.qtyReceived || 0), 0);
+        
+        if (!isMounted) return;
+        
         setTotalReceived(total);
-        const remaining = po.qty - total;
-        setRemainingQty(remaining);
+        
+        // Calculate max allowed with 10% tolerance
+        const maxTotal = Math.ceil(po.qty * 1.1);
+        const maxRemaining = maxTotal - total;
+        setMaxAllowedQty(maxRemaining > 0 ? maxRemaining : 0);
+        
         // Set default qtyReceived ke remaining qty jika masih ada
+        const remaining = po.qty - total;
         if (remaining > 0) {
           setQtyReceived(remaining.toString());
+        } else if (maxRemaining > 0) {
+          setQtyReceived(maxRemaining.toString());
         } else {
           setQtyReceived('0');
         }
+        setIsLoading(false);
       } catch (error) {
-        console.error('Error loading GRNs:', error);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
+    
     loadGRNs();
-  }, [po.poNo, po.qty]);
-  
-  // Custom Dialog state untuk ReceiptDialog
-  const [dialogState, setDialogState] = useState<{
-    show: boolean;
-    type: 'alert' | 'confirm';
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-  }>({
-    show: false,
-    type: 'alert',
-    title: '',
-    message: '',
-  });
-  
-  const showAlert = (message: string, title: string = 'Information') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'alert',
-      title,
-      message,
-    });
-  };
-  
-  const closeDialog = () => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(false);
-    }
-    setDialogState({
-      show: false,
-      type: 'alert',
-      title: '',
-      message: '',
-    });
-  };
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [po.poNo, po.qty, preloadedData]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -4292,20 +5138,29 @@ const ReceiptDialog = ({ po, onClose, onSave }: { po: PurchaseOrder; onClose: ()
   };
 
   const handleSubmit = () => {
+    // Prevent double-click/multiple submissions
+    if (isSaving) {
+      return;
+    }
+    
     const qty = Number(qtyReceived);
     if (isNaN(qty) || qty <= 0) {
       showAlert('Quantity received must be greater than 0', 'Validation Error');
       return;
     }
     
-    // Validasi: qtyReceived tidak boleh melebihi remaining qty dari PO
-    if (qty > remainingQty) {
+    // Validasi dengan toleransi 10%
+    const maxAllowedTotal = Math.ceil(po.qty * 1.1);
+    const newTotal = totalReceived + qty;
+    if (newTotal > maxAllowedTotal) {
       showAlert(
-        `⚠️ Quantity received (${qty}) melebihi sisa yang belum diterima!\n\n` +
-        `Qty Ordered: ${po.qty} PCS\n` +
-        `Total Sudah Diterima: ${totalReceived} PCS\n` +
-        `Sisa: ${remainingQty} PCS\n\n` +
-        `Maksimal yang bisa diterima: ${remainingQty} PCS`,
+        `⚠️ Quantity received melebihi batas maksimal!\n\n` +
+        `Qty Ordered: ${po.qty}\n` +
+        `Total Sudah Diterima: ${totalReceived}\n` +
+        `Qty Baru: ${qty}\n` +
+        `Total Baru: ${newTotal}\n` +
+        `Maksimal Total (dengan toleransi 10%): ${maxAllowedTotal}\n` +
+        `Maksimal yang bisa diterima sekarang: ${maxAllowedQty}`,
         'Validation Error'
       );
       return;
@@ -4318,80 +5173,84 @@ const ReceiptDialog = ({ po, onClose, onSave }: { po: PurchaseOrder; onClose: ()
     // Invoice number dan file adalah optional
 
     // Handle file uploads (surat jalan dan invoice)
-    const handleFiles = () => {
-      const filesToProcess: Array<{ file: File; type: 'suratJalan' | 'invoice' }> = [];
-      if (suratJalanFile) filesToProcess.push({ file: suratJalanFile, type: 'suratJalan' });
-      if (invoiceFile) filesToProcess.push({ file: invoiceFile, type: 'invoice' });
+    const handleFiles = async () => {
+      try {
+        setIsSaving(true); // Set saving state
+        
+        const filesToProcess: Array<{ file: File; type: 'suratJalan' | 'invoice' }> = [];
+        if (suratJalanFile) filesToProcess.push({ file: suratJalanFile, type: 'suratJalan' });
+        if (invoiceFile) filesToProcess.push({ file: invoiceFile, type: 'invoice' });
 
-      if (filesToProcess.length === 0) {
-        // No files, save directly (invoice dan surat jalan optional)
-        onSave({ 
-          qtyReceived: qty, 
-          receivedDate, 
-          notes,
-          invoiceNo: invoiceNo || undefined
-        });
-        return;
+        if (filesToProcess.length === 0) {
+          // No files, save directly
+          onSave({ 
+            qtyReceived: qty, 
+            receivedDate, 
+            notes,
+            invoiceNo: invoiceNo || undefined,
+            sitePlan: sitePlan || 'Site Plan 1'
+          });
+          return;
+        }
+
+        // Process files with BlobService
+        const results: { suratJalanId?: string; suratJalanName?: string; invoiceFileId?: string; invoiceFileName?: string } = {};
+
+        try {
+          for (const { file, type } of filesToProcess) {
+            const uploadResult = await BlobService.uploadFile(file, 'packaging');
+            if (type === 'suratJalan') {
+              results.suratJalanId = uploadResult.fileId;
+              results.suratJalanName = file.name;
+            } else if (type === 'invoice') {
+              results.invoiceFileId = uploadResult.fileId;
+              results.invoiceFileName = file.name;
+            }
+          }
+
+          // All files processed, save
+          onSave({ 
+            qtyReceived: qty, 
+            receivedDate, 
+            notes,
+            suratJalanId: results.suratJalanId,
+            suratJalanName: results.suratJalanName,
+            invoiceNo: invoiceNo || undefined,
+            invoiceFileId: results.invoiceFileId,
+            invoiceFileName: results.invoiceFileName,
+            sitePlan: sitePlan || 'Site Plan 1'
+          });
+        } catch (error: any) {
+          showAlert(`Error uploading files: ${error.message}`, 'Error');
+          setIsSaving(false); // Reset saving state on error
+        }
+      } catch (error: any) {
+        showAlert(`Error: ${error.message}`, 'Error');
+        setIsSaving(false); // Reset saving state on error
       }
-
-      // Process files sequentially
-      let processedCount = 0;
-      const results: { suratJalan?: string; suratJalanName?: string; invoiceFile?: string; invoiceFileName?: string } = {};
-
-      filesToProcess.forEach(({ file, type }) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const base64 = e.target?.result as string;
-          if (type === 'suratJalan') {
-            results.suratJalan = base64;
-            results.suratJalanName = file.name;
-          } else if (type === 'invoice') {
-            results.invoiceFile = base64;
-            results.invoiceFileName = file.name;
-          }
-          
-          processedCount++;
-          if (processedCount === filesToProcess.length) {
-            // All files processed, save
-            onSave({ 
-              qtyReceived: qty, 
-              receivedDate, 
-              notes,
-              suratJalan: results.suratJalan,
-              suratJalanName: results.suratJalanName,
-              invoiceNo: invoiceNo || undefined,
-              invoiceFile: results.invoiceFile,
-              invoiceFileName: results.invoiceFileName
-            });
-          }
-        };
-        reader.readAsDataURL(file);
-      });
     };
 
     handleFiles();
   };
 
-  // Enable semua input di dalam dialog saat dialog terbuka
-  useEffect(() => {
-    const enableDialogInputs = () => {
-      const dialogInputs = document.querySelectorAll('.dialog-card input, .dialog-card textarea, .dialog-card select');
-      dialogInputs.forEach((input: Element) => {
-        if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement || input instanceof HTMLSelectElement) {
-          input.removeAttribute('readonly');
-          input.removeAttribute('disabled');
-          (input as any).readOnly = false;
-          (input as any).disabled = false;
-        }
-      });
-    };
-    
-    // Enable inputs multiple times untuk memastikan
-    enableDialogInputs();
-    setTimeout(enableDialogInputs, 50);
-    setTimeout(enableDialogInputs, 100);
-    setTimeout(enableDialogInputs, 200);
-  }, []);
+  // Show loading state hanya jika benar-benar loading (tidak ada pre-loaded data)
+  if (isLoading && !preloadedData) {
+    return (
+      <div className="dialog-overlay" onClick={onClose}>
+        <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%' }}>
+          <Card className="dialog-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2>Create Receipt (GRN) - {po.poNo}</h2>
+              <Button variant="secondary" onClick={onClose} style={{ padding: '6px 12px' }}>✕</Button>
+            </div>
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              Loading...
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="dialog-overlay" onClick={onClose}>
@@ -4415,100 +5274,20 @@ const ReceiptDialog = ({ po, onClose, onSave }: { po: PurchaseOrder; onClose: ()
                 lineHeight: '1.6'
               }}>
                 <div><strong>Supplier:</strong> {po.supplier}</div>
-                <div><strong>Product:</strong> {po.productItem}</div>
-                <div><strong>SKU:</strong> {po.productId || '-'}</div>
+                <div><strong>product:</strong> {po.productItem}</div>
+                <div><strong>product ID:</strong> {po.productId || '-'}</div>
                 <div><strong>Qty Ordered:</strong> {po.qty} PCS</div>
-                {totalReceived > 0 && (
-                  <div style={{ 
-                    padding: '8px', 
-                    backgroundColor: remainingQty > 0 ? 'rgba(255, 152, 0, 0.1)' : 'rgba(76, 175, 80, 0.1)',
-                    borderRadius: '4px',
-                    marginTop: '8px',
-                    border: `1px solid ${remainingQty > 0 ? '#ff9800' : '#4caf50'}`
-                  }}>
-                    <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '4px', color: remainingQty > 0 ? '#ff9800' : '#4caf50' }}>
-                      📦 Receipt Status
-                    </div>
-                    <div style={{ fontSize: '13px' }}>
-                      <div>✓ <strong>Received:</strong> {totalReceived} PCS</div>
-                      {remainingQty > 0 ? (
-                        <div style={{ color: '#ff9800', fontWeight: '600', marginTop: '4px' }}>
-                          ⏳ <strong>Outstanding:</strong> {remainingQty} PCS
-                        </div>
-                      ) : (
-                        <div style={{ color: '#4caf50', fontWeight: '600', marginTop: '4px' }}>
-                          ✓ <strong>Complete</strong>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
                 <div><strong>Unit Price:</strong> Rp {po.price.toLocaleString('id-ID')}</div>
-                <div><strong>Sub Total:</strong> Rp {(po.qty * po.price).toLocaleString('id-ID')}</div>
-                {(po.discountPercent || 0) > 0 && (
-                  <>
-                    <div style={{ color: '#ff9800' }}>
-                      <strong>Discount ({po.discountPercent}%):</strong> - Rp {(po.qty * po.price * (po.discountPercent || 0) / 100).toLocaleString('id-ID')}
-                    </div>
-                  </>
-                )}
-                <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px', marginTop: '8px', fontWeight: 'bold' }}>
-                  <strong>Total:</strong> Rp {po.total.toLocaleString('id-ID')}
-                </div>
+                <div><strong>Total:</strong> Rp {po.total.toLocaleString('id-ID')}</div>
               </div>
             </div>
-            
-            {/* History GRN */}
-            {existingGRNs.length > 0 && (
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
-                  📋 GRN History ({existingGRNs.length} receipt{existingGRNs.length > 1 ? 's' : ''})
-                </label>
-                <div style={{ 
-                  maxHeight: '200px',
-                  overflowY: 'auto',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '6px',
-                  padding: '8px'
-                }}>
-                  {existingGRNs.map((grn: any, idx: number) => (
-                    <div key={idx} style={{ 
-                      padding: '8px', 
-                      marginBottom: '4px',
-                      backgroundColor: 'var(--bg-secondary)',
-                      borderRadius: '4px',
-                      fontSize: '12px'
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <strong>{grn.grnNo || `GRN-${idx + 1}`}</strong>
-                        </div>
-                        <div style={{ color: '#4caf50', fontWeight: '600' }}>
-                          {grn.qtyReceived || 0} PCS
-                        </div>
-                      </div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                        {grn.receivedDate || grn.created?.split('T')[0] || '-'}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
                 Quantity Received *
-                {remainingQty > 0 && (
-                  <span style={{ fontSize: '12px', color: '#ff9800', marginLeft: '8px', fontWeight: '600' }}>
-                    (Max: {remainingQty} PCS)
-                  </span>
-                )}
               </label>
               <input
-                type="number"
-                min="0"
-                max={remainingQty}
+                type="text"
                 value={qtyReceived}
                 onChange={(e) => {
                   const value = e.target.value;
@@ -4520,41 +5299,34 @@ const ReceiptDialog = ({ po, onClose, onSave }: { po: PurchaseOrder; onClose: ()
                   const value = e.target.value;
                   const numValue = value === '' ? 0 : Number(value);
                   if (isNaN(numValue) || numValue < 0) {
-                    setQtyReceived(remainingQty > 0 ? remainingQty.toString() : '0');
-                  } else if (numValue > remainingQty) {
-                    // Auto-correct jika melebihi remaining qty
-                    setQtyReceived(remainingQty.toString());
-                    showAlert(
-                      `⚠️ Quantity dibatasi ke maksimal ${remainingQty} PCS (sisa yang belum diterima dari PO)`,
-                      'Info'
-                    );
+                    setQtyReceived(po.qty.toString());
                   } else {
                     setQtyReceived(Math.ceil(numValue).toString());
                   }
                 }}
-                placeholder={remainingQty > 0 ? `Enter quantity (max: ${remainingQty} PCS)` : "All items already received"}
-                disabled={remainingQty <= 0}
+                placeholder="Enter quantity received"
                 style={{
                   width: '100%',
                   padding: '8px 12px',
                   border: '1px solid var(--border-color)',
                   borderRadius: '6px',
-                  backgroundColor: remainingQty <= 0 ? 'var(--bg-secondary)' : 'var(--bg-primary)',
+                  backgroundColor: 'var(--bg-primary)',
                   color: 'var(--text-primary)',
                   fontSize: '14px',
-                  opacity: remainingQty <= 0 ? 0.6 : 1,
                 }}
               />
               <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                {remainingQty > 0 ? (
-                  <span style={{ color: '#ff9800' }}>
-                    ⏳ Outstanding: <strong>{remainingQty} PCS</strong> belum diterima
-                  </span>
-                ) : (
-                  <span style={{ color: '#4caf50' }}>
-                    ✓ Semua barang sudah diterima ({totalReceived} PCS)
-                  </span>
+                Ordered: {po.qty} PCS
+                {totalReceived > 0 && (
+                  <span> | Already Received: {totalReceived} PCS</span>
                 )}
+                <br />
+                <span style={{ color: 'var(--primary-color)', fontWeight: '500' }}>
+                  Max Allowed (with 10% tolerance): {Math.ceil(po.qty * 1.1)} PCS
+                  {totalReceived > 0 && (
+                    <span> | Remaining: {maxAllowedQty} PCS</span>
+                  )}
+                </span>
               </div>
             </div>
 
@@ -4576,6 +5348,31 @@ const ReceiptDialog = ({ po, onClose, onSave }: { po: PurchaseOrder; onClose: ()
                   fontSize: '14px',
                 }}
               />
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
+                Upload Surat Jalan (Optional)
+              </label>
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                onChange={handleFileChange}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '6px',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '14px',
+                }}
+              />
+              {suratJalanFile && (
+                <div style={{ fontSize: '12px', color: 'var(--success)', marginTop: '4px' }}>
+                  Selected: {suratJalanFile.name}
+                </div>
+              )}
             </div>
 
             <div style={{ marginBottom: '16px' }}>
@@ -4624,31 +5421,6 @@ const ReceiptDialog = ({ po, onClose, onSave }: { po: PurchaseOrder; onClose: ()
               )}
             </div>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
-                Upload Surat Jalan (Optional)
-              </label>
-              <input
-                type="file"
-                accept="image/*,.pdf"
-                onChange={handleFileChange}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '6px',
-                  backgroundColor: 'var(--bg-primary)',
-                  color: 'var(--text-primary)',
-                  fontSize: '14px',
-                }}
-              />
-              {suratJalanFile && (
-                <div style={{ fontSize: '12px', color: 'var(--success)', marginTop: '4px' }}>
-                  Selected: {suratJalanFile.name}
-                </div>
-              )}
-            </div>
-
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500' }}>
                 Notes (Optional)
@@ -4673,95 +5445,541 @@ const ReceiptDialog = ({ po, onClose, onSave }: { po: PurchaseOrder; onClose: ()
             </div>
 
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <Button variant="secondary" onClick={onClose}>Cancel</Button>
-              <Button variant="primary" onClick={handleSubmit}>
-                Create GRN
+              <Button variant="secondary" onClick={onClose} disabled={isSaving}>Cancel</Button>
+              <Button 
+                variant="primary" 
+                onClick={handleSubmit}
+                disabled={isSaving}
+                style={{ opacity: isSaving ? 0.6 : 1, cursor: isSaving ? 'not-allowed' : 'pointer' }}
+              >
+                {isSaving ? '⏳ Creating GRN...' : 'Create GRN'}
               </Button>
             </div>
           </div>
         </Card>
       </div>
       
-      {/* Custom Dialog for Alert/Confirm/Prompt - Main Dialog */}
-      {dialogState.show && (dialogState.type === 'alert' || dialogState.type === 'confirm') && (
-        <div className="dialog-overlay" onClick={dialogState.type === 'alert' ? closeDialog : undefined} style={{ zIndex: 10001 }}>
-          <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
-            <div style={{ marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)' }}>
-                {dialogState.title}
-              </h3>
+      {/* Custom Dialog for ReceiptDialog */}
+      <ReceiptDialogComponent />
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  // Memo comparison - hanya re-render jika PO berubah
+  return prevProps.po.id === nextProps.po.id && 
+         prevProps.po.poNo === nextProps.po.poNo &&
+         prevProps.po.qty === nextProps.po.qty;
+});
+
+// Edit PO Dialog Component
+const EditPODialog = ({
+  po,
+  suppliers,
+  products,
+  formData,
+  setFormData,
+  supplierInputValue,
+  setSupplierInputValue,
+  productInputValue,
+  setProductInputValue,
+  qtyInputValue,
+  setQtyInputValue,
+  priceInputValue,
+  setPriceInputValue,
+  onClose,
+  onSave,
+  removeLeadingZero,
+}: {
+  po: PurchaseOrder;
+  suppliers: Supplier[];
+  products: Product[];
+  formData: Partial<PurchaseOrder>;
+  setFormData: (data: Partial<PurchaseOrder>) => void;
+  supplierInputValue: string;
+  setSupplierInputValue: (value: string) => void;
+  productInputValue: string;
+  setProductInputValue: (value: string) => void;
+  qtyInputValue: string;
+  setQtyInputValue: (value: string) => void;
+  priceInputValue: string;
+  setPriceInputValue: (value: string) => void;
+  onClose: () => void;
+  onSave: () => void;
+  removeLeadingZero: (value: string) => string;
+}) => {
+  const getSupplierInputDisplayValue = () => {
+    if (supplierInputValue !== undefined && supplierInputValue !== '') {
+      return supplierInputValue;
+    }
+    if (formData.supplier) {
+      const supplier = suppliers.find(s => s.nama === formData.supplier);
+      if (supplier) {
+        return `${supplier.kode} - ${supplier.nama}`;
+      }
+      return formData.supplier;
+    }
+    return '';
+  };
+
+  const handleSupplierInputChange = (text: string) => {
+    setSupplierInputValue(text);
+    if (!text) {
+      setFormData({ ...formData, supplier: '' });
+      return;
+    }
+    const normalized = text.toLowerCase();
+    const matchedSupplier = suppliers.find(s => {
+      const label = `${s.kode || ''}${s.kode ? ' - ' : ''}${s.nama || ''}`.toLowerCase();
+      const code = (s.kode || '').toLowerCase();
+      const name = (s.nama || '').toLowerCase();
+      return label === normalized || code === normalized || name === normalized;
+    });
+    if (matchedSupplier) {
+      setFormData({ ...formData, supplier: matchedSupplier.nama });
+    } else {
+      setFormData({ ...formData, supplier: text });
+    }
+  };
+
+  const getProductInputDisplayValue = () => {
+    if (productInputValue !== undefined && productInputValue !== '') {
+      return productInputValue;
+    }
+    if (formData.productItem) {
+      const product = products.find(m => m.nama === formData.productItem);
+      if (product) {
+        return `${product.product_id || product.kode} - ${product.nama}`;
+      }
+      return formData.productItem;
+    }
+    return '';
+  };
+
+  const handleProductInputChange = (text: string) => {
+    setProductInputValue(text);
+    if (!text) {
+      setFormData({
+        ...formData,
+        productItem: '',
+        price: 0,
+        total: 0,
+      });
+      return;
+    }
+    const normalized = text.toLowerCase();
+    const matchedproduct = products.find(m => {
+      const label = `${m.product_id || m.kode || ''}${m.product_id || m.kode ? ' - ' : ''}${m.nama || ''}`.toLowerCase();
+      const code = (m.product_id || m.kode || '').toLowerCase();
+      const name = (m.nama || '').toLowerCase();
+      return label === normalized || code === normalized || name === normalized;
+    });
+    if (matchedproduct) {
+      const productPrice = matchedproduct.hargaSales || matchedproduct.hargaFg || 0;
+      const roundedPrice = Math.ceil(productPrice);
+      const roundedTotal = Math.ceil((formData.qty || 0) * roundedPrice);
+      setFormData({
+        ...formData,
+        productItem: matchedproduct.nama,
+        price: roundedPrice,
+        total: roundedTotal,
+      });
+    } else {
+      setFormData({
+        ...formData,
+        productItem: text,
+        price: 0,
+        total: 0,
+      });
+    }
+  };
+
+  function setShowSupplierDialog(arg0: boolean): void {
+    throw new Error('Function not implemented.');
+  }
+
+  return (
+    <div className="dialog-overlay" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '700px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
+        <Card className="dialog-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h2>Edit Purchase Order - {po.poNo}</h2>
+            <Button variant="secondary" onClick={onClose} style={{ padding: '6px 12px' }}>✕</Button>
+          </div>
+
+          <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px' }}>
+            <div><strong>PO No:</strong> {po.poNo}</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              Status: {po.status} | Created: {new Date(po.created).toLocaleDateString('id-ID')}
             </div>
-            
-            <div style={{ marginBottom: '24px', fontSize: '14px', color: 'var(--text-primary)', whiteSpace: 'pre-line' }}>
-              {dialogState.message}
-            </div>
-            
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              {dialogState.type === 'confirm' && (
-                <Button variant="secondary" onClick={() => {
-                  if (dialogState.onCancel) dialogState.onCancel();
-                  closeDialog();
-                }}>
-                  Cancel
-                </Button>
-              )}
-              <Button variant="primary" onClick={() => {
-                if (dialogState.onConfirm) dialogState.onConfirm();
-                if (dialogState.type === 'alert') closeDialog();
-              }}>
-                {dialogState.type === 'alert' ? 'OK' : 'Confirm'}
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+              Supplier *
+            </label>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                value={getSupplierInputDisplayValue()}
+                onChange={() => {}}
+                placeholder="-- Pilih Supplier --"
+                readOnly
+                onClick={() => setShowSupplierDialog(true)}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                }}
+              />
+              <Button
+                variant="secondary"
+                onClick={() => setShowSupplierDialog(true)}
+                style={{ fontSize: '12px', padding: '8px 16px' }}
+              >
+                Select
               </Button>
             </div>
           </div>
-        </div>
-      )}
-      
-      {/* Custom Dialog for Prompt */}
-      {dialogState.show && (dialogState.type as string) === 'prompt' && (() => {
-        const promptState = dialogState as typeof dialogState & { inputValue?: string; inputPlaceholder?: string; onConfirm?: (value?: string) => void };
-        return (
-          <div className="dialog-overlay" onClick={undefined} style={{ zIndex: 10001 }}>
-            <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
-              <div style={{ marginBottom: '16px' }}>
-                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)' }}>
-                  {dialogState.title}
-                </h3>
-              </div>
-              
-              <div style={{ marginBottom: '24px', fontSize: '14px', color: 'var(--text-primary)', whiteSpace: 'pre-line' }}>
-                {dialogState.message}
-              </div>
-              
-              <div style={{ marginBottom: '24px' }}>
-                <Input
-                  label=""
-                  value={promptState.inputValue || ''}
-                  onChange={(value) => setDialogState({ ...dialogState, inputValue: value } as typeof dialogState)}
-                  placeholder={promptState.inputPlaceholder || 'Enter value...'}
-                />
-              </div>
-              
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                <Button variant="secondary" onClick={() => {
-                  if (dialogState.onCancel) dialogState.onCancel();
-                  closeDialog();
-                }}>
-                  Cancel
-                </Button>
-                <Button variant="primary" onClick={() => {
-                  if (promptState.onConfirm) {
-                    promptState.onConfirm(promptState.inputValue);
-                  }
-                }}>
-                  OK
-                </Button>
-              </div>
-            </div>
+          <Input
+            label="SO No (Linked - Cannot Edit)"
+            value={formData.soNo || ''}
+            onChange={(v) => setFormData({ ...formData, soNo: v })}
+            disabled={true}
+          />
+          <Input
+            label="Reason Pembelian (jika tanpa SO/SPK)"
+            value={formData.purchaseReason || ''}
+            onChange={(v) => setFormData({ ...formData, purchaseReason: v })}
+            placeholder="Contoh: Refill stock umum / sample R&D"
+          />
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+              product/Item *
+            </label>
+            <input
+              type="text"
+              list={`product-list-edit-${po.id}`}
+              value={getProductInputDisplayValue()}
+              onChange={(e) => {
+                handleProductInputChange(e.target.value);
+              }}
+              onBlur={(e) => {
+                const value = e.target.value;
+                const matchedproduct = products.find(m => {
+                  const label = `${m.product_id || m.kode || ''}${m.product_id || m.kode ? ' - ' : ''}${m.nama || ''}`;
+                  return label === value;
+                });
+                if (matchedproduct) {
+                  const productPrice = matchedproduct.hargaSales || matchedproduct.hargaFg || 0;
+                  const roundedPrice = Math.ceil(productPrice);
+                  const roundedTotal = Math.ceil((formData.qty || 0) * roundedPrice);
+                  setFormData({
+                    ...formData,
+                    productItem: matchedproduct.nama,
+                    price: roundedPrice,
+                    total: roundedTotal,
+                  });
+                }
+              }}
+              placeholder="-- Pilih Product --"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            />
+            <datalist id={`product-list-edit-${po.id}`}>
+              {products.map(m => (
+                <option key={m.id} value={`${m.product_id || m.kode} - ${m.nama}`}>
+                  {m.product_id || m.kode} - {m.nama}
+                </option>
+              ))}
+            </datalist>
           </div>
-        );
-      })()}
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+              Qty *
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={qtyInputValue !== undefined && qtyInputValue !== '' ? qtyInputValue : (formData.qty !== undefined && formData.qty !== null && formData.qty !== 0 ? String(formData.qty) : '')}
+              onFocus={(e) => {
+                const input = e.target as HTMLInputElement;
+                const currentQty = formData.qty;
+                if (currentQty === 0 || currentQty === null || currentQty === undefined || String(currentQty) === '0') {
+                  setQtyInputValue('');
+                  input.value = '';
+                } else {
+                  input.select();
+                }
+              }}
+              onMouseDown={(e) => {
+                const input = e.target as HTMLInputElement;
+                const currentQty = formData.qty;
+                if (currentQty === 0 || currentQty === null || currentQty === undefined || String(currentQty) === '0') {
+                  setQtyInputValue('');
+                  input.value = '';
+                }
+              }}
+              onChange={(e) => {
+                let val = e.target.value;
+                val = val.replace(/[^\d.,]/g, '');
+                const cleaned = removeLeadingZero(val);
+                setQtyInputValue(cleaned);
+                const qty = cleaned === '' ? 0 : Number(cleaned) || 0;
+                const total = Math.ceil(qty * (formData.price || 0));
+                setFormData({
+                  ...formData,
+                  qty,
+                  total,
+                });
+              }}
+              onBlur={(e) => {
+                const val = e.target.value;
+                if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
+                  setFormData({
+                    ...formData,
+                    qty: 0,
+                    total: 0,
+                  });
+                  setQtyInputValue('');
+                } else {
+                  const qty = Number(val);
+                  const total = Math.ceil(qty * (formData.price || 0));
+                  setFormData({
+                    ...formData,
+                    qty,
+                    total,
+                  });
+                  setQtyInputValue('');
+                }
+              }}
+              onKeyDown={(e) => {
+                const input = e.target as HTMLInputElement;
+                const currentVal = input.value;
+                if ((currentVal === '' || currentVal === '0') && /^[1-9]$/.test(e.key)) {
+                  e.preventDefault();
+                  const newVal = e.key;
+                  setQtyInputValue(newVal);
+                  input.value = newVal;
+                  const qty = Number(newVal);
+                  const total = Math.ceil(qty * (formData.price || 0));
+                  setFormData({
+                    ...formData,
+                    qty,
+                    total,
+                  });
+                }
+              }}
+              placeholder="0"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            />
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+              Price
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={priceInputValue !== undefined && priceInputValue !== '' ? priceInputValue : (formData.price !== undefined && formData.price !== null && formData.price !== 0 ? String(Math.ceil(formData.price)) : '')}
+              onFocus={(e) => {
+                const input = e.target as HTMLInputElement;
+                const currentPrice = formData.price;
+                if (currentPrice === 0 || currentPrice === null || currentPrice === undefined || String(currentPrice) === '0') {
+                  setPriceInputValue('');
+                  input.value = '';
+                } else {
+                  input.select();
+                }
+              }}
+              onMouseDown={(e) => {
+                const input = e.target as HTMLInputElement;
+                const currentPrice = formData.price;
+                if (currentPrice === 0 || currentPrice === null || currentPrice === undefined || String(currentPrice) === '0') {
+                  setPriceInputValue('');
+                  input.value = '';
+                }
+              }}
+              onChange={(e) => {
+                let val = e.target.value;
+                val = val.replace(/[^\d.,]/g, '');
+                const cleaned = removeLeadingZero(val);
+                setPriceInputValue(cleaned);
+                const price = cleaned === '' ? 0 : Math.ceil(Number(cleaned) || 0);
+                const total = Math.ceil((formData.qty || 0) * price);
+                setFormData({
+                  ...formData,
+                  price,
+                  total,
+                });
+              }}
+              onBlur={(e) => {
+                const val = e.target.value;
+                if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
+                  setFormData({
+                    ...formData,
+                    price: 0,
+                    total: 0,
+                  });
+                  setPriceInputValue('');
+                } else {
+                  const price = Math.ceil(Number(val));
+                  const total = Math.ceil((formData.qty || 0) * price);
+                  setFormData({
+                    ...formData,
+                    price,
+                    total,
+                  });
+                  setPriceInputValue('');
+                }
+              }}
+              onKeyDown={(e) => {
+                const input = e.target as HTMLInputElement;
+                const currentVal = input.value;
+                if ((currentVal === '' || currentVal === '0') && /^[1-9]$/.test(e.key)) {
+                  e.preventDefault();
+                  const newVal = e.key;
+                  setPriceInputValue(newVal);
+                  input.value = newVal;
+                  const price = Math.ceil(Number(newVal));
+                  const total = Math.ceil((formData.qty || 0) * price);
+                  setFormData({
+                    ...formData,
+                    price,
+                    total,
+                  });
+                }
+              }}
+              placeholder="0"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            />
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+              Total: Rp {Math.ceil((formData.qty || 0) * (formData.price || 0)).toLocaleString('id-ID', { maximumFractionDigits: 0 })}
+            </label>
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+              Quality
+            </label>
+            <Input
+              value={formData.quality || ''}
+              onChange={(v) => setFormData({ ...formData, quality: v })}
+              placeholder="Quality"
+            />
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+              Score
+            </label>
+            <Input
+              value={formData.score !== undefined && formData.score !== null ? String(formData.score) : ''}
+              onChange={(v) => setFormData({ ...formData, score: v === '' ? '' : (isNaN(Number(v)) ? v : Number(v)) })}
+              placeholder="Score"
+            />
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+              Keterangan
+            </label>
+            <textarea
+              value={formData.keterangan || ''}
+              onChange={(e) => setFormData({ ...formData, keterangan: e.target.value })}
+              placeholder="Keterangan"
+              rows={3}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+                fontFamily: 'inherit',
+                resize: 'vertical',
+              }}
+            />
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+              Payment Terms *
+            </label>
+            <select
+              value={formData.paymentTerms || 'TOP'}
+              onChange={(e) => {
+                const newPaymentTerms = e.target.value as any;
+                const newTopDays = (newPaymentTerms === 'COD' || newPaymentTerms === 'CBD') ? 0 : (formData.topDays || 30);
+                setFormData({ ...formData, paymentTerms: newPaymentTerms, topDays: newTopDays });
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            >
+              <option value="TOP">TOP (Term of Payment)</option>
+              <option value="COD">COD (Cash on Delivery)</option>
+              <option value="CBD">CBD (Cash Before Delivery)</option>
+            </select>
+          </div>
+          {formData.paymentTerms === 'TOP' && (
+            <Input
+              label="TOP Days"
+              type="number"
+              value={String(formData.topDays || 30)}
+              onChange={(v) => setFormData({ ...formData, topDays: Number(v) })}
+            />
+          )}
+          <Input
+            label="Receipt Date (Tanggal Penerimaan)"
+            type="date"
+            value={formData.receiptDate || ''}
+            onChange={(v) => setFormData({ ...formData, receiptDate: v })}
+          />
+          <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
+            <Button onClick={onClose} variant="secondary">
+              Cancel
+            </Button>
+            <Button onClick={onSave} variant="primary">
+              Update PO
+            </Button>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 };
 
 export default Purchasing;
+

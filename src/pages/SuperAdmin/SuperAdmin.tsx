@@ -4,7 +4,7 @@ import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
-import { storageService } from '../../services/storage';
+import { storageService, StorageKeys } from '../../services/storage';
 import { getCurrentUser, isDefaultAdmin } from '../../utils/access-control-helper';
 import { filterActiveItems } from '../../utils/data-persistence-helper';
 import { ActivityLog } from '../../utils/activity-logger';
@@ -223,9 +223,9 @@ const SuperAdmin = () => {
         
         // Define all business contexts to read from
         const contexts = [
-          { name: 'Packaging', key: 'activityLogs' },
-          { name: 'GT', key: 'general-trading/activityLogs' },
-          { name: 'Trucking', key: 'trucking/activityLogs' }
+          { name: 'Packaging', key: StorageKeys.PACKAGING.ACTIVITY_LOGS },
+          { name: 'GT', key: StorageKeys.GENERAL_TRADING.ACTIVITY_LOGS },
+          { name: 'Trucking', key: StorageKeys.TRUCKING.ACTIVITY_LOGS }
         ];
         
         const allLogs: (ActivityLog & { businessContext?: string })[] = [];
@@ -279,9 +279,9 @@ const SuperAdmin = () => {
       const changedKey = detail?.key || '';
       
       // Check if any activity logs changed (from any business context)
-      if (changedKey === 'activityLogs' || 
-          changedKey === 'general-trading/activityLogs' || 
-          changedKey === 'trucking/activityLogs' ||
+      if (changedKey === StorageKeys.PACKAGING.ACTIVITY_LOGS || 
+          changedKey === StorageKeys.GENERAL_TRADING.ACTIVITY_LOGS || 
+          changedKey === StorageKeys.TRUCKING.ACTIVITY_LOGS ||
           changedKey.endsWith('/activityLogs')) {
         console.log(`[SuperAdmin] Activity logs changed: ${changedKey}, reloading...`);
         loadLogs();
@@ -499,9 +499,9 @@ const SuperAdmin = () => {
     if (window.confirm('Hapus semua activity logs dari semua business context (Packaging, GT, Trucking)? Tindakan ini tidak dapat dibatalkan.')) {
       try {
         // Clear logs from all business contexts
-        await storageService.set('activityLogs', []);
-        await storageService.set('general-trading/activityLogs', []);
-        await storageService.set('trucking/activityLogs', []);
+        await storageService.set(StorageKeys.PACKAGING.ACTIVITY_LOGS, []);
+        await storageService.set(StorageKeys.GENERAL_TRADING.ACTIVITY_LOGS, []);
+        await storageService.set(StorageKeys.TRUCKING.ACTIVITY_LOGS, []);
         setActivityLogs([]);
         console.log('[SuperAdmin] All activity logs cleared');
       } catch (error) {

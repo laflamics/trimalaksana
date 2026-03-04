@@ -3,9 +3,10 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService } from '../../../services/storage';
+import { storageService, StorageKeys } from '../../../services/storage';
 import { deleteGTItem, reloadGTData, filterActiveItems } from '../../../utils/gt-delete-helper';
 import { useDialog } from '../../../hooks/useDialog';
+import { useLanguage } from '../../../hooks/useLanguage';
 import * as XLSX from 'xlsx';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
@@ -40,6 +41,7 @@ interface Customer {
 }
 
 const Products = () => {
+  const { t } = useLanguage();
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -110,13 +112,13 @@ const Products = () => {
 
   const loadProducts = useCallback(async () => {
     console.log('[GT Products] Loading products...');
-    let data = await storageService.get<Product[]>('gt_products') || [];
+    let data = await storageService.get<Product[]>(StorageKeys.GENERAL_TRADING.PRODUCTS) || [];
     console.log(`[GT Products] Raw data from storage: ${data.length} items`);
     
     // If we have very few products, try force reload from file
     if (data.length <= 1) {
       console.log('[GT Products] Few products detected, trying force reload from file...');
-      const fileData = await storageService.forceReloadFromFile<Product[]>('gt_products');
+      const fileData = await storageService.forceReloadFromFile<Product[]>(StorageKeys.GENERAL_TRADING.PRODUCTS);
       if (fileData && Array.isArray(fileData) && fileData.length > data.length) {
         console.log(`[GT Products] Force reload successful: ${fileData.length} products from file`);
         data = fileData;
@@ -129,7 +131,7 @@ const Products = () => {
     setProducts(activeProducts.map((p, idx) => ({ ...p, no: idx + 1 })));
     
     // Load product images (support both old format string and new format object with tombstone)
-    const imagesDataRaw = await storageService.get<Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }>>('GT_productimage') || {};
+    const imagesDataRaw = await storageService.get<Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }>>(StorageKeys.GENERAL_TRADING.PRODUCT_IMAGES) || {};
     
     // Filter out deleted images (tombstone) for display
     const activeImages: Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }> = {};
@@ -145,13 +147,13 @@ const Products = () => {
 
   const loadCustomers = useCallback(async () => {
     console.log('[GT Products] Loading customers...');
-    let data = await storageService.get<Customer[]>('gt_customers') || [];
+    let data = await storageService.get<Customer[]>(StorageKeys.GENERAL_TRADING.CUSTOMERS) || [];
     console.log(`[GT Products] Raw customers from storage: ${data.length} items`);
     
     // If we have very few customers, try force reload from file
     if (data.length <= 1) {
       console.log('[GT Products] Few customers detected, trying force reload from file...');
-      const fileData = await storageService.forceReloadFromFile<Customer[]>('gt_customers');
+      const fileData = await storageService.forceReloadFromFile<Customer[]>(StorageKeys.GENERAL_TRADING.CUSTOMERS);
       if (fileData && Array.isArray(fileData) && fileData.length > data.length) {
         console.log(`[GT Products] Force reload successful: ${fileData.length} customers from file`);
         data = fileData;
@@ -180,7 +182,7 @@ const Products = () => {
       const changedKey = customEvent.detail?.key || '';
       const normalizedKey = changedKey.split('/').pop();
 
-      if (normalizedKey === 'gt_products' || normalizedKey === 'GT_productimage') {
+      if (normalizedKey === StorageKeys.GENERAL_TRADING.PRODUCTS || normalizedKey === StorageKeys.GENERAL_TRADING.PRODUCT_IMAGES) {
         // Debounce: hanya reload setelah 100ms tanpa event baru
         if (timeoutId) {
           clearTimeout(timeoutId);
@@ -424,7 +426,7 @@ const Products = () => {
               } as Product
             : p
         );
-        await storageService.set('gt_products', updated);
+        await storageService.set(StorageKeys.GENERAL_TRADING.PRODUCTS, updated);
         setProducts(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
       } else {
         // Create mode: auto generate kode jika kosong, atau validasi jika diisi manual
@@ -456,7 +458,7 @@ const Products = () => {
           kode: finalKode,
         } as Product;
         const updated = [...products, newProduct];
-        await storageService.set('gt_products', updated);
+        await storageService.set(StorageKeys.GENERAL_TRADING.PRODUCTS, updated);
         setProducts(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
       }
       
@@ -531,11 +533,11 @@ const Products = () => {
         async () => {
           try {
             // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
-            const deleteResult = await deleteGTItem('gt_products', item.id, 'id');
+            const deleteResult = await deleteGTItem(StorageKeys.GENERAL_TRADING.PRODUCTS, item.id, 'id');
             
             if (deleteResult.success) {
               // Reload data dengan helper (handle race condition)
-              const activeProducts = await reloadGTData('gt_products', setProducts);
+              const activeProducts = await reloadGTData(StorageKeys.GENERAL_TRADING.PRODUCTS, setProducts);
               // Re-number products
               setProducts(activeProducts.map((p, idx) => ({ ...p, no: idx + 1 })));
               showAlert(`✅ Product "${item.nama}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
@@ -740,7 +742,7 @@ const Products = () => {
           // Re-number products
           const renumbered = updatedProducts.map((p, idx) => ({ ...p, no: idx + 1 }));
 
-          await storageService.set('gt_products', renumbered);
+          await storageService.set(StorageKeys.GENERAL_TRADING.PRODUCTS, renumbered);
           setProducts(renumbered);
 
           if (errors.length > 0) {
@@ -959,7 +961,7 @@ const Products = () => {
         const base64 = e.target?.result as string;
         
         // Load existing images
-        const existingImages = await storageService.get<Record<string, string>>('GT_productimage') || {};
+        const existingImages = await storageService.get<Record<string, string>>(StorageKeys.GENERAL_TRADING.PRODUCT_IMAGES) || {};
         
         // Update with new image
         const updatedImages = {
@@ -968,7 +970,7 @@ const Products = () => {
         };
         
         // Save to storage
-        await storageService.set('GT_productimage', updatedImages);
+        await storageService.set(StorageKeys.GENERAL_TRADING.PRODUCT_IMAGES, updatedImages);
         setProductImages(updatedImages);
         setUploadingImage(null);
         showAlert('Foto berhasil diupload', 'Success');
@@ -991,7 +993,7 @@ const Products = () => {
       async () => {
         try {
           // Load existing images (support both old and new format)
-          const existingImagesRaw = await storageService.get<Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }>>('GT_productimage') || {};
+          const existingImagesRaw = await storageService.get<Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }>>(StorageKeys.GENERAL_TRADING.PRODUCT_IMAGES) || {};
           
           // Convert to new format and mark as deleted (tombstone pattern)
           const updatedImages: Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }> = {};
@@ -1023,10 +1025,10 @@ const Products = () => {
           });
           
           // Save tombstone to storage (sync ke server)
-          await storageService.set('GT_productimage', updatedImages);
+          await storageService.set(StorageKeys.GENERAL_TRADING.PRODUCT_IMAGES, updatedImages);
           
           // Reload images (filter out deleted/tombstone)
-          const reloadedImagesRaw = await storageService.get<Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }>>('GT_productimage') || {};
+          const reloadedImagesRaw = await storageService.get<Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }>>(StorageKeys.GENERAL_TRADING.PRODUCT_IMAGES) || {};
           const activeImages: Record<string, string | { image: string; deleted?: boolean; deletedAt?: string; deletedTimestamp?: number }> = {};
           Object.keys(reloadedImagesRaw).forEach(key => {
             const entry = reloadedImagesRaw[key];
@@ -1148,10 +1150,10 @@ const Products = () => {
         );
       },
     },
-    { key: 'kode', header: 'Kode (SKU/ID)' },
+    { key: 'kode', header: t('master.productCode') || 'Kode (SKU/ID)' },
     { 
       key: 'nama', 
-      header: 'Nama',
+      header: t('master.productName') || 'Nama',
       render: (item: Product) => (
         <span 
           style={{ cursor: 'pointer', textDecoration: 'underline', color: 'var(--primary)' }}
@@ -1162,11 +1164,11 @@ const Products = () => {
         </span>
       ),
     },
-    { key: 'satuan', header: 'Satuan (Unit)' },
-    { key: 'kategori', header: 'Kategori' },
+    { key: 'satuan', header: t('common.unit') || 'Satuan (Unit)' },
+    { key: 'kategori', header: t('master.category') || 'Kategori' },
     { 
       key: 'customer', 
-      header: 'Customer',
+      header: t('master.customerName') || 'Customer',
       render: (item: Product) => {
         return item.customer || item.supplier || '-';
       },
@@ -1182,10 +1184,10 @@ const Products = () => {
     },
     { 
       key: 'lastUpdate', 
-      header: 'Last Update',
+      header: t('common.updatedAt') || 'Last Update',
       render: (item: Product) => formatDateTime(item.lastUpdate)
     },
-    { key: 'userUpdate', header: 'User Update' },
+    { key: 'userUpdate', header: t('common.updatedBy') || 'User Update' },
     { 
       key: 'harga', 
       header: 'Harga Beli',
@@ -1212,7 +1214,7 @@ const Products = () => {
     },
     {
       key: 'actions',
-      header: 'Actions',
+      header: t('common.actions') || 'Actions',
       render: (item: Product) => (
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {!item.isTurunan && (

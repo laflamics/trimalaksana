@@ -1,16 +1,16 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, PieChart, Pie, Cell } from 'recharts';
 import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import { storageService, extractStorageValue } from '../../services/storage';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
+import * as XLSX from 'xlsx';
 import '../../styles/common.css';
 import '../../styles/compact.css';
 
 const Report = () => {
-  const [activeTab, setActiveTab] = useState<'summary' | 'comprehensive' | 'so' | 'po' | 'production' | 'delivery' | 'invoice' | 'inventory' | 'hr'>('summary');
+  const [activeTab, setActiveTab] = useState<'summary' | 'comprehensive' | 'so' | 'po' | 'production' | 'delivery' | 'invoice' | 'inventory' | 'hr' | 'finance' | 'ar' | 'ap' | 'tax' | 'payment' | 'ops'>('summary');
   const [soData, setSoData] = useState<any[]>([]);
   const [poData, setPoData] = useState<any[]>([]);
   const [productionData, setProductionData] = useState<any[]>([]);
@@ -20,6 +20,32 @@ const Report = () => {
   const [hrData, setHrData] = useState<any[]>([]);
   const [summaryData, setSummaryData] = useState<any>({});
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Filter states for each tab
+  const [soStatusFilter, setSoStatusFilter] = useState<string>('all');
+  const [soDateFrom, setSoDateFrom] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
+  const [soDateTo, setSoDateTo] = useState(new Date().toISOString().split('T')[0]);
+  
+  const [poStatusFilter, setPoStatusFilter] = useState<string>('all');
+  const [poDateFrom, setPoDateFrom] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
+  const [poDateTo, setPoDateTo] = useState(new Date().toISOString().split('T')[0]);
+  
+  const [prodStatusFilter, setProdStatusFilter] = useState<string>('all');
+  const [prodDateFrom, setProdDateFrom] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
+  const [prodDateTo, setProdDateTo] = useState(new Date().toISOString().split('T')[0]);
+  
+  const [deliveryStatusFilter, setDeliveryStatusFilter] = useState<string>('all');
+  const [deliveryDateFrom, setDeliveryDateFrom] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
+  const [deliveryDateTo, setDeliveryDateTo] = useState(new Date().toISOString().split('T')[0]);
+  
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState<string>('all');
+  const [invoiceDateFrom, setInvoiceDateFrom] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
+  const [invoiceDateTo, setInvoiceDateTo] = useState(new Date().toISOString().split('T')[0]);
+  // Finance modules
+  const [arData, setArData] = useState<any[]>([]);
+  const [apData, setApData] = useState<any[]>([]);
+  const [taxData, setTaxData] = useState<any[]>([]);
+  const [opsExpensesData, setOpsExpensesData] = useState<any[]>([]);
   // Custom Dialog state
   const [dialogState, setDialogState] = useState<{
     show: boolean;
@@ -101,28 +127,134 @@ const Report = () => {
     }
   };
   
-  // Filtered data berdasarkan search query
+  // Filtered SO data with status, date range, and search
   const filteredSoData = useMemo(() => {
-    if (!searchQuery) return soData;
-    const query = searchQuery.toLowerCase();
-    return soData.filter(item => {
-      const itemsMatch = item.items?.some((itm: any) => 
-        (itm.productName || itm.product || '').toLowerCase().includes(query)
-      );
-      return (
-        (item.soNo || '').toLowerCase().includes(query) ||
-        (item.customer || '').toLowerCase().includes(query) ||
-        (item.paymentTerms || '').toLowerCase().includes(query) ||
-        (item.status || '').toLowerCase().includes(query) ||
-        itemsMatch
-      );
+    let filtered = soData;
+    
+    // Filter by status
+    if (soStatusFilter !== 'all') {
+      filtered = filtered.filter(item => (item.status || '').toLowerCase() === soStatusFilter.toLowerCase());
+    }
+    
+    // Filter by date range
+    if (soDateFrom || soDateTo) {
+      filtered = filtered.filter(item => {
+        const itemDate = new Date(item.created || item.orderDate);
+        const from = soDateFrom ? new Date(soDateFrom) : null;
+        const to = soDateTo ? new Date(soDateTo) : null;
+        
+        if (from && itemDate < from) return false;
+        if (to && itemDate > to) return false;
+        return true;
+      });
+    }
+    
+    // Filter by search query
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(item => {
+        const itemsMatch = item.items?.some((itm: any) => 
+          (itm.productName || itm.product || '').toLowerCase().includes(query)
+        );
+        return (
+          (item.soNo || '').toLowerCase().includes(query) ||
+          (item.customer || '').toLowerCase().includes(query) ||
+          (item.paymentTerms || '').toLowerCase().includes(query) ||
+          (item.status || '').toLowerCase().includes(query) ||
+          itemsMatch
+        );
+      });
+    }
+    
+    return filtered;
+  }, [soData, soStatusFilter, soDateFrom, soDateTo, searchQuery]);
+  
+  // SO Metrics calculation
+  const soMetrics = useMemo(() => {
+    const openSOs = soData.filter(item => (item.status || '').toLowerCase() === 'open');
+    const closeSOs = soData.filter(item => (item.status || '').toLowerCase() === 'close');
+    
+    const openTotal = openSOs.reduce((sum, item) => {
+      if (item.items && Array.isArray(item.items)) {
+        return sum + item.items.reduce((itemSum: number, itm: any) => itemSum + (itm.total || 0), 0);
+      }
+      return sum + (item.total || 0);
+    }, 0);
+    
+    const closeTotal = closeSOs.reduce((sum, item) => {
+      if (item.items && Array.isArray(item.items)) {
+        return sum + item.items.reduce((itemSum: number, itm: any) => itemSum + (itm.total || 0), 0);
+      }
+      return sum + (item.total || 0);
+    }, 0);
+    
+    // Last month vs This month
+    const now = new Date();
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    
+    const thisMonthSOs = soData.filter(item => {
+      const itemDate = new Date(item.created || item.orderDate);
+      return itemDate >= thisMonthStart;
     });
-  }, [soData, searchQuery]);
+    
+    const lastMonthSOs = soData.filter(item => {
+      const itemDate = new Date(item.created || item.orderDate);
+      return itemDate >= lastMonthStart && itemDate <= lastMonthEnd;
+    });
+    
+    const thisMonthTotal = thisMonthSOs.reduce((sum, item) => {
+      if (item.items && Array.isArray(item.items)) {
+        return sum + item.items.reduce((itemSum: number, itm: any) => itemSum + (itm.total || 0), 0);
+      }
+      return sum + (item.total || 0);
+    }, 0);
+    
+    const lastMonthTotal = lastMonthSOs.reduce((sum, item) => {
+      if (item.items && Array.isArray(item.items)) {
+        return sum + item.items.reduce((itemSum: number, itm: any) => itemSum + (itm.total || 0), 0);
+      }
+      return sum + (item.total || 0);
+    }, 0);
+    
+    return {
+      openCount: openSOs.length,
+      openTotal,
+      closeCount: closeSOs.length,
+      closeTotal,
+      thisMonthCount: thisMonthSOs.length,
+      thisMonthTotal,
+      lastMonthCount: lastMonthSOs.length,
+      lastMonthTotal,
+    };
+  }, [soData]);
   
   const filteredPoData = useMemo(() => {
-    if (!searchQuery) return poData;
+    let filtered = poData;
+    
+    // Filter by status
+    if (poStatusFilter !== 'all') {
+      filtered = filtered.filter(item => (item.status || '').toLowerCase() === poStatusFilter.toLowerCase());
+    }
+    
+    // Filter by date range
+    if (poDateFrom || poDateTo) {
+      filtered = filtered.filter(item => {
+        const itemDate = new Date(item.created || item.poDate);
+        const from = poDateFrom ? new Date(poDateFrom) : null;
+        const to = poDateTo ? new Date(poDateTo) : null;
+        
+        if (from && itemDate < from) return false;
+        if (to && itemDate > to) return false;
+        return true;
+      });
+    }
+    
+    // Filter by search query
+    if (!searchQuery) return filtered;
     const query = searchQuery.toLowerCase();
-    return poData.filter(item => 
+    return filtered.filter(item => 
       (item.poNo || '').toLowerCase().includes(query) ||
       (item.supplier || '').toLowerCase().includes(query) ||
       (item.soNo || '').toLowerCase().includes(query) ||
@@ -132,12 +264,72 @@ const Report = () => {
       String(item.price || '').includes(query) ||
       String(item.total || '').includes(query)
     );
-  }, [poData, searchQuery]);
+  }, [poData, poStatusFilter, poDateFrom, poDateTo, searchQuery]);
+  
+  // PO Metrics calculation
+  const poMetrics = useMemo(() => {
+    const openPOs = poData.filter(item => (item.status || '').toLowerCase() === 'open');
+    const closePOs = poData.filter(item => (item.status || '').toLowerCase() === 'close');
+    
+    const openTotal = openPOs.reduce((sum, item) => sum + (item.total || 0), 0);
+    const closeTotal = closePOs.reduce((sum, item) => sum + (item.total || 0), 0);
+    
+    // Last month vs This month
+    const now = new Date();
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    
+    const thisMonthPOs = poData.filter(item => {
+      const itemDate = new Date(item.created || item.poDate);
+      return itemDate >= thisMonthStart;
+    });
+    
+    const lastMonthPOs = poData.filter(item => {
+      const itemDate = new Date(item.created || item.poDate);
+      return itemDate >= lastMonthStart && itemDate <= lastMonthEnd;
+    });
+    
+    const thisMonthTotal = thisMonthPOs.reduce((sum, item) => sum + (item.total || 0), 0);
+    const lastMonthTotal = lastMonthPOs.reduce((sum, item) => sum + (item.total || 0), 0);
+    
+    return {
+      openCount: openPOs.length,
+      openTotal,
+      closeCount: closePOs.length,
+      closeTotal,
+      thisMonthCount: thisMonthPOs.length,
+      thisMonthTotal,
+      lastMonthCount: lastMonthPOs.length,
+      lastMonthTotal,
+    };
+  }, [poData]);
   
   const filteredProductionData = useMemo(() => {
-    if (!searchQuery) return productionData;
+    let filtered = productionData;
+    
+    // Filter by status
+    if (prodStatusFilter !== 'all') {
+      filtered = filtered.filter(item => (item.status || '').toLowerCase() === prodStatusFilter.toLowerCase());
+    }
+    
+    // Filter by date range
+    if (prodDateFrom || prodDateTo) {
+      filtered = filtered.filter(item => {
+        const itemDate = new Date(item.date || item.producedDate || item.created);
+        const from = prodDateFrom ? new Date(prodDateFrom) : null;
+        const to = prodDateTo ? new Date(prodDateTo) : null;
+        
+        if (from && itemDate < from) return false;
+        if (to && itemDate > to) return false;
+        return true;
+      });
+    }
+    
+    // Filter by search query
+    if (!searchQuery) return filtered;
     const query = searchQuery.toLowerCase();
-    return productionData.filter(item => 
+    return filtered.filter(item => 
       (item.grnNo || '').toLowerCase().includes(query) ||
       (item.soNo || '').toLowerCase().includes(query) ||
       (item.customer || '').toLowerCase().includes(query) ||
@@ -147,13 +339,63 @@ const Report = () => {
       String(item.progress || '').includes(query) ||
       String(item.remaining || '').includes(query)
     );
-  }, [productionData, searchQuery]);
+  }, [productionData, prodStatusFilter, prodDateFrom, prodDateTo, searchQuery]);
+  
+  // Production Metrics calculation
+  const prodMetrics = useMemo(() => {
+    const openProds = productionData.filter(item => (item.status || '').toLowerCase() === 'open');
+    const closeProds = productionData.filter(item => (item.status || '').toLowerCase() === 'close' || (item.status || '').toLowerCase() === 'completed');
+    
+    // Last month vs This month
+    const now = new Date();
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    
+    const thisMonthProds = productionData.filter(item => {
+      const itemDate = new Date(item.date || item.producedDate || item.created);
+      return itemDate >= thisMonthStart;
+    });
+    
+    const lastMonthProds = productionData.filter(item => {
+      const itemDate = new Date(item.date || item.producedDate || item.created);
+      return itemDate >= lastMonthStart && itemDate <= lastMonthEnd;
+    });
+    
+    return {
+      openCount: openProds.length,
+      closeCount: closeProds.length,
+      thisMonthCount: thisMonthProds.length,
+      lastMonthCount: lastMonthProds.length,
+    };
+  }, [productionData]);
   
   const filteredDeliveryData = useMemo(() => {
     if (!Array.isArray(deliveryData)) return [];
-    if (!searchQuery) return deliveryData;
+    let filtered = deliveryData;
+    
+    // Filter by status
+    if (deliveryStatusFilter !== 'all') {
+      filtered = filtered.filter(item => (item.status || '').toLowerCase() === deliveryStatusFilter.toLowerCase());
+    }
+    
+    // Filter by date range
+    if (deliveryDateFrom || deliveryDateTo) {
+      filtered = filtered.filter(item => {
+        const itemDate = new Date(item.deliveryDate || item.created);
+        const from = deliveryDateFrom ? new Date(deliveryDateFrom) : null;
+        const to = deliveryDateTo ? new Date(deliveryDateTo) : null;
+        
+        if (from && itemDate < from) return false;
+        if (to && itemDate > to) return false;
+        return true;
+      });
+    }
+    
+    // Filter by search query
+    if (!searchQuery) return filtered;
     const query = searchQuery.toLowerCase();
-    return deliveryData.filter(item => {
+    return filtered.filter(item => {
       const itemsMatch = item.items?.some((itm: any) => 
         (itm.product || '').toLowerCase().includes(query)
       );
@@ -167,20 +409,109 @@ const Report = () => {
         itemsMatch
       );
     });
-  }, [deliveryData, searchQuery]);
+  }, [deliveryData, deliveryStatusFilter, deliveryDateFrom, deliveryDateTo, searchQuery]);
+  
+  // Delivery Metrics calculation
+  const deliveryMetrics = useMemo(() => {
+    const openDeliveries = deliveryData.filter(item => (item.status || '').toLowerCase() === 'open');
+    const closeDeliveries = deliveryData.filter(item => (item.status || '').toLowerCase() === 'close' || (item.status || '').toLowerCase() === 'delivered');
+    
+    // Last month vs This month
+    const now = new Date();
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    
+    const thisMonthDeliveries = deliveryData.filter(item => {
+      const itemDate = new Date(item.deliveryDate || item.created);
+      return itemDate >= thisMonthStart;
+    });
+    
+    const lastMonthDeliveries = deliveryData.filter(item => {
+      const itemDate = new Date(item.deliveryDate || item.created);
+      return itemDate >= lastMonthStart && itemDate <= lastMonthEnd;
+    });
+    
+    return {
+      openCount: openDeliveries.length,
+      closeCount: closeDeliveries.length,
+      thisMonthCount: thisMonthDeliveries.length,
+      lastMonthCount: lastMonthDeliveries.length,
+    };
+  }, [deliveryData]);
   
   const filteredInvoiceData = useMemo(() => {
     if (!Array.isArray(invoiceData)) return [];
-    if (!searchQuery) return invoiceData;
+    let filtered = invoiceData;
+    
+    // Filter by status
+    if (invoiceStatusFilter !== 'all') {
+      filtered = filtered.filter(item => (item.status || '').toLowerCase() === invoiceStatusFilter.toLowerCase());
+    }
+    
+    // Filter by date range
+    if (invoiceDateFrom || invoiceDateTo) {
+      filtered = filtered.filter(item => {
+        const itemDate = new Date(item.invoiceDate || item.created);
+        const from = invoiceDateFrom ? new Date(invoiceDateFrom) : null;
+        const to = invoiceDateTo ? new Date(invoiceDateTo) : null;
+        
+        if (from && itemDate < from) return false;
+        if (to && itemDate > to) return false;
+        return true;
+      });
+    }
+    
+    // Filter by search query
+    if (!searchQuery) return filtered;
     const query = searchQuery.toLowerCase();
-    return invoiceData.filter(item => 
+    return filtered.filter(item => 
       (item.invoiceNo || '').toLowerCase().includes(query) ||
       (item.customer || '').toLowerCase().includes(query) ||
       (item.soNo || '').toLowerCase().includes(query) ||
       (item.status || '').toLowerCase().includes(query) ||
       String(item.totalAmount || '').includes(query)
     );
-  }, [invoiceData, searchQuery]);
+  }, [invoiceData, invoiceStatusFilter, invoiceDateFrom, invoiceDateTo, searchQuery]);
+  
+  // Invoice Metrics calculation
+  const invoiceMetrics = useMemo(() => {
+    const openInvoices = invoiceData.filter(item => (item.status || '').toLowerCase() === 'open');
+    const closeInvoices = invoiceData.filter(item => (item.status || '').toLowerCase() === 'close' || (item.status || '').toLowerCase() === 'paid');
+    
+    const openTotal = openInvoices.reduce((sum, item) => sum + (item.total || item.totalAmount || item.bom?.total || 0), 0);
+    const closeTotal = closeInvoices.reduce((sum, item) => sum + (item.total || item.totalAmount || item.bom?.total || 0), 0);
+    
+    // Last month vs This month
+    const now = new Date();
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    
+    const thisMonthInvoices = invoiceData.filter(item => {
+      const itemDate = new Date(item.invoiceDate || item.created);
+      return itemDate >= thisMonthStart;
+    });
+    
+    const lastMonthInvoices = invoiceData.filter(item => {
+      const itemDate = new Date(item.invoiceDate || item.created);
+      return itemDate >= lastMonthStart && itemDate <= lastMonthEnd;
+    });
+    
+    const thisMonthTotal = thisMonthInvoices.reduce((sum, item) => sum + (item.total || item.totalAmount || item.bom?.total || 0), 0);
+    const lastMonthTotal = lastMonthInvoices.reduce((sum, item) => sum + (item.total || item.totalAmount || item.bom?.total || 0), 0);
+    
+    return {
+      openCount: openInvoices.length,
+      openTotal,
+      closeCount: closeInvoices.length,
+      closeTotal,
+      thisMonthCount: thisMonthInvoices.length,
+      thisMonthTotal,
+      lastMonthCount: lastMonthInvoices.length,
+      lastMonthTotal,
+    };
+  }, [invoiceData]);
   
   const filteredInventoryData = useMemo(() => {
     if (!Array.isArray(inventoryData)) return [];
@@ -208,6 +539,59 @@ const Report = () => {
       String(item['GAJI POKOK'] || '').includes(query)
     );
   }, [hrData, searchQuery]);
+
+  // Filtered AR Data
+  const filteredArData = useMemo(() => {
+    if (!Array.isArray(arData)) return [];
+    if (!searchQuery) return arData;
+    const query = searchQuery.toLowerCase();
+    return arData.filter(item =>
+      (item.invoiceNo || '').toLowerCase().includes(query) ||
+      (item.customer || '').toLowerCase().includes(query) ||
+      (item.status || '').toLowerCase().includes(query) ||
+      String(item.amount || '').includes(query)
+    );
+  }, [arData, searchQuery]);
+
+  // Filtered AP Data
+  const filteredApData = useMemo(() => {
+    if (!Array.isArray(apData)) return [];
+    if (!searchQuery) return apData;
+    const query = searchQuery.toLowerCase();
+    return apData.filter(item =>
+      (item.poNo || '').toLowerCase().includes(query) ||
+      (item.supplier || '').toLowerCase().includes(query) ||
+      (item.status || '').toLowerCase().includes(query) ||
+      String(item.amount || '').includes(query)
+    );
+  }, [apData, searchQuery]);
+
+  // Filtered Tax Data
+  const filteredTaxData = useMemo(() => {
+    if (!Array.isArray(taxData)) return [];
+    if (!searchQuery) return taxData;
+    const query = searchQuery.toLowerCase();
+    return taxData.filter(item =>
+      (item.reference || '').toLowerCase().includes(query) ||
+      (item.taxType || '').toLowerCase().includes(query) ||
+      (item.status || '').toLowerCase().includes(query) ||
+      String(item.taxAmount || '').includes(query)
+    );
+  }, [taxData, searchQuery]);
+
+  // Filtered Ops Expenses Data
+  const filteredOpsData = useMemo(() => {
+    if (!Array.isArray(opsExpensesData)) return [];
+    if (!searchQuery) return opsExpensesData;
+    const query = searchQuery.toLowerCase();
+    return opsExpensesData.filter(item =>
+      (item.expenseNo || '').toLowerCase().includes(query) ||
+      (item.category || '').toLowerCase().includes(query) ||
+      (item.description || '').toLowerCase().includes(query) ||
+      (item.status || '').toLowerCase().includes(query) ||
+      String(item.amount || '').includes(query)
+    );
+  }, [opsExpensesData, searchQuery]);
 
   // Helper function untuk deduplicate inventory berdasarkan codeItem
   const deduplicateInventory = (inventoryData: any[]): any[] => {
@@ -292,6 +676,12 @@ const Report = () => {
     { id: 'production', label: 'Production' },
     { id: 'delivery', label: 'Delivery' },
     { id: 'invoice', label: 'Invoice' },
+    { id: 'finance', label: 'Finance' },
+    { id: 'ar', label: 'AR' },
+    { id: 'ap', label: 'AP' },
+    { id: 'tax', label: 'Tax' },
+    { id: 'payment', label: 'Payment' },
+    { id: 'ops', label: 'Ops Expense' },
     { id: 'inventory', label: 'Inventory' },
     { id: 'hr', label: 'HR' },
   ];
@@ -650,6 +1040,152 @@ const Report = () => {
     },
   ];
 
+  // AR (Accounts Receivable) Columns
+  const arColumns = [
+    { key: 'invoiceNo', header: 'Invoice No' },
+    { key: 'customer', header: 'Customer' },
+    {
+      key: 'amount',
+      header: 'Amount',
+      render: (item: any) => `Rp ${(item.amount || item.total || 0).toLocaleString('id-ID')}`,
+    },
+    {
+      key: 'paidAmount',
+      header: 'Paid Amount',
+      render: (item: any) => `Rp ${(item.paidAmount || 0).toLocaleString('id-ID')}`,
+    },
+    {
+      key: 'outstanding',
+      header: 'Outstanding',
+      render: (item: any) => {
+        const outstanding = (item.amount || item.total || 0) - (item.paidAmount || 0);
+        return `Rp ${outstanding.toLocaleString('id-ID')}`;
+      },
+    },
+    { key: 'dueDate', header: 'Due Date' },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (item: any) => (
+        <span className={`status-badge status-${(item.status || '').toLowerCase()}`}>
+          {item.status || 'Open'}
+        </span>
+      ),
+    },
+  ];
+
+  // AP (Accounts Payable) Columns
+  const apColumns = [
+    { key: 'poNo', header: 'PO No' },
+    { key: 'supplier', header: 'Supplier' },
+    {
+      key: 'amount',
+      header: 'Amount',
+      render: (item: any) => `Rp ${(item.amount || item.total || 0).toLocaleString('id-ID')}`,
+    },
+    {
+      key: 'paidAmount',
+      header: 'Paid Amount',
+      render: (item: any) => `Rp ${(item.paidAmount || 0).toLocaleString('id-ID')}`,
+    },
+    {
+      key: 'outstanding',
+      header: 'Outstanding',
+      render: (item: any) => {
+        const outstanding = (item.amount || item.total || 0) - (item.paidAmount || 0);
+        return `Rp ${outstanding.toLocaleString('id-ID')}`;
+      },
+    },
+    { key: 'dueDate', header: 'Due Date' },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (item: any) => (
+        <span className={`status-badge status-${(item.status || '').toLowerCase()}`}>
+          {item.status || 'Open'}
+        </span>
+      ),
+    },
+  ];
+
+  // Tax Columns
+  const taxColumns = [
+    { key: 'taxDate', header: 'Tax Date' },
+    { key: 'reference', header: 'Reference' },
+    { key: 'referenceType', header: 'Type' },
+    { key: 'taxType', header: 'Tax Type' },
+    {
+      key: 'baseAmount',
+      header: 'Base Amount',
+      render: (item: any) => `Rp ${(item.baseAmount || 0).toLocaleString('id-ID')}`,
+    },
+    {
+      key: 'taxPercent',
+      header: 'Tax %',
+      render: (item: any) => `${(item.taxPercent || 0).toFixed(2)}%`,
+    },
+    {
+      key: 'taxAmount',
+      header: 'Tax Amount',
+      render: (item: any) => `Rp ${(item.taxAmount || 0).toLocaleString('id-ID')}`,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (item: any) => (
+        <span className={`status-badge status-${(item.status || '').toLowerCase()}`}>
+          {item.status || 'Open'}
+        </span>
+      ),
+    },
+  ];
+
+  // Payment Columns
+  const paymentColumns = [
+    { key: 'paymentNo', header: 'Payment No' },
+    { key: 'paymentDate', header: 'Payment Date' },
+    { key: 'type', header: 'Type' },
+    { key: 'reference', header: 'Reference' },
+    {
+      key: 'amount',
+      header: 'Amount',
+      render: (item: any) => `Rp ${(item.amount || 0).toLocaleString('id-ID')}`,
+    },
+    { key: 'paymentMethod', header: 'Method' },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (item: any) => (
+        <span className={`status-badge status-${(item.status || '').toLowerCase()}`}>
+          {item.status || '-'}
+        </span>
+      ),
+    },
+  ];
+
+  // Operational Expenses Columns
+  const opsColumns = [
+    { key: 'expenseNo', header: 'Expense No' },
+    { key: 'expenseDate', header: 'Date' },
+    { key: 'category', header: 'Category' },
+    { key: 'description', header: 'Description' },
+    {
+      key: 'amount',
+      header: 'Amount',
+      render: (item: any) => `Rp ${(item.amount || 0).toLocaleString('id-ID')}`,
+    },
+    { key: 'approvedBy', header: 'Approved By' },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (item: any) => (
+        <span className={`status-badge status-${(item.status || '').toLowerCase()}`}>
+          {item.status || 'Pending'}
+        </span>
+      ),
+    },
+  ];
+
   const inventoryColumns = [
     { 
       key: 'supplierName', 
@@ -731,13 +1267,10 @@ const Report = () => {
     const production = extractStorageValue(productionRaw);
     setProductionData(Array.isArray(production) ? production : []);
 
-    // Load Delivery data - from deliveryNotes
-    const deliveryNotesRaw = await storageService.get<any[]>('deliveryNotes');
+    // Load Delivery data - from delivery key only
     const deliveryRaw = await storageService.get<any[]>('delivery');
-    const deliveryNotes = extractStorageValue(deliveryNotesRaw);
     const delivery = extractStorageValue(deliveryRaw);
-    const deliveryCombined = [...(Array.isArray(deliveryNotes) ? deliveryNotes : []), ...(Array.isArray(delivery) ? delivery : [])];
-    setDeliveryData(deliveryCombined);
+    setDeliveryData(Array.isArray(delivery) ? delivery : []);
 
     // Load Invoice data
     const invoicesRaw = await storageService.get<any[]>('invoices');
@@ -748,6 +1281,43 @@ const Report = () => {
     const paymentRecordsRaw = await storageService.get<any[]>('payments');
     const paymentRecords = extractStorageValue(paymentRecordsRaw);
     setPaymentData(Array.isArray(paymentRecords) ? paymentRecords : []);
+
+    // Load Finance Modules Data (Packaging)
+    // AR - Accounts Receivable (from Invoices)
+    const packagingInvoicesRaw = await storageService.get<any[]>('invoices');
+    const packagingInvoices = extractStorageValue(packagingInvoicesRaw);
+    const arRecords = (Array.isArray(packagingInvoices) ? packagingInvoices : []).map((inv: any) => ({
+      invoiceNo: inv.invoiceNo,
+      customer: inv.customer,
+      amount: inv.bom?.total || inv.total || 0,
+      paidAmount: inv.paidAmount || 0,
+      dueDate: inv.dueDate || inv.created,
+      status: inv.status === 'CLOSE' ? 'Paid' : 'Open',
+    }));
+    setArData(arRecords);
+
+    // AP - Accounts Payable (from PO)
+    const packagingPOsRaw = await storageService.get<any[]>('purchaseOrders');
+    const packagingPOs = extractStorageValue(packagingPOsRaw);
+    const apRecords = (Array.isArray(packagingPOs) ? packagingPOs : []).map((po: any) => ({
+      poNo: po.poNo,
+      supplier: po.supplier,
+      amount: po.total || 0,
+      paidAmount: po.paidAmount || 0,
+      dueDate: po.dueDate || po.created,
+      status: po.status === 'CLOSE' ? 'Paid' : 'Open',
+    }));
+    setApData(apRecords);
+
+    // Tax Records
+    const taxRecordsRaw = await storageService.get<any[]>('taxRecords');
+    const taxRecords = extractStorageValue(taxRecordsRaw);
+    setTaxData(Array.isArray(taxRecords) ? taxRecords : []);
+
+    // Operational Expenses
+    const opsExpensesRaw = await storageService.get<any[]>('operationalExpenses');
+    const opsExpenses = extractStorageValue(opsExpensesRaw);
+    setOpsExpensesData(Array.isArray(opsExpenses) ? opsExpenses : []);
 
     // Load Inventory data dan deduplicate berdasarkan codeItem
     const inventoryDataRaw = await storageService.get<any[]>('inventory');
@@ -811,71 +1381,75 @@ const Report = () => {
       }
     });
 
-    // Calculate Summary
+    // Calculate Summary using AllReportsFinance logic
     const totalSO = salesOrders.length;
     const totalPO = purchaseOrders.length;
     const totalProduction = production.length;
     const totalDelivery = delivery.length;
     const totalInvoice = invoices.length;
     
-    // Revenue = Total dari Invoice Data
-    const totalRevenue = invoices.reduce((sum, inv) => {
-      const invTotal = inv.total || inv.totalAmount || inv.bom?.total || 0;
-      return sum + invTotal;
-    }, 0);
-    
-    // Expenses = Payment Supplier + Salary Staff + Expense Accounts dari Journal Entries
-    // paymentRecords sudah di-load di atas
-    const supplierPayments = paymentRecords
-      .filter((p: any) => p.type === 'Payment')
-      .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
-    
-    // Salary Staff - dari staff data atau payroll
-    const staffData = await storageService.get<any[]>('staff') || [];
-    const totalSalary = staffData.reduce((sum: number, s: any) => {
-      const salary = s['GAJI POKOK'] || s.salary || s.gaji || 0;
-      return sum + (typeof salary === 'string' ? parseFloat(salary.replace(/[^\d.-]/g, '')) || 0 : salary);
-    }, 0);
-    
-    // Expense Accounts dari Journal Entries (COA type Expense)
-    const expenseAccounts = (accs || []).filter(a => a.type === 'Expense');
-    const expenseFromCOA = expenseAccounts.reduce((sum, acc) => {
-      const accBalance = balances[acc.code]?.balance || 0;
-      return sum + Math.abs(accBalance); // Expense biasanya negative, jadi pakai abs
-    }, 0);
-    
-    // Total Expenses = Payment Supplier + Salary + Expense COA
-    const totalExpenses = supplierPayments + totalSalary + expenseFromCOA;
-    
-    const totalPOAmount = purchaseOrders.reduce((sum, po) => sum + (po.total || 0), 0);
-    
-    // Financial data from COA
-    const cash = balances['1000']?.balance || 0;
-    const accountsReceivable = balances['1100']?.balance || 0;
-    const inventory = balances['1200']?.balance || 0;
-    const fixedAssets = balances['1300']?.balance || 0;
-    const accountsPayable = balances['2000']?.balance || 0;
-    
-    // Revenue dan Expenses untuk display
-    const revenue = totalRevenue;
-    const expenses = totalExpenses;
-    const netProfit = revenue - expenses;
-    const totalAssets = cash + accountsReceivable + inventory + fixedAssets;
-    const totalLiabilities = accountsPayable;
-    const totalEquity = (accs || []).filter(a => a.type === 'Equity').reduce((sum, acc) => {
-      let balance = balances[acc.code]?.balance || 0;
-      if (acc.code === '3100') {
-        balance = balance + netProfit; // Retained Earnings
+    // AR Close (Dana Masuk) - Invoices paid
+    const arClose = (Array.isArray(invoices) ? invoices : [])
+      .filter(inv => inv.status === 'CLOSE')
+      .reduce((sum, inv) => sum + (inv.paidAmount || 0), 0);
+
+    // AR Open (Outstanding Invoice)
+    const arOpen = (Array.isArray(invoices) ? invoices : [])
+      .filter(inv => inv.status === 'OPEN')
+      .reduce((sum, inv) => sum + (inv.bom?.total || inv.total || 0), 0);
+
+    // AP Close (Dana Keluar - Paid Out)
+    const paymentsByPO: Record<string, number> = {};
+    (Array.isArray(paymentRecords) ? paymentRecords : []).forEach((p: any) => {
+      if (p.type === 'Payment') {
+        const poNo = p.poNo || p.purchaseOrderNo || '';
+        if (poNo) {
+          paymentsByPO[poNo] = (paymentsByPO[poNo] || 0) + (p.amount || 0);
+        }
       }
-      return sum + balance;
-    }, 0);
+    });
     
-    // Calculate Outstanding (status OPEN)
-    const outstandingSO = salesOrders.filter(so => so.status === 'OPEN').length;
-    const outstandingPO = purchaseOrders.filter(po => po.status === 'OPEN').length;
-    const outstandingProduction = production.filter(p => p.status === 'OPEN').length;
-    const outstandingDelivery = delivery.filter(d => d.status === 'OPEN').length;
-    const outstandingInvoice = invoices.filter(inv => inv.status === 'OPEN').length;
+    const apClose = (Array.isArray(purchaseOrders) ? purchaseOrders : [])
+      .filter(po => po.status === 'CLOSE')
+      .reduce((sum, po) => sum + (paymentsByPO[po.poNo] || 0), 0);
+
+    // AP Open (Dana Belum Keluar - Unpaid)
+    const apOpen = (Array.isArray(purchaseOrders) ? purchaseOrders : [])
+      .filter(po => po.status === 'OPEN')
+      .reduce((sum, po) => {
+        const balance = Math.max(0, (po.total || 0) - (paymentsByPO[po.poNo] || 0));
+        return sum + balance;
+      }, 0);
+
+    // Tax Paid
+    const taxPaid = (Array.isArray(taxData) ? taxData : [])
+      .filter(r => r.status === 'Paid' || r.status === 'paid')
+      .reduce((sum, r) => sum + (r.taxAmount || 0), 0);
+
+    // Tax Outstanding
+    const taxOutstanding = (Array.isArray(taxData) ? taxData : [])
+      .filter(r => r.status === 'Open' || r.status === 'open')
+      .reduce((sum, r) => sum + (r.taxAmount || 0), 0);
+
+    // Operational Expenses Total
+    const operationalExpensesTotal = (Array.isArray(opsExpensesData) ? opsExpensesData : [])
+      .reduce((sum, e) => sum + (e.amount || 0), 0);
+
+    // Inventory Total Value (Products only)
+    const inventoryTotalValue = (Array.isArray(inventoryData) ? inventoryData : [])
+      .filter(item => (item.kategori || '').toLowerCase().includes('product'))
+      .reduce((sum, item) => sum + ((item.nextStock || 0) * (item.price || 0)), 0);
+
+    // Materials Total Value
+    const materialsTotalValue = (Array.isArray(inventoryData) ? inventoryData : [])
+      .filter(item => (item.kategori || '').toLowerCase().includes('material'))
+      .reduce((sum, item) => sum + ((item.nextStock || 0) * (item.price || 0)), 0);
+
+    // Margin Percentage
+    const revenue = arClose;
+    const cost = apClose + operationalExpensesTotal + taxPaid;
+    const marginPercentage = revenue > 0 ? ((revenue - cost) / revenue) * 100 : 0;
+    const netProfit = revenue - cost;
     
     setSummaryData({
       totalSO,
@@ -883,30 +1457,20 @@ const Report = () => {
       totalProduction,
       totalDelivery,
       totalInvoice,
-      totalRevenue,
-      totalPOAmount,
-      profit: netProfit,
-      outstandingSO,
-      outstandingPO,
-      outstandingProduction,
-      outstandingDelivery,
-      outstandingInvoice,
-      // Financial data
-      cash,
-      accountsReceivable,
-      inventory,
-      fixedAssets,
-      accountsPayable,
-      revenue, // Revenue dari Invoice Data
-      expenses, // Expenses dari Payment Supplier + Salary Staff + Expense COA
+      // Financial metrics from AllReportsFinance
+      arClose,
+      arOpen,
+      apClose,
+      apOpen,
+      taxPaid,
+      taxOutstanding,
+      operationalExpensesTotal,
+      inventoryTotalValue,
+      materialsTotalValue,
+      marginPercentage,
+      revenue,
+      cost,
       netProfit,
-      totalAssets,
-      totalLiabilities,
-      totalEquity,
-      // Breakdown untuk debugging
-      supplierPayments,
-      totalSalary,
-      expenseFromCOA,
     });
   };
 
@@ -1213,6 +1777,205 @@ const Report = () => {
     };
   }, [filteredSoData, filteredPoData, filteredProductionData, filteredDeliveryData, filteredInvoiceData, filteredInventoryData, filteredHrData, soColumns, poColumns, productionColumns, deliveryColumns, invoiceColumns, inventoryColumns, hrColumns, summaryData, inventoryValueSummary, dateFrom, dateTo, formatDateTime]);
 
+  const handleExportExcel = () => {
+    try {
+      const wb = XLSX.utils.book_new();
+      
+      // Helper function untuk set column widths
+      const setWidths = (ws: XLSX.WorkSheet, widths: number[]) => {
+        if (!ws['!cols']) ws['!cols'] = [];
+        widths.forEach((width, idx) => {
+          if (ws['!cols']) {
+            ws['!cols'][idx] = { wch: width };
+          }
+        });
+      };
+      
+      // Sheet 1: Sales Orders (with flattened items)
+      const soExportData = filteredSoData.flatMap((so: any) => {
+        if (so.items && Array.isArray(so.items) && so.items.length > 0) {
+          return so.items.map((item: any, idx: number) => ({
+            'SO No': idx === 0 ? so.soNo : '',
+            'Customer': idx === 0 ? so.customer : '',
+            'Payment Terms': idx === 0 ? so.paymentTerms : '',
+            'Status': idx === 0 ? so.status : '',
+            'Created': idx === 0 ? formatDateTime(so.created) : '',
+            'Product': item.productName || item.product,
+            'Qty': item.qty || 0,
+            'Total': item.total || 0,
+          }));
+        }
+        return [{
+          'SO No': so.soNo,
+          'Customer': so.customer,
+          'Payment Terms': so.paymentTerms,
+          'Status': so.status,
+          'Created': formatDateTime(so.created),
+          'Product': '-',
+          'Qty': 0,
+          'Total': 0,
+        }];
+      });
+      const wsSO = XLSX.utils.json_to_sheet(soExportData);
+      setWidths(wsSO, [20, 25, 15, 12, 20, 30, 10, 15]);
+      XLSX.utils.book_append_sheet(wb, wsSO, 'Sales Orders');
+      
+      // Sheet 2: Purchase Orders
+      const poExportData = filteredPoData.map((po: any) => ({
+        'PO No': po.poNo,
+        'Supplier': po.supplier,
+        'SO No': po.soNo || '-',
+        'Reason': po.purchaseReason || '-',
+        'Material/Item': po.materialItem,
+        'Qty': po.qty,
+        'Price': po.price || 0,
+        'Total': po.total || 0,
+        'Payment Terms': po.paymentTerms,
+        'TOP Days': po.paymentTerms === 'COD' || po.paymentTerms === 'CBD' ? '-' : po.topDays || 0,
+        'Status': po.status,
+        'Receipt Date': po.receiptDate || '-',
+        'Created': formatDateTime(po.created),
+      }));
+      const wsPO = XLSX.utils.json_to_sheet(poExportData);
+      setWidths(wsPO, [20, 25, 20, 15, 30, 10, 15, 15, 15, 10, 12, 15, 20]);
+      XLSX.utils.book_append_sheet(wb, wsPO, 'Purchase Orders');
+      
+      // Sheet 3: Production
+      const prodExportData = filteredProductionData.map((prod: any) => ({
+        'SO No': prod.soNo,
+        'Customer': prod.customer,
+        'Product': prod.productName || prod.product || '-',
+        'Target': prod.target || prod.targetQty || 0,
+        'Progress': prod.progress || prod.producedQty || 0,
+        'Remaining': prod.remaining || ((prod.target || prod.targetQty || 0) - (prod.progress || prod.producedQty || 0)),
+        'SPK No': prod.spkNo || '-',
+        'Status': prod.status,
+        'Date': formatDateTime(prod.date || prod.producedDate || prod.created),
+      }));
+      const wsProd = XLSX.utils.json_to_sheet(prodExportData);
+      setWidths(wsProd, [20, 25, 30, 10, 10, 10, 20, 12, 15]);
+      XLSX.utils.book_append_sheet(wb, wsProd, 'Production');
+      
+      // Sheet 4: Delivery (with flattened items)
+      const deliveryExportData = filteredDeliveryData.flatMap((del: any) => {
+        if (del.items && Array.isArray(del.items) && del.items.length > 0) {
+          return del.items.map((item: any, idx: number) => ({
+            'SJ No': idx === 0 ? del.sjNo : '',
+            'SO No': idx === 0 ? del.soNo : '',
+            'Customer': idx === 0 ? del.customer : '',
+            'Product': item.product,
+            'Qty': item.qty,
+            'Unit': item.unit || 'PCS',
+            'Delivery Date': idx === 0 ? formatDateTime(del.deliveryDate || del.created) : '',
+            'Status': idx === 0 ? del.status : '',
+          }));
+        }
+        return [{
+          'SJ No': del.sjNo,
+          'SO No': del.soNo,
+          'Customer': del.customer,
+          'Product': del.product || '-',
+          'Qty': del.qty || 0,
+          'Unit': del.unit || 'PCS',
+          'Delivery Date': formatDateTime(del.deliveryDate || del.created),
+          'Status': del.status,
+        }];
+      });
+      const wsDel = XLSX.utils.json_to_sheet(deliveryExportData);
+      setWidths(wsDel, [20, 20, 25, 30, 10, 10, 15, 12]);
+      XLSX.utils.book_append_sheet(wb, wsDel, 'Delivery');
+      
+      // Sheet 5: Invoice
+      const invExportData = filteredInvoiceData.map((inv: any) => ({
+        'Invoice No': inv.invoiceNo,
+        'Invoice Date': inv.invoiceDate || '-',
+        'Due Date': inv.dueDate || '-',
+        'Customer': inv.customer,
+        'SO No': inv.soNo,
+        'Total Amount': inv.total || inv.totalAmount || inv.bom?.total || 0,
+        'Status': inv.status,
+        'Created': formatDateTime(inv.created || inv.invoiceDate),
+      }));
+      const wsInv = XLSX.utils.json_to_sheet(invExportData);
+      setWidths(wsInv, [20, 15, 15, 25, 20, 15, 12, 20]);
+      XLSX.utils.book_append_sheet(wb, wsInv, 'Invoice');
+      
+      // Sheet 6: Inventory
+      const invtExportData = filteredInventoryData.map((item: any) => ({
+        'Supplier/Customer': item.supplierName || '-',
+        'Code Item': item.codeItem,
+        'Description': item.description,
+        'Kategori': item.kategori,
+        'Satuan': item.satuan,
+        'Price': item.price || 0,
+        'Stock Premonth': item.stockPremonth || 0,
+        'Receive': item.receive || 0,
+        'Outgoing': item.outgoing || 0,
+        'Return': item.return || 0,
+        'Next Stock': (item.stockPremonth || 0) + (item.receive || 0) - (item.outgoing || 0) + (item.return || 0),
+        'Last Update': formatDateTime(item.lastUpdate),
+      }));
+      const wsInvt = XLSX.utils.json_to_sheet(invtExportData);
+      setWidths(wsInvt, [25, 15, 35, 15, 10, 15, 12, 10, 10, 10, 12, 20]);
+      XLSX.utils.book_append_sheet(wb, wsInvt, 'Inventory');
+      
+      // Sheet 7: HR
+      const hrExportData = filteredHrData.map((hr: any) => ({
+        'NIP': hr.NIP,
+        'Name': hr['NAMA LENGKAP'],
+        'Department': hr.DEPARTEMEN,
+        'Position': hr.JABATAN,
+        'Salary': hr['GAJI POKOK'],
+      }));
+      const wsHR = XLSX.utils.json_to_sheet(hrExportData);
+      setWidths(wsHR, [20, 30, 20, 20, 15]);
+      XLSX.utils.book_append_sheet(wb, wsHR, 'HR');
+      
+      // Sheet 8: Payment Data
+      const paymentExportData = paymentData.map((payment: any) => ({
+        'Payment No': payment.paymentNo || payment.id,
+        'Type': payment.type || '-',
+        'Amount': payment.amount || 0,
+        'Date': formatDateTime(payment.paymentDate || payment.created),
+        'Reference': payment.reference || payment.invoiceNo || payment.poNo || '-',
+        'Status': payment.status || '-',
+      }));
+      const wsPayment = XLSX.utils.json_to_sheet(paymentExportData);
+      setWidths(wsPayment, [20, 15, 15, 15, 25, 12]);
+      XLSX.utils.book_append_sheet(wb, wsPayment, 'Payments');
+      
+      // Sheet 9: Summary
+      const summaryExportData = [
+        { 'Metric': 'Total SO', 'Value': summaryData.totalSO || 0 },
+        { 'Metric': 'Total PO', 'Value': summaryData.totalPO || 0 },
+        { 'Metric': 'Total Production', 'Value': summaryData.totalProduction || 0 },
+        { 'Metric': 'Total Delivery', 'Value': summaryData.totalDelivery || 0 },
+        { 'Metric': 'Total Invoice', 'Value': summaryData.totalInvoice || 0 },
+        { 'Metric': '', 'Value': '' },
+        { 'Metric': 'Total Revenue', 'Value': summaryData.totalRevenue || 0 },
+        { 'Metric': 'Total Expenses', 'Value': summaryData.expenses || 0 },
+        { 'Metric': 'Net Profit', 'Value': summaryData.netProfit || 0 },
+        { 'Metric': '', 'Value': '' },
+        { 'Metric': 'Total Assets', 'Value': summaryData.totalAssets || 0 },
+        { 'Metric': 'Total Liabilities', 'Value': summaryData.totalLiabilities || 0 },
+        { 'Metric': 'Total Equity', 'Value': summaryData.totalEquity || 0 },
+        { 'Metric': '', 'Value': '' },
+        { 'Metric': 'Material Inventory Value', 'Value': inventoryValueSummary.materialValue || 0 },
+        { 'Metric': 'Product Inventory Value', 'Value': inventoryValueSummary.productValue || 0 },
+        { 'Metric': 'Total Inventory Value', 'Value': inventoryValueSummary.totalValue || 0 },
+      ];
+      const wsSummary = XLSX.utils.json_to_sheet(summaryExportData);
+      setWidths(wsSummary, [30, 20]);
+      XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+      
+      const fileName = `Packaging_Report_Complete_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      showAlert(`✅ Exported complete report (SO, PO, Production, Delivery, Invoice, Inventory, HR, Payments, Summary) to ${fileName}`, 'Success');
+    } catch (error: any) {
+      showAlert(`Error exporting to Excel: ${error.message}`, 'Error');
+    }
+  };
+
   const handleSaveToPDF = async () => {
     try {
       const html = generateReportHtml();
@@ -1247,13 +2010,22 @@ const Report = () => {
     <div className="module-compact">
       <div className="page-header">
         <h1>Report Module</h1>
-        <Button
-          variant="primary"
-          onClick={handleSaveToPDF}
-          style={{ padding: '8px 16px', fontSize: '14px' }}
-        >
-          💾 Save to PDF
-        </Button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Button
+            variant="secondary"
+            onClick={handleExportExcel}
+            style={{ padding: '8px 16px', fontSize: '14px' }}
+          >
+            📥 Export Excel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSaveToPDF}
+            style={{ padding: '8px 16px', fontSize: '14px' }}
+          >
+            💾 Save to PDF
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -1272,230 +2044,146 @@ const Report = () => {
         <div className="tab-content">
           {activeTab === 'summary' && (
             <div style={{ padding: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <h2 style={{ fontSize: '16px', margin: 0 }}>Summary Report</h2>
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                  <Input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(value) => setDateFrom(value)}
-                  />
-                  <Input
-                    type="date"
-                    value={dateTo}
-                    onChange={(value) => setDateTo(value)}
-                  />
-                  <Button onClick={loadAllData} style={{ padding: '4px 12px', fontSize: '12px' }}>🔄 Refresh</Button>
+              <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h1 style={{ margin: 0, fontSize: '18px' }}>Financial Reports Summary</h1>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                      Start
+                    </label>
+                    <Input
+                      type="date"
+                      value={dateFrom}
+                      onChange={(value) => setDateFrom(value)}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                      End
+                    </label>
+                    <Input
+                      type="date"
+                      value={dateTo}
+                      onChange={(value) => setDateTo(value)}
+                    />
+                  </div>
+                  <Button onClick={loadAllData} style={{ padding: '8px 16px', fontSize: '12px', marginTop: '20px' }}>🔄 Refresh</Button>
                 </div>
               </div>
 
-              {/* Charts & Financial Section */}
-              <div className="report-charts-section" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                {/* Chart Card - Left */}
-                <Card style={{ padding: '8px' }}>
-                  <div style={{ 
-                    padding: '8px', 
-                    backgroundColor: '#0a0e27', 
-                    borderRadius: '6px',
-                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.3)',
-                    marginBottom: '8px'
-                  }}>
-                    <ResponsiveContainer width="100%" height={180}>
-                      <AreaChart data={chartData}>
-                        <defs>
-                          <linearGradient id="colorSummary" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.8}/>
-                            <stop offset="95%" stopColor="#14b8a6" stopOpacity={0.1}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                        <XAxis dataKey="month" stroke="#94a3b8" style={{ fontSize: '10px' }} />
-                        <YAxis stroke="#94a3b8" style={{ fontSize: '10px' }} tickFormatter={(value) => value.toLocaleString('id-ID')} />
-                        <Tooltip 
-                          contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '6px', color: '#f1f5f9', fontSize: '11px' }}
-                          formatter={(value: any) => [`Rp ${value.toLocaleString('id-ID')}`, 'Total Assets']}
-                        />
-                        <Area type="monotone" dataKey="value" stroke="#14b8a6" strokeWidth={2} fillOpacity={1} fill="url(#colorSummary)" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                  
-                  {/* Pie Chart - Assets Breakdown */}
-                  <div style={{ 
-                    padding: '8px', 
-                    backgroundColor: '#0a0e27', 
-                    borderRadius: '6px',
-                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.3)'
-                  }}>
-                    <ResponsiveContainer width="100%" height={180}>
-                      <PieChart>
-                        <Pie
-                          data={[
-                            { name: 'Cash', value: Math.abs(summaryData.cash || 0) },
-                            { name: 'AR', value: Math.abs(summaryData.accountsReceivable || 0) },
-                            { name: 'Inventory', value: Math.abs(summaryData.inventory || 0) },
-                            { name: 'Fixed Assets', value: Math.abs(summaryData.fixedAssets || 0) }
-                          ].filter(item => item.value !== 0)}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
-                          outerRadius={60}
-                          fill="#8884d8"
-                          dataKey="value"
-                        >
-                          <Cell fill="#14b8a6" />
-                          <Cell fill="#3b82f6" />
-                          <Cell fill="#8b5cf6" />
-                          <Cell fill="#ec4899" />
-                        </Pie>
-                        <Tooltip 
-                          contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '6px', color: '#f1f5f9', fontSize: '11px' }}
-                          formatter={(value: any) => `Rp ${value.toLocaleString('id-ID')}`}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
+              {/* Profit Margin & Key Metrics */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Profit Margin</div>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: summaryData.marginPercentage >= 0 ? '#2e7d32' : '#d32f2f' }}>
+                    {(summaryData.marginPercentage || 0).toFixed(2)}%
                   </div>
                 </Card>
-
-                {/* Financial Summary Card - Right */}
-                <Card style={{ padding: '8px' }}>
-                  {/* Profit & Loss */}
-                  <h4 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '4px', marginBottom: '6px', fontSize: '11px', fontWeight: '600' }}>PROFIT & LOSS</h4>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid var(--border-color)', fontSize: '10px' }}>
-                    <span>Revenue</span>
-                    <span style={{ fontWeight: '600', fontSize: '9px', color: 'var(--success)' }}>Rp {(summaryData.revenue || 0).toLocaleString('id-ID')}</span>
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Revenue (Dana Masuk)</div>
+                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#2e7d32' }}>
+                    Rp {(summaryData.arClose || 0).toLocaleString('id-ID')}
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid var(--border-color)', fontSize: '10px' }}>
-                    <span>Expenses</span>
-                    <span style={{ fontWeight: '600', fontSize: '9px', color: 'var(--warning)' }}>Rp {(summaryData.expenses || 0).toLocaleString('id-ID')}</span>
+                </Card>
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Cost (Dana Keluar + Expenses + Tax)</div>
+                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#d32f2f' }}>
+                    Rp {(summaryData.cost || 0).toLocaleString('id-ID')}
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', marginTop: '4px', marginBottom: '8px', borderTop: '1px solid var(--border-color)', fontWeight: 'bold', fontSize: '11px' }}>
-                    <span>Net Profit</span>
-                    <span style={{ color: (summaryData.netProfit || 0) >= 0 ? 'var(--success)' : 'var(--error)' }}>
-                      Rp {(summaryData.netProfit || 0).toLocaleString('id-ID')}
-                    </span>
-                  </div>
-
-                  {/* Assets & Liabilities */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '8px' }}>
-                    {/* Assets */}
-                    <div>
-                      <h4 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '4px', marginBottom: '6px', fontSize: '11px', fontWeight: '600' }}>ASSETS</h4>
-                      {(summaryData.cash || 0) !== 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid var(--border-color)', fontSize: '10px' }}>
-                          <span>Cash</span>
-                          <span style={{ fontWeight: '600', fontSize: '9px' }}>Rp {(summaryData.cash || 0).toLocaleString('id-ID')}</span>
-                        </div>
-                      )}
-                      {(summaryData.accountsReceivable || 0) !== 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid var(--border-color)', fontSize: '10px' }}>
-                          <span>AR</span>
-                          <span style={{ fontWeight: '600', fontSize: '9px' }}>Rp {(summaryData.accountsReceivable || 0).toLocaleString('id-ID')}</span>
-                        </div>
-                      )}
-                      {(summaryData.inventory || 0) !== 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid var(--border-color)', fontSize: '10px' }}>
-                          <span>Inventory</span>
-                          <span style={{ fontWeight: '600', fontSize: '9px' }}>Rp {(summaryData.inventory || 0).toLocaleString('id-ID')}</span>
-                        </div>
-                      )}
-                      {(summaryData.fixedAssets || 0) !== 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid var(--border-color)', fontSize: '10px' }}>
-                          <span>Fixed Assets</span>
-                          <span style={{ fontWeight: '600', fontSize: '9px' }}>Rp {(summaryData.fixedAssets || 0).toLocaleString('id-ID')}</span>
-                        </div>
-                      )}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', marginTop: '4px', borderTop: '1px solid var(--border-color)', fontWeight: 'bold', fontSize: '11px' }}>
-                        <span>Total Assets</span>
-                        <span>Rp {(summaryData.totalAssets || 0).toLocaleString('id-ID')}</span>
-                      </div>
-                    </div>
-
-                    {/* Liabilities & Equity */}
-                    <div>
-                      <h4 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '4px', marginBottom: '6px', fontSize: '11px', fontWeight: '600' }}>LIABILITIES</h4>
-                      {(summaryData.accountsPayable || 0) !== 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid var(--border-color)', fontSize: '10px' }}>
-                          <span>AP</span>
-                          <span style={{ fontWeight: '600', fontSize: '9px' }}>Rp {(summaryData.accountsPayable || 0).toLocaleString('id-ID')}</span>
-                        </div>
-                      )}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', marginTop: '4px', borderTop: '1px solid var(--border-color)', fontWeight: 'bold', fontSize: '11px' }}>
-                        <span>Total Liabilities</span>
-                        <span>Rp {(summaryData.totalLiabilities || 0).toLocaleString('id-ID')}</span>
-                      </div>
-                      
-                      <h4 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '4px', marginTop: '12px', marginBottom: '6px', fontSize: '11px', fontWeight: '600' }}>EQUITY</h4>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', marginTop: '4px', borderTop: '1px solid var(--border-color)', fontWeight: 'bold', fontSize: '11px' }}>
-                        <span>Total Equity</span>
-                        <span>Rp {(summaryData.totalEquity || 0).toLocaleString('id-ID')}</span>
-                      </div>
-                      
-                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', marginTop: '8px', borderTop: '2px solid var(--accent-color)', fontWeight: 'bold', fontSize: '12px' }}>
-                        <span>Total L&E</span>
-                        <span>Rp {((summaryData.totalLiabilities || 0) + (summaryData.totalEquity || 0)).toLocaleString('id-ID')}</span>
-                      </div>
-                    </div>
+                </Card>
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Net Profit</div>
+                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: summaryData.netProfit >= 0 ? '#2e7d32' : '#d32f2f' }}>
+                    Rp {(summaryData.netProfit || 0).toLocaleString('id-ID')}
                   </div>
                 </Card>
               </div>
 
-              {/* Operational Summary Cards */}
-              <div className="report-summary-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '12px' }}>
-                <Card style={{ padding: '8px' }}>
-                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--primary)' }}>{summaryData.totalSO || 0}</div>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '10px', marginTop: '2px' }}>Sales Orders</div>
-                  <div style={{ marginTop: '4px', fontSize: '9px', color: 'var(--warning)' }}>Outstanding: {summaryData.outstandingSO || 0}</div>
-                </Card>
-                <Card style={{ padding: '8px' }}>
-                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--primary)' }}>{summaryData.totalPO || 0}</div>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '10px', marginTop: '2px' }}>Purchase Orders</div>
-                  <div style={{ marginTop: '4px', fontSize: '9px', color: 'var(--warning)' }}>Outstanding: {summaryData.outstandingPO || 0}</div>
-                </Card>
-                <Card style={{ padding: '8px' }}>
-                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--primary)' }}>{summaryData.totalProduction || 0}</div>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '10px', marginTop: '2px' }}>Production</div>
-                  <div style={{ marginTop: '4px', fontSize: '9px', color: 'var(--warning)' }}>Outstanding: {summaryData.outstandingProduction || 0}</div>
-                </Card>
-                <Card style={{ padding: '8px' }}>
-                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--primary)' }}>{summaryData.totalDelivery || 0}</div>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '10px', marginTop: '2px' }}>Delivery Notes</div>
-                  <div style={{ marginTop: '4px', fontSize: '9px', color: 'var(--warning)' }}>Outstanding: {summaryData.outstandingDelivery || 0}</div>
-                </Card>
-                <Card style={{ padding: '8px' }}>
-                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--primary)' }}>{summaryData.totalInvoice || 0}</div>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '10px', marginTop: '2px' }}>Invoices</div>
-                  <div style={{ marginTop: '4px', fontSize: '9px', color: 'var(--warning)' }}>Outstanding: {summaryData.outstandingInvoice || 0}</div>
-                </Card>
-                <Card style={{ padding: '8px' }}>
-                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--success)' }}>Rp {(summaryData.revenue || 0).toLocaleString('id-ID')}</div>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '10px', marginTop: '2px' }}>Revenue</div>
-                </Card>
-                <Card style={{ padding: '8px' }}>
-                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--warning)' }}>Rp {(summaryData.expenses || 0).toLocaleString('id-ID')}</div>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '10px', marginTop: '2px' }}>Expenses</div>
-                </Card>
-                {/* Inventory Value Cards */}
-                <Card style={{ padding: '8px', backgroundColor: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
-                  <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#3b82f6' }}>Rp {inventoryValueSummary.materialValue.toLocaleString('id-ID')}</div>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '10px', marginTop: '2px' }}>Inventory Material</div>
-                  <div style={{ marginTop: '4px', fontSize: '9px', color: 'var(--text-secondary)' }}>Total Nilai (Next Stock)</div>
-                </Card>
-                <Card style={{ padding: '8px', backgroundColor: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.3)' }}>
-                  <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#8b5cf6' }}>Rp {inventoryValueSummary.productValue.toLocaleString('id-ID')}</div>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '10px', marginTop: '2px' }}>Inventory Product</div>
-                  <div style={{ marginTop: '4px', fontSize: '9px', color: 'var(--text-secondary)' }}>Total Nilai (Next Stock)</div>
-                </Card>
-                <Card style={{ padding: '8px' }}>
-                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: (summaryData.netProfit || 0) >= 0 ? 'var(--success)' : 'var(--error)' }}>
-                    Rp {(summaryData.netProfit || 0).toLocaleString('id-ID')}
+              {/* Accounts Receivable */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                <Card style={{ padding: '12px' }}>
+                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600', borderBottom: '1px solid var(--border-color)', paddingBottom: '4px' }}>Accounts Receivable</h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-color)', fontSize: '11px' }}>
+                    <span>Dana Masuk (AR Close)</span>
+                    <span style={{ fontWeight: '600' }}>Rp {(summaryData.arClose || 0).toLocaleString('id-ID')}</span>
                   </div>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '10px', marginTop: '2px' }}>Net Profit</div>
-                  <div style={{ marginTop: '4px', fontSize: '9px', color: 'var(--accent-color)' }}>
-                    Margin: {summaryData.revenue && summaryData.revenue > 0 
-                      ? `${((summaryData.netProfit || 0) / summaryData.revenue * 100).toFixed(2)}%` 
-                      : '0.00%'}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '11px' }}>
+                    <span>Outstanding (AR Open)</span>
+                    <span style={{ fontWeight: '600', color: '#d32f2f' }}>Rp {(summaryData.arOpen || 0).toLocaleString('id-ID')}</span>
+                  </div>
+                </Card>
+
+                <Card style={{ padding: '12px' }}>
+                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600', borderBottom: '1px solid var(--border-color)', paddingBottom: '4px' }}>Accounts Payable</h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-color)', fontSize: '11px' }}>
+                    <span>Dana Keluar (AP Close)</span>
+                    <span style={{ fontWeight: '600' }}>Rp {(summaryData.apClose || 0).toLocaleString('id-ID')}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '11px' }}>
+                    <span>Unpaid Supplier (AP Open)</span>
+                    <span style={{ fontWeight: '600', color: '#d32f2f' }}>Rp {(summaryData.apOpen || 0).toLocaleString('id-ID')}</span>
+                  </div>
+                </Card>
+              </div>
+
+              {/* Tax Management */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                <Card style={{ padding: '12px' }}>
+                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600', borderBottom: '1px solid var(--border-color)', paddingBottom: '4px' }}>Tax Management</h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-color)', fontSize: '11px' }}>
+                    <span>Tax Paid</span>
+                    <span style={{ fontWeight: '600' }}>Rp {(summaryData.taxPaid || 0).toLocaleString('id-ID')}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '11px' }}>
+                    <span>Tax Outstanding</span>
+                    <span style={{ fontWeight: '600', color: '#d32f2f' }}>Rp {(summaryData.taxOutstanding || 0).toLocaleString('id-ID')}</span>
+                  </div>
+                </Card>
+
+                <Card style={{ padding: '12px' }}>
+                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600', borderBottom: '1px solid var(--border-color)', paddingBottom: '4px' }}>Operational Expenses</h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '11px' }}>
+                    <span>Total Expenses</span>
+                    <span style={{ fontWeight: '600' }}>Rp {(summaryData.operationalExpensesTotal || 0).toLocaleString('id-ID')}</span>
+                  </div>
+                </Card>
+              </div>
+
+              {/* Inventory & Materials */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                <Card style={{ padding: '12px' }}>
+                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600', borderBottom: '1px solid var(--border-color)', paddingBottom: '4px' }}>Inventory & Materials</h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-color)', fontSize: '11px' }}>
+                    <span>Inventory Value</span>
+                    <span style={{ fontWeight: '600' }}>Rp {(summaryData.inventoryTotalValue || 0).toLocaleString('id-ID')}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '11px' }}>
+                    <span>Materials Value</span>
+                    <span style={{ fontWeight: '600' }}>Rp {(summaryData.materialsTotalValue || 0).toLocaleString('id-ID')}</span>
+                  </div>
+                </Card>
+
+                <Card style={{ padding: '12px' }}>
+                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600', borderBottom: '1px solid var(--border-color)', paddingBottom: '4px' }}>Operational Summary</h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: '10px' }}>
+                    <span>Total SO</span>
+                    <span style={{ fontWeight: '600' }}>{summaryData.totalSO || 0}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: '10px' }}>
+                    <span>Total PO</span>
+                    <span style={{ fontWeight: '600' }}>{summaryData.totalPO || 0}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: '10px' }}>
+                    <span>Total Production</span>
+                    <span style={{ fontWeight: '600' }}>{summaryData.totalProduction || 0}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: '10px' }}>
+                    <span>Total Delivery</span>
+                    <span style={{ fontWeight: '600' }}>{summaryData.totalDelivery || 0}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: '10px' }}>
+                    <span>Total Invoice</span>
+                    <span style={{ fontWeight: '600' }}>{summaryData.totalInvoice || 0}</span>
                   </div>
                 </Card>
               </div>
@@ -1561,138 +2249,657 @@ const Report = () => {
           )}
           {activeTab === 'so' && (
             <div style={{ padding: '8px' }}>
-              <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                <h2 style={{ fontSize: '16px', margin: 0 }}>Sales Orders Report</h2>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  Total: {soData.length} | Outstanding: {soData.filter(item => item.status === 'OPEN').length}
+              {/* Metrics Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>SO Open</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#ff9800', marginBottom: '4px' }}>
+                    {soMetrics.openCount}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#ff9800' }}>
+                    Rp {soMetrics.openTotal.toLocaleString('id-ID')}
+                  </div>
+                </Card>
+                
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>SO Close</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2e7d32', marginBottom: '4px' }}>
+                    {soMetrics.closeCount}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#2e7d32' }}>
+                    Rp {soMetrics.closeTotal.toLocaleString('id-ID')}
+                  </div>
+                </Card>
+                
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>This Month</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2', marginBottom: '4px' }}>
+                    {soMetrics.thisMonthCount}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#1976d2' }}>
+                    Rp {soMetrics.thisMonthTotal.toLocaleString('id-ID')}
+                  </div>
+                </Card>
+                
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Last Month</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#757575', marginBottom: '4px' }}>
+                    {soMetrics.lastMonthCount}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#757575' }}>
+                    Rp {soMetrics.lastMonthTotal.toLocaleString('id-ID')}
+                  </div>
+                  <div style={{ fontSize: '10px', color: soMetrics.thisMonthTotal >= soMetrics.lastMonthTotal ? '#2e7d32' : '#d32f2f', marginTop: '4px' }}>
+                    {soMetrics.lastMonthTotal > 0 
+                      ? `${soMetrics.thisMonthTotal >= soMetrics.lastMonthTotal ? '▲' : '▼'} ${Math.abs(((soMetrics.thisMonthTotal - soMetrics.lastMonthTotal) / soMetrics.lastMonthTotal) * 100).toFixed(1)}%`
+                      : '-'}
+                  </div>
+                </Card>
+              </div>
+
+              {/* Filters */}
+              <div style={{ display: 'grid', gridTemplateColumns: '200px 150px 150px 1fr', gap: '12px', marginBottom: '16px', alignItems: 'end' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                    Status Filter
+                  </label>
+                  <select
+                    value={soStatusFilter}
+                    onChange={(e) => setSoStatusFilter(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      borderRadius: '4px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: 'var(--bg-secondary)',
+                      color: 'var(--text-primary)',
+                      fontSize: '12px',
+                    }}
+                  >
+                    <option value="all">All Status</option>
+                    <option value="open">Open</option>
+                    <option value="close">Close</option>
+                    <option value="draft">Draft</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                    Date From
+                  </label>
+                  <Input
+                    type="date"
+                    value={soDateFrom}
+                    onChange={(value) => setSoDateFrom(value)}
+                  />
+                </div>
+                
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                    Date To
+                  </label>
+                  <Input
+                    type="date"
+                    value={soDateTo}
+                    onChange={(value) => setSoDateTo(value)}
+                  />
+                </div>
+                
+                <div>
+                  <Input
+                    label="Search"
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    placeholder="Search by SO No, Customer, Product..."
+                  />
                 </div>
               </div>
-              <div style={{ marginBottom: '12px' }}>
-                <Input
-                  label="Search & Filter"
-                  value={searchQuery}
-                  onChange={setSearchQuery}
-                  placeholder="Search by SO No, Customer, Product, Status..."
+
+              {/* Results Summary */}
+              <div style={{ marginBottom: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Showing {filteredSoData.length} of {soData.length} Sales Orders
+                {soStatusFilter !== 'all' && ` (Status: ${soStatusFilter})`}
+                {(soDateFrom || soDateTo) && ` (Date: ${soDateFrom || 'Start'} - ${soDateTo || 'End'})`}
+              </div>
+
+              {/* Table */}
+              <Card style={{ padding: '8px' }}>
+                <Table 
+                  columns={soColumns} 
+                  data={filteredSoData} 
+                  emptyMessage={searchQuery || soStatusFilter !== 'all' ? "No SO data found with current filters" : "No SO report data"} 
                 />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <Card style={{ padding: '8px' }}>
-                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600' }}>All Sales Orders ({filteredSoData.length})</h3>
-                  <div style={{ maxHeight: '500px', overflow: 'auto' }}>
-                    <Table columns={soColumns} data={filteredSoData} emptyMessage={searchQuery ? "No SO data found" : "No SO report data"} />
-                  </div>
-                </Card>
-                <Card style={{ padding: '8px' }}>
-                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600' }}>Outstanding ({filteredSoData.filter(item => item.status === 'OPEN').length})</h3>
-                  <div style={{ maxHeight: '500px', overflow: 'auto' }}>
-                    <Table columns={soColumns} data={filteredSoData.filter(item => item.status === 'OPEN')} emptyMessage="No outstanding SO data" />
-                  </div>
-                </Card>
-              </div>
+              </Card>
             </div>
           )}
           {activeTab === 'po' && (
             <div style={{ padding: '8px' }}>
-              <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                <h2 style={{ fontSize: '16px', margin: 0 }}>Purchase Orders Report</h2>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  Total: {poData.length} | Outstanding: {poData.filter(item => item.status === 'OPEN').length}
+              {/* Metrics Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>PO Open</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#ff9800', marginBottom: '4px' }}>
+                    {poMetrics.openCount}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#ff9800' }}>
+                    Rp {poMetrics.openTotal.toLocaleString('id-ID')}
+                  </div>
+                </Card>
+                
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>PO Close</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2e7d32', marginBottom: '4px' }}>
+                    {poMetrics.closeCount}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#2e7d32' }}>
+                    Rp {poMetrics.closeTotal.toLocaleString('id-ID')}
+                  </div>
+                </Card>
+                
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>This Month</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2', marginBottom: '4px' }}>
+                    {poMetrics.thisMonthCount}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#1976d2' }}>
+                    Rp {poMetrics.thisMonthTotal.toLocaleString('id-ID')}
+                  </div>
+                </Card>
+                
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Last Month</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#757575', marginBottom: '4px' }}>
+                    {poMetrics.lastMonthCount}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#757575' }}>
+                    Rp {poMetrics.lastMonthTotal.toLocaleString('id-ID')}
+                  </div>
+                  <div style={{ fontSize: '10px', color: poMetrics.thisMonthTotal >= poMetrics.lastMonthTotal ? '#2e7d32' : '#d32f2f', marginTop: '4px' }}>
+                    {poMetrics.lastMonthTotal > 0 
+                      ? `${poMetrics.thisMonthTotal >= poMetrics.lastMonthTotal ? '▲' : '▼'} ${Math.abs(((poMetrics.thisMonthTotal - poMetrics.lastMonthTotal) / poMetrics.lastMonthTotal) * 100).toFixed(1)}%`
+                      : '-'}
+                  </div>
+                </Card>
+              </div>
+
+              {/* Filters */}
+              <div style={{ display: 'grid', gridTemplateColumns: '200px 150px 150px 1fr', gap: '12px', marginBottom: '16px', alignItems: 'end' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                    Status Filter
+                  </label>
+                  <select
+                    value={poStatusFilter}
+                    onChange={(e) => setPoStatusFilter(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      borderRadius: '4px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: 'var(--bg-secondary)',
+                      color: 'var(--text-primary)',
+                      fontSize: '12px',
+                    }}
+                  >
+                    <option value="all">All Status</option>
+                    <option value="open">Open</option>
+                    <option value="close">Close</option>
+                    <option value="draft">Draft</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                    Date From
+                  </label>
+                  <Input
+                    type="date"
+                    value={poDateFrom}
+                    onChange={(value) => setPoDateFrom(value)}
+                  />
+                </div>
+                
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                    Date To
+                  </label>
+                  <Input
+                    type="date"
+                    value={poDateTo}
+                    onChange={(value) => setPoDateTo(value)}
+                  />
+                </div>
+                
+                <div>
+                  <Input
+                    label="Search"
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    placeholder="Search by PO No, Supplier, Material..."
+                  />
                 </div>
               </div>
-              <div style={{ marginBottom: '12px' }}>
-                <Input
-                  label="Search & Filter"
-                  value={searchQuery}
-                  onChange={setSearchQuery}
-                  placeholder="Search by PO No, Supplier, SO No, Material, Status..."
+
+              {/* Results Summary */}
+              <div style={{ marginBottom: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Showing {filteredPoData.length} of {poData.length} Purchase Orders
+                {poStatusFilter !== 'all' && ` (Status: ${poStatusFilter})`}
+                {(poDateFrom || poDateTo) && ` (Date: ${poDateFrom || 'Start'} - ${poDateTo || 'End'})`}
+              </div>
+
+              {/* Table */}
+              <Card style={{ padding: '8px' }}>
+                <Table 
+                  columns={poColumns} 
+                  data={filteredPoData} 
+                  emptyMessage={searchQuery || poStatusFilter !== 'all' ? "No PO data found with current filters" : "No PO report data"} 
                 />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <Card style={{ padding: '8px' }}>
-                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600' }}>All Purchase Orders ({filteredPoData.length})</h3>
-                  <div style={{ maxHeight: '500px', overflow: 'auto' }}>
-                    <Table columns={poColumns} data={filteredPoData} emptyMessage={searchQuery ? "No PO data found" : "No PO report data"} />
-                  </div>
-                </Card>
-                <Card style={{ padding: '8px' }}>
-                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600' }}>Outstanding ({filteredPoData.filter(item => item.status === 'OPEN').length})</h3>
-                  <div style={{ maxHeight: '500px', overflow: 'auto' }}>
-                    <Table columns={poColumns} data={filteredPoData.filter(item => item.status === 'OPEN')} emptyMessage="No outstanding PO data" />
-                  </div>
-                </Card>
-              </div>
+              </Card>
             </div>
           )}
           {activeTab === 'production' && (
             <div style={{ padding: '8px' }}>
-              <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                <h2 style={{ fontSize: '16px', margin: 0 }}>Production Report</h2>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  Total: {productionData.length} | Outstanding: {productionData.filter(item => item.status === 'OPEN').length}
+              {/* Metrics Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Production Open</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#ff9800' }}>
+                    {prodMetrics.openCount}
+                  </div>
+                </Card>
+                
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Production Close</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2e7d32' }}>
+                    {prodMetrics.closeCount}
+                  </div>
+                </Card>
+                
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>This Month</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>
+                    {prodMetrics.thisMonthCount}
+                  </div>
+                </Card>
+                
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Last Month</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#757575' }}>
+                    {prodMetrics.lastMonthCount}
+                  </div>
+                  <div style={{ fontSize: '10px', color: prodMetrics.thisMonthCount >= prodMetrics.lastMonthCount ? '#2e7d32' : '#d32f2f', marginTop: '4px' }}>
+                    {prodMetrics.lastMonthCount > 0 
+                      ? `${prodMetrics.thisMonthCount >= prodMetrics.lastMonthCount ? '▲' : '▼'} ${Math.abs(((prodMetrics.thisMonthCount - prodMetrics.lastMonthCount) / prodMetrics.lastMonthCount) * 100).toFixed(1)}%`
+                      : '-'}
+                  </div>
+                </Card>
+              </div>
+
+              {/* Filters */}
+              <div style={{ display: 'grid', gridTemplateColumns: '200px 150px 150px 1fr', gap: '12px', marginBottom: '16px', alignItems: 'end' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                    Status Filter
+                  </label>
+                  <select
+                    value={prodStatusFilter}
+                    onChange={(e) => setProdStatusFilter(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      borderRadius: '4px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: 'var(--bg-secondary)',
+                      color: 'var(--text-primary)',
+                      fontSize: '12px',
+                    }}
+                  >
+                    <option value="all">All Status</option>
+                    <option value="open">Open</option>
+                    <option value="close">Close</option>
+                    <option value="completed">Completed</option>
+                    <option value="in_progress">In Progress</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                    Date From
+                  </label>
+                  <Input
+                    type="date"
+                    value={prodDateFrom}
+                    onChange={(value) => setProdDateFrom(value)}
+                  />
+                </div>
+                
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                    Date To
+                  </label>
+                  <Input
+                    type="date"
+                    value={prodDateTo}
+                    onChange={(value) => setProdDateTo(value)}
+                  />
+                </div>
+                
+                <div>
+                  <Input
+                    label="Search"
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    placeholder="Search by SO No, Customer, Product..."
+                  />
                 </div>
               </div>
-              <div style={{ marginBottom: '12px' }}>
-                <Input
-                  label="Search & Filter"
-                  value={searchQuery}
-                  onChange={setSearchQuery}
-                  placeholder="Search by SO No, Customer, Product, Status, Target, Progress..."
+
+              {/* Results Summary */}
+              <div style={{ marginBottom: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Showing {filteredProductionData.length} of {productionData.length} Production Records
+                {prodStatusFilter !== 'all' && ` (Status: ${prodStatusFilter})`}
+                {(prodDateFrom || prodDateTo) && ` (Date: ${prodDateFrom || 'Start'} - ${prodDateTo || 'End'})`}
+              </div>
+
+              {/* Table */}
+              <Card style={{ padding: '8px' }}>
+                <Table 
+                  columns={productionColumns} 
+                  data={filteredProductionData} 
+                  emptyMessage={searchQuery || prodStatusFilter !== 'all' ? "No Production data found with current filters" : "No Production report data"} 
                 />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <Card style={{ padding: '8px' }}>
-                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600' }}>All Production ({filteredProductionData.length})</h3>
-                  <div style={{ maxHeight: '500px', overflow: 'auto' }}>
-                    <Table columns={productionColumns} data={filteredProductionData} emptyMessage={searchQuery ? "No Production data found" : "No Production report data"} />
-                  </div>
-                </Card>
-                <Card style={{ padding: '8px' }}>
-                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600' }}>Outstanding ({filteredProductionData.filter(item => item.status === 'OPEN').length})</h3>
-                  <div style={{ maxHeight: '500px', overflow: 'auto' }}>
-                    <Table columns={productionColumns} data={filteredProductionData.filter(item => item.status === 'OPEN')} emptyMessage="No outstanding Production data" />
-                  </div>
-                </Card>
-              </div>
+              </Card>
             </div>
           )}
           {activeTab === 'delivery' && (
             <div style={{ padding: '8px' }}>
-              <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                <h2 style={{ fontSize: '16px', margin: 0 }}>Delivery Report</h2>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  Total: {deliveryData.length} | Outstanding: {deliveryData.filter(item => item.status === 'OPEN').length}
+              {/* Metrics Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Delivery Open</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#ff9800' }}>
+                    {deliveryMetrics.openCount}
+                  </div>
+                </Card>
+                
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Delivery Close</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2e7d32' }}>
+                    {deliveryMetrics.closeCount}
+                  </div>
+                </Card>
+                
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>This Month</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>
+                    {deliveryMetrics.thisMonthCount}
+                  </div>
+                </Card>
+                
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Last Month</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#757575' }}>
+                    {deliveryMetrics.lastMonthCount}
+                  </div>
+                  <div style={{ fontSize: '10px', color: deliveryMetrics.thisMonthCount >= deliveryMetrics.lastMonthCount ? '#2e7d32' : '#d32f2f', marginTop: '4px' }}>
+                    {deliveryMetrics.lastMonthCount > 0 
+                      ? `${deliveryMetrics.thisMonthCount >= deliveryMetrics.lastMonthCount ? '▲' : '▼'} ${Math.abs(((deliveryMetrics.thisMonthCount - deliveryMetrics.lastMonthCount) / deliveryMetrics.lastMonthCount) * 100).toFixed(1)}%`
+                      : '-'}
+                  </div>
+                </Card>
+              </div>
+
+              {/* Filters */}
+              <div style={{ display: 'grid', gridTemplateColumns: '200px 150px 150px 1fr', gap: '12px', marginBottom: '16px', alignItems: 'end' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                    Status Filter
+                  </label>
+                  <select
+                    value={deliveryStatusFilter}
+                    onChange={(e) => setDeliveryStatusFilter(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      borderRadius: '4px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: 'var(--bg-secondary)',
+                      color: 'var(--text-primary)',
+                      fontSize: '12px',
+                    }}
+                  >
+                    <option value="all">All Status</option>
+                    <option value="open">Open</option>
+                    <option value="close">Close</option>
+                    <option value="delivered">Delivered</option>
+                    <option value="in_transit">In Transit</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                    Date From
+                  </label>
+                  <Input
+                    type="date"
+                    value={deliveryDateFrom}
+                    onChange={(value) => setDeliveryDateFrom(value)}
+                  />
+                </div>
+                
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                    Date To
+                  </label>
+                  <Input
+                    type="date"
+                    value={deliveryDateTo}
+                    onChange={(value) => setDeliveryDateTo(value)}
+                  />
+                </div>
+                
+                <div>
+                  <Input
+                    label="Search"
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    placeholder="Search by SJ No, SO No, Customer..."
+                  />
                 </div>
               </div>
-              <div style={{ marginBottom: '12px' }}>
-                <Input
-                  label="Search & Filter"
-                  value={searchQuery}
-                  onChange={setSearchQuery}
-                  placeholder="Search by SJ No, SO No, Customer, Product, Status, Qty..."
+
+              {/* Results Summary */}
+              <div style={{ marginBottom: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Showing {filteredDeliveryData.length} of {deliveryData.length} Delivery Records
+                {deliveryStatusFilter !== 'all' && ` (Status: ${deliveryStatusFilter})`}
+                {(deliveryDateFrom || deliveryDateTo) && ` (Date: ${deliveryDateFrom || 'Start'} - ${deliveryDateTo || 'End'})`}
+              </div>
+
+              {/* Table */}
+              <Card style={{ padding: '8px' }}>
+                <Table 
+                  columns={deliveryColumns} 
+                  data={filteredDeliveryData} 
+                  emptyMessage={searchQuery || deliveryStatusFilter !== 'all' ? "No Delivery data found with current filters" : "No Delivery report data"} 
                 />
+              </Card>
+            </div>
+          )}
+          {activeTab === 'invoice' && (
+            <div style={{ padding: '8px' }}>
+              {/* Metrics Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Invoice Open</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#ff9800', marginBottom: '4px' }}>
+                    {invoiceMetrics.openCount}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#ff9800' }}>
+                    Rp {invoiceMetrics.openTotal.toLocaleString('id-ID')}
+                  </div>
+                </Card>
+                
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Invoice Close</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2e7d32', marginBottom: '4px' }}>
+                    {invoiceMetrics.closeCount}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#2e7d32' }}>
+                    Rp {invoiceMetrics.closeTotal.toLocaleString('id-ID')}
+                  </div>
+                </Card>
+                
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>This Month</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2', marginBottom: '4px' }}>
+                    {invoiceMetrics.thisMonthCount}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#1976d2' }}>
+                    Rp {invoiceMetrics.thisMonthTotal.toLocaleString('id-ID')}
+                  </div>
+                </Card>
+                
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Last Month</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#757575', marginBottom: '4px' }}>
+                    {invoiceMetrics.lastMonthCount}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#757575' }}>
+                    Rp {invoiceMetrics.lastMonthTotal.toLocaleString('id-ID')}
+                  </div>
+                  <div style={{ fontSize: '10px', color: invoiceMetrics.thisMonthTotal >= invoiceMetrics.lastMonthTotal ? '#2e7d32' : '#d32f2f', marginTop: '4px' }}>
+                    {invoiceMetrics.lastMonthTotal > 0 
+                      ? `${invoiceMetrics.thisMonthTotal >= invoiceMetrics.lastMonthTotal ? '▲' : '▼'} ${Math.abs(((invoiceMetrics.thisMonthTotal - invoiceMetrics.lastMonthTotal) / invoiceMetrics.lastMonthTotal) * 100).toFixed(1)}%`
+                      : '-'}
+                  </div>
+                </Card>
+              </div>
+
+              {/* Filters */}
+              <div style={{ display: 'grid', gridTemplateColumns: '200px 150px 150px 1fr', gap: '12px', marginBottom: '16px', alignItems: 'end' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                    Status Filter
+                  </label>
+                  <select
+                    value={invoiceStatusFilter}
+                    onChange={(e) => setInvoiceStatusFilter(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      borderRadius: '4px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: 'var(--bg-secondary)',
+                      color: 'var(--text-primary)',
+                      fontSize: '12px',
+                    }}
+                  >
+                    <option value="all">All Status</option>
+                    <option value="open">Open</option>
+                    <option value="close">Close</option>
+                    <option value="paid">Paid</option>
+                    <option value="overdue">Overdue</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                    Date From
+                  </label>
+                  <Input
+                    type="date"
+                    value={invoiceDateFrom}
+                    onChange={(value) => setInvoiceDateFrom(value)}
+                  />
+                </div>
+                
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                    Date To
+                  </label>
+                  <Input
+                    type="date"
+                    value={invoiceDateTo}
+                    onChange={(value) => setInvoiceDateTo(value)}
+                  />
+                </div>
+                
+                <div>
+                  <Input
+                    label="Search"
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    placeholder="Search by Invoice No, Customer, SO No..."
+                  />
+                </div>
+              </div>
+
+              {/* Results Summary */}
+              <div style={{ marginBottom: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Showing {filteredInvoiceData.length} of {invoiceData.length} Invoices
+                {invoiceStatusFilter !== 'all' && ` (Status: ${invoiceStatusFilter})`}
+                {(invoiceDateFrom || invoiceDateTo) && ` (Date: ${invoiceDateFrom || 'Start'} - ${invoiceDateTo || 'End'})`}
+              </div>
+
+              {/* Table */}
+              <Card style={{ padding: '8px' }}>
+                <Table 
+                  columns={invoiceColumns} 
+                  data={filteredInvoiceData} 
+                  emptyMessage={searchQuery || invoiceStatusFilter !== 'all' ? "No Invoice data found with current filters" : "No Invoice report data"} 
+                />
+              </Card>
+            </div>
+          )}
+          {activeTab === 'finance' && (
+            <div style={{ padding: '8px' }}>
+              <div style={{ marginBottom: '12px' }}>
+                <h2 style={{ fontSize: '16px', margin: 0 }}>Finance Summary</h2>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Total AR</div>
+                  <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#2e7d32' }}>
+                    Rp {arData.reduce((sum, item) => sum + (item.amount || 0), 0).toLocaleString('id-ID')}
+                  </div>
+                </Card>
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Total AP</div>
+                  <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#d32f2f' }}>
+                    Rp {apData.reduce((sum, item) => sum + (item.amount || 0), 0).toLocaleString('id-ID')}
+                  </div>
+                </Card>
+                <Card style={{ padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Total Tax</div>
+                  <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2' }}>
+                    Rp {taxData.reduce((sum, item) => sum + (item.taxAmount || 0), 0).toLocaleString('id-ID')}
+                  </div>
+                </Card>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <Card style={{ padding: '8px' }}>
-                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600' }}>All Delivery ({filteredDeliveryData.length})</h3>
-                  <div style={{ maxHeight: '500px', overflow: 'auto' }}>
-                    <Table columns={deliveryColumns} data={filteredDeliveryData} emptyMessage={searchQuery ? "No Delivery data found" : "No Delivery report data"} />
+                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600' }}>AR Outstanding</h3>
+                  <div style={{ maxHeight: '400px', overflow: 'auto' }}>
+                    <Table columns={arColumns} data={arData.filter(item => item.status === 'Open')} emptyMessage="No outstanding AR" />
                   </div>
                 </Card>
                 <Card style={{ padding: '8px' }}>
-                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600' }}>Outstanding ({filteredDeliveryData.filter(item => item.status === 'OPEN').length})</h3>
-                  <div style={{ maxHeight: '500px', overflow: 'auto' }}>
-                    <Table columns={deliveryColumns} data={filteredDeliveryData.filter(item => item.status === 'OPEN')} emptyMessage="No outstanding Delivery data" />
+                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600' }}>AP Outstanding</h3>
+                  <div style={{ maxHeight: '400px', overflow: 'auto' }}>
+                    <Table columns={apColumns} data={apData.filter(item => item.status === 'Open')} emptyMessage="No outstanding AP" />
                   </div>
                 </Card>
               </div>
             </div>
           )}
-          {activeTab === 'invoice' && (
+          {activeTab === 'ar' && (
             <div style={{ padding: '8px' }}>
               <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                <h2 style={{ fontSize: '16px', margin: 0 }}>Invoice Report</h2>
+                <h2 style={{ fontSize: '16px', margin: 0 }}>Accounts Receivable (AR)</h2>
                 <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  Total: {invoiceData.length} | Outstanding: {invoiceData.filter(item => item.status === 'OPEN').length}
+                  Total: {arData.length} | Outstanding: {arData.filter(item => item.status === 'Open').length}
                 </div>
               </div>
               <div style={{ marginBottom: '12px' }}>
@@ -1700,23 +2907,135 @@ const Report = () => {
                   label="Search & Filter"
                   value={searchQuery}
                   onChange={setSearchQuery}
-                  placeholder="Search by Invoice No, Customer, SO No, Status, Total..."
+                  placeholder="Search by Invoice No, Customer, Status, Amount..."
                 />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <Card style={{ padding: '8px' }}>
-                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600' }}>All Invoices ({filteredInvoiceData.length})</h3>
+                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600' }}>All AR ({filteredArData.length})</h3>
                   <div style={{ maxHeight: '500px', overflow: 'auto' }}>
-                    <Table columns={invoiceColumns} data={filteredInvoiceData} emptyMessage={searchQuery ? "No Invoice data found" : "No Invoice report data"} />
+                    <Table columns={arColumns} data={filteredArData} emptyMessage="No AR data" />
                   </div>
                 </Card>
                 <Card style={{ padding: '8px' }}>
-                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600' }}>Outstanding ({filteredInvoiceData.filter(item => item.status === 'OPEN').length})</h3>
+                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600' }}>Outstanding ({filteredArData.filter(item => item.status === 'Open').length})</h3>
                   <div style={{ maxHeight: '500px', overflow: 'auto' }}>
-                    <Table columns={invoiceColumns} data={filteredInvoiceData.filter(item => item.status === 'OPEN')} emptyMessage="No outstanding Invoice data" />
+                    <Table columns={arColumns} data={filteredArData.filter(item => item.status === 'Open')} emptyMessage="No outstanding AR" />
                   </div>
                 </Card>
               </div>
+            </div>
+          )}
+          {activeTab === 'ap' && (
+            <div style={{ padding: '8px' }}>
+              <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                <h2 style={{ fontSize: '16px', margin: 0 }}>Accounts Payable (AP)</h2>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  Total: {apData.length} | Outstanding: {apData.filter(item => item.status === 'Open').length}
+                </div>
+              </div>
+              <div style={{ marginBottom: '12px' }}>
+                <Input
+                  label="Search & Filter"
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  placeholder="Search by PO No, Supplier, Status, Amount..."
+                />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <Card style={{ padding: '8px' }}>
+                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600' }}>All AP ({filteredApData.length})</h3>
+                  <div style={{ maxHeight: '500px', overflow: 'auto' }}>
+                    <Table columns={apColumns} data={filteredApData} emptyMessage="No AP data" />
+                  </div>
+                </Card>
+                <Card style={{ padding: '8px' }}>
+                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600' }}>Outstanding ({filteredApData.filter(item => item.status === 'Open').length})</h3>
+                  <div style={{ maxHeight: '500px', overflow: 'auto' }}>
+                    <Table columns={apColumns} data={filteredApData.filter(item => item.status === 'Open')} emptyMessage="No outstanding AP" />
+                  </div>
+                </Card>
+              </div>
+            </div>
+          )}
+          {activeTab === 'tax' && (
+            <div style={{ padding: '8px' }}>
+              <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                <h2 style={{ fontSize: '16px', margin: 0 }}>Tax Management</h2>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  Total: {taxData.length} | Open: {taxData.filter(item => item.status === 'Open').length}
+                </div>
+              </div>
+              <div style={{ marginBottom: '12px' }}>
+                <Input
+                  label="Search & Filter"
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  placeholder="Search by Reference, Tax Type, Status, Amount..."
+                />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <Card style={{ padding: '8px' }}>
+                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600' }}>All Tax Records ({filteredTaxData.length})</h3>
+                  <div style={{ maxHeight: '500px', overflow: 'auto' }}>
+                    <Table columns={taxColumns} data={filteredTaxData} emptyMessage="No tax data" />
+                  </div>
+                </Card>
+                <Card style={{ padding: '8px' }}>
+                  <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600' }}>Open Tax ({filteredTaxData.filter(item => item.status === 'Open').length})</h3>
+                  <div style={{ maxHeight: '500px', overflow: 'auto' }}>
+                    <Table columns={taxColumns} data={filteredTaxData.filter(item => item.status === 'Open')} emptyMessage="No open tax records" />
+                  </div>
+                </Card>
+              </div>
+            </div>
+          )}
+          {activeTab === 'payment' && (
+            <div style={{ padding: '8px' }}>
+              <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                <h2 style={{ fontSize: '16px', margin: 0 }}>Payment Records</h2>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  Total: {paymentData.length}
+                </div>
+              </div>
+              <div style={{ marginBottom: '12px' }}>
+                <Input
+                  label="Search & Filter"
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  placeholder="Search by Payment No, Type, Reference, Amount..."
+                />
+              </div>
+              <Card style={{ padding: '8px' }}>
+                <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600' }}>All Payments ({paymentData.length})</h3>
+                <div style={{ maxHeight: '600px', overflow: 'auto' }}>
+                  <Table columns={paymentColumns} data={paymentData} emptyMessage="No payment data" />
+                </div>
+              </Card>
+            </div>
+          )}
+          {activeTab === 'ops' && (
+            <div style={{ padding: '8px' }}>
+              <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                <h2 style={{ fontSize: '16px', margin: 0 }}>Operational Expenses</h2>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  Total: {opsExpensesData.length}
+                </div>
+              </div>
+              <div style={{ marginBottom: '12px' }}>
+                <Input
+                  label="Search & Filter"
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  placeholder="Search by Expense No, Category, Description, Status..."
+                />
+              </div>
+              <Card style={{ padding: '8px' }}>
+                <h3 style={{ fontSize: '12px', marginBottom: '8px', fontWeight: '600' }}>All Expenses ({filteredOpsData.length})</h3>
+                <div style={{ maxHeight: '600px', overflow: 'auto' }}>
+                  <Table columns={opsColumns} data={filteredOpsData} emptyMessage="No operational expense data" />
+                </div>
+              </Card>
             </div>
           )}
           {activeTab === 'inventory' && (

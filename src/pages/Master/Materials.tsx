@@ -3,9 +3,10 @@ import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
-import { storageService } from '../../services/storage';
+import { storageService, StorageKeys } from '../../services/storage';
 import { filterActiveItems } from '../../utils/data-persistence-helper';
 import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
+import { useLanguage } from '../../hooks/useLanguage';
 import * as XLSX from 'xlsx';
 import '../../styles/common.css';
 import './Master.css';
@@ -27,6 +28,20 @@ interface Material {
   priceMtr?: number;
 }
 
+interface InventoryItem {
+  id: string;
+  codeItem: string;
+  description: string;
+  kategori: string;
+  satuan: string;
+  price: number;
+  stockP1?: number;
+  stockP2?: number;
+  stockPremonth: number;
+  nextStock: number;
+  supplierName: string;
+}
+
 interface Supplier {
   id: string;
   kode: string;
@@ -34,7 +49,9 @@ interface Supplier {
 }
 
 const Materials = () => {
+  const { t } = useLanguage();
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<Material | null>(null);
@@ -253,7 +270,7 @@ const Materials = () => {
         const kodeB = (b.kode || '').toUpperCase();
         return kodeA.localeCompare(kodeB, undefined, { numeric: true, sensitivity: 'base' });
       });
-      await storageService.set('materials', sorted);
+      await storageService.set(StorageKeys.PACKAGING.MATERIALS, sorted);
       setMaterials(sorted.map((m, idx) => ({ ...m, no: idx + 1 })));
       setShowForm(false);
       setEditingItem(null);
@@ -336,6 +353,182 @@ const Materials = () => {
       );
     } catch (error: any) {
       console.error('[Materials] Error in handleDelete:', error);
+      showAlert(`❌ Error: ${error.message}`, 'Error');
+    }
+  };
+
+  // Cleanup Duplicates
+  const handleCleanupDuplicates = async () => {
+    try {
+      const currentMaterials = Array.isArray(materials) ? materials : [];
+      
+      if (currentMaterials.length === 0) {
+        showAlert('Tidak ada data material untuk dibersihkan', 'Info');
+        return;
+      }
+
+      showConfirm(
+        `🧹 Bersihkan Data Duplikat?
+
+Fungsi ini akan:
+- Deteksi duplikat berdasarkan Kode atau Nama
+- Merge duplikat (ambil yang lebih lengkap/baru)
+- Simpan data yang sudah dibersihkan
+
+Total material saat ini: ${currentMaterials.length}
+
+Lanjutkan?`,
+        async () => {
+          try {
+            const deduplicatedMap = new Map<string, Material>();
+            const duplicatesFound: string[] = [];
+            
+            // Helper untuk normalize nama
+            const normalizeName = (name: string): string => {
+              return name.toLowerCase().trim()
+                .replace(/\s+/g, ' ')
+                .trim();
+            };
+
+            // Build lookup maps
+            const materialsByKode = new Map<string, Material>();
+            const materialsByNama = new Map<string, Material[]>();
+            
+            currentMaterials.forEach(m => {
+              const kode = (m.kode || '').trim().toLowerCase();
+              const nama = normalizeName(m.nama || '');
+              
+              if (kode) materialsByKode.set(kode, m);
+              if (nama) {
+                if (!materialsByNama.has(nama)) {
+                  materialsByNama.set(nama, []);
+                }
+                materialsByNama.get(nama)!.push(m);
+              }
+            });
+
+            // Group materials yang harus di-merge
+            const materialGroups = new Map<string, Material[]>();
+            const processedIds = new Set<string>();
+            
+            currentMaterials.forEach((material, index) => {
+              const materialId = material.id || `unknown-${index}`;
+              if (processedIds.has(materialId)) return;
+              
+              const kode = (material.kode || '').trim().toLowerCase();
+              const nama = normalizeName(material.nama || '');
+              
+              let groupKey = '';
+              
+              // Prioritas 1: Gunakan kode sebagai group key
+              if (kode) {
+                groupKey = `kode:${kode}`;
+              }
+              
+              // Prioritas 2: Gunakan nama sebagai group key
+              if (!groupKey && nama) {
+                groupKey = `nama:${nama}`;
+              }
+              
+              // Fallback: Gunakan id
+              if (!groupKey) {
+                groupKey = `id:${materialId}`;
+              }
+
+              if (groupKey) {
+                if (!materialGroups.has(groupKey)) {
+                  materialGroups.set(groupKey, []);
+                }
+                materialGroups.get(groupKey)!.push(material);
+                processedIds.add(materialId);
+              }
+            });
+
+            // Merge materials dalam setiap group
+            materialGroups.forEach((groupMaterials, groupKey) => {
+              if (groupMaterials.length === 1) {
+                deduplicatedMap.set(groupKey, groupMaterials[0]);
+                return;
+              }
+
+              // Duplikat ditemukan - merge dengan memilih yang lebih lengkap
+              duplicatesFound.push(`${groupMaterials[0].kode || groupMaterials[0].nama || 'Unknown'} (${groupKey})`);
+              
+              // Score setiap material dalam group
+              const scoredMaterials = groupMaterials.map(material => {
+                const score = 
+                  (material.harga && material.harga > 0 ? 100 : 0) +
+                  (material.nama || '').trim().length +
+                  (material.kategori && material.kategori.trim() ? 50 : 0);
+                
+                return { score, material };
+              });
+              
+              // Sort by score (desc), then by lastUpdate (desc)
+              scoredMaterials.sort((a, b) => {
+                if (a.score !== b.score) return b.score - a.score;
+                const aUpdate = a.material.lastUpdate || '';
+                const bUpdate = b.material.lastUpdate || '';
+                return bUpdate.localeCompare(aUpdate);
+              });
+              
+              // Ambil yang terbaik dan merge data dari yang lain
+              const bestMaterial = scoredMaterials[0].material;
+              
+              const mergedMaterial: Material = {
+                ...bestMaterial,
+                kode: bestMaterial.kode || groupMaterials.find(m => m.kode)?.kode || '',
+                nama: groupMaterials.reduce((longest, m) => 
+                  (m.nama || '').trim().length > (longest.nama || '').trim().length ? m : longest
+                ).nama,
+                satuan: bestMaterial.satuan || groupMaterials.find(m => m.satuan)?.satuan || '',
+                kategori: bestMaterial.kategori || groupMaterials.find(m => m.kategori)?.kategori || '',
+                supplier: bestMaterial.supplier || groupMaterials.find(m => m.supplier)?.supplier || '',
+                harga: Math.max(...groupMaterials.map(m => m.harga || 0)),
+                stockAman: Math.max(...groupMaterials.map(m => m.stockAman || 0)),
+                stockMinimum: Math.max(...groupMaterials.map(m => m.stockMinimum || 0)),
+              };
+              
+              deduplicatedMap.set(groupKey, mergedMaterial);
+            });
+
+            const deduplicated = Array.from(deduplicatedMap.values());
+            const removedCount = currentMaterials.length - deduplicated.length;
+            
+            if (removedCount === 0) {
+              showAlert('✅ Tidak ada duplikat ditemukan. Data sudah bersih!', 'Success');
+              return;
+            }
+
+            // Re-number materials
+            const renumbered = deduplicated.map((m, idx) => ({ ...m, no: idx + 1 }));
+
+            // Save to storage
+            await storageService.set(StorageKeys.PACKAGING.MATERIALS, renumbered);
+            setMaterials(renumbered);
+
+            const duplicateList = duplicatesFound.slice(0, 10).join('\n');
+            const moreText = duplicatesFound.length > 10 ? `\n... dan ${duplicatesFound.length - 10} duplikat lainnya` : '';
+            
+            showAlert(
+              `✅ Data duplikat berhasil dibersihkan!\n\n` +
+              `📊 Statistik:\n` +
+              `- Sebelum: ${currentMaterials.length} material\n` +
+              `- Sesudah: ${renumbered.length} material\n` +
+              `- Dihapus: ${removedCount} duplikat\n\n` +
+              `Duplikat yang ditemukan:\n${duplicateList}${moreText}`,
+              'Success'
+            );
+          } catch (error: any) {
+            showAlert(`❌ Error membersihkan duplikat: ${error.message}`, 'Error');
+          }
+        },
+        () => {
+          // Cancelled
+        },
+        'Cleanup Duplicates Confirmation'
+      );
+    } catch (error: any) {
       showAlert(`❌ Error: ${error.message}`, 'Error');
     }
   };
@@ -488,7 +681,7 @@ const Materials = () => {
             return kodeA.localeCompare(kodeB, undefined, { numeric: true, sensitivity: 'base' });
           });
           const renumbered = sorted.map((m, idx) => ({ ...m, no: idx + 1 }));
-          await storageService.set('materials', renumbered);
+          await storageService.set(StorageKeys.PACKAGING.MATERIALS, renumbered);
           setMaterials(renumbered);
 
           if (errors.length > 0) {
@@ -558,8 +751,10 @@ const Materials = () => {
         (material.satuan || '').toLowerCase().includes(query)
       );
     });
-    // Sort berdasarkan kode (SKU/ID) secara ascending
+    // Sort by stockAman in descending order (highest stock first), then by kode
     return filtered.sort((a, b) => {
+      const stockADiff = (b.stockAman || 0) - (a.stockAman || 0);
+      if (stockADiff !== 0) return stockADiff;
       const kodeA = (a.kode || '').toUpperCase();
       const kodeB = (b.kode || '').toUpperCase();
       return kodeA.localeCompare(kodeB, undefined, { numeric: true, sensitivity: 'base' });
@@ -576,29 +771,29 @@ const Materials = () => {
     setCurrentPage(1);
   }, [searchQuery]);
 
-  const columns = [
+  const columns = useMemo(() => [
     { 
       key: 'no', 
-      header: 'No',
+      header: t('common.number') || 'No',
       render: (item: Material) => {
         const index = paginatedMaterials.findIndex(m => m.id === item.id);
         return index >= 0 ? startIndex + index + 1 : '';
       },
     },
-    { key: 'kode', header: 'Kode (SKU/ID)' },
-    { key: 'nama', header: 'Nama' },
-    { key: 'satuan', header: 'Satuan (Unit)' },
-    { key: 'kategori', header: 'Kategori' },
-    { key: 'supplier', header: 'Supplier' },
+    { key: 'kode', header: t('master.materialCode') || 'Kode (SKU/ID)' },
+    { key: 'nama', header: t('master.materialName') || 'Nama' },
+    { key: 'satuan', header: t('master.unit') || 'Satuan (Unit)' },
+    { key: 'kategori', header: t('master.category') || 'Kategori' },
+    { key: 'supplier', header: t('master.supplierName') || 'Supplier' },
     { 
       key: 'lastUpdate', 
-      header: 'Last Update',
+      header: t('common.updatedAt') || 'Last Update',
       render: (item: Material) => formatDateTime(item.lastUpdate)
     },
-    { key: 'userUpdate', header: 'User Update' },
+    { key: 'userUpdate', header: t('common.updatedBy') || 'User Update' },
     { 
       key: 'priceMtr', 
-      header: 'Price Satuan',
+      header: t('master.price') || 'Harga Satuan',
       render: (item: Material) => {
         const harga = item.priceMtr || item.harga || 0;
         return harga > 0 ? new Intl.NumberFormat('id-ID', { 
@@ -610,21 +805,22 @@ const Materials = () => {
     },
     {
       key: 'actions',
-      header: 'Actions',
+      header: t('common.actions') || 'Actions',
       render: (item: Material) => (
         <div style={{ display: 'flex', gap: '8px' }}>
-          <Button variant="secondary" onClick={() => handleEdit(item)}>Edit</Button>
-          <Button variant="danger" onClick={() => handleDelete(item)}>Delete</Button>
+          <Button variant="secondary" onClick={() => handleEdit(item)}>{t('common.edit') || 'Edit'}</Button>
+          <Button variant="danger" onClick={() => handleDelete(item)}>{t('common.delete') || 'Delete'}</Button>
         </div>
       ),
     },
-  ];
+  ], [t, paginatedMaterials, startIndex]);
 
   return (
     <div className="master-compact">
       <div className="page-header">
-        <h1>Master Materials</h1>
+        <h1>Master Material</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
+          <Button variant="secondary" onClick={handleCleanupDuplicates}>🧹 Bersihkan Duplikat</Button>
           <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
           <Button variant="secondary" onClick={handleDownloadTemplate}>📋 Download Template</Button>
           <Button variant="primary" onClick={handleImportExcel}>📤 Import Excel</Button>
@@ -637,7 +833,7 @@ const Materials = () => {
               setEditingItem(null);
             setShowForm(true);
           }}>
-            + Add Material
+            + Tambah Material
           </Button>
         </div>
       </div>
@@ -645,7 +841,7 @@ const Materials = () => {
       {showForm && (
         <div className="dialog-overlay" onClick={() => { setShowForm(false); setEditingItem(null); setSupplierInputValue(''); setStockAmanInputValue(''); setStockMinimumInputValue(''); setPriceInputValue(''); setFormData({ kode: '', nama: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', supplier: '', priceMtr: 0 }); }} style={{ zIndex: 10000 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', width: '90%', maxHeight: '90vh', overflowY: 'auto', zIndex: 10001 }}>
-            <Card title={editingItem ? "Edit Material" : "Add New Material"} className="dialog-card">
+            <Card title={editingItem ? "Edit Material" : "Tambah Material Baru"} className="dialog-card">
           <Input
             label="Kode (SKU/ID)"
             value={formData.kode || ''}
@@ -869,7 +1065,7 @@ const Materials = () => {
           </div>
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Price Satuan
+              Harga Satuan
             </label>
             <input
               type="text"
@@ -935,10 +1131,10 @@ const Materials = () => {
           </div>
           <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
             <Button onClick={() => { setShowForm(false); setEditingItem(null); setSupplierInputValue(''); setStockAmanInputValue(''); setStockMinimumInputValue(''); setPriceInputValue(''); setFormData({ kode: '', nama: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', supplier: '', priceMtr: 0 }); }} variant="secondary">
-              Cancel
+              Batal
             </Button>
             <Button onClick={handleSave} variant="primary">
-              {editingItem ? 'Update Material' : 'Save Material'}
+              {editingItem ? 'Update Material' : 'Simpan Material'}
             </Button>
           </div>
         </Card>
@@ -965,7 +1161,7 @@ const Materials = () => {
             }}
           />
         </div>
-        <Table columns={columns} data={paginatedMaterials} emptyMessage={searchQuery ? "No materials found matching your search" : "No materials data"} />
+        <Table columns={columns} data={paginatedMaterials} showPagination={false} emptyMessage={searchQuery ? "Tidak ada material yang cocok dengan pencarian" : "Tidak ada data material"} />
         
         {/* Pagination Controls */}
         {(totalPages > 1 || filteredMaterials.length > 0) && (
@@ -989,6 +1185,13 @@ const Materials = () => {
               alignItems: 'center', 
               gap: '8px'
             }}>
+            <Button 
+              variant="secondary" 
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+            >
+              First
+            </Button>
             <Button 
               variant="secondary" 
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
@@ -1030,6 +1233,13 @@ const Materials = () => {
               disabled={currentPage === totalPages}
             >
               Next
+            </Button>
+            <Button 
+              variant="secondary" 
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+            >
+              Last
             </Button>
             <div style={{ marginLeft: '16px', color: 'var(--text-secondary)', fontSize: '14px' }}>
               Page {currentPage} of {totalPages}

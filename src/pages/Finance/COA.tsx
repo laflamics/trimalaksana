@@ -13,6 +13,9 @@ interface Account {
   name: string;
   type: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
   balance: number;
+  lastUpdate?: string;
+  timestamp?: number;
+  _timestamp?: number;
 }
 
 const COA = () => {

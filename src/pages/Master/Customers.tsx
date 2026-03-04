@@ -4,9 +4,10 @@ import Table from '../../components/Table';
 import type { Column } from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
-import { storageService } from '../../services/storage';
+import { storageService, StorageKeys } from '../../services/storage';
 import { filterActiveItems } from '../../utils/data-persistence-helper';
 import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
+import { useLanguage } from '../../hooks/useLanguage';
 import * as XLSX from 'xlsx';
 import '../../styles/common.css';
 import './Master.css';
@@ -25,6 +26,7 @@ interface Customer {
 }
 
 const Customers = () => {
+  const { t } = useLanguage();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<Customer | null>(null);
@@ -124,7 +126,7 @@ const Customers = () => {
     
     // Save cleaned data back to storage if duplicates were removed
     if (uniqueData.length < data.length) {
-      await storageService.set('customers', numberedData);
+      await storageService.set(StorageKeys.PACKAGING.CUSTOMERS, numberedData);
     }
   };
 
@@ -153,7 +155,7 @@ const Customers = () => {
             ? { ...formData, id: editingItem.id, no: editingItem.no } as Customer
             : c
         );
-        await storageService.set('customers', updated);
+        await storageService.set(StorageKeys.PACKAGING.CUSTOMERS, updated);
         setCustomers(updated.map((c, idx) => ({ ...c, no: idx + 1 })));
       } else {
         // Create new
@@ -164,7 +166,7 @@ const Customers = () => {
           kode: formData.kode.trim(), // Pastikan kode di-trim
         } as Customer;
         const updated = [...customers, newCustomer];
-        await storageService.set('customers', updated);
+        await storageService.set(StorageKeys.PACKAGING.CUSTOMERS, updated);
         setCustomers(updated.map((c, idx) => ({ ...c, no: idx + 1 })));
       }
       setShowForm(false);
@@ -360,7 +362,7 @@ const Customers = () => {
           });
 
           const renumbered = updatedCustomers.map((c, idx) => ({ ...c, no: idx + 1 }));
-          await storageService.set('customers', renumbered);
+          await storageService.set(StorageKeys.PACKAGING.CUSTOMERS, renumbered);
           setCustomers(renumbered);
 
           if (errors.length > 0) {
@@ -473,18 +475,18 @@ const Customers = () => {
     if (customers.length === 0) {
       // Default columns if no data
       return [
-        { key: 'no', header: 'No' },
-        { key: 'kode', header: 'Kode (ID)' },
-        { key: 'nama', header: 'Nama (Company Name)' },
-        { key: 'alamat', header: 'Alamat (Address)' },
-        { key: 'telepon', header: 'Telepon' },
+        { key: 'no', header: t('common.number') || 'No' },
+        { key: 'kode', header: t('master.customerCode') || 'Kode (ID)' },
+        { key: 'nama', header: t('master.customerName') || 'Nama (Company Name)' },
+        { key: 'alamat', header: t('common.address') || 'Alamat (Address)' },
+        { key: 'telepon', header: t('common.phone') || 'Telepon' },
         {
           key: 'actions',
-          header: 'Actions',
+          header: t('common.actions') || 'Actions',
           render: () => (
             <div style={{ display: 'flex', gap: '8px' }}>
-              <Button variant="secondary" onClick={() => showAlert('No data to edit', 'Information')}>Edit</Button>
-              <Button variant="danger" onClick={() => showAlert('No data to delete', 'Information')}>Delete</Button>
+              <Button variant="secondary" onClick={() => showAlert('No data to edit', 'Information')}>{t('common.edit') || 'Edit'}</Button>
+              <Button variant="danger" onClick={() => showAlert('No data to delete', 'Information')}>{t('common.delete') || 'Delete'}</Button>
             </div>
           ),
         },
@@ -502,10 +504,10 @@ const Customers = () => {
 
     // Define optional columns with their fill percentages
     const optionalColumns = [
-      { key: 'kontak' as keyof Customer, header: 'Kontak (PIC Name)', fillPercent: getFillPercentage('kontak') },
-      { key: 'npwp' as keyof Customer, header: 'NPWP', fillPercent: getFillPercentage('npwp') },
-      { key: 'email' as keyof Customer, header: 'Email', fillPercent: getFillPercentage('email') },
-      { key: 'telepon' as keyof Customer, header: 'Telepon (Phone)', fillPercent: getFillPercentage('telepon') },
+      { key: 'kontak' as keyof Customer, header: t('master.contactPerson') || 'Kontak (PIC Name)', fillPercent: getFillPercentage('kontak') },
+      { key: 'npwp' as keyof Customer, header: t('settings.npwp') || 'NPWP', fillPercent: getFillPercentage('npwp') },
+      { key: 'email' as keyof Customer, header: t('common.email') || 'Email', fillPercent: getFillPercentage('email') },
+      { key: 'telepon' as keyof Customer, header: t('common.phone') || 'Telepon (Phone)', fillPercent: getFillPercentage('telepon') },
     ];
 
     // Filter: only show columns with >= 50% filled
@@ -517,9 +519,9 @@ const Customers = () => {
 
     // Build final columns: base columns + sorted optional columns + remaining columns
     const baseColumns: Column<Customer>[] = [
-      { key: 'no', header: 'No' },
-      { key: 'kode', header: 'Kode (ID)' },
-      { key: 'nama', header: 'Nama (Company Name)' },
+      { key: 'no', header: t('common.number') || 'No' },
+      { key: 'kode', header: t('master.customerCode') || 'Kode (ID)' },
+      { key: 'nama', header: t('master.customerName') || 'Nama (Company Name)' },
     ];
 
     // Add optional columns (sorted by fill percentage, highest first)
@@ -527,28 +529,29 @@ const Customers = () => {
 
     // Add remaining columns
     baseColumns.push(
-      { key: 'alamat', header: 'Alamat (Address)' },
-      { key: 'telepon', header: 'Telepon' },
+      { key: 'alamat', header: t('common.address') || 'Alamat (Address)' },
+      { key: 'telepon', header: t('common.phone') || 'Telepon' },
       {
         key: 'actions',
-        header: 'Actions',
+        header: t('common.actions') || 'Actions',
         render: (item: Customer) => (
           <div style={{ display: 'flex', gap: '8px' }}>
-            <Button variant="secondary" onClick={() => handleEdit(item)}>Edit</Button>
-            <Button variant="danger" onClick={() => handleDelete(item)}>Delete</Button>
+            <Button variant="secondary" onClick={() => handleEdit(item)}>{t('common.edit') || 'Edit'}</Button>
+            <Button variant="danger" onClick={() => handleDelete(item)}>{t('common.delete') || 'Delete'}</Button>
           </div>
         ),
       }
     );
 
     return baseColumns;
-  }, [customers]);
+  }, [customers, t]);
 
   return (
     <div className="master-compact">
       <div className="page-header">
-        <h1>Master Customers</h1>
+        <h1>Master Pelanggan</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
+          <Button variant="secondary" onClick={() => loadCustomers()}>🔄 Refresh</Button>
           <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
           <Button variant="secondary" onClick={handleDownloadTemplate}>📋 Download Template</Button>
           <Button variant="primary" onClick={handleImportExcel}>📤 Import Excel</Button>
@@ -557,7 +560,7 @@ const Customers = () => {
             setEditingItem(null);
             setShowForm(true);
           }}>
-            + Add Customer
+            + Tambah Pelanggan
           </Button>
         </div>
       </div>
@@ -565,7 +568,7 @@ const Customers = () => {
       {showForm && (
         <div className="dialog-overlay" onClick={() => { setShowForm(false); setEditingItem(null); setFormData({ kode: '', nama: '', kontak: '', npwp: '', email: '', telepon: '', alamat: '', kategori: '' }); }} style={{ zIndex: 10000 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', width: '90%', maxHeight: '90vh', overflowY: 'auto', zIndex: 10001 }}>
-            <Card title={editingItem ? "Edit Customer" : "Add New Customer"} className="dialog-card">
+            <Card title={editingItem ? "Edit Pelanggan" : "Tambah Pelanggan Baru"} className="dialog-card">
           <Input
             label="Kode *"
             value={formData.kode || ''}
@@ -613,10 +616,10 @@ const Customers = () => {
           </p>
           <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
             <Button onClick={() => { setShowForm(false); setEditingItem(null); setFormData({ kode: '', nama: '', kontak: '', npwp: '', email: '', telepon: '', alamat: '', kategori: '' }); }} variant="secondary">
-              Cancel
+              Batal
             </Button>
             <Button onClick={handleSave} variant="primary">
-              {editingItem ? 'Update Customer' : 'Save Customer'}
+              {editingItem ? 'Update Pelanggan' : 'Simpan Pelanggan'}
             </Button>
           </div>
             </Card>
@@ -643,7 +646,7 @@ const Customers = () => {
             }}
           />
         </div>
-        <Table columns={columns} data={filteredCustomers} emptyMessage={searchQuery ? "No customers found matching your search" : "No customers data"} />
+        <Table columns={columns} data={filteredCustomers} emptyMessage={searchQuery ? "Tidak ada pelanggan yang cocok dengan pencarian" : "Tidak ada data pelanggan"} />
       </Card>
 
       {/* Custom Dialog */}

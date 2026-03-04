@@ -4,8 +4,9 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService } from '../../../services/storage';
+import { storageService, StorageKeys } from '../../../services/storage';
 import { deleteTruckingItem, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { setupRealTimeSync, TRUCKING_SYNC_KEYS } from '../../../utils/real-time-sync-helper';
 import { useDialog } from '../../../hooks/useDialog';
 import '../../../styles/common.css';
 
@@ -41,17 +42,25 @@ const COA = () => {
 
   useEffect(() => {
     loadData();
+    
+    // Real-time listener untuk server updates
+    const cleanup = setupRealTimeSync({
+      keys: [TRUCKING_SYNC_KEYS.JOURNAL_ENTRIES, TRUCKING_SYNC_KEYS.ACCOUNTS],
+      onUpdate: loadData,
+    });
+    
+    return cleanup;
   }, []);
 
   const loadData = async () => {
     // Load journal entries dulu
-    const entriesRaw = await storageService.get<any[]>('trucking_journalEntries') || [];
+    const entriesRaw = await storageService.get<any[]>(StorageKeys.TRUCKING.JOURNAL_ENTRIES) || [];
     // Filter out deleted items menggunakan helper function
     const entries = filterActiveItems(entriesRaw || []);
     setJournalEntries(entries);
     
     // Load accounts - pastikan selalu load dari storage
-    let dataRaw = await storageService.get<Account[]>('trucking_accounts') || [];
+    let dataRaw = await storageService.get<Account[]>(StorageKeys.TRUCKING.ACCOUNTS) || [];
     // Filter out deleted items menggunakan helper function
     let data = filterActiveItems(dataRaw || []);
     
@@ -263,7 +272,7 @@ const COA = () => {
     
     if (dataArray.length === 0) {
       // Jika data kosong, set semua default accounts
-      await storageService.set('trucking_accounts', defaultAccountsArray);
+      await storageService.set(StorageKeys.TRUCKING.ACCOUNTS, defaultAccountsArray);
       data = defaultAccountsArray;
     } else if (missingDefaults.length > 0) {
       // Tambahkan default accounts yang belum ada, preserve balance dari existing accounts
@@ -283,7 +292,7 @@ const COA = () => {
       // Sort by code untuk konsistensi
       merged.sort((a, b) => a.code.localeCompare(b.code));
       
-      await storageService.set('trucking_accounts', merged);
+      await storageService.set(StorageKeys.TRUCKING.ACCOUNTS, merged);
       data = merged;
     }
     
@@ -312,7 +321,7 @@ const COA = () => {
             ? { ...formData, balance: a.balance } as Account
             : a
         );
-        await storageService.set('trucking_accounts', updated);
+        await storageService.set(StorageKeys.TRUCKING.ACCOUNTS, updated);
         setAccounts(updated);
       } else {
         const newAccount: Account = {
@@ -324,7 +333,7 @@ const COA = () => {
         // Ensure accounts is always an array
         const accountsArray = Array.isArray(accounts) ? accounts : [];
         const updated = [...accountsArray, newAccount];
-        await storageService.set('trucking_accounts', updated);
+        await storageService.set(StorageKeys.TRUCKING.ACCOUNTS, updated);
         setAccounts(updated);
       }
 
@@ -359,11 +368,11 @@ const COA = () => {
           try {
             // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
             // COA menggunakan 'code' sebagai ID field, bukan 'id'
-            const deleteResult = await deleteTruckingItem('trucking_accounts', item.code, 'code');
+            const deleteResult = await deleteTruckingItem(StorageKeys.TRUCKING.ACCOUNTS, item.code, 'code');
             
             if (deleteResult.success) {
               // Reload data dengan helper (handle race condition)
-              const activeAccounts = await reloadTruckingData('trucking_accounts', setAccounts);
+              const activeAccounts = await reloadTruckingData(StorageKeys.TRUCKING.ACCOUNTS, setAccounts);
               setAccounts(activeAccounts);
               await loadData(); // Reload untuk update balances
               showAlert('Success', `✅ Account "${item.code} - ${item.name}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`);
@@ -573,6 +582,7 @@ const COA = () => {
     
     const showPreviewDialog = () => {
       showConfirm(
+        'Import Excel Template',
         `Pastikan file Excel Anda memiliki header berikut:\n\n${exampleHeaders.join(' | ')}\n\nContoh data:\n${exampleData.map((row, idx) => `${idx + 1}. ${exampleHeaders.map(h => String(row[h as keyof typeof row] || '')).join(' | ')}`).join('\n')}\n\n⚠️ Catatan:\n- Header harus ada di baris pertama\n- Account Code harus unik\n- Type: Asset, Liability, Equity, Revenue, atau Expense\n\nKlik "Download Template" untuk mendapatkan file Excel template, atau "Lanjutkan" untuk memilih file Excel yang sudah Anda siapkan.`,
         () => {
           const input = document.createElement('input');
@@ -649,7 +659,7 @@ const COA = () => {
               // Ensure accounts is always an array
               const accountsArray = Array.isArray(accounts) ? accounts : [];
               const updated = [...accountsArray, ...newAccounts];
-              await storageService.set('trucking_accounts', updated);
+              await storageService.set(StorageKeys.TRUCKING.ACCOUNTS, updated);
               setAccounts(updated);
               await loadData(); // Reload untuk update balances
               showAlert('Success', `✅ Imported ${newAccounts.length} accounts${errors.length > 0 ? `\n⚠️ ${errors.length} errors` : ''}`);
@@ -670,9 +680,7 @@ const COA = () => {
       }
     };
     input.click();
-        },
-        () => {}, // onCancel
-        'Format Excel Preview'
+        }
       );
     };
     

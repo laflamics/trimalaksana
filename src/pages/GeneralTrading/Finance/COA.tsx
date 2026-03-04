@@ -4,9 +4,7 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService } from '../../../services/storage';
-import { deleteGTItem, reloadGTData, filterActiveItems } from '../../../utils/gt-delete-helper';
-import { loadGTDataFromLocalStorage } from '../../../utils/gtStorageHelper';
+import { storageService, StorageKeys } from '../../../services/storage';
 import '../../../styles/common.css';
 
 interface Account {
@@ -14,6 +12,9 @@ interface Account {
   name: string;
   type: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
   balance: number;
+  lastUpdate?: string;
+  timestamp?: number;
+  _timestamp?: number;
 }
 
 const COA = () => {
@@ -83,22 +84,25 @@ const COA = () => {
   };
 
   const loadData = async () => {
-    // Load langsung dari localStorage untuk memastikan data terbaru
-    const entriesRaw = await loadGTDataFromLocalStorage<any>(
-      'gt_journalEntries',
-      async () => await storageService.get<any[]>('gt_journalEntries') || []
-    );
-    // Filter out deleted items menggunakan helper function
-    const entries = filterActiveItems(entriesRaw || []);
+    // Load journal entries dulu
+    const entriesRaw = await storageService.get<any[]>('journalEntries') || [];
+    // Ensure entries is always an array
+    const entries = Array.isArray(entriesRaw) ? entriesRaw : [];
     setJournalEntries(entries);
     
     // Load accounts - pastikan selalu load dari storage
-    let dataRaw = await loadGTDataFromLocalStorage<Account>(
-      'gt_accounts',
-      async () => await storageService.get<Account[]>('gt_accounts') || []
-    );
-    // Filter out deleted items menggunakan helper function
-    let data = filterActiveItems(dataRaw || []);
+    let dataRaw = await storageService.get<Account[]>('gt_accounts') || [];
+    // Ensure data is always an array
+    let data = Array.isArray(dataRaw) ? dataRaw : [];
+    
+    // Debug: log balance dari beberapa accounts untuk verify data ter-load
+    if (data.length > 0) {
+      const sampleAccount = data.find(a => a.code === '1-1110');
+      console.log('[COA] Loaded accounts:', data.length);
+      console.log('[COA] Sample account 1-1110 balance:', sampleAccount?.balance);
+      const dataArray = Array.isArray(data) ? data : [];
+      console.log('[COA] Accounts with balance > 0:', dataArray.filter(a => (a.balance || 0) > 0).length);
+    }
     
     // Default accounts yang harus ada
     // AKTIVA (Assets)
@@ -299,6 +303,7 @@ const COA = () => {
     
     // Merge default accounts dengan existing accounts
     // Jika default account belum ada (berdasarkan code), tambahkan
+    // IMPORTANT: Preserve balance dari existing accounts (yang sudah di-update dari seed)
     // Ensure data is always an array
     const dataArray = Array.isArray(data) ? data : [];
     // Ensure defaultAccounts is always an array
@@ -308,11 +313,11 @@ const COA = () => {
     
     if (dataArray.length === 0) {
       // Jika data kosong, set semua default accounts
-      await storageService.set('gt_accounts', defaultAccountsArray);
+      await storageService.set(StorageKeys.GENERAL_TRADING.ACCOUNTS, defaultAccountsArray);
       data = defaultAccountsArray;
     } else if (missingDefaults.length > 0) {
       // Tambahkan default accounts yang belum ada, preserve balance dari existing accounts
-      const merged = [...dataArray];
+      const merged = [...dataArray]; // Start with existing data (preserve balances from seed)
       // Ensure missingDefaults is always an array
       const missingDefaultsArray = Array.isArray(missingDefaults) ? missingDefaults : [];
       if (Array.isArray(missingDefaultsArray) && missingDefaultsArray.length > 0) {
@@ -328,12 +333,17 @@ const COA = () => {
       // Sort by code untuk konsistensi
       merged.sort((a, b) => a.code.localeCompare(b.code));
       
-      await storageService.set('gt_accounts', merged);
+      await storageService.set(StorageKeys.GENERAL_TRADING.ACCOUNTS, merged);
       data = merged;
     }
     
+    // Ensure balance dari seed tidak ter-override
+    // Data dari storage sudah punya balance yang benar dari seed
     // Ensure data is still an array after merge
     const finalDataArray = Array.isArray(data) ? data : [];
+    console.log('[COA] Final accounts count:', finalDataArray.length);
+    console.log('[COA] Accounts with balance > 0:', finalDataArray.filter(a => (a.balance || 0) > 0).length);
+    
     setAccounts(finalDataArray);
   };
 
@@ -344,15 +354,18 @@ const COA = () => {
         return;
       }
 
+      // Ensure accounts is always an array
+      const accountsArray = Array.isArray(accounts) ? accounts : [];
+      
       // Cek apakah code sudah ada
-      const existingAccount = accounts.find(a => a.code === formData.code);
+      const existingAccount = accountsArray.find(a => a.code === formData.code);
       if (existingAccount && !editingAccount) {
         showAlert('Duplicate Account Code', `Account code ${formData.code} already exists`);
         return;
       }
 
       if (editingAccount) {
-        const updated = accounts.map(a =>
+        const updated = accountsArray.map(a =>
           a.code === editingAccount.code
             ? { 
                 ...formData, 
@@ -363,7 +376,7 @@ const COA = () => {
               } as Account
             : a
         );
-        await storageService.set('gt_accounts', updated);
+        await storageService.set(StorageKeys.GENERAL_TRADING.ACCOUNTS, updated);
         setAccounts(updated);
       } else {
         const newAccount: Account = {
@@ -375,10 +388,8 @@ const COA = () => {
           timestamp: Date.now(),
           _timestamp: Date.now(),
         };
-        // Ensure accounts is always an array
-        const accountsArray = Array.isArray(accounts) ? accounts : [];
-        const updated = [...accountsArray, newAccount];
-        await storageService.set('gt_accounts', updated);
+        const updated = [...accounts, newAccount];
+        await storageService.set(StorageKeys.GENERAL_TRADING.ACCOUNTS, updated);
         setAccounts(updated);
       }
 
@@ -399,42 +410,41 @@ const COA = () => {
 
   const handleDelete = async (item: Account) => {
     try {
-      console.log('[GT Finance COA] handleDelete called for:', item?.code, item?.name);
+      console.log('[COA] handleDelete called for:', item?.code, item?.name);
       
       if (!item || !item.code) {
         showAlert('Account tidak valid. Mohon coba lagi.', 'Error');
         return;
       }
       
+      // Validate item.code exists (COA uses 'code' as ID field)
+      if (!item.code) {
+        console.error('[COA] Account missing code:', item);
+        showAlert(`❌ Error: Account ${item.name || 'Unknown'} tidak memiliki code. Tidak bisa dihapus.`, 'Error');
+        return;
+      }
+      
       showConfirm(
-        `Hapus Account "${item.code} - ${item.name}"?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        'Safe Delete Confirmation',
+        `Hapus Account: ${item.code} - ${item.name}?\n\n⚠️ Data akan dihapus dengan aman.\n\nTindakan ini tidak bisa dibatalkan.`,
         async () => {
           try {
-            // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
-            // COA menggunakan 'code' sebagai ID field
-            const deleteResult = await deleteGTItem('gt_accounts', item.code, 'code');
-            
-            if (deleteResult.success) {
-              // Reload data dengan helper (handle race condition)
-              const activeAccounts = await reloadGTData('gt_accounts', setAccounts);
-              setAccounts(activeAccounts);
-              await loadData(); // Reload untuk update balances
-              showAlert(`✅ Account "${item.code} - ${item.name}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
-            } else {
-              console.error('[GT Finance COA] Delete failed:', deleteResult.error);
-              showAlert(`❌ Error deleting account "${item.code}": ${deleteResult.error || 'Unknown error'}`, 'Error');
-            }
+            // Delete account from storage
+            const accountsArray = Array.isArray(accounts) ? accounts : [];
+            const updated = accountsArray.filter(a => a.code !== item.code);
+            await storageService.set(StorageKeys.GENERAL_TRADING.ACCOUNTS, updated);
+            setAccounts(updated);
+            await loadData(); // Reload untuk update balances
+            showAlert(`Account ${item.code} - ${item.name} deleted successfully`, 'Success');
           } catch (error: any) {
-            console.error('[GT Finance COA] Error deleting account:', error);
-            showAlert(`❌ Error deleting account: ${error.message}`, 'Error');
+            console.error('[COA] Error deleting account:', error);
+            showAlert('Error', `Error deleting account: ${error.message}`);
           }
-        },
-        undefined,
-        'Safe Delete Confirmation'
+        }
       );
     } catch (error: any) {
-      console.error('[GT Finance COA] Error in handleDelete:', error);
-      showAlert(`Error: ${error.message}`, 'Error');
+      console.error('[COA] Error in handleDelete:', error);
+      showAlert('Error', `Error: ${error.message}`);
     }
   };
 
@@ -525,6 +535,7 @@ const COA = () => {
               totalDebit: 0,
               totalCredit: 0,
               balance: acc.balance || 0,
+              initialBalance: acc.balance || 0,
             });
           }
         }
@@ -538,8 +549,28 @@ const COA = () => {
           // Baca Debit dan Kredit dari COA_update.json (yang sudah disimpan di account data)
           const accAny = acc as any;
           // Coba berbagai kemungkinan field name
-          const debetFromCOA = accAny.debet || accAny.debit || accAny.Debit || accAny.Debet || 0;
-          const kreditFromCOA = accAny.kredit || accAny.credit || accAny.Kredit || accAny.Credit || 0;
+          let debetFromCOA = accAny.debet || accAny.debit || accAny.Debit || accAny.Debet || 0;
+          let kreditFromCOA = accAny.kredit || accAny.credit || accAny.Kredit || accAny.Credit || 0;
+          
+          // Jika debet dan kredit belum ada, coba hitung dari balance yang sudah ada
+          // (untuk data lama yang belum di-seed ulang)
+          if (debetFromCOA === 0 && kreditFromCOA === 0 && acc.balance) {
+            // Untuk Asset/Expense: balance positif = debit, balance negatif = credit
+            // Untuk Liability/Equity/Revenue: balance positif = credit, balance negatif = debit
+            if (acc.type === 'Asset' || acc.type === 'Expense') {
+              if (acc.balance > 0) {
+                debetFromCOA = acc.balance;
+              } else {
+                kreditFromCOA = Math.abs(acc.balance);
+              }
+            } else {
+              if (acc.balance > 0) {
+                kreditFromCOA = acc.balance;
+              } else {
+                debetFromCOA = Math.abs(acc.balance);
+              }
+            }
+          }
           
           // Debit dan Kredit dari journal entries
           const journalDebit = accountBalances[acc.code]?.debit || 0;
@@ -594,49 +625,12 @@ const COA = () => {
     }
   };
 
-  // Download Template Excel
-  const handleDownloadTemplate = () => {
-    try {
-      const templateData = [
-        { 'Account Code': '1-2000', 'Account Name': 'PERSEDIAAN', 'Type': 'Asset' },
-        { 'Account Code': '2-1100', 'Account Name': 'HUTANG', 'Type': 'Liability' },
-        { 'Account Code': '4-1100', 'Account Name': 'PENDAPATAN JUAL', 'Type': 'Revenue' },
-      ];
-
-      const ws = XLSX.utils.json_to_sheet(templateData);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Template');
-      
-      const fileName = `COA_Template.xlsx`;
-      XLSX.writeFile(wb, fileName);
-      showAlert('Success', `✅ Template downloaded! Silakan isi data sesuai format dan import kembali.`);
-    } catch (error: any) {
-      showAlert('Error', `Error downloading template: ${error.message}`);
-    }
-  };
-
   // Import from Excel
   const handleImportExcel = () => {
-    // Show preview dialog dengan contoh header sebelum browse file
-    const exampleHeaders = ['Account Code', 'Account Name', 'Type'];
-    const exampleData = [
-      { 'Account Code': '1-2000', 'Account Name': 'PERSEDIAAN', 'Type': 'Asset' },
-      { 'Account Code': '2-1100', 'Account Name': 'HUTANG', 'Type': 'Liability' },
-      { 'Account Code': '4-1100', 'Account Name': 'PENDAPATAN JUAL', 'Type': 'Revenue' },
-    ];
-    
-    const showPreviewDialog = () => {
-      setDialogState({
-        show: true,
-        type: 'confirm',
-        title: '📋 Format Excel untuk Import COA',
-        message: `Pastikan file Excel Anda memiliki header berikut:\n\n${exampleHeaders.join(' | ')}\n\nContoh data:\n${exampleData.map((row, idx) => `${idx + 1}. ${exampleHeaders.map(h => String(row[h as keyof typeof row] || '')).join(' | ')}`).join('\n')}\n\n⚠️ Catatan:\n- Header harus ada di baris pertama\n- Account Code harus unik\n- Type: Asset, Liability, Equity, Revenue, atau Expense\n\nKlik "Download Template" untuk mendapatkan file Excel template, atau "Lanjutkan" untuk memilih file Excel yang sudah Anda siapkan.`,
-        onConfirm: () => {
-          closeDialog();
-          const input = document.createElement('input');
-          input.type = 'file';
-          input.accept = '.xlsx,.xls,.csv';
-          input.onchange = async (e: any) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xlsx,.xls,.csv';
+    input.onchange = async (e: any) => {
       const file = e.target.files?.[0];
       if (!file) return;
 
@@ -707,7 +701,7 @@ const COA = () => {
               // Ensure accounts is always an array
               const accountsArray = Array.isArray(accounts) ? accounts : [];
               const updated = [...accountsArray, ...newAccounts];
-              await storageService.set('gt_accounts', updated);
+              await storageService.set(StorageKeys.GENERAL_TRADING.ACCOUNTS, updated);
               setAccounts(updated);
               await loadData(); // Reload untuk update balances
               showAlert('Success', `✅ Imported ${newAccounts.length} accounts${errors.length > 0 ? `\n⚠️ ${errors.length} errors` : ''}`);
@@ -724,16 +718,10 @@ const COA = () => {
 
         showConfirm('Confirm Import', `Import ${jsonData.length} accounts from Excel? This will add new accounts to COA.`, importAccounts);
       } catch (error: any) {
-        showAlert('Error', `Error reading Excel file: ${error.message}`);
+        showAlert('Error', `Error importing Excel: ${error.message}`);
       }
     };
     input.click();
-          },
-        onCancel: () => closeDialog(),
-      });
-    };
-    
-    showPreviewDialog();
   };
 
   const columns = [
@@ -893,15 +881,7 @@ const COA = () => {
               {dialogState.message}
             </div>
             
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-              {dialogState.type === 'confirm' && dialogState.title.includes('Format Excel') && (
-                <Button variant="secondary" onClick={() => {
-                  handleDownloadTemplate();
-                  closeDialog();
-                }} style={{ marginRight: 'auto' }}>
-                  📥 Download Template
-                </Button>
-              )}
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
               {dialogState.type === 'confirm' && (
                 <Button variant="secondary" onClick={() => {
                   if (dialogState.onCancel) dialogState.onCancel();

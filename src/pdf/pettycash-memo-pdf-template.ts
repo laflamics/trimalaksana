@@ -1,3 +1,4 @@
+import { ensureLogoIsBase64 } from '../utils/hardcoded-logo';
 /**
  * Template PDF untuk INTERNAL MEMO - Permohonan Dana Petty Cash
  * Format sesuai dengan screenshot yang diberikan user
@@ -36,7 +37,7 @@ export function generatePettyCashMemoHtml({
   bankName,
   recipientName,
 }: PettyCashMemoParams): string {
-  const logoSrc = logo || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzAwN2JmZiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LXNpemU9IjE0IiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkxPR088L3RleHQ+PC9zdmc+';
+  const logoSrc = ensureLogoIsBase64(logo);
   
   // Format tanggal: DD Month YYYY (contoh: 26 November 2025)
   const formatDate = (dateStr: string): string => {
@@ -298,10 +299,10 @@ export function generatePettyCashMemoHtml({
     
     <div class="bank-details">
       <div class="bank-detail-row">
-        <span class="bank-label">No. Rekening:</span> ${bankAccountNo}
+        <span class="bank-label">No. Rekening:</span> ${bankAccountNo || '129-00-1116726-5'}
       </div>
       <div class="bank-detail-row">
-        <span class="bank-label">BANK:</span> ${bankName}
+        <span class="bank-label">BANK:</span> ${bankName || 'Bank MANDIRI, KCP JKT Cimanggis'}
       </div>
       <div class="bank-detail-row">
         <span class="bank-label">Recipient Name:</span> ${recipientName}

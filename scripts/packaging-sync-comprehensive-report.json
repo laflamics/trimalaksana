@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-02-07T22:33:41.458Z",
+  "criticalIssues": [
+    "File missing: deliveryNotes.json"
+  ],
+  "potentialIssues": [],
+  "filesExist": 24,
+  "filesMissing": 1,
+  "filesEmpty": 9
+}

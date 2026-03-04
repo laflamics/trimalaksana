@@ -1,0 +1,126 @@
+{
+  "value": [
+    {
+      "id": "log-1770657763257-z8ta65",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/packaging/finance/reports",
+      "timestamp": "2026-02-09T17:22:43.257Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) trima-laksana-erp/1.0.6-build.138 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36"
+    },
+    {
+      "id": "log-1770657335436-gtez0o",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/packaging/finance/reports",
+      "timestamp": "2026-02-09T17:15:35.436Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+    },
+    {
+      "id": "log-1770614542843-vv0e5w",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/packaging/finance/reports",
+      "timestamp": "2026-02-09T05:22:22.843Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+    },
+    {
+      "id": "log-1770522034258-3rig14",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/packaging/finance/reports",
+      "timestamp": "2026-02-08T03:40:34.258Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+    },
+    {
+      "id": "log-1770522019672-hwuv82",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/packaging/finance/reports",
+      "timestamp": "2026-02-08T03:40:19.672Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+    },
+    {
+      "id": "log-1770521646746-pbql0e",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/packaging/finance/reports",
+      "timestamp": "2026-02-08T03:34:06.746Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+    },
+    {
+      "id": "log-1770521391751-gsesbd",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/packaging/finance/reports",
+      "timestamp": "2026-02-08T03:29:51.752Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+    },
+    {
+      "id": "log-1770521283766-jkmzis",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/packaging/finance/reports",
+      "timestamp": "2026-02-08T03:28:03.766Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+    },
+    {
+      "id": "log-1770519616392-jkoa05",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/packaging/finance/reports",
+      "timestamp": "2026-02-08T03:00:16.392Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+    },
+    {
+      "id": "log-1770519261007-vb6zyf",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/packaging/finance/reports",
+      "timestamp": "2026-02-08T02:54:21.007Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+    },
+    {
+      "id": "log-1770519038332-8gyiaf",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "NAVIGATE",
+      "path": "/packaging/finance/reports",
+      "timestamp": "2026-02-08T02:50:38.332Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+    },
+    {
+      "id": "log-1770519035883-8jr8mm",
+      "userId": "default-admin",
+      "username": "admin",
+      "fullName": "System Administrator",
+      "action": "LOGIN",
+      "path": "/login",
+      "timestamp": "2026-02-08T02:50:35.883Z",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+    }
+  ],
+  "timestamp": 1770657763646,
+  "_timestamp": 1770657763646
+}

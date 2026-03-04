@@ -4,9 +4,10 @@ import Table from '../../../components/Table';
 import type { Column } from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService } from '../../../services/storage';
+import { storageService, StorageKeys } from '../../../services/storage';
 import { deleteGTItem, reloadGTData, filterActiveItems } from '../../../utils/gt-delete-helper';
 import { useDialog } from '../../../hooks/useDialog';
+import { useLanguage } from '../../../hooks/useLanguage';
 import * as XLSX from 'xlsx';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
@@ -27,6 +28,7 @@ interface Customer {
 }
 
 const Customers = () => {
+  const { t } = useLanguage();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [showForm, setShowForm] = useState(false);
   // Custom Dialog - menggunakan hook terpusat
@@ -51,38 +53,61 @@ const Customers = () => {
     loadCustomers();
   }, []);
 
+  // Helper: count filled fields
+  const countFilledFields = (customer: Customer): number => {
+    if (!customer) return 0;
+    let count = 0;
+    const fields = ['kode', 'nama', 'kontak', 'npwp', 'email', 'telepon', 'alamat', 'kategori', 'picTitle'];
+    fields.forEach(field => {
+      const value = customer[field as keyof Customer];
+      if (value && value !== '-' && String(value).trim() !== '') {
+        count++;
+      }
+    });
+    return count;
+  };
+
   const loadCustomers = async () => {
     console.log('[GT Customers] Loading customers...');
-    let dataRaw = await storageService.get<Customer[]>('gt_customers') || [];
+    let dataRaw = await storageService.get<Customer[]>(StorageKeys.GENERAL_TRADING.CUSTOMERS) || [];
     console.log('[GT Customers] Raw data length:', dataRaw.length);
     
     // If we have very few customers, try force reload from file
     if (dataRaw.length <= 1) {
       console.log('[GT Customers] Few customers detected, trying force reload from file...');
-      const fileData = await storageService.forceReloadFromFile<Customer[]>('gt_customers');
+      const fileData = await storageService.forceReloadFromFile<Customer[]>(StorageKeys.GENERAL_TRADING.CUSTOMERS);
       if (fileData && Array.isArray(fileData) && fileData.length > dataRaw.length) {
         console.log(`[GT Customers] Force reload successful: ${fileData.length} customers from file`);
         dataRaw = fileData;
       }
     }
     
-    // Filter out deleted items menggunakan helper function
+    // Filter out deleted items
     const data = filterActiveItems(dataRaw);
     console.log('[GT Customers] Filtered data length:', data.length);
     
-    // CRITICAL: Remove duplicates by kode before setting state
-    const seen = new Set<string>();
-    const uniqueData: Customer[] = [];
+    // Remove duplicates by nama (customer name) - keep the one with most filled fields
+    const grouped = new Map<string, Customer[]>();
     
     data.forEach(customer => {
-      if (customer && customer.kode) {
-        const key = customer.kode.toLowerCase().trim();
-        if (!seen.has(key)) {
-          seen.add(key);
-          uniqueData.push(customer);
-        } else {
-          console.log('[GT Customers] Removed duplicate:', customer.kode, '-', customer.nama);
+      if (customer && customer.nama) {
+        const normalizedName = customer.nama.toLowerCase().trim();
+        if (!grouped.has(normalizedName)) {
+          grouped.set(normalizedName, []);
         }
+        grouped.get(normalizedName)!.push(customer);
+      }
+    });
+    
+    const uniqueData: Customer[] = [];
+    grouped.forEach((customers, name) => {
+      if (customers.length > 1) {
+        // Sort by filled fields (descending) and keep the first one
+        customers.sort((a, b) => countFilledFields(b) - countFilledFields(a));
+        console.log(`[GT Customers] Duplicate found for "${name}": keeping the one with ${countFilledFields(customers[0])} fields filled`);
+        uniqueData.push(customers[0]);
+      } else {
+        uniqueData.push(customers[0]);
       }
     });
     
@@ -92,12 +117,6 @@ const Customers = () => {
     console.log('[GT Customers] Final data length:', numberedData.length);
     
     setCustomers(numberedData);
-    
-    // Save cleaned data back to storage if duplicates were removed
-    if (uniqueData.length < data.length) {
-      console.log('[GT Customers] Saving cleaned data to storage...');
-      await storageService.set('gt_customers', numberedData);
-    }
   };
 
   // Auto generate kode customer: CUST-001, CUST-002, dst
@@ -132,7 +151,7 @@ const Customers = () => {
               } as Customer
             : c
         );
-        await storageService.set('gt_customers', updated);
+        await storageService.set(StorageKeys.GENERAL_TRADING.CUSTOMERS, updated);
         setCustomers(updated.map((c, idx) => ({ ...c, no: idx + 1 })));
       } else {
         // Manual add: selalu auto generate kode (ignore kode yang diisi manual)
@@ -149,7 +168,7 @@ const Customers = () => {
           kode: autoKode,
         } as Customer;
         const updated = [...customers, newCustomer];
-        await storageService.set('gt_customers', updated);
+        await storageService.set(StorageKeys.GENERAL_TRADING.CUSTOMERS, updated);
         setCustomers(updated.map((c, idx) => ({ ...c, no: idx + 1 })));
       }
       setShowForm(false);
@@ -347,7 +366,7 @@ const Customers = () => {
                   });
 
                   const renumbered = updatedCustomers.map((c, idx) => ({ ...c, no: idx + 1 }));
-                  await storageService.set('gt_customers', renumbered);
+                  await storageService.set(StorageKeys.GENERAL_TRADING.CUSTOMERS, renumbered);
                   setCustomers(renumbered);
 
                   if (errors.length > 0) {
@@ -430,13 +449,33 @@ const Customers = () => {
       );
     });
     
-    // Sort berdasarkan kode ID secara natural (SPL-0001, SPL-0002, CTM-068, dst)
+    // Sort by completeness (paling lengkap di atas), then by kode
     const sorted = filtered.sort((a, b) => {
+      // Count filled fields untuk setiap customer
+      const countFields = (customer: Customer): number => {
+        let count = 0;
+        const fields = ['kode', 'nama', 'kontak', 'npwp', 'email', 'telepon', 'alamat', 'kategori', 'picTitle'];
+        fields.forEach(field => {
+          const value = customer[field as keyof Customer];
+          if (value && value !== '-' && String(value).trim() !== '') {
+            count++;
+          }
+        });
+        return count;
+      };
+      
+      const completenessA = countFields(a);
+      const completenessB = countFields(b);
+      
+      // Sort by completeness descending (paling lengkap di atas)
+      if (completenessA !== completenessB) {
+        return completenessB - completenessA;
+      }
+      
+      // If same completeness, sort by kode naturally
       const kodeA = a.kode || '';
       const kodeB = b.kode || '';
       
-      // Natural sort untuk kode dengan format PREFIX-NUMBER
-      // Contoh: SPL-0001, SPL-0002, CTM-068, dll
       const parseKode = (kode: string) => {
         const match = kode.match(/^([A-Z]+)-?(\d+)$/i);
         if (match) {
@@ -451,7 +490,6 @@ const Customers = () => {
       const parsedA = parseKode(kodeA);
       const parsedB = parseKode(kodeB);
       
-      // Sort by prefix first, then by number
       if (parsedA.prefix !== parsedB.prefix) {
         return parsedA.prefix.localeCompare(parsedB.prefix);
       }

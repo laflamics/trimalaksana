@@ -1,0 +1,150 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                    🔌 WEBSOCKET CONNECTION - QUICK FIX                         ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+PROBLEM:
+  ❌ WebSocket connection failing
+  ❌ 502 Bad Gateway errors
+  ❌ CORS errors in console
+  ❌ Data sync blocked
+
+ROOT CAUSE:
+  Old containers still running → Tailscale routing to old server → 502 errors
+
+═══════════════════════════════════════════════════════════════════════════════
+
+SOLUTION - 3 COMMANDS ON PC UTAMA:
+
+1️⃣  CLEANUP OLD CONTAINERS
+    ─────────────────────────────────────────────────────────────────────────
+    cd D:\trimalaksanaapps\possgresql\docker
+    docker-compose -f docker-compose-migration.yml down
+    docker container prune -f
+    docker ps -a
+    
+    ✓ Should show: CONTAINER ID   IMAGE   COMMAND   CREATED   STATUS   PORTS   NAMES
+    ✓ (empty - no containers)
+
+2️⃣  START FRESH SERVICES
+    ─────────────────────────────────────────────────────────────────────────
+    docker-compose -f docker-compose-migration.yml up -d
+    timeout /t 30
+    docker ps
+    
+    ✓ Should show 4 containers:
+      - docker-storage-server-1 (port 9999)
+      - trimalaksana-postgres (port 5432)
+      - trimalaksana-minio (port 9000-9001)
+      - trimalaksana-pgadmin (port 5051)
+
+3️⃣  TEST ENDPOINTS
+    ─────────────────────────────────────────────────────────────────────────
+    curl http://localhost:9999/health
+    curl https://server-tljp.tail75a421.ts.net/health
+    
+    ✓ Both should return: {"status":"ok",...}
+    ✓ NOT 502 error
+
+═══════════════════════════════════════════════════════════════════════════════
+
+THEN ON LAPTOP DEV:
+
+1️⃣  CLEAR BROWSER CACHE
+    ─────────────────────────────────────────────────────────────────────────
+    Open DevTools (F12) and run:
+    localStorage.clear();
+    sessionStorage.clear();
+    location.reload();
+
+2️⃣  CHECK CONNECTION
+    ─────────────────────────────────────────────────────────────────────────
+    Go to Settings > Check Connection
+    ✓ Should show: Connected ✅
+
+3️⃣  VERIFY IN CONSOLE
+    ─────────────────────────────────────────────────────────────────────────
+    Open DevTools (F12) > Console
+    ✓ Should show: [WebSocketClient] ✅ WebSocket connected!
+    ✓ Should NOT show: 502 Bad Gateway or CORS errors
+
+4️⃣  TEST DATA SYNC
+    ─────────────────────────────────────────────────────────────────────────
+    Go to Packaging > Master > Products
+    Add new product → Data appears ✅
+    Refresh page → Data persists ✅
+
+═══════════════════════════════════════════════════════════════════════════════
+
+VERIFICATION CHECKLIST:
+
+PC Utama:
+  ☐ Old containers stopped (docker ps -a shows empty)
+  ☐ Fresh services running (docker ps shows 4 containers)
+  ☐ Local endpoint working (curl http://localhost:9999/health = 200 OK)
+  ☐ Tailscale endpoint working (curl https://server-tljp.tail75a421.ts.net/health = 200 OK)
+
+Laptop Dev:
+  ☐ Browser cache cleared
+  ☐ Page reloaded
+  ☐ Settings shows Connected ✅
+  ☐ Console shows WebSocket connected ✅
+  ☐ New product persists after refresh ✅
+
+═══════════════════════════════════════════════════════════════════════════════
+
+TROUBLESHOOTING:
+
+Still getting 502 errors?
+  → Check: docker ps -a (should show only 4 containers)
+  → If more: docker container prune -f
+  → Check: tasklist | find "node" (should show nothing)
+  → If found: taskkill /IM node.exe /F
+
+WebSocket still not connecting?
+  → Check: localStorage.getItem('websocket_url')
+  → Should be: wss://server-tljp.tail75a421.ts.net/ws
+  → NOT: wss://server-tljp.tail75a421.ts.net:8888/ws
+
+Tailscale endpoint not responding?
+  → Check: tailscale status (should show Connected)
+  → Check: PC Utama is online in Tailscale network
+  → Restart: Restart-Service Tailscale (PowerShell)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+EXPECTED TIMELINE:
+  1. Cleanup: 30 seconds
+  2. Start services: 2 minutes
+  3. Test endpoints: 30 seconds
+  4. Clear cache: 10 seconds
+  5. Verify connection: 30 seconds
+  6. Test data sync: 1 minute
+  ─────────────────────────
+  TOTAL: ~5 minutes
+
+═══════════════════════════════════════════════════════════════════════════════
+
+AFTER THIS WORKS:
+  ✅ All data syncs automatically
+  ✅ Products load from PostgreSQL
+  ✅ Files stored in MinIO
+  ✅ Real-time updates via WebSocket
+  ✅ No more 502 errors
+  ✅ No more CORS errors
+  ✅ Data persists after refresh
+  ✅ Multi-device sync works
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📖 DETAILED GUIDES:
+  - IMMEDIATE_ACTION_REQUIRED.md (overview)
+  - CLEANUP_AND_RESTART.md (step-by-step)
+  - WEBSOCKET_CONNECTION_COMPLETE_GUIDE.md (comprehensive)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Status: 🔴 BLOCKED - Waiting for old containers to be stopped
+
+Next Action: Run cleanup commands on PC Utama NOW!
+
+═══════════════════════════════════════════════════════════════════════════════

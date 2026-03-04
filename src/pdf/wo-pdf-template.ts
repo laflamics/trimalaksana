@@ -1,3 +1,4 @@
+import { ensureLogoIsBase64 } from '../utils/hardcoded-logo';
 /**
  * Template Struktur PDF Work Order (SPK)
  * Diambil dari: desktop/src/workorders.tsx - fungsi generate SPK HTML
@@ -40,6 +41,11 @@ interface Material {
   unit?: string;
   qtyPerUnit?: string | number;
   qty?: string | number;
+  // Additional fields for flexibility
+  material_id?: string;
+  kode?: string;
+  nama?: string;
+  satuan?: string;
 }
 
 interface SOLine {
@@ -118,7 +124,7 @@ export function generateWOHtml({
 }: GenerateWOHtmlParams): string {
   // Logo harus sudah base64 string (dari component yang memanggil template ini)
   // Fallback ke placeholder base64 jika tidak ada
-  const logoSrc = logo || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzAwN2JmZiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LXNpemU9IjE0IiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkxPR088L3RleHQ+PC9zdmc+';
+  const logoSrc = ensureLogoIsBase64(logo);
   
   // Fix SPK number format - support both old format (SPK-xxx) and new format (SPK/xxx)
   const normalizeSPK = (spk: string) => {
@@ -181,30 +187,46 @@ export function generateWOHtml({
 
   // Format material requirement - cari material ID dari master materials
   const woMaterials = Array.isArray(wo.materials) ? wo.materials : [];
+  
+  console.log('[WO Template] Material rendering debug:', {
+    woMaterialsLength: woMaterials.length,
+    woMaterialsSample: woMaterials.slice(0, 3),
+    woObject: {
+      id: wo.id,
+      soNo: wo.soNo,
+      customer: wo.customer,
+      materialsCount: woMaterials.length,
+    }
+  });
+  
   const materialLines: MaterialLine[] = woMaterials.map((m, idx) => {
     const materialName = m.materialName || m.name || '';
-    // Cari material ID dari master materials/products
+    // IMPORTANT: Try multiple ways to find material (seperti di PPIC line 3080)
+    const bomMaterialId = (m.materialId || m.material_id || '').toString().trim().toLowerCase();
+    
     let materialId = m.materialId || m.materialCode || m.id || '';
     
-    // Jika tidak ada materialId, cari dari master materials
-    if (!materialId && materialName) {
+    // Jika tidak ada materialId, cari dari master materials dengan multiple field lookup
+    if (!materialId && bomMaterialId) {
       // Cari dari materials (kategori material)
       const foundMaterial = materials.find((mat) => {
-        const matName = mat.name || '';
-        return matName === materialName || matName.toLowerCase() === materialName.toLowerCase();
+        const mId = (mat.material_id || mat.materialId || mat.kode || '').toString().trim().toLowerCase();
+        const mNama = (mat.nama || mat.name || '').toString().trim().toLowerCase();
+        return mId === bomMaterialId || (bomMaterialId && mNama === bomMaterialId);
       });
       if (foundMaterial) {
-        materialId = foundMaterial.id || foundMaterial.sku || '';
+        materialId = foundMaterial.id || foundMaterial.sku || foundMaterial.material_id || foundMaterial.kode || '';
       }
       
       // Jika masih tidak ketemu, cari dari rawMaterials
       if (!materialId) {
         const foundRawMaterial = rawMaterials.find((rm) => {
-          const rmName = rm.materialName || rm.name || '';
-          return rmName === materialName || rmName.toLowerCase() === materialName.toLowerCase();
+          const rmId = (rm.material_id || rm.materialId || rm.kode || '').toString().trim().toLowerCase();
+          const rmName = (rm.materialName || rm.name || rm.nama || '').toString().trim().toLowerCase();
+          return rmId === bomMaterialId || (bomMaterialId && rmName === bomMaterialId);
         });
         if (foundRawMaterial) {
-          materialId = foundRawMaterial.materialId || foundRawMaterial.materialCode || foundRawMaterial.id || '';
+          materialId = foundRawMaterial.materialId || foundRawMaterial.materialCode || foundRawMaterial.id || foundRawMaterial.kode || '';
         }
       }
     }
@@ -221,6 +243,11 @@ export function generateWOHtml({
       totalUsage: String(Math.round(Number(m.qty || 0))),
       qtyOut: ''
     };
+  });
+
+  console.log('[WO Template] Final materialLines:', {
+    count: materialLines.length,
+    sample: materialLines.slice(0, 3)
   });
 
   const companyName = company?.companyName || 'PT TRIMA LAKSANA JAYA PRATAMA';
@@ -545,7 +572,7 @@ export function generateWOHtml({
           <td>${p.ket}</td>
         </tr>
       `).join('') : '<tr><td colspan="11" style="text-align:center;">No products</td></tr>'}
-      ${productLines.length > 0 && productLines.length < 3 ? Array(3 - productLines.length).fill(0).map(() => `
+      ${productLines.length > 0 && productLines.length < 5 ? Array(5 - productLines.length).fill(0).map(() => `
         <tr>
           <td style="width: 4%; height: 50px;"></td><td style="width: 12%; height: 50px;"></td><td style="width: 18%; height: 50px;"></td><td style="width: 10%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td>
         </tr>
@@ -584,7 +611,7 @@ export function generateWOHtml({
           <td>${m.qtyOut}</td>
         </tr>
       `).join('') : '<tr><td colspan="10" style="text-align:center;">No materials</td></tr>'}
-      ${materialLines.length > 0 && materialLines.length < 3 ? Array(3 - materialLines.length).fill(0).map(() => `
+      ${materialLines.length > 0 && materialLines.length < 5 ? Array(5 - materialLines.length).fill(0).map(() => `
         <tr>
           <td style="width: 4%; height: 50px;"></td><td style="width: 12%; height: 50px;"></td><td style="width: 20%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 10%; height: 50px;"></td><td style="width: 10%; height: 50px;"></td><td style="width: 12%; height: 50px;"></td>
         </tr>

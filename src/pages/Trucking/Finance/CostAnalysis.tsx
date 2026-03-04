@@ -4,8 +4,9 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService } from '../../../services/storage';
+import { storageService, StorageKeys } from '../../../services/storage';
 import { filterActiveItems } from '../../../utils/data-persistence-helper';
+import { setupRealTimeSync, TRUCKING_SYNC_KEYS } from '../../../utils/real-time-sync-helper';
 import { useDialog } from '../../../hooks/useDialog';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
@@ -70,13 +71,21 @@ const CostAnalysis = () => {
 
   useEffect(() => {
     loadData();
+    
+    // Real-time listener untuk server updates
+    const cleanup = setupRealTimeSync({
+      keys: [TRUCKING_SYNC_KEYS.PRODUCTS],
+      onUpdate: loadData,
+    });
+    
+    return cleanup;
   }, []);
 
   const loadData = async () => {
     setIsLoading(true);
     try {
       const [prods] = await Promise.all([
-        storageService.get<Product[]>('trucking_products') || [],
+        storageService.get<Product[]>(StorageKeys.TRUCKING.PRODUCTS) || [],
       ]);
       
       // Filter out deleted items menggunakan helper function

@@ -1,12 +1,13 @@
 /**
  * Real-Time Sync Engine untuk Trucking Business Module
- * Mirip dengan packaging-sync.ts dan gt-sync.ts
+ * Based on gt-sync.ts pattern - simplified but functional
  */
 
 export type SyncPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
 
 import { websocketClient } from './websocket-client';
+import { storageService } from './storage';
 
 export interface SyncOperation {
   id: string;
@@ -16,11 +17,6 @@ export interface SyncOperation {
   timestamp: number;
   retryCount: number;
   metadata?: any;
-}
-
-export interface ConflictResolution {
-  strategy: 'lastWriteWins' | 'merge' | 'manual';
-  resolver?: (local: any, remote: any, key: string) => any;
 }
 
 class TruckingSync {
@@ -36,204 +32,439 @@ class TruckingSync {
   constructor() {
     this.initializeWebSocket();
     this.startQueueProcessor();
-    // Check initial sync status based on storage config
     this.checkInitialSyncStatus();
   }
 
   /**
-   * Check initial sync status based on storage config
+   * Check initial sync status and download server data if needed
    */
   private async checkInitialSyncStatus() {
     try {
-      const storageConfig = JSON.parse(localStorage.getItem('storage_config') || '{"type":"local"}');
+      const selectedBusiness = localStorage.getItem('selectedBusiness');
+      if (selectedBusiness !== 'trucking') {
+        this.syncStatus = 'synced';
+        this.emitStatusChange('synced');
+        return;
+      }
+      
+      const storageConfig = storageService.getConfig();
       
       if (storageConfig.type === 'server' && storageConfig.serverUrl) {
-        // Server mode - check and download data
         this.syncStatus = 'syncing';
         this.emitStatusChange('syncing');
         
         try {
           // Download essential Trucking data from server
           const essentialKeys = [
-            // Master Data
             'trucking_customers', 'trucking_vehicles', 'trucking_drivers', 'trucking_routes',
-            // Operations
-            'trucking_delivery_orders', 'trucking_suratJalan', 'trucking_route_plans',
-            'trucking_unitSchedules', 'trucking_salesOrders',
-            // Finance
-            'trucking_invoices', 'trucking_payments', 'trucking_bills',
-            'trucking_journalEntries', 'trucking_accounts', 'trucking_taxRecords',
-            'trucking_pettycash_requests', 'trucking_pettycash_memos', 'trucking_purchaseOrders',
-            // Notifications
-            'trucking_unitNotifications', 'trucking_suratJalanNotifications',
-            'trucking_invoiceNotifications', 'trucking_pettyCashNotifications',
-            // System
-            'trucking_settings', 'trucking_auditLogs', 'trucking_route_ready',
+            'trucking_delivery_orders', 'trucking_suratJalan', 'trucking_unitSchedules',
+            'trucking_invoices', 'trucking_payments', 'trucking_purchaseOrders',
+            'trucking_suratJalanNotifications', 'trucking_invoiceNotifications',
             'userAccessControl'
           ];
           
-          // Download all essential keys in parallel
           await Promise.all(
             essentialKeys.map(key => this.downloadServerData(key, storageConfig.serverUrl))
           );
           
-          // Check if there are unsynced local changes
-          const unsyncedCount = this.getUnsyncedCount();
-          if (unsyncedCount === 0) {
-            this.syncStatus = 'synced';
-            this.emitStatusChange('synced');
-          } else {
-            // Has local data but server is empty - this is normal for first device
-            this.syncStatus = 'synced';
-            this.emitStatusChange('synced');
-          }
+          this.syncStatus = 'synced';
+          this.emitStatusChange('synced');
         } catch (error) {
-          // If server sync fails but we have local data, still mark as synced for local use
           this.syncStatus = 'synced';
           this.emitStatusChange('synced');
         }
       } else {
-        // Local mode, set status to synced (no server sync needed)
         this.syncStatus = 'synced';
         this.emitStatusChange('synced');
       }
     } catch (error) {
-      // Default to synced on error
       this.syncStatus = 'synced';
       this.emitStatusChange('synced');
     }
   }
 
   private initializeWebSocket() {
-    // WebSocket untuk real-time sync (wajib untuk performa optimal)
     try {
-      // Check if WebSocket is explicitly enabled
       const wsEnabled = localStorage.getItem('websocket_enabled') === 'true';
-      if (!wsEnabled) {
-        // WebSocket disabled - use polling fallback silently
-        return;
-      }
+      if (!wsEnabled) return;
       
-      // Use fixed WebSocket URL
-      const wsUrl = 'ws://server-tljp.tail75a421.ts.net:8888/ws';
+      const wsUrl = 'wss://server-tljp.tail75a421.ts.net/ws';
+      this.ws = new WebSocket(wsUrl);
       
-      // Try to connect WebSocket
-      try {
-        this.ws = new WebSocket(wsUrl);
-        
-        this.ws.onopen = () => {
-          this.syncStatus = 'synced';
-          this.emitStatusChange('synced');
-        };
-        
-        this.ws.onmessage = (event) => {
-          try {
-            const message = JSON.parse(event.data);
-            if (message.type === 'data_change') {
-              // Handle real-time data change from server
-              // Trigger sync for this key
-              this.syncKey(message.key);
-            }
-          } catch (error) {
+      this.ws.onopen = () => {
+        console.log('[TruckingSync] WebSocket connected');
+      };
+      
+      this.ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === 'STORAGE_CHANGED') {
+            this.emitStorageChange(message.key, message.data);
           }
-        };
-        
-        this.ws.onerror = (error) => {
-          // Don't change status on WebSocket error - polling will handle sync
-        };
-        
-        this.ws.onclose = () => {
-          // Try to reconnect after delay
-          setTimeout(() => {
-            if (this.ws?.readyState === WebSocket.CLOSED) {
-              this.initializeWebSocket();
-            }
-          }, 5000);
-        };
-      } catch (error) {
-      }
+        } catch (e) {
+          // Ignore parse errors
+        }
+      };
+      
+      this.ws.onerror = () => {
+        this.ws = null;
+      };
+      
+      this.ws.onclose = () => {
+        this.ws = null;
+      };
     } catch (error) {
+      this.ws = null;
     }
   }
 
-  private async downloadServerData(key: string, serverUrl: string): Promise<void> {
-    try {
-      // Pakai WebSocket saja (lebih cepat, tidak pakai HTTP/Vercel)
-      const ready = await websocketClient.waitUntilReady(10000);
-      if (!ready) {
-        return; // Skip if WebSocket not available
+  /**
+   * Update data dengan instant local update + background sync
+   */
+  async updateData(key: string, data: any, priority: SyncPriority = 'MEDIUM'): Promise<void> {
+    this.pendingChanges.set(key, data);
+    
+    const operation: SyncOperation = {
+      id: `${key}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      key,
+      data,
+      priority,
+      timestamp: Date.now(),
+      retryCount: 0
+    };
+    
+    this.addToQueue(operation);
+    this.emitStorageChange(key, data);
+  }
+
+  private addToQueue(operation: SyncOperation) {
+    this.syncQueue = this.syncQueue.filter(op => op.key !== operation.key);
+    
+    this.syncQueue.push(operation);
+    this.syncQueue.sort((a, b) => {
+      const priorityOrder = { 'CRITICAL': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
+      const aPriority = priorityOrder[a.priority];
+      const bPriority = priorityOrder[b.priority];
+      
+      if (aPriority !== bPriority) {
+        return bPriority - aPriority;
       }
       
-      await websocketClient.get(key);
+      return a.timestamp - b.timestamp;
+    });
+  }
+
+  private startQueueProcessor() {
+    setInterval(async () => {
+      if (this.syncQueue.length > 0 && this.syncStatus !== 'syncing') {
+        await this.processQueue();
+      }
+    }, 10000); // Process every 10 seconds
+  }
+
+  private async processQueue() {
+    if (this.syncQueue.length === 0) return;
+    
+    this.syncStatus = 'syncing';
+    this.emitStatusChange('syncing');
+    
+    try {
+      const operation = this.syncQueue.shift()!;
+      await this.syncOperation(operation);
+      
+      if (this.syncQueue.length === 0) {
+        this.syncStatus = 'synced';
+        this.emitStatusChange('synced');
+      }
+    } catch (error) {
+      this.syncStatus = 'error';
+      this.emitStatusChange('error');
+    }
+  }
+
+  private async syncOperation(operation: SyncOperation): Promise<void> {
+    try {
+      const storageConfig = storageService.getConfig();
+      
+      if (storageConfig.type === 'local') {
+        return;
+      }
+      
+      if (storageConfig.serverUrl) {
+        await this.syncToServer(operation.key, operation.data, storageConfig.serverUrl);
+      }
+    } catch (error) {
+      operation.retryCount++;
+      
+      if (operation.retryCount < this.maxRetries) {
+        const delay = this.baseRetryDelay * Math.pow(2, operation.retryCount);
+        
+        const timeoutId = setTimeout(() => {
+          this.addToQueue(operation);
+          this.retryTimeouts.delete(operation.id);
+        }, delay);
+        
+        this.retryTimeouts.set(operation.id, timeoutId);
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  private async syncToServer(key: string, data: any, serverUrl: string): Promise<void> {
+    const response = await fetch(`${serverUrl}/api/storage/${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        value: data,
+        timestamp: Date.now()
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+  }
+
+  /**
+   * Download data from server and merge with local data
+   */
+  private async downloadServerData(key: string, serverUrl: string): Promise<void> {
+    try {
+      const currentData = localStorage.getItem(key);
+      let currentItems: any[] = [];
+      
+      if (currentData) {
+        try {
+          const parsed = JSON.parse(currentData);
+          currentItems = parsed.value || parsed || [];
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
+      
+      const response = await fetch(`${serverUrl}/api/storage/${encodeURIComponent(key)}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const serverDataRaw = await response.json();
+      
+      let serverData = serverDataRaw;
+      if (serverDataRaw && typeof serverDataRaw === 'object' && 'value' in serverDataRaw) {
+        serverData = serverDataRaw.value;
+      }
+      
+      let serverItems: any[] = [];
+      
+      if (serverData && serverData.value && Array.isArray(serverData.value)) {
+        serverItems = serverData.value;
+      } else if (Array.isArray(serverData)) {
+        serverItems = serverData;
+      } else if (serverData && serverData.data && Array.isArray(serverData.data)) {
+        serverItems = serverData.data;
+      } else if (serverData && serverData.items && Array.isArray(serverData.items)) {
+        serverItems = serverData.items;
+      }
+      
+      if (serverItems.length === 0) {
+        return;
+      }
+      
+      const mergedItems = [...currentItems];
+      let newCount = 0;
+      
+      serverItems.forEach(serverItem => {
+        const exists = currentItems.some(localItem => 
+          localItem.id === serverItem.id || 
+          localItem.sjNo === serverItem.sjNo ||
+          localItem.doNo === serverItem.doNo
+        );
+        
+        if (!exists) {
+          mergedItems.push(serverItem);
+          newCount++;
+        }
+      });
+      
+      const finalData = {
+        value: mergedItems,
+        timestamp: Date.now(),
+        _timestamp: Date.now(),
+        lastUpdate: new Date().toISOString(),
+        syncedFromServer: true,
+        serverSyncAt: new Date().toISOString(),
+        newItemsAdded: newCount
+      };
+      
+      localStorage.setItem(key, JSON.stringify(finalData));
+      
+      window.dispatchEvent(new CustomEvent('app-storage-changed', {
+        detail: { 
+          key,
+          value: mergedItems,
+          action: 'server-sync'
+        }
+      }));
+      
     } catch (error) {
       // Don't throw - allow sync to continue
     }
   }
 
-  private getUnsyncedCount(): number {
-    // Check localStorage for unsynced items
-    // This is a simplified check - in real implementation, you'd track pending changes
-    return 0; // Assume synced if no explicit tracking
-  }
-
-  private syncKey(key: string): void {
-    // Trigger sync for specific key
-    // This would integrate with storageService
-  }
-
-  private startQueueProcessor(): void {
-    // Process sync queue periodically
-    setInterval(() => {
-      if (this.syncQueue.length > 0) {
-        const operation = this.syncQueue.shift();
-        if (operation) {
-          this.processSyncOperation(operation);
+  /**
+   * Force download all Trucking data from server
+   */
+  async forceDownloadFromServer(): Promise<void> {
+    const storageConfig = storageService.getConfig();
+    
+    if (storageConfig.type !== 'server' || !storageConfig.serverUrl) {
+      throw new Error('Server mode not configured');
+    }
+    
+    this.syncStatus = 'syncing';
+    this.emitStatusChange('syncing');
+    
+    try {
+      const dataTypes = [
+        'trucking_customers', 'trucking_vehicles', 'trucking_drivers', 'trucking_routes',
+        'trucking_delivery_orders', 'trucking_suratJalan', 'trucking_unitSchedules',
+        'trucking_invoices', 'trucking_payments', 'trucking_purchaseOrders',
+        'userAccessControl'
+      ];
+      
+      for (const dataType of dataTypes) {
+        try {
+          await this.downloadServerData(dataType, storageConfig.serverUrl);
+        } catch (error) {
+          // Continue with other data types
         }
       }
-    }, 1000);
-  }
-
-  private async processSyncOperation(operation: SyncOperation): Promise<void> {
-    // Process individual sync operation
-    // This would integrate with storageService to sync data
-  }
-
-  private emitStatusChange(status: SyncStatus): void {
-    this.syncStatus = status;
-    // Emit to storageService so Layout can listen
-    const listeners = this.listeners.get('status');
-    if (listeners) {
-      listeners.forEach(listener => listener(status));
+      
+      this.syncStatus = 'synced';
+      this.emitStatusChange('synced');
+      
+    } catch (error) {
+      this.syncStatus = 'error';
+      this.emitStatusChange('error');
+      throw error;
     }
   }
 
-  getStatus(): SyncStatus {
-    return this.syncStatus;
+  private getUnsyncedCount(): number {
+    return this.syncQueue.length + this.pendingChanges.size;
   }
 
-  onStatusChange(callback: (status: SyncStatus) => void): () => void {
-    if (!this.listeners.has('status')) {
-      this.listeners.set('status', []);
+  getQueueStatus() {
+    return {
+      queueLength: this.syncQueue.length,
+      pendingChanges: this.pendingChanges.size,
+      status: this.syncStatus,
+      retryCount: this.retryTimeouts.size
+    };
+  }
+
+  onSyncStatusChange(callback: (status: SyncStatus) => void): () => void {
+    if (!this.listeners.has('syncStatus')) {
+      this.listeners.set('syncStatus', []);
     }
-    this.listeners.get('status')!.push(callback);
     
-    // Return unsubscribe function
+    this.listeners.get('syncStatus')!.push(callback);
+    
     return () => {
-      const listeners = this.listeners.get('status');
-      if (listeners) {
-        const index = listeners.indexOf(callback);
-        if (index > -1) {
-          listeners.splice(index, 1);
-        }
+      const callbacks = this.listeners.get('syncStatus') || [];
+      const index = callbacks.indexOf(callback);
+      if (index > -1) {
+        callbacks.splice(index, 1);
       }
     };
   }
 
-  destroy(): void {
+  onStorageChange(key: string, callback: (data: any) => void): () => void {
+    if (!this.listeners.has(key)) {
+      this.listeners.set(key, []);
+    }
+    
+    this.listeners.get(key)!.push(callback);
+    
+    return () => {
+      const callbacks = this.listeners.get(key) || [];
+      const index = callbacks.indexOf(callback);
+      if (index > -1) {
+        callbacks.splice(index, 1);
+      }
+    };
+  }
+
+  getSyncStatus(): SyncStatus {
+    return this.syncStatus;
+  }
+
+  async forceSyncAll(): Promise<void> {
+    if (this.syncQueue.length === 0 && this.pendingChanges.size === 0) {
+      this.syncStatus = 'synced';
+      this.emitStatusChange('synced');
+      return;
+    }
+    
+    this.syncStatus = 'syncing';
+    this.emitStatusChange('syncing');
+    
+    try {
+      for (const [key, data] of this.pendingChanges.entries()) {
+        await this.updateData(key, data, 'HIGH');
+      }
+      
+      while (this.syncQueue.length > 0) {
+        await this.processQueue();
+      }
+      
+      this.syncStatus = 'synced';
+      this.emitStatusChange('synced');
+    } catch (error) {
+      this.syncStatus = 'error';
+      this.emitStatusChange('error');
+      throw error;
+    }
+  }
+
+  private emitStatusChange(status: SyncStatus) {
+    const callbacks = this.listeners.get('syncStatus') || [];
+    callbacks.forEach(callback => {
+      try {
+        callback(status);
+      } catch (error) {
+        // Ignore callback errors
+      }
+    });
+  }
+
+  private emitStorageChange(key: string, data: any) {
+    const callbacks = this.listeners.get(key) || [];
+    callbacks.forEach(callback => {
+      try {
+        callback(data);
+      } catch (error) {
+        // Ignore callback errors
+      }
+    });
+  }
+
+  destroy() {
     if (this.ws) {
       this.ws.close();
-      this.ws = null;
     }
+    
+    for (const timeoutId of this.retryTimeouts.values()) {
+      clearTimeout(timeoutId);
+    }
+    
+    this.retryTimeouts.clear();
+    this.listeners.clear();
     this.syncQueue = [];
     this.pendingChanges.clear();
   }

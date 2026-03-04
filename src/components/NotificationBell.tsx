@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import Button from './Button';
 import '../styles/common.css';
 
@@ -15,6 +16,7 @@ interface NotificationBellProps {
   notifications: Notification[];
   onNotificationClick?: (notification: Notification) => void;
   onDeleteNotification?: (notification: Notification) => void;
+  onSJReminder?: (notification: Notification) => void;
   icon?: string;
   emptyMessage?: string;
 }
@@ -23,6 +25,7 @@ const NotificationBell = ({
   notifications, 
   onNotificationClick,
   onDeleteNotification,
+  onSJReminder,
   icon = '🔔',
   emptyMessage = 'Tidak ada notifikasi'
 }: NotificationBellProps) => {
@@ -30,6 +33,7 @@ const NotificationBell = ({
   const [dialogPosition, setDialogPosition] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
   const dialogRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const clickDebounceRef = useRef<{ [key: string]: number }>({});
 
   // Update dialog position saat dialog dibuka
   useEffect(() => {
@@ -88,6 +92,17 @@ const NotificationBell = ({
   };
 
   const handleNotificationClick = (notification: Notification) => {
+    // Debounce: prevent multiple clicks on same notification within 1 second
+    const now = Date.now();
+    const lastClickTime = clickDebounceRef.current[notification.id] || 0;
+    
+    if (now - lastClickTime < 1000) {
+      console.log('[NotificationBell] Debounced click on notification:', notification.id);
+      return;
+    }
+    
+    clickDebounceRef.current[notification.id] = now;
+    
     if (onNotificationClick) {
       onNotificationClick(notification);
     } else if (notification.onClick) {
@@ -95,6 +110,219 @@ const NotificationBell = ({
     }
     setShowDialog(false);
   };
+
+  const dialogContent = showDialog && (
+    <div
+      ref={dialogRef}
+      style={{
+        position: 'fixed',
+        top: `${dialogPosition.top}px`,
+        right: `${dialogPosition.right}px`,
+        width: '360px',
+        maxWidth: '90vw',
+        maxHeight: '500px',
+        backgroundColor: 'var(--bg-secondary)',
+        border: '1px solid var(--border-color)',
+        borderRadius: '8px',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+        zIndex: 10000,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          padding: '12px 16px',
+          borderBottom: '1px solid var(--border-color)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <strong style={{ fontSize: '14px', color: 'var(--text-primary)' }}>
+          Notifikasi ({notifications.length})
+        </strong>
+        <button
+          onClick={() => setShowDialog(false)}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            fontSize: '18px',
+            padding: '0',
+            width: '24px',
+            height: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          ×
+        </button>
+      </div>
+
+      {/* Notifications List */}
+      <div
+        style={{
+          overflowY: 'auto',
+          maxHeight: '400px',
+        }}
+      >
+        {sortedNotifications.length === 0 ? (
+          <div
+            style={{
+              padding: '40px 20px',
+              textAlign: 'center',
+              color: 'var(--text-secondary)',
+              fontSize: '13px',
+            }}
+          >
+            {emptyMessage}
+          </div>
+        ) : (
+          sortedNotifications.map((notification, idx) => (
+            <div
+              key={notification.id || idx}
+              style={{
+                padding: '12px 16px',
+                borderBottom: idx < sortedNotifications.length - 1 ? '1px solid var(--border-color)' : 'none',
+                transition: 'background-color 0.2s ease',
+                backgroundColor: 'var(--bg-secondary)',
+                position: 'relative',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--hover-bg)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--bg-secondary)';
+              }}
+            >
+              <div
+                onClick={() => handleNotificationClick(notification)}
+                style={{
+                  cursor: 'pointer',
+                  paddingRight: (onDeleteNotification || onSJReminder) ? '60px' : '0',
+                  userSelect: 'none',
+                }}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    handleNotificationClick(notification);
+                  }
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    color: 'var(--text-primary)',
+                    marginBottom: '4px',
+                  }}
+                >
+                  {notification.title}
+                </div>
+                <div
+                  style={{
+                    fontSize: '12px',
+                    color: 'var(--text-secondary)',
+                    marginBottom: '4px',
+                    lineHeight: '1.4',
+                  }}
+                >
+                  {notification.message}
+                </div>
+                {notification.timestamp && (
+                  <div
+                    style={{
+                      fontSize: '10px',
+                      color: 'var(--text-secondary)',
+                      opacity: 0.7,
+                    }}
+                  >
+                    {formatTime(notification.timestamp)}
+                  </div>
+                )}
+              </div>
+              {onSJReminder && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSJReminder(notification);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: '8px',
+                    right: onDeleteNotification ? '32px' : '8px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: notification.reminderSent ? '#4CAF50' : '#FF9800',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    padding: '4px',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '24px',
+                    height: '24px',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = notification.reminderSent 
+                      ? 'rgba(76, 175, 80, 0.1)' 
+                      : 'rgba(255, 152, 0, 0.1)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
+                  title={notification.reminderSent ? 'Reminder sudah dikirim' : 'SJ Reminder'}
+                >
+                  {notification.reminderSent ? '✅' : '📦'}
+                </button>
+              )}
+              {onDeleteNotification && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteNotification(notification);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: '8px',
+                    right: '8px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#EF4444',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    padding: '4px',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '24px',
+                    height: '24px',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
+                  title="Hapus notifikasi"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ position: 'relative', display: 'inline-block' }}>
@@ -150,192 +378,9 @@ const NotificationBell = ({
         )}
       </button>
 
-      {showDialog && (
-        <>
-          {/* Overlay backdrop untuk memastikan dialog selalu di layer paling luar */}
-          <div
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 99998,
-              backgroundColor: 'transparent',
-              pointerEvents: 'none',
-            }}
-          />
-          <div
-            ref={dialogRef}
-            style={{
-              position: 'fixed',
-              top: `${dialogPosition.top}px`,
-              right: `${dialogPosition.right}px`,
-              width: '360px',
-              maxWidth: '90vw',
-              maxHeight: '500px',
-              backgroundColor: 'var(--bg-secondary)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '8px',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-              zIndex: 99999,
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
-          {/* Header */}
-          <div
-            style={{
-              padding: '12px 16px',
-              borderBottom: '1px solid var(--border-color)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            <strong style={{ fontSize: '14px', color: 'var(--text-primary)' }}>
-              Notifikasi ({notifications.length})
-            </strong>
-            <button
-              onClick={() => setShowDialog(false)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                fontSize: '18px',
-                padding: '0',
-                width: '24px',
-                height: '24px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              ×
-            </button>
-          </div>
-
-          {/* Notifications List */}
-          <div
-            style={{
-              overflowY: 'auto',
-              maxHeight: '400px',
-            }}
-          >
-            {sortedNotifications.length === 0 ? (
-              <div
-                style={{
-                  padding: '40px 20px',
-                  textAlign: 'center',
-                  color: 'var(--text-secondary)',
-                  fontSize: '13px',
-                }}
-              >
-                {emptyMessage}
-              </div>
-            ) : (
-              sortedNotifications.map((notification, idx) => (
-                <div
-                  key={notification.id || idx}
-                  style={{
-                    padding: '12px 16px',
-                    borderBottom: idx < sortedNotifications.length - 1 ? '1px solid var(--border-color)' : 'none',
-                    transition: 'background-color 0.2s ease',
-                    backgroundColor: 'var(--bg-secondary)',
-                    position: 'relative',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--hover-bg)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--bg-secondary)';
-                  }}
-                >
-                  <div
-                    onClick={() => handleNotificationClick(notification)}
-                    style={{
-                      cursor: 'pointer',
-                      paddingRight: onDeleteNotification ? '30px' : '0',
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: '13px',
-                        fontWeight: '600',
-                        color: 'var(--text-primary)',
-                        marginBottom: '4px',
-                      }}
-                    >
-                      {notification.title}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: '12px',
-                        color: 'var(--text-secondary)',
-                        marginBottom: '4px',
-                        lineHeight: '1.4',
-                      }}
-                    >
-                      {notification.message}
-                    </div>
-                    {notification.timestamp && (
-                      <div
-                        style={{
-                          fontSize: '10px',
-                          color: 'var(--text-secondary)',
-                          opacity: 0.7,
-                        }}
-                      >
-                        {formatTime(notification.timestamp)}
-                      </div>
-                    )}
-                  </div>
-                  {onDeleteNotification && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteNotification(notification);
-                      }}
-                      style={{
-                        position: 'absolute',
-                        top: '8px',
-                        right: '8px',
-                        background: 'transparent',
-                        border: 'none',
-                        color: '#EF4444',
-                        cursor: 'pointer',
-                        fontSize: '14px',
-                        padding: '4px',
-                        borderRadius: '4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: '24px',
-                        height: '24px',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                      }}
-                      title="Hapus notifikasi"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-        </>
-      )}
+      {typeof window !== 'undefined' && window.document ? createPortal(dialogContent, document.body) : dialogContent}
     </div>
   );
 };
 
 export default NotificationBell;
-

@@ -6,7 +6,7 @@
 
 import { packagingSync } from './packaging-sync';
 import { workflowStateMachine } from './workflow-state-machine';
-import { materialAllocator } from './material-allocator';
+import { StorageKeys } from './storage';
 
 export interface OptimisticResult {
   success: boolean;
@@ -43,7 +43,7 @@ class OptimisticOperations {
       };
       
       // 2. Update GRN data immediately
-      const currentGRNs = await packagingSync.getData('grn');
+      const currentGRNs = await packagingSync.getData(StorageKeys.PACKAGING.GRN);
       const existingIndex = currentGRNs.findIndex((g: any) => g.id === grnData.id);
       
       let updatedGRNs;
@@ -55,7 +55,7 @@ class OptimisticOperations {
       }
       
       // 3. INSTANT inventory update (optimistic)
-      const currentInventory = await packagingSync.getData('inventory');
+      const currentInventory = await packagingSync.getData(StorageKeys.PACKAGING.INVENTORY);
       const updatedInventory = currentInventory.map((item: any) => {
         if (item.codeItem === grnData.materialId || item.id === grnData.materialId) {
           return {
@@ -72,7 +72,7 @@ class OptimisticOperations {
       });
       
       // 4. INSTANT notifications update (optimistic)
-      const currentNotifications = await packagingSync.getData('productionNotifications');
+      const currentNotifications = await packagingSync.getData(StorageKeys.PACKAGING.PRODUCTION_NOTIFICATIONS);
       const updatedNotifications = currentNotifications.map((notif: any) => {
         if (notif.spkNo === grnData.spkNo || notif.soNo === grnData.poNo) {
           return {
@@ -89,13 +89,13 @@ class OptimisticOperations {
       
       // 5. Update all data immediately using packagingSync (HIGH priority for instant UI)
       await Promise.all([
-        packagingSync.updateData('grn', updatedGRNs, 'CRITICAL'),
-        packagingSync.updateData('inventory', updatedInventory, 'HIGH'),
-        packagingSync.updateData('productionNotifications', updatedNotifications, 'MEDIUM')
+        packagingSync.updateData(StorageKeys.PACKAGING.GRN, updatedGRNs, 'CRITICAL'),
+        packagingSync.updateData(StorageKeys.PACKAGING.INVENTORY, updatedInventory, 'HIGH'),
+        packagingSync.updateData(StorageKeys.PACKAGING.PRODUCTION_NOTIFICATIONS, updatedNotifications, 'MEDIUM')
       ]);
       
       // 6. Queue background workflow processing (non-blocking)
-      this.queueWorkflowTransition('grn', grnData.id, 'CLOSE');
+      this.queueWorkflowTransition(StorageKeys.PACKAGING.GRN, grnData.id, 'CLOSE');
       
       return {
         success: true,
@@ -132,7 +132,7 @@ class OptimisticOperations {
     
     try {
       // 1. INSTANT LOCAL UPDATE
-      const currentProductions = await packagingSync.getData('production');
+      const currentProductions = await packagingSync.getData(StorageKeys.PACKAGING.PRODUCTION);
       const existingProduction = currentProductions.find((p: any) => p.id === productionData.id);
       
       const prevProgress = existingProduction?.progress || existingProduction?.producedQty || 0;
@@ -160,7 +160,7 @@ class OptimisticOperations {
       );
       
       // 3. INSTANT QC record creation (optimistic)
-      const currentQC = await packagingSync.getData('qc');
+      const currentQC = await packagingSync.getData(StorageKeys.PACKAGING.QC);
       const newQCRecord = {
         id: 'qc-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
         qcNo: `QC-${productionData.productionNo}-${Date.now()}`,
@@ -184,10 +184,10 @@ class OptimisticOperations {
       
       // 5. Update all data immediately
       await Promise.all([
-        packagingSync.updateData('production', updatedProductions, 'CRITICAL'),
-        packagingSync.updateData('qc', updatedQC, 'HIGH'),
+        packagingSync.updateData(StorageKeys.PACKAGING.PRODUCTION, updatedProductions, 'CRITICAL'),
+        packagingSync.updateData(StorageKeys.PACKAGING.QC, updatedQC, 'HIGH'),
         ...(materialUsageResult.inventoryUpdated ? 
-          [packagingSync.updateData('inventory', materialUsageResult.updatedInventory, 'HIGH')] : 
+          [packagingSync.updateData(StorageKeys.PACKAGING.INVENTORY, materialUsageResult.updatedInventory, 'HIGH')] : 
           []
         )
       ]);
@@ -225,7 +225,7 @@ class OptimisticOperations {
     
     try {
       // 1. INSTANT SO confirmation
-      const currentSOs = await packagingSync.getData('salesOrders');
+      const currentSOs = await packagingSync.getData(StorageKeys.PACKAGING.SALES_ORDERS);
       const updatedSOs = currentSOs.map((so: any) => {
         if (so.id === soData.id) {
           return {
@@ -240,7 +240,7 @@ class OptimisticOperations {
       });
       
       // 2. INSTANT SPK creation (optimistic)
-      const currentSPKs = await packagingSync.getData('spk');
+      const currentSPKs = await packagingSync.getData(StorageKeys.PACKAGING.SPK);
       const newSPKs = soData.items.map((item: any, index: number) => ({
         id: 'spk-' + Date.now() + '-' + index,
         spkNo: `SPK-${soData.soNo}-${String.fromCharCode(65 + index)}`, // SPK-SO001-A, SPK-SO001-B, etc.
@@ -259,7 +259,7 @@ class OptimisticOperations {
       const updatedSPKs = [...currentSPKs, ...newSPKs];
       
       // 3. INSTANT production notifications (optimistic)
-      const currentNotifications = await packagingSync.getData('productionNotifications');
+      const currentNotifications = await packagingSync.getData(StorageKeys.PACKAGING.PRODUCTION_NOTIFICATIONS);
       const newNotifications = newSPKs.map((spk: any) => ({
         id: 'notif-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
         spkNo: spk.spkNo,
@@ -277,9 +277,9 @@ class OptimisticOperations {
       
       // 4. Update all data immediately
       await Promise.all([
-        packagingSync.updateData('salesOrders', updatedSOs, 'CRITICAL'),
-        packagingSync.updateData('spk', updatedSPKs, 'HIGH'),
-        packagingSync.updateData('productionNotifications', updatedNotifications, 'MEDIUM')
+        packagingSync.updateData(StorageKeys.PACKAGING.SALES_ORDERS, updatedSOs, 'CRITICAL'),
+        packagingSync.updateData(StorageKeys.PACKAGING.SPK, updatedSPKs, 'HIGH'),
+        packagingSync.updateData(StorageKeys.PACKAGING.PRODUCTION_NOTIFICATIONS, updatedNotifications, 'MEDIUM')
       ]);
       
       // 5. Queue background workflow processing
@@ -308,9 +308,9 @@ class OptimisticOperations {
   private async calculateOptimisticMaterialUsage(spkNo: string, qtyProduced: number) {
     try {
       // Get BOM data for material calculation
-      const bomData = await packagingSync.getData('bom');
-      const spkData = await packagingSync.getData('spk');
-      const currentInventory = await packagingSync.getData('inventory');
+      const bomData = await packagingSync.getData(StorageKeys.PACKAGING.BOM);
+      const spkData = await packagingSync.getData(StorageKeys.PACKAGING.SPK);
+      const currentInventory = await packagingSync.getData(StorageKeys.PACKAGING.INVENTORY);
       
       const spk = spkData.find((s: any) => s.spkNo === spkNo);
       if (!spk || !spk.productId) {

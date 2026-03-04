@@ -3,8 +3,9 @@ import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
+import DateRangeFilter from '../../components/DateRangeFilter';
 import NotificationBell from '../../components/NotificationBell';
-import { storageService, extractStorageValue } from '../../services/storage';
+import { storageService, extractStorageValue, StorageKeys } from '../../services/storage';
 import { filterActiveItems } from '../../utils/data-persistence-helper';
 import { deletePackagingItem, deletePackagingItems, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import { generatePOHtml } from '../../pdf/po-pdf-template';
@@ -13,6 +14,8 @@ import { generatePRHtml } from '../../pdf/pr-pdf-template';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
 import { useDialog } from '../../hooks/useDialog';
+import { useLanguage } from '../../hooks/useLanguage';
+import BlobService from '../../services/blob-service';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
 import { logCreate, logUpdate, logDelete } from '../../utils/activity-logger';
@@ -27,7 +30,8 @@ interface PurchaseOrder {
   spkNo?: string;
   sourcePRId?: string;
   materialItem: string;
-  materialId?: string;
+  material_id?: string;
+  materialId?: string; // Deprecated - use material_id
   qty: number;
   price: number;
   total: number;
@@ -71,7 +75,8 @@ interface PurchaseRequest {
   customer: string;
   product: string;
   items: Array<{
-    materialId: string;
+    material_id: string;
+    materialId?: string; // Deprecated - use material_id
     materialName: string;
     materialKode: string;
     supplier: string;
@@ -209,7 +214,7 @@ const POActionMenu = ({
                   onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
                   onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                 >
-                  👁️ View Detail PO Sheet
+                  👁️ View Detail PR
                 </button>
               )}
               {onViewDetailPOFull && (
@@ -396,6 +401,7 @@ const POActionMenu = ({
 };
 
 const Purchasing = () => {
+  const { t } = useLanguage();
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -410,6 +416,8 @@ const Purchasing = () => {
   const [editPriceInputValue, setEditPriceInputValue] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'outstanding'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [selectedPR, setSelectedPR] = useState<PurchaseRequest | null>(null);
   const [viewPdfData, setViewPdfData] = useState<{ html: string; poNo: string } | null>(null);
   const [viewPRPdfData, setViewPRPdfData] = useState<{ html: string; prNo: string } | null>(null);
@@ -422,6 +430,7 @@ const Purchasing = () => {
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(50); // 50 items per page untuk performa optimal
+  const [tableCurrentPage, setTableCurrentPage] = useState(1);
   const [materialInputValue, setMaterialInputValue] = useState('');
   const [supplierInputValue, setSupplierInputValue] = useState('');
   const [showSupplierDialog, setShowSupplierDialog] = useState(false);
@@ -448,6 +457,9 @@ const Purchasing = () => {
   
   // Custom Dialog - menggunakan hook terpusat
   const { showAlert, showConfirm, closeDialog, DialogComponent } = useDialog();
+  
+  // Ref untuk track if GRN save is in progress (prevent race condition)
+  const grnSavingRef = useRef<boolean>(false);
 
   // Filtered suppliers for dialog
   const filteredSuppliersForDialog = useMemo(() => {
@@ -505,6 +517,19 @@ const Purchasing = () => {
       return cleaned || '0';
     }
     return value;
+  };
+
+  // Helper function untuk get material_id (support backward compatibility)
+  const getMaterialId = (item: any): string => {
+    return (item.material_id || item.materialId || '').toString().trim();
+  };
+
+  // Helper function untuk find material by ID (support backward compatibility)
+  const findMaterialById = (materialId: string): Material | undefined => {
+    if (!materialId) return undefined;
+    return materials.find(m => 
+      (m.material_id || m.kode || '').toString().trim() === materialId
+    );
   };
 
   useEffect(() => {
@@ -713,7 +738,7 @@ const Purchasing = () => {
       };
       const ordersArray = Array.isArray(orders) ? orders : [];
       const updated = ordersArray.map(o => o.id === editingItem.id ? updatedPO : o);
-      await storageService.set('purchaseOrders', updated);
+      await storageService.set(StorageKeys.PACKAGING.PURCHASE_ORDERS, updated);
       setOrders(updated);
       // Log activity
       try {
@@ -781,7 +806,7 @@ const Purchasing = () => {
         };
         const ordersArray = Array.isArray(orders) ? orders : [];
         const updated = [...ordersArray, newPO];
-        await storageService.set('purchaseOrders', updated);
+        await storageService.set(StorageKeys.PACKAGING.PURCHASE_ORDERS, updated);
         setOrders(updated);
         
         // Log activity
@@ -813,9 +838,9 @@ const Purchasing = () => {
           });
           
           // Check if any PR was updated
-          const hasUpdatedPR = updatedPRs.some((pr, idx) => pr.status === 'PO_CREATED' && prArray[idx].status === 'PENDING');
+          const hasUpdatedPR = (Array.isArray(updatedPRs) && updatedPRs.some((pr, idx) => pr.status === 'PO_CREATED' && prArray[idx].status === 'PENDING')) || false;
           if (hasUpdatedPR) {
-            await storageService.set('purchaseRequests', updatedPRs);
+            await storageService.set(StorageKeys.PACKAGING.PURCHASE_REQUESTS, updatedPRs);
             setPurchaseRequests(updatedPRs);
           }
         }
@@ -1093,7 +1118,8 @@ const Purchasing = () => {
     // Pre-load GRN data sebelum dialog dibuka untuk performa lebih cepat
     try {
       const grnData = await storageService.get<any[]>('grnPackaging') || [];
-      const grnsForPO = grnData.filter((grn: any) => 
+      const grnDataArray = Array.isArray(grnData) ? grnData : [];
+      const grnsForPO = grnDataArray.filter((grn: any) => 
         (grn.poNo || '').toString().trim() === (item.poNo || '').toString().trim()
       );
       const totalReceived = grnsForPO.reduce((sum: number, grn: any) => sum + (grn.qtyReceived || 0), 0);
@@ -1113,14 +1139,24 @@ const Purchasing = () => {
   };
 
   const handleSaveReceipt = async (receiptData: {
-    qtyReceived: number; receivedDate: string; notes?: string; suratJalan?: string; suratJalanName?: string; invoiceNo?: string; invoiceFile?: string; invoiceFileName?: string; sitePlan?: string 
+    qtyReceived: number; receivedDate: string; notes?: string; suratJalan?: string; suratJalanId?: string; suratJalanName?: string; invoiceNo?: string; invoiceFile?: string; invoiceFileId?: string; invoiceFileName?: string; sitePlan?: string 
 }) => {
+    // CRITICAL: Prevent race condition - if already saving, return immediately
+    if (grnSavingRef.current) {
+      console.warn('[GRN] Save already in progress, ignoring duplicate request');
+      return;
+    }
+    
     if (!selectedPOForReceipt) return;
 
     try {
+      // Mark as saving
+      grnSavingRef.current = true;
+      
       // IMPORTANT: Validate PO is not deleted (tombstone protection)
       if ((selectedPOForReceipt as any).deleted === true || (selectedPOForReceipt as any).deletedAt) {
         showAlert('PO ini sudah dihapus. Tidak bisa membuat GRN untuk PO yang sudah dihapus.', 'Error');
+        grnSavingRef.current = false;
         return;
       }
       
@@ -1130,6 +1166,7 @@ const Purchasing = () => {
 
       if (qtyReceived <= 0) {
         showAlert('Quantity received must be greater than 0', 'Validation Error');
+        grnSavingRef.current = false;
         return;
       }
 
@@ -1166,7 +1203,7 @@ const Purchasing = () => {
               return grnPO !== currentPO;
             });
             
-            await storageService.set('grnPackaging', cleanedGRNs);
+            await storageService.set(StorageKeys.PACKAGING.GRN_PACKAGING, cleanedGRNs);
             
             // Force sync to server immediately
             if ((storageService as any).syncToServer) {
@@ -1179,9 +1216,11 @@ const Purchasing = () => {
           },
           () => {
             setSelectedPOForReceipt(null);
+            grnSavingRef.current = false;
           },
           '🧹 Clean Up Corrupt GRN Data'
         );
+        grnSavingRef.current = false;
         return;
       }
 
@@ -1199,6 +1238,7 @@ const Purchasing = () => {
           `Maksimal yang bisa diterima sekarang: ${Math.ceil(maxAllowedWithExisting)}`,
           'Validation Error'
         );
+        grnSavingRef.current = false;
         return;
       }
 
@@ -1218,6 +1258,7 @@ const Purchasing = () => {
       
       if (duplicateGRN) {
         showAlert(`⚠️ GRN duplicate terdeteksi!\n\nGRN ${duplicateGRN.grnNo} dengan qty ${duplicateGRN.qtyReceived} untuk PO ${item.poNo} sudah ada.\n\nTidak bisa membuat GRN duplicate.`, 'Duplicate Detected');
+        grnSavingRef.current = false;
         return;
       }
       
@@ -1229,41 +1270,44 @@ const Purchasing = () => {
         spkNo: item.spkNo,
         supplier: item.supplier,
         materialItem: item.materialItem,
-        materialId: item.materialId || '',
+        material_id: getMaterialId(item),
+        materialId: getMaterialId(item), // Backward compatibility
         qtyOrdered: item.qty,
         qtyReceived: qtyReceived,
         status: 'OPEN', // GRN langsung OPEN setelah barang diterima
         receivedDate: receivedDate,
         notes: receiptData.notes || '',
-        suratJalan: receiptData.suratJalan || '',
+        suratJalanId: receiptData.suratJalanId || '',
         suratJalanName: receiptData.suratJalanName || '',
         invoiceNo: receiptData.invoiceNo || '',
-        invoiceFile: receiptData.invoiceFile || '',
+        invoiceFileId: receiptData.invoiceFileId || '',
         invoiceFileName: receiptData.invoiceFileName || '',
         sitePlan: receiptData.sitePlan || 'Site Plan 1',
         created: new Date().toISOString(),
       };
       
       // IMPORTANT: Load dan save ke key yang SAMA!
-      const currentGRN = extractStorageValue(await storageService.get<any[]>('grnPackaging'));
+      const currentGRN = extractStorageValue(await storageService.get<any[]>('grnPackaging')) || [];
+      const currentGRNArray = Array.isArray(currentGRN) ? currentGRN : [];
       
       // Prevent duplicate before save
-      const isDuplicate = currentGRN.some((grn: any) => 
+      const isDuplicate = (Array.isArray(currentGRNArray) && currentGRNArray.some((grn: any) => 
         grn.grnNo === newGRN.grnNo || 
         (grn.poNo === newGRN.poNo && 
          grn.qtyReceived === newGRN.qtyReceived && 
          grn.receivedDate === newGRN.receivedDate &&
          Math.abs(new Date(grn.created).getTime() - new Date(newGRN.created).getTime()) < 5000) // 5 sec threshold
-      );
+      )) || false;
       
       if (isDuplicate) {
         showAlert('⚠️ GRN duplicate terdeteksi! Tidak bisa save.\n\nKemungkinan double-click atau data sudah ada.', 'Error');
+        grnSavingRef.current = false;
         return;
       }
       
-      const updatedGRNs = Array.isArray(currentGRN) ? [...currentGRN, newGRN] : [newGRN];
+      const updatedGRNs = Array.isArray(currentGRNArray) ? [...currentGRNArray, newGRN] : [newGRN];
       // Save GRN dengan immediateSync untuk pastikan langsung sync ke server
-      await storageService.set('grnPackaging', updatedGRNs, true); // immediateSync = true untuk pastikan langsung sync ke server
+      await storageService.set(StorageKeys.PACKAGING.GRN_PACKAGING, updatedGRNs, true); // immediateSync = true untuk pastikan langsung sync ke server
       
       setGrnList(Array.isArray(updatedGRNs) ? updatedGRNs : []);
       
@@ -1277,22 +1321,20 @@ const Purchasing = () => {
         const updatedOrders = ordersArray.map((po: any) =>
           po.poNo === item.poNo ? { ...po, status: 'CLOSE' as const } : po
         );
-        await storageService.set('purchaseOrders', updatedOrders);
+        await storageService.set(StorageKeys.PACKAGING.PURCHASE_ORDERS, updatedOrders);
         setOrders(updatedOrders);
       }
       
       // Update inventory - material received (OTOMATIS MASUK KE INVENTORY)
       const inventory = extractStorageValue(await storageService.get<any[]>('inventory'));
-      const materialId = (item.materialId || '').toString().trim();
+      const materialId = getMaterialId(item);
       
       if (!materialId) {
         showAlert('⚠️ Material ID tidak ditemukan. Inventory tidak dapat di-update.', 'Warning');
       } else {
         // Cari material di master untuk mendapatkan kode yang benar
-        const materials = extractStorageValue(await storageService.get<any[]>('materials'));
-        const material = materials.find((m: any) => 
-          ((m.material_id || m.kode || '').toString().trim()) === materialId
-        );
+        const materials = extractStorageValue(await storageService.get<any[]>('materials')) || [];
+        const material = findMaterialById(materialId);
         
         if (!material) {
           showAlert(`⚠️ Material tidak ditemukan di master data: ${materialId}\n\nInventory tidak dapat di-update.`, 'Warning');
@@ -1301,14 +1343,15 @@ const Purchasing = () => {
           const codeItem = (material.material_id || material.kode || materialId).toString().trim();
           
           // Cari existing inventory dengan codeItem (coba beberapa cara matching)
-          let existingMaterial = inventory.find((inv: any) => 
-            (inv.codeItem || '').toString().trim() === codeItem
+          const inventoryArray = Array.isArray(inventory) ? inventory : [];
+          let existingMaterial = inventoryArray.find((inv: any) => 
+            (inv.item_code || inv.codeItem || '').toString().trim() === codeItem
           );
           
           // Jika tidak ketemu, coba match dengan material_id atau kode
           if (!existingMaterial) {
-            existingMaterial = inventory.find((inv: any) => {
-              const invCode = (inv.codeItem || '').toString().trim();
+            existingMaterial = inventoryArray.find((inv: any) => {
+              const invCode = (inv.item_code || inv.codeItem || '').toString().trim();
               return invCode === materialId || 
                      (material.material_id && invCode === material.material_id.toString().trim()) ||
                      (material.kode && invCode === material.kode.toString().trim());
@@ -1371,7 +1414,7 @@ const Purchasing = () => {
                   }
                 : inv
             );
-            await storageService.set('inventory', updatedInventory);
+            await storageService.set(StorageKeys.PACKAGING.INVENTORY, updatedInventory);
             showAlert(`✅ Inventory updated: ${item.materialItem}\n\nStock: ${newNextStock} ${material.satuan || 'PCS'}\nPrice: Rp ${updatedPrice.toLocaleString('id-ID')}`, 'Success');
           } else {
             // Create new inventory entry for material
@@ -1387,7 +1430,7 @@ const Purchasing = () => {
               supplierName: item.supplier || '',
               codeItem: codeItem,
               description: material.nama || item.materialItem,
-              kategori: material.kategori || 'Material',
+              kategori: 'Material',
               satuan: material.satuan || 'PCS',
               price: materialPrice, // Price dari PO
               stockPremonth: 0,
@@ -1401,7 +1444,7 @@ const Purchasing = () => {
               lastUpdate: new Date().toISOString(),
             };
             inventory.push(newInventoryEntry);
-            await storageService.set('inventory', inventory);
+            await storageService.set(StorageKeys.PACKAGING.INVENTORY, inventory);
             showAlert(`✅ New inventory entry created: ${item.materialItem}\n\nStock: ${qtyReceived} ${material.satuan || 'PCS'}\nPrice: Rp ${materialPrice.toLocaleString('id-ID')} (from PO)`, 'Success');
           }
         }
@@ -1431,21 +1474,22 @@ const Purchasing = () => {
             { code: '6100', name: 'Administrative Expenses', type: 'Expense', balance: 0 },
             { code: '6200', name: 'Financial Expenses', type: 'Expense', balance: 0 },
           ];
-          await storageService.set('accounts', defaultAccounts);
+          await storageService.set(StorageKeys.PACKAGING.ACCOUNTS, defaultAccounts);
         }
         
         const entryDate = receivedDate;
         const poTotal = item.total || 0;
         
         // Cek apakah sudah ada journal entry untuk GRN ini (prevent duplicate)
-        const hasGRNEntry = journalEntries.some((entry: any) =>
+        const hasGRNEntry = (Array.isArray(journalEntries) && journalEntries.some((entry: any) =>
           entry.reference === newGRN.grnNo &&
           (entry.account === '1200' || entry.account === '2000')
-        );
+        )) || false;
         
         if (!hasGRNEntry && poTotal > 0) {
-          const inventoryAccount = accounts.find((a: any) => a.code === '1200') || { code: '1200', name: 'Inventory' };
-          const apAccount = accounts.find((a: any) => a.code === '2000') || { code: '2000', name: 'Accounts Payable' };
+          const accountsArray = Array.isArray(accounts) ? accounts : [];
+          const inventoryAccount = accountsArray.find((a: any) => a.code === '1200') || { code: '1200', name: 'Inventory' };
+          const apAccount = accountsArray.find((a: any) => a.code === '2000') || { code: '2000', name: 'Accounts Payable' };
           
           // Debit Inventory, Credit AP
           const newEntries = [
@@ -1476,7 +1520,7 @@ const Purchasing = () => {
             no: baseLength + idx + 1,
           }));
           
-          await storageService.set('journalEntries', [...journalEntries, ...entriesWithNo]);
+          await storageService.set(StorageKeys.PACKAGING.JOURNAL_ENTRIES, [...journalEntries, ...entriesWithNo]);
         }
       } catch (error: any) {
         // Jangan block proses, hanya log error (non-blocking)
@@ -1486,10 +1530,11 @@ const Purchasing = () => {
       // Tidak auto-close PO setelah GRN dibuat
 
       // Create notification untuk Finance - Supplier Payment
-      const notifications = extractStorageValue(await storageService.get<any[]>('financeNotifications'));
+      const notifications = extractStorageValue(await storageService.get<any[]>('financeNotifications')) || [];
+      const notificationsArray = Array.isArray(notifications) ? notifications : [];
       
       // IMPORTANT: Cek duplikasi notification sebelum create (cek berdasarkan PO dan GRN)
-      const existingNotification = notifications.find((notif: any) => {
+      const existingNotification = notificationsArray.find((notif: any) => {
         const notifPONo = (notif.poNo || '').toString().trim();
         const notifGRNNo = (notif.grnNo || '').toString().trim();
         const currentPONo = (item.poNo || '').toString().trim();
@@ -1504,7 +1549,7 @@ const Purchasing = () => {
       
       if (existingNotification) {
         // Update existing notification dengan data terbaru jika perlu
-        const updatedNotifications = notifications.map((notif: any) => {
+        const updatedNotifications = notificationsArray.map((notif: any) => {
           if (notif.id === existingNotification.id) {
             // Update dengan data terbaru (GRN, qty, dll)
             return {
@@ -1513,16 +1558,16 @@ const Purchasing = () => {
               qty: qtyReceived,
               materialItem: item.materialItem || notif.materialItem,
               receivedDate: receivedDate,
-              suratJalan: receiptData.suratJalan || notif.suratJalan || '',
+              suratJalanId: receiptData.suratJalanId || notif.suratJalanId || '',
               suratJalanName: receiptData.suratJalanName || notif.suratJalanName || '',
               invoiceNo: receiptData.invoiceNo || notif.invoiceNo || '',
-              invoiceFile: receiptData.invoiceFile || notif.invoiceFile || '',
+              invoiceFileId: receiptData.invoiceFileId || notif.invoiceFileId || '',
               invoiceFileName: receiptData.invoiceFileName || notif.invoiceFileName || '',
             };
           }
           return notif;
         });
-        await storageService.set('financeNotifications', updatedNotifications);
+        await storageService.set(StorageKeys.PACKAGING.FINANCE_NOTIFICATIONS, updatedNotifications);
       } else {
         // Buat notification baru jika belum ada
         const newNotification = {
@@ -1537,16 +1582,16 @@ const Purchasing = () => {
           qty: qtyReceived,
           total: item.total,
           receivedDate: receivedDate,
-          suratJalan: receiptData.suratJalan || '',
+          suratJalanId: receiptData.suratJalanId || '',
           suratJalanName: receiptData.suratJalanName || '',
           invoiceNo: receiptData.invoiceNo || '',
-          invoiceFile: receiptData.invoiceFile || '',
+          invoiceFileId: receiptData.invoiceFileId || '',
           invoiceFileName: receiptData.invoiceFileName || '',
           purchaseReason: item.purchaseReason || '',
           status: 'PENDING',
           created: new Date().toISOString(),
         };
-        await storageService.set('financeNotifications', [...notifications, newNotification]);
+        await storageService.set(StorageKeys.PACKAGING.FINANCE_NOTIFICATIONS, [...notifications, newNotification]);
       }
 
       // Update Production notification - material sudah diterima
@@ -1576,13 +1621,16 @@ const Purchasing = () => {
         };
         
         // Load BOM dan materials
-        const bomList = extractStorageValue(await storageService.get<any[]>('bom'));
-        const materialsList = extractStorageValue(await storageService.get<any[]>('materials'));
+        const bomList = extractStorageValue(await storageService.get<any[]>('bom')) || [];
+        const materialsList = extractStorageValue(await storageService.get<any[]>('materials')) || [];
+        
+        const bomListArray = Array.isArray(bomList) ? bomList : [];
+        const materialsListArray = Array.isArray(materialsList) ? materialsList : [];
         
         const productKey = normalizeKey(notif.productId || notif.product || notif.productCode);
         if (!productKey) return notif;
         
-        const bomForProduct = bomList.filter((bom: any) => {
+        const bomForProduct = bomListArray.filter((bom: any) => {
           const bomProductKey = normalizeKey(bom.product_id || bom.kode);
           return bomProductKey === productKey;
         });
@@ -1603,7 +1651,7 @@ const Purchasing = () => {
           if (requiredQty === 0) return;
           
           // Cari material name dari materials list
-          const material = materialsList.find((m: any) => 
+          const material = materialsListArray.find((m: any) => 
             normalizeKey(m.material_id || m.kode) === materialKey
           );
           
@@ -1668,7 +1716,8 @@ const Purchasing = () => {
       if (!notificationUpdated && item.spkNo) {
         // Cek apakah notification sudah ada untuk SPK ini (untuk avoid double notification)
         const grnSPKNormalized = normalizeSPK(item.spkNo || '');
-        const existingNotif = updatedProductionNotifications.find((n: any) => {
+        const prodNotifArray = Array.isArray(updatedProductionNotifications) ? updatedProductionNotifications : [];
+        const existingNotif = prodNotifArray.find((n: any) => {
           const notifSPK = (n.spkNo || '').toString().trim();
           if (!notifSPK) return false;
           return (
@@ -1686,11 +1735,12 @@ const Purchasing = () => {
       
       if (!notificationUpdated && item.spkNo) {
         // Cari SPK data untuk mendapatkan info lengkap
-        const spkData = extractStorageValue(await storageService.get<any[]>('spk'));
+        const spkData = extractStorageValue(await storageService.get<any[]>('spk')) || [];
+        const spkDataArray = Array.isArray(spkData) ? spkData : [];
         
         // Cari SPK dengan matching yang lebih fleksibel (handle batch suffix)
         const grnSPKNormalized = normalizeSPK(item.spkNo || '');
-        const relatedSPK = spkData.find((s: any) => {
+        const relatedSPK = spkDataArray.find((s: any) => {
           const sSPK = (s.spkNo || '').toString().trim();
           
           // Match SPK: exact atau normalized (batch dari SPK yang sama)
@@ -1715,8 +1765,11 @@ const Purchasing = () => {
           };
           
           // Load BOM dan materials untuk enrich material requirements
-          const bomList = extractStorageValue(await storageService.get<any[]>('bom'));
-          const materialsList = extractStorageValue(await storageService.get<any[]>('materials'));
+          const bomList = extractStorageValue(await storageService.get<any[]>('bom')) || [];
+          const materialsList = extractStorageValue(await storageService.get<any[]>('materials')) || [];
+          
+          const bomListArray = Array.isArray(bomList) ? bomList : [];
+          const materialsListArray = Array.isArray(materialsList) ? materialsList : [];
           
           const productKey = normalizeKey(relatedSPK.kode || relatedSPK.product_id || '');
           const qtyNeeded = toNumber(relatedSPK.qty || 0);
@@ -1724,7 +1777,7 @@ const Purchasing = () => {
           // Build material requirements dari BOM
           const materialRequirements: any[] = [];
           if (productKey && qtyNeeded > 0) {
-            const bomForProduct = bomList.filter((bom: any) => {
+            const bomForProduct = bomListArray.filter((bom: any) => {
               const bomProductKey = normalizeKey(bom.product_id || bom.kode);
               return bomProductKey === productKey;
             });
@@ -1738,7 +1791,7 @@ const Purchasing = () => {
               if (requiredQty === 0) return;
               
               // Cari material name dari materials list
-              const material = materialsList.find((m: any) => 
+              const material = materialsListArray.find((m: any) => 
                 normalizeKey(m.material_id || m.kode) === materialKey
               );
               
@@ -1774,7 +1827,7 @@ const Purchasing = () => {
       }
       
       if (notificationUpdated) {
-        await storageService.set('productionNotifications', updatedProductionNotifications);
+        await storageService.set(StorageKeys.PACKAGING.PRODUCTION_NOTIFICATIONS, updatedProductionNotifications);
       }
       
       // Update receipt date di PO
@@ -1788,7 +1841,7 @@ const Purchasing = () => {
             }
           : order
       );
-      await storageService.set('purchaseOrders', updatedOrders);
+      await storageService.set(StorageKeys.PACKAGING.PURCHASE_ORDERS, updatedOrders);
       setOrders(updatedOrders);
       
       // Reload orders untuk update UI
@@ -1798,6 +1851,9 @@ const Purchasing = () => {
       setSelectedPOForReceipt(null);
     } catch (error: any) {
       showAlert(`Error creating GRN: ${error.message}`, 'Error');
+    } finally {
+      // CRITICAL: Always reset saving flag to allow future saves
+      grnSavingRef.current = false;
     }
   };
 
@@ -1827,7 +1883,7 @@ const Purchasing = () => {
         const updated = ordersArray.map(o =>
           o.id === item.id ? { ...o, status: newStatus as any } : o
         );
-        await storageService.set('purchaseOrders', updated);
+        await storageService.set(StorageKeys.PACKAGING.PURCHASE_ORDERS, updated);
         setOrders(updated);
         showAlert(`Status updated to: ${newStatus}`, 'Success');
       } catch (error: any) {
@@ -1853,13 +1909,21 @@ const Purchasing = () => {
     });
   }, [orders]);
 
-  // Filter orders berdasarkan search query
+  // Filter orders berdasarkan search query dan date range
   const filteredOrders = useMemo(() => {
     let filtered = sortedOrders;
     
     // Tab filter - Outstanding tab hanya show status OPEN
     if (activeTab === 'outstanding') {
       filtered = filtered.filter(item => item.status === 'OPEN');
+    }
+    
+    // Date filter
+    if (dateFrom) {
+      filtered = filtered.filter(order => order.created >= dateFrom);
+    }
+    if (dateTo) {
+      filtered = filtered.filter(order => order.created <= dateTo);
     }
     
     if (!searchQuery) return filtered;
@@ -1875,12 +1939,13 @@ const Purchasing = () => {
         (item.status || '').toLowerCase().includes(query)
       );
     });
-  }, [sortedOrders, searchQuery, activeTab]);
+  }, [sortedOrders, searchQuery, activeTab, dateFrom, dateTo]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, activeTab, viewMode]);
+    setTableCurrentPage(1);
+  }, [searchQuery, activeTab, viewMode, dateFrom, dateTo]);
 
   const handleExportExcel = async () => {
     try {
@@ -2087,24 +2152,24 @@ const Purchasing = () => {
     }
   };
 
-  const columns = [
+  const columns = useMemo(() => [
     { 
       key: 'poNo', 
-      header: 'PO No',
+      header: t('common.code') || 'PO No',
       render: (item: PurchaseOrder) => (
         <strong style={{ color: '#2e7d32', fontSize: '13px' }}>{item.poNo}</strong>
       ),
     },
     { 
       key: 'supplier', 
-      header: 'Supplier',
+      header: t('master.supplierName') || 'Supplier',
       render: (item: PurchaseOrder) => (
         <span style={{ fontSize: '13px' }}>{item.supplier}</span>
       ),
     },
     { 
       key: 'soNo', 
-      header: 'SO No',
+      header: t('salesOrder.number') || 'SO No',
       render: (item: PurchaseOrder) => (
         <span style={{ fontSize: '12px', color: '#2e7d32' }}>{item.soNo || '-'}</span>
       ),
@@ -2122,7 +2187,7 @@ const Purchasing = () => {
     },
     {
       key: 'status',
-      header: 'Status',
+      header: t('common.status') || 'Status',
       render: (item: PurchaseOrder) => (
         <span className={`status-badge status-${item.status.toLowerCase()}`} style={{ fontSize: '11px' }}>
           {item.status}
@@ -2131,7 +2196,7 @@ const Purchasing = () => {
     },
     {
       key: 'receiptDate',
-      header: 'Receipt Date',
+      header: t('common.date') || 'Receipt Date',
       render: (item: PurchaseOrder) => (
         <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
           {formatDateSimple(item.receiptDate)}
@@ -2140,14 +2205,14 @@ const Purchasing = () => {
     },
     {
       key: 'materialItem',
-      header: 'Material/Item',
+      header: t('master.materialName') || 'Material/Item',
       render: (item: PurchaseOrder) => (
         <span style={{ fontSize: '13px' }}>{item.materialItem}</span>
       ),
     },
     {
       key: 'qty',
-      header: 'Qty Order',
+      header: t('common.quantity') || 'Qty Order',
       render: (item: PurchaseOrder) => (
         <span style={{ fontSize: '13px', textAlign: 'right', display: 'block' }}>
           {Number(item.qty || 0).toLocaleString('id-ID')}
@@ -2174,7 +2239,7 @@ const Purchasing = () => {
     },
     {
       key: 'price',
-      header: 'Unit Price',
+      header: t('common.price') || 'Unit Price',
       render: (item: PurchaseOrder) => (
         <span style={{ fontSize: '12px', textAlign: 'right', display: 'block' }}>
           Rp {Math.ceil(item.price || 0).toLocaleString('id-ID', { maximumFractionDigits: 0 })}
@@ -2183,7 +2248,7 @@ const Purchasing = () => {
     },
     {
       key: 'total',
-      header: 'Total',
+      header: t('common.total') || 'Total',
       render: (item: PurchaseOrder) => {
         // Hitung total berdasarkan qtyReceived jika sudah ada GRN, atau qty order jika belum
         const grnPackagingRecords = Array.isArray(grnList) ? grnList : [];
@@ -2231,8 +2296,112 @@ const Purchasing = () => {
       ),
     },
     {
+      key: 'invoiceNo',
+      header: 'Invoice No',
+      render: (item: PurchaseOrder) => {
+        const grnPackagingRecords = Array.isArray(grnList) ? grnList : [];
+        const grnsForPO = grnPackagingRecords.filter((grn: any) => {
+          const grnPO = (grn.poNo || '').toString().trim();
+          const currentPO = (item.poNo || '').toString().trim();
+          return grnPO === currentPO;
+        });
+        
+        if (grnsForPO.length === 0) {
+          return <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>-</span>;
+        }
+        
+        // Collect all invoice numbers from GRNs
+        const invoiceNumbers = grnsForPO
+          .map((grn: any) => grn.invoiceNo)
+          .filter((inv: string) => inv && inv.trim());
+        
+        if (invoiceNumbers.length === 0) {
+          return <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>-</span>;
+        }
+        
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            {invoiceNumbers.map((invNo: string, idx: number) => (
+              <span key={idx} style={{ fontSize: '12px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                {invNo}
+              </span>
+            ))}
+          </div>
+        );
+      },
+    },
+    {
+      key: 'uploadedFiles',
+      header: 'Uploaded Files',
+      render: (item: PurchaseOrder) => {
+        const grnPackagingRecords = Array.isArray(grnList) ? grnList : [];
+        const grnsForPO = grnPackagingRecords.filter((grn: any) => {
+          const grnPO = (grn.poNo || '').toString().trim();
+          const currentPO = (item.poNo || '').toString().trim();
+          return grnPO === currentPO;
+        });
+        
+        if (grnsForPO.length === 0) {
+          return <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>-</span>;
+        }
+        
+        // Collect all uploaded files from GRNs
+        const uploadedFiles: Array<{ type: string; name: string; data: string }> = [];
+        grnsForPO.forEach((grn: any) => {
+          if (grn.suratJalan && grn.suratJalanName) {
+            uploadedFiles.push({ type: 'SJ', name: grn.suratJalanName, data: grn.suratJalan });
+          }
+          if (grn.invoiceFile && grn.invoiceFileName) {
+            uploadedFiles.push({ type: 'INV', name: grn.invoiceFileName, data: grn.invoiceFile });
+          }
+        });
+        
+        if (uploadedFiles.length === 0) {
+          return <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>No files</span>;
+        }
+        
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {uploadedFiles.map((file, idx) => (
+              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ 
+                  fontSize: '10px', 
+                  padding: '2px 6px', 
+                  borderRadius: '3px',
+                  backgroundColor: file.type === 'SJ' ? '#e3f2fd' : '#fff3e0',
+                  color: file.type === 'SJ' ? '#1976d2' : '#f57c00',
+                  fontWeight: '600'
+                }}>
+                  {file.type}
+                </span>
+                <a
+                  href={file.data}
+                  download={file.name}
+                  style={{ 
+                    fontSize: '11px', 
+                    color: '#1976d2',
+                    textDecoration: 'none',
+                    maxWidth: '150px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}
+                  title={file.name}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
+                >
+                  📎 {file.name}
+                </a>
+              </div>
+            ))}
+          </div>
+        );
+      },
+    },
+    {
       key: 'created',
-      header: 'Created',
+      header: t('common.createdAt') || 'Created',
       render: (item: PurchaseOrder) => (
         <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
           {formatDateSimple(item.created)}
@@ -2241,7 +2410,7 @@ const Purchasing = () => {
     },
     {
       key: 'actions',
-      header: 'Actions',
+      header: t('common.actions') || 'Actions',
       render: (item: PurchaseOrder) => {
         const grnPackagingRecords = Array.isArray(grnList) ? grnList : [];
         const hasGRN = grnPackagingRecords.some((grn: any) => {
@@ -2274,7 +2443,7 @@ const Purchasing = () => {
         );
       },
     },
-  ];
+  ], [t]);
 
   // Filter PENDING PR (exclude yang sudah punya PO)
   const pendingPRs = useMemo(() => {
@@ -2445,7 +2614,8 @@ const Purchasing = () => {
       const finalTopDays = (paymentTerms === 'COD' || paymentTerms === 'CBD') ? 0 : (topDays || 30);
       
       for (const item of pr.items) {
-        const supplierName = selectedSuppliers[item.materialId] || item.supplier;
+        const materialId = getMaterialId(item);
+        const supplierName = selectedSuppliers[materialId] || item.supplier;
         if (!supplierName) {
           showAlert(`Supplier belum dipilih untuk material: ${item.materialName}`, 'Validation Error');
           return;
@@ -2454,9 +2624,7 @@ const Purchasing = () => {
         // Re-load price dari master material jika price = 0
         let itemPrice = item.price;
         if (!itemPrice || itemPrice === 0) {
-          const material = materials.find((m: any) => 
-            (m.material_id || m.kode || '').toString().trim() === (item.materialId || item.materialKode || '').toString().trim()
-          );
+          const material = findMaterialById(getMaterialId(item));
           if (material) {
             itemPrice = material.priceMtr || material.harga || (material as any).hargaSales || 0;
           }
@@ -2478,7 +2646,8 @@ const Purchasing = () => {
           sourcePRId: pr.id,
           purchaseReason: '',
           materialItem: item.materialName,
-          materialId: item.materialId,
+          material_id: getMaterialId(item),
+          materialId: getMaterialId(item), // Backward compatibility
           qty: item.qty,
           price: Math.ceil(itemPrice),
           total: Math.ceil(item.qty * Math.ceil(itemPrice)),
@@ -2494,7 +2663,7 @@ const Purchasing = () => {
       // Save POs
       const ordersArray = Array.isArray(orders) ? orders : [];
       const updatedOrders = [...ordersArray, ...newPOs];
-      await storageService.set('purchaseOrders', updatedOrders);
+      await storageService.set(StorageKeys.PACKAGING.PURCHASE_ORDERS, updatedOrders);
       setOrders(updatedOrders);
 
       // Update PR status to PO_CREATED
@@ -2502,7 +2671,7 @@ const Purchasing = () => {
       const updatedPRs = prArray.map(p => 
         p.id === pr.id ? { ...p, status: 'PO_CREATED' as const } : p
       );
-      await storageService.set('purchaseRequests', updatedPRs);
+      await storageService.set(StorageKeys.PACKAGING.PURCHASE_REQUESTS, updatedPRs);
       setPurchaseRequests(updatedPRs);
 
       showAlert(`PO berhasil dibuat dari PR ${pr.prNo}!\n\n${newPOs.length} Purchase Order telah dibuat.`, 'Success');
@@ -2687,7 +2856,7 @@ const Purchasing = () => {
       const activeOrders = filterActiveItems(currentOrders);
       const updatedOrders = [...activeOrders, ...newPOs];
       
-      await storageService.set('purchaseOrders', updatedOrders);
+      await storageService.set(StorageKeys.PACKAGING.PURCHASE_ORDERS, updatedOrders);
       
       // Update state dengan filtered active items (exclude tombstones)
       setOrders(filterActiveItems(updatedOrders));
@@ -2795,13 +2964,13 @@ const Purchasing = () => {
           }
 
           if (prChanged) {
-            await storageService.set('purchaseRequests', updatedPRs);
+            await storageService.set(StorageKeys.PACKAGING.PURCHASE_REQUESTS, updatedPRs);
             setPurchaseRequests(updatedPRs);
           }
 
           const updatedFinanceNotif = financeNotifications.filter((notif: any) => (notif.poNo || '').toString().trim() !== poNo);
           if (updatedFinanceNotif.length !== financeNotifications.length) {
-            await storageService.set('financeNotifications', updatedFinanceNotif);
+            await storageService.set(StorageKeys.PACKAGING.FINANCE_NOTIFICATIONS, updatedFinanceNotif);
             setFinanceNotifications(updatedFinanceNotif);
           }
 
@@ -3231,7 +3400,7 @@ const Purchasing = () => {
         </Card>
       )}
 
-      <Card>
+      <Card style={{ position: 'sticky', top: 0, zIndex: 100, marginBottom: '16px' }}>
         <div className="tab-container">
           <button
             className={`tab-button ${activeTab === 'all' ? 'active' : ''}`}
@@ -3256,6 +3425,16 @@ const Purchasing = () => {
                 placeholder="Search by PO No, Supplier, SO No, SPK No, Material, Status..."
               />
             </div>
+            <div style={{ flex: '1 1 400px', minWidth: '300px' }}>
+              <DateRangeFilter
+                onDateChange={(from, to) => {
+                  setDateFrom(from);
+                  setDateTo(to);
+                }}
+                defaultFrom={dateFrom}
+                defaultTo={dateTo}
+              />
+            </div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <Button
                 variant={viewMode === 'table' ? 'primary' : 'secondary'}
@@ -3274,14 +3453,97 @@ const Purchasing = () => {
             </div>
           </div>
           {viewMode === 'table' ? (
+          <>
           <Table 
             columns={columns} 
-            data={filteredOrders}
+            data={filteredOrders.slice((tableCurrentPage - 1) * itemsPerPage, tableCurrentPage * itemsPerPage)}
             emptyMessage={activeTab === 'outstanding' ? 'No outstanding purchase orders' : (searchQuery ? "No PO data found matching your search" : "No PO data")}
             getRowStyle={(item: PurchaseOrder) => ({
               backgroundColor: getRowColor(item.soNo),
             })}
           />
+          
+          {/* Pagination Controls untuk Table View */}
+          {filteredOrders.length > itemsPerPage && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: '8px',
+              marginTop: '16px',
+              flexWrap: 'wrap',
+            }}>
+              <Button
+                variant="secondary"
+                onClick={() => setTableCurrentPage(Math.max(1, tableCurrentPage - 1))}
+                disabled={tableCurrentPage === 1}
+                style={{ padding: '6px 12px', fontSize: '12px' }}
+              >
+                ← Previous
+              </Button>
+              
+              {(() => {
+                const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+                const pages: (number | string)[] = [];
+                if (totalPages <= 5) {
+                  for (let i = 1; i <= totalPages; i++) pages.push(i);
+                } else {
+                  pages.push(1);
+                  if (tableCurrentPage > 3) pages.push('...');
+                  
+                  const startPage = Math.max(2, tableCurrentPage - 1);
+                  const endPage = Math.min(totalPages - 1, tableCurrentPage + 1);
+                  
+                  for (let i = startPage; i <= endPage; i++) {
+                    pages.push(i);
+                  }
+                  
+                  if (tableCurrentPage < totalPages - 2) pages.push('...');
+                  pages.push(totalPages);
+                }
+                
+                return pages.map((page, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => typeof page === 'number' && setTableCurrentPage(page)}
+                    disabled={page === '...'}
+                    style={{
+                      padding: '6px 10px',
+                      border: page === tableCurrentPage ? '2px solid var(--primary-color)' : '1px solid var(--border-color)',
+                      backgroundColor: page === tableCurrentPage ? 'var(--primary-color)' : 'var(--bg-primary)',
+                      color: page === tableCurrentPage ? '#fff' : 'var(--text-primary)',
+                      borderRadius: '4px',
+                      cursor: page === '...' ? 'default' : 'pointer',
+                      fontSize: '12px',
+                      fontWeight: page === tableCurrentPage ? '600' : '400',
+                      opacity: page === '...' ? 0.5 : 1,
+                    }}
+                  >
+                    {page}
+                  </button>
+                ));
+              })()}
+              
+              <Button
+                variant="secondary"
+                onClick={() => setTableCurrentPage(Math.min(Math.ceil(filteredOrders.length / itemsPerPage), tableCurrentPage + 1))}
+                disabled={tableCurrentPage >= Math.ceil(filteredOrders.length / itemsPerPage)}
+                style={{ padding: '6px 12px', fontSize: '12px' }}
+              >
+                Next →
+              </Button>
+            </div>
+          )}
+          
+          <div style={{
+            textAlign: 'center',
+            marginTop: '8px',
+            fontSize: '12px',
+            color: 'var(--text-secondary)',
+          }}>
+            Page {tableCurrentPage} of {Math.ceil(filteredOrders.length / itemsPerPage)} ({filteredOrders.length} total)
+          </div>
+          </>
           ) : (
           <>
           <div style={{ 
@@ -3308,8 +3570,8 @@ const Purchasing = () => {
                 const relatedSPKs = spkData.filter((spk: any) => 
                   (spk.soNo || '').toString().trim() === (item.soNo || '').toString().trim()
                 );
-                const hasGRN = grnList.some((grn: any) => grn && grn.poNo === item.poNo);
-                const hasPendingFinance = financeNotifications.some((notif: any) => {
+                const hasGRN = (Array.isArray(grnList) && grnList.some((grn: any) => grn && grn.poNo === item.poNo)) || false;
+                const hasPendingFinance = (Array.isArray(financeNotifications) && financeNotifications.some((notif: any) => {
                   if (!notif) return false;
                   const notifPo = (notif.poNo || '').toString().trim();
                   const currentPo = (item.poNo || '').toString().trim();
@@ -3319,7 +3581,7 @@ const Purchasing = () => {
                     notifPo === currentPo &&
                     (notif.status || 'PENDING').toUpperCase() !== 'CLOSE'
                   );
-                });
+                })) || false;
                 
                 // Warna selang-seling untuk PO card - lebih jelas perbedaannya
                 const cardBgColors = [
@@ -3419,6 +3681,134 @@ const Purchasing = () => {
                           </div>
                         </div>
                       )}
+                      
+                      {/* Invoice Numbers - Compact */}
+                      {(() => {
+                        const grnPackagingRecords = Array.isArray(grnList) ? grnList : [];
+                        const grnsForPO = grnPackagingRecords.filter((grn: any) => {
+                          const grnPO = (grn.poNo || '').toString().trim();
+                          const currentPO = (item.poNo || '').toString().trim();
+                          return grnPO === currentPO;
+                        });
+                        
+                        // Collect all invoice numbers from GRNs
+                        const invoiceNumbers = grnsForPO
+                          .map((grn: any) => grn.invoiceNo)
+                          .filter((inv: string) => inv && inv.trim());
+                        
+                        if (invoiceNumbers.length === 0) return null;
+                        
+                        return (
+                          <div style={{ 
+                            padding: '6px',
+                            backgroundColor: 'var(--bg-secondary)',
+                            borderRadius: '4px',
+                            fontSize: '10px',
+                            border: '1px solid var(--border-color)',
+                            marginTop: '8px',
+                          }}>
+                            <div style={{ fontSize: '9px', color: 'var(--text-secondary)', marginBottom: '4px', fontWeight: '600' }}>
+                              🧾 Invoice Number(s)
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                              {invoiceNumbers.map((invNo: string, idx: number) => (
+                                <span key={idx} style={{ 
+                                  fontSize: '11px', 
+                                  padding: '3px 8px', 
+                                  borderRadius: '4px',
+                                  backgroundColor: 'var(--bg-primary)',
+                                  color: 'var(--text-primary)',
+                                  fontWeight: '600',
+                                  border: '1px solid var(--border-color)'
+                                }}>
+                                  {invNo}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      
+                      {/* Uploaded Files - Compact */}
+                      {(() => {
+                        const grnPackagingRecords = Array.isArray(grnList) ? grnList : [];
+                        const grnsForPO = grnPackagingRecords.filter((grn: any) => {
+                          const grnPO = (grn.poNo || '').toString().trim();
+                          const currentPO = (item.poNo || '').toString().trim();
+                          return grnPO === currentPO;
+                        });
+                        
+                        // Collect all uploaded files from GRNs
+                        const uploadedFiles: Array<{ type: string; name: string; data: string; invoiceNo?: string }> = [];
+                        grnsForPO.forEach((grn: any) => {
+                          if (grn.suratJalan && grn.suratJalanName) {
+                            uploadedFiles.push({ type: 'SJ', name: grn.suratJalanName, data: grn.suratJalan });
+                          }
+                          if (grn.invoiceFile && grn.invoiceFileName) {
+                            uploadedFiles.push({ 
+                              type: 'INV', 
+                              name: grn.invoiceFileName, 
+                              data: grn.invoiceFile,
+                              invoiceNo: grn.invoiceNo || undefined
+                            });
+                          }
+                        });
+                        
+                        if (uploadedFiles.length === 0) return null;
+                        
+                        return (
+                          <div style={{ 
+                            padding: '6px',
+                            backgroundColor: 'var(--bg-secondary)',
+                            borderRadius: '4px',
+                            fontSize: '10px',
+                            border: '1px solid var(--border-color)',
+                            marginTop: '8px',
+                          }}>
+                            <div style={{ fontSize: '9px', color: 'var(--text-secondary)', marginBottom: '4px', fontWeight: '600' }}>
+                              📎 Uploaded Files ({uploadedFiles.length})
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {uploadedFiles.map((file, idx) => (
+                                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                  <span style={{ 
+                                    fontSize: '9px', 
+                                    padding: '2px 6px', 
+                                    borderRadius: '3px',
+                                    backgroundColor: file.type === 'SJ' ? '#e3f2fd' : '#fff3e0',
+                                    color: file.type === 'SJ' ? '#1976d2' : '#f57c00',
+                                    fontWeight: '700',
+                                    minWidth: '30px',
+                                    textAlign: 'center'
+                                  }}>
+                                    {file.type}
+                                  </span>
+                                  <a
+                                    href={file.data}
+                                    download={file.name}
+                                    style={{ 
+                                      fontSize: '10px', 
+                                      color: '#1976d2',
+                                      textDecoration: 'none',
+                                      flex: 1,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      fontWeight: '500'
+                                    }}
+                                    title={file.name}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                    }}
+                                  >
+                                    {file.name}
+                                  </a>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
                       
                       {/* Payment Info - Compact */}
                       <div style={{ 
@@ -4621,7 +5011,7 @@ const PRApprovalDialog = ({ pr, suppliers, materials, onClose, onApprove, onView
 };
 
 // Receipt/GRN Dialog Component - OPTIMIZED dengan pre-loaded data dan memoization
-const ReceiptDialog = React.memo(({ po, onClose, onSave }: { po: PurchaseOrder & { _preloadedGRNData?: { totalReceived: number; grnsForPO: any[] } }; onClose: () => void; onSave: (data: { qtyReceived: number; receivedDate: string; notes?: string; suratJalan?: string; suratJalanName?: string; invoiceNo?: string; invoiceFile?: string; invoiceFileName?: string; sitePlan?: string }) => void }) => {
+const ReceiptDialog = React.memo(({ po, onClose, onSave }: { po: PurchaseOrder & { _preloadedGRNData?: { totalReceived: number; grnsForPO: any[] } }; onClose: () => void; onSave: (data: { qtyReceived: number; receivedDate: string; notes?: string; suratJalanId?: string; suratJalanName?: string; invoiceNo?: string; invoiceFileId?: string; invoiceFileName?: string; sitePlan?: string }) => void }) => {
   // Use pre-loaded data jika ada, jika tidak baru load
   const preloadedData = (po as any)._preloadedGRNData;
   const initialTotalReceived = preloadedData?.totalReceived || 0;
@@ -4643,6 +5033,7 @@ const ReceiptDialog = React.memo(({ po, onClose, onSave }: { po: PurchaseOrder &
     return po.qty;
   });
   const [isLoading, setIsLoading] = useState<boolean>(!preloadedData);
+  const [isSaving, setIsSaving] = useState<boolean>(false); // Track saving state to prevent double-click
   
   // Custom Dialog - menggunakan hook terpusat
   const { showAlert, DialogComponent: ReceiptDialogComponent } = useDialog();
@@ -4732,6 +5123,11 @@ const ReceiptDialog = React.memo(({ po, onClose, onSave }: { po: PurchaseOrder &
   };
 
   const handleSubmit = () => {
+    // Prevent double-click/multiple submissions
+    if (isSaving) {
+      return;
+    }
+    
     const qty = Number(qtyReceived);
     if (isNaN(qty) || qty <= 0) {
       showAlert('Quantity received must be greater than 0', 'Validation Error');
@@ -4762,57 +5158,61 @@ const ReceiptDialog = React.memo(({ po, onClose, onSave }: { po: PurchaseOrder &
     // Invoice number dan file adalah optional
 
     // Handle file uploads (surat jalan dan invoice)
-    const handleFiles = () => {
-      const filesToProcess: Array<{ file: File; type: 'suratJalan' | 'invoice' }> = [];
-      if (suratJalanFile) filesToProcess.push({ file: suratJalanFile, type: 'suratJalan' });
-      if (invoiceFile) filesToProcess.push({ file: invoiceFile, type: 'invoice' });
+    const handleFiles = async () => {
+      try {
+        setIsSaving(true); // Set saving state
+        
+        const filesToProcess: Array<{ file: File; type: 'suratJalan' | 'invoice' }> = [];
+        if (suratJalanFile) filesToProcess.push({ file: suratJalanFile, type: 'suratJalan' });
+        if (invoiceFile) filesToProcess.push({ file: invoiceFile, type: 'invoice' });
 
-      if (filesToProcess.length === 0) {
-        // No files, save directly
-        onSave({ 
-          qtyReceived: qty, 
-          receivedDate, 
-          notes,
-          invoiceNo: invoiceNo || undefined,
-          sitePlan: sitePlan || 'Site Plan 1'
-        });
-        return;
+        if (filesToProcess.length === 0) {
+          // No files, save directly
+          onSave({ 
+            qtyReceived: qty, 
+            receivedDate, 
+            notes,
+            invoiceNo: invoiceNo || undefined,
+            sitePlan: sitePlan || 'Site Plan 1'
+          });
+          return;
+        }
+
+        // Process files with BlobService
+        const results: { suratJalanId?: string; suratJalanName?: string; invoiceFileId?: string; invoiceFileName?: string } = {};
+
+        try {
+          for (const { file, type } of filesToProcess) {
+            const uploadResult = await BlobService.uploadFile(file, 'packaging');
+            if (type === 'suratJalan') {
+              results.suratJalanId = uploadResult.fileId;
+              results.suratJalanName = file.name;
+            } else if (type === 'invoice') {
+              results.invoiceFileId = uploadResult.fileId;
+              results.invoiceFileName = file.name;
+            }
+          }
+
+          // All files processed, save
+          onSave({ 
+            qtyReceived: qty, 
+            receivedDate, 
+            notes,
+            suratJalanId: results.suratJalanId,
+            suratJalanName: results.suratJalanName,
+            invoiceNo: invoiceNo || undefined,
+            invoiceFileId: results.invoiceFileId,
+            invoiceFileName: results.invoiceFileName,
+            sitePlan: sitePlan || 'Site Plan 1'
+          });
+        } catch (error: any) {
+          showAlert(`Error uploading files: ${error.message}`, 'Error');
+          setIsSaving(false); // Reset saving state on error
+        }
+      } catch (error: any) {
+        showAlert(`Error: ${error.message}`, 'Error');
+        setIsSaving(false); // Reset saving state on error
       }
-
-      // Process files sequentially
-      let processedCount = 0;
-      const results: { suratJalan?: string; suratJalanName?: string; invoiceFile?: string; invoiceFileName?: string } = {};
-
-      filesToProcess.forEach(({ file, type }) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const base64 = e.target?.result as string;
-          if (type === 'suratJalan') {
-            results.suratJalan = base64;
-            results.suratJalanName = file.name;
-          } else if (type === 'invoice') {
-            results.invoiceFile = base64;
-            results.invoiceFileName = file.name;
-          }
-          
-          processedCount++;
-          if (processedCount === filesToProcess.length) {
-            // All files processed, save
-            onSave({ 
-              qtyReceived: qty, 
-              receivedDate, 
-              notes,
-              suratJalan: results.suratJalan,
-              suratJalanName: results.suratJalanName,
-              invoiceNo: invoiceNo || undefined,
-              invoiceFile: results.invoiceFile,
-              invoiceFileName: results.invoiceFileName,
-              sitePlan: sitePlan || 'Site Plan 1'
-            });
-          }
-        };
-        reader.readAsDataURL(file);
-      });
     };
 
     handleFiles();
@@ -5030,9 +5430,14 @@ const ReceiptDialog = React.memo(({ po, onClose, onSave }: { po: PurchaseOrder &
             </div>
 
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <Button variant="secondary" onClick={onClose}>Cancel</Button>
-              <Button variant="primary" onClick={handleSubmit}>
-                Create GRN
+              <Button variant="secondary" onClick={onClose} disabled={isSaving}>Cancel</Button>
+              <Button 
+                variant="primary" 
+                onClick={handleSubmit}
+                disabled={isSaving}
+                style={{ opacity: isSaving ? 0.6 : 1, cursor: isSaving ? 'not-allowed' : 'pointer' }}
+              >
+                {isSaving ? '⏳ Creating GRN...' : 'Create GRN'}
               </Button>
             </div>
           </div>

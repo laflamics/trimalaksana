@@ -4,8 +4,9 @@ import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import NotificationBell from '../../components/NotificationBell';
-import { storageService } from '../../services/storage';
+import { storageService, StorageKeys } from '../../services/storage';
 import { filterActiveItems } from '../../utils/data-persistence-helper';
+import { setupRealTimeSync, TRUCKING_SYNC_KEYS } from '../../utils/real-time-sync-helper';
 import { useDialog } from '../../hooks/useDialog';
 import { deleteTruckingItem, reloadTruckingData } from '../../utils/trucking-delete-helper';
 import '../../styles/common.css';
@@ -266,7 +267,8 @@ const UnitScheduling = () => {
   
   // Format notifications untuk NotificationBell
   const unitNotifications = useMemo(() => {
-    return notifications.map((notif: any) => ({
+    const notificationsArray = Array.isArray(notifications) ? notifications : [];
+    return notificationsArray.map((notif: any) => ({
       id: notif.id,
       title: `DO ${notif.doNo || 'N/A'}`,
       message: `Customer: ${notif.customerName || 'N/A'} | Address: ${notif.customerAddress || 'N/A'}`,
@@ -301,21 +303,32 @@ const UnitScheduling = () => {
 
   useEffect(() => {
     loadData();
+    
+    // Real-time listener untuk server updates
+    const cleanup = setupRealTimeSync({
+      keys: [TRUCKING_SYNC_KEYS.UNIT_SCHEDULES, TRUCKING_SYNC_KEYS.DELIVERY_ORDERS],
+      onUpdate: loadData,
+    });
+    
     // Auto-refresh setiap 30 detik (reduced frequency untuk mengurangi re-render)
     const interval = setInterval(loadData, 30000);
-    return () => clearInterval(interval);
+    
+    return () => {
+      clearInterval(interval);
+      cleanup();
+    };
   }, []);
 
   const loadData = async () => {
     try {
       // Load semua data menggunakan storageService untuk membaca dari file storage juga
       const [scheduleDataRaw, doDataRaw, notifDataRaw, vehiclesDataRaw, driversDataRaw, routesDataRaw] = await Promise.all([
-        storageService.get<UnitSchedule[]>('trucking_unitSchedules'),
-        storageService.get<any[]>('trucking_delivery_orders'),
-        storageService.get<any[]>('trucking_unitNotifications'),
-        storageService.get<any[]>('trucking_vehicles'),
-        storageService.get<any[]>('trucking_drivers'),
-        storageService.get<any[]>('trucking_routes'),
+        storageService.get<UnitSchedule[]>(StorageKeys.TRUCKING.UNIT_SCHEDULES),
+        storageService.get<any[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS),
+        storageService.get<any[]>(StorageKeys.TRUCKING.UNIT_NOTIFICATIONS),
+        storageService.get<any[]>(StorageKeys.TRUCKING.VEHICLES),
+        storageService.get<any[]>(StorageKeys.TRUCKING.DRIVERS),
+        storageService.get<any[]>(StorageKeys.TRUCKING.ROUTES),
       ]);
       
       // CRITICAL: Extract array from storage wrapper if needed
@@ -390,11 +403,11 @@ const UnitScheduling = () => {
         );
         
         if (notificationsToRemove.length > 0) {
-          const allNotifications = await storageService.get<any[]>('trucking_unitNotifications') || [];
+          const allNotifications = await storageService.get<any[]>(StorageKeys.TRUCKING.UNIT_NOTIFICATIONS) || [];
           const updatedNotifications = allNotifications.filter((n: any) => 
             !(n.type === 'DO_CONFIRMED' && n.doNo && scheduledDONos.has(n.doNo))
           );
-          await storageService.set('trucking_unitNotifications', updatedNotifications);
+          await storageService.set(StorageKeys.TRUCKING.UNIT_NOTIFICATIONS, updatedNotifications);
         }
       }
       
@@ -481,19 +494,20 @@ const UnitScheduling = () => {
         return;
       }
 
-      const vehicle = vehicles.find(v => v.id === formData.vehicleId);
-      const driver = drivers.find(d => d.id === formData.driverId);
-      const route = routes.find(r => r.id === formData.routeId);
+      const vehicle = Array.isArray(vehicles) ? vehicles.find(v => v.id === formData.vehicleId) : undefined;
+      const driver = Array.isArray(drivers) ? drivers.find(d => d.id === formData.driverId) : undefined;
+      const route = Array.isArray(routes) ? routes.find(r => r.id === formData.routeId) : undefined;
 
       // FIX: Cek apakah ini edit atau create baru
-      const isEditing = formData.id && schedules.find(s => s.id === formData.id);
+      const schedulesArray = Array.isArray(schedules) ? schedules : [];
+      const isEditing = formData.id && schedulesArray.find(s => s.id === formData.id);
       
       let updatedSchedules: UnitSchedule[];
       
       if (isEditing) {
         // UPDATE: Update schedule yang sudah ada
-        const existingSchedule = schedules.find(s => s.id === formData.id);
-        updatedSchedules = schedules.map(s =>
+        const existingSchedule = schedulesArray.find(s => s.id === formData.id);
+        updatedSchedules = schedulesArray.map(s =>
           s.id === formData.id
             ? {
                 ...s,
@@ -547,7 +561,7 @@ const UnitScheduling = () => {
         updatedSchedules = [...schedules, newSchedule];
       }
 
-      await storageService.set('trucking_unitSchedules', updatedSchedules);
+      await storageService.set(StorageKeys.TRUCKING.UNIT_SCHEDULES, updatedSchedules);
       // Sort by created date (newest first)
       const sortedSchedules = updatedSchedules.sort((a: any, b: any) => {
         const dateA = a.created ? new Date(a.created).getTime() : (a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0);
@@ -559,11 +573,11 @@ const UnitScheduling = () => {
       // Hapus notification setelah schedule dibuat (hanya untuk CREATE, bukan UPDATE)
       if (!isEditing) {
         const scheduleDoNo = formData.doNo || '';
-        const allNotifications = await storageService.get<any[]>('trucking_unitNotifications') || [];
+        const allNotifications = await storageService.get<any[]>(StorageKeys.TRUCKING.UNIT_NOTIFICATIONS) || [];
         const updatedNotifications = allNotifications.filter((n: any) => 
           !(n.type === 'DO_CONFIRMED' && n.doNo === scheduleDoNo)
         );
-        await storageService.set('trucking_unitNotifications', updatedNotifications);
+        await storageService.set(StorageKeys.TRUCKING.UNIT_NOTIFICATIONS, updatedNotifications);
         
         // Update state notifications
         const scheduledDONos = new Set([...schedules.map((s: any) => s.doNo), scheduleDoNo]);
@@ -582,7 +596,7 @@ const UnitScheduling = () => {
         try {
           const savedSchedule = updatedSchedules.find(s => s.doNo === scheduleDoNo && !schedules.find(os => os.id === s.id));
           if (savedSchedule) {
-            const pettyCashNotifications = await storageService.get<any[]>('trucking_pettyCashNotifications') || [];
+            const pettyCashNotifications = await storageService.get<any[]>(StorageKeys.TRUCKING.PETTY_CASH_NOTIFICATIONS) || [];
             const existingNotif = pettyCashNotifications.find((n: any) => 
               n.scheduleId === savedSchedule.id && n.type === 'SCHEDULE_CREATED'
             );
@@ -608,7 +622,7 @@ const UnitScheduling = () => {
                 status: 'Open',
                 created: new Date().toISOString(),
               };
-              await storageService.set('trucking_pettyCashNotifications', [...pettyCashNotifications, newPettyCashNotification]);
+              await storageService.set(StorageKeys.TRUCKING.PETTY_CASH_NOTIFICATIONS, [...pettyCashNotifications, newPettyCashNotification]);
             }
           }
         } catch (error: any) {
@@ -673,12 +687,12 @@ const UnitScheduling = () => {
       async () => {
         try {
           // Pakai helper function untuk safe delete (tombstone pattern)
-          const deleteResult = await deleteTruckingItem('trucking_unitSchedules', schedule.id, 'id');
+          const deleteResult = await deleteTruckingItem(StorageKeys.TRUCKING.UNIT_SCHEDULES, schedule.id, 'id');
           const success = deleteResult.success;
           
           if (deleteResult.success) {
             // Reload data dengan helper function
-            const activeSchedules = await reloadTruckingData('trucking_unitSchedules', setSchedules);
+            const activeSchedules = await reloadTruckingData(StorageKeys.TRUCKING.UNIT_SCHEDULES, setSchedules);
             
             // Sort by created date (newest first)
             const sortedSchedules = activeSchedules.sort((a: any, b: any) => {
@@ -707,7 +721,7 @@ const UnitScheduling = () => {
           ? { ...s, status: newStatus }
           : s
       );
-      await storageService.set('trucking_unitSchedules', updated);
+      await storageService.set(StorageKeys.TRUCKING.UNIT_SCHEDULES, updated);
       // Sort by created date (newest first)
       const sortedSchedules = updated.sort((a: any, b: any) => {
         const dateA = a.created ? new Date(a.created).getTime() : (a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0);
@@ -729,11 +743,11 @@ const UnitScheduling = () => {
         return;
       }
       
-      const deleteResult = await deleteTruckingItem('trucking_unitNotifications', notifId, 'id');
+      const deleteResult = await deleteTruckingItem(StorageKeys.TRUCKING.UNIT_NOTIFICATIONS, notifId, 'id');
       
       if (deleteResult.success) {
         // Reload data dengan filter active items
-        const allNotifications = await storageService.get<any[]>('trucking_unitNotifications') || [];
+        const allNotifications = await storageService.get<any[]>(StorageKeys.TRUCKING.UNIT_NOTIFICATIONS) || [];
         const activeNotifs = filterActiveItems(allNotifications).filter((n: any) => {
           if (n.type !== 'DO_CONFIRMED' || (n.status || 'Open') !== 'Open') {
             return false;
@@ -758,7 +772,7 @@ const UnitScheduling = () => {
   const handleDeleteConfirmedDO = async (confirmedDO: any) => {
     try {
       // Cari notification yang sesuai dengan DO ini
-      const allNotifications = await storageService.get<any[]>('trucking_unitNotifications') || [];
+      const allNotifications = await storageService.get<any[]>(StorageKeys.TRUCKING.UNIT_NOTIFICATIONS) || [];
       const matchingNotif = allNotifications.find((n: any) => 
         n.type === 'DO_CONFIRMED' && n.doNo === confirmedDO.doNo
       );
@@ -768,7 +782,7 @@ const UnitScheduling = () => {
         return;
       }
       
-      const deleteResult = await deleteTruckingItem('trucking_unitNotifications', matchingNotif.id, 'id');
+      const deleteResult = await deleteTruckingItem(StorageKeys.TRUCKING.UNIT_NOTIFICATIONS, matchingNotif.id, 'id');
       
       if (deleteResult.success) {
         // Reload data
@@ -783,11 +797,12 @@ const UnitScheduling = () => {
   };
 
   const filteredSchedules = useMemo(() => {
+    const schedulesArray = Array.isArray(schedules) ? schedules : [];
     let filtered: UnitSchedule[] = [];
     if (activeTab === 'schedules') {
-      filtered = schedules.filter(s => s.status === 'Open');
+      filtered = schedulesArray.filter(s => s.status === 'Open');
     } else if (activeTab === 'completed') {
-      filtered = schedules.filter(s => s.status === 'Close');
+      filtered = schedulesArray.filter(s => s.status === 'Close');
     }
     // Sort by created date (newest first), fallback to scheduledDate
     return filtered.sort((a, b) => {
@@ -1070,7 +1085,7 @@ const UnitScheduling = () => {
             {viewMode === 'card' ? (
               confirmedDOs.length > 0 ? (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '16px' }}>
-                  {confirmedDOs.map((item: any) => (
+                  {(Array.isArray(confirmedDOs) ? confirmedDOs : []).map((item: any) => (
                     <Card key={item.id} style={{ padding: '16px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                         <div>
@@ -1089,10 +1104,10 @@ const UnitScheduling = () => {
                         {item.scheduledDate && <div>📆 Scheduled: {item.scheduledDate}</div>}
                         {item.confirmedAt && <div>✓ Confirmed: {new Date(item.confirmedAt).toLocaleString('id-ID')}</div>}
                       </div>
-                      {item.items && item.items.length > 0 && (
+                      {item.items && (Array.isArray(item.items) ? item.items.length > 0 : false) && (
                         <div style={{ fontSize: '12px', background: 'var(--bg-secondary)', padding: '8px', borderRadius: '6px', marginBottom: '12px' }}>
                           <div style={{ fontWeight: 600, marginBottom: '4px' }}>Items ({item.items.length})</div>
-                          {item.items.slice(0, 3).map((itm: any, idx: number) => (
+                          {(Array.isArray(item.items) ? item.items : []).slice(0, 3).map((itm: any, idx: number) => (
                             <div key={idx}>• {itm.product} ({itm.qty} {itm.unit || 'PCS'})</div>
                           ))}
                           {item.items.length > 3 && <div style={{ opacity: 0.7 }}>... and {item.items.length - 3} more</div>}

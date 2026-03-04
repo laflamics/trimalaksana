@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
+import ImportJsonDialog from '../../components/ImportJsonDialog';
+import BulkImportDialog from '../../components/BulkImportDialog';
 import { storageService, extractStorageValue } from '../../services/storage';
 import { filterActiveItems } from '../../utils/data-persistence-helper';
-import { deletePackagingItem, deletePackagingItems } from '../../utils/packaging-delete-helper';
 import axios from 'axios';
 import '../../styles/common.css';
 import '../../styles/compact.css';
@@ -20,45 +21,13 @@ const getCategoryKeys = (category: string): string[] => {
       // Purchasing & Inventory
       'purchaseRequests', 'purchaseOrders', 'grn', 'inventory', // grn akan map ke grnPackaging
       // Sales & Delivery
-      'salesOrders', 'delivery', 'deliveryNotes',
+      'salesOrders', 'delivery',
       // Notifications
       'productionNotifications', 'deliveryNotifications', 'invoiceNotifications', 'financeNotifications',
       // Finance
-      'payments', 'journalEntries', 'accounts', 'invoices', 'expenses',
+      'payments', 'journalEntries', 'accounts', 'invoices', 'expenses', 'operationalExpenses',
       // Other
       'audit', 'outbox'
-    ],
-    generalTrading: [
-      // Master Data
-      'gt_products', 'gt_customers', 'gt_suppliers',
-      // Sales & Purchasing
-      'gt_salesOrders', 'gt_purchaseRequests', 'gt_purchaseOrders', 'gt_invoices',
-      // Inventory & Delivery
-      'gt_grn', 'gt_delivery', 'gt_inventory',
-      // Notifications
-      'gt_deliveryNotifications', 'gt_invoiceNotifications', 'gt_financeNotifications', 'gt_productionNotifications',
-      // Finance
-      'gt_payments', 'gt_journalEntries', 'gt_accounts', 'gt_expenses'
-    ],
-    trucking: [
-      // Master Data
-      'trucking_customers', 'trucking_drivers', 'trucking_routes', 'trucking_vehicles',
-      // Operations
-      'trucking_route_plans', 'trucking_delivery_orders',
-      // Finance
-      'trucking_pettycash_requests', 'trucking_payments', 'trucking_bills', 'Trucking_bills', 'Trucking_route_plans'
-    ],
-    finance: [
-      // Common Finance (shared across categories)
-      'payments', 'journalEntries', 'accounts', 'invoices', 'expenses',
-      'gt_payments', 'gt_journalEntries', 'gt_accounts', 'gt_invoices', 'gt_expenses',
-      'trucking_payments', 'trucking_bills', 'Trucking_bills'
-    ],
-    master: [
-      // Common Master Data (shared)
-      'products', 'customers', 'suppliers', 'staff', 'materials', 'bom',
-      'gt_products', 'gt_customers', 'gt_suppliers',
-      'trucking_customers', 'trucking_drivers', 'trucking_routes', 'trucking_vehicles'
     ],
     all: [] // Will be populated with all keys
   };
@@ -83,6 +52,10 @@ const DBActivity = () => {
   const [seedMessage, setSeedMessage] = useState<string>('');
   const [exportLoading, setExportLoading] = useState(false);
   const [exportMessage, setExportMessage] = useState<string>('');
+  const [importLoading, setImportLoading] = useState(false);
+  const [importMessage, setImportMessage] = useState<string>('');
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [showBulkImportDialog, setShowBulkImportDialog] = useState(false);
   const [clearLoading, setClearLoading] = useState(false);
   const [clearMessage, setClearMessage] = useState<string>('');
   const [clearingCategory, setClearingCategory] = useState<string | null>(null);
@@ -134,6 +107,7 @@ const DBActivity = () => {
     { id: 'journal-entries', label: 'Journal Entries' },
     { id: 'notifications', label: 'Notifications' },
     { id: 'expenses', label: 'Expenses' },
+    { id: 'operational-expenses', label: 'Operational Expenses' },
     { id: 'invoices', label: 'Invoices' },
     { id: 'accounting', label: 'Accounting' },
     { id: 'general-ledger', label: 'General Ledger' },
@@ -279,6 +253,24 @@ const DBActivity = () => {
     { key: 'created', header: 'Created' },
   ];
 
+  const operationalExpenseColumns = [
+    { key: 'id', header: 'ID' },
+    { key: 'expenseNo', header: 'Expense No' },
+    { key: 'type', header: 'Type' },
+    { key: 'category', header: 'Category' },
+    { key: 'description', header: 'Description' },
+    {
+      key: 'amount',
+      header: 'Amount',
+      render: (item: any) => `Rp ${(item.amount || 0).toLocaleString('id-ID')}`,
+    },
+    { key: 'paymentMethod', header: 'Payment Method' },
+    { key: 'approvedBy', header: 'Approved By' },
+    { key: 'requestor', header: 'Requestor' },
+    { key: 'expenseDate', header: 'Expense Date' },
+    { key: 'created', header: 'Created' },
+  ];
+
   const auditColumns = [
     { key: 'id', header: 'ID' },
     { key: 'refType', header: 'Ref Type' },
@@ -371,6 +363,7 @@ const DBActivity = () => {
       'payments': { key: 'payments', idField: 'id' },
       'journal-entries': { key: 'journalEntries', idField: 'id' },
       'expenses': { key: 'expenses', idField: 'id' },
+      'operational-expenses': { key: 'operationalExpenses', idField: 'id' },
       'accounting': { key: 'journalEntries', idField: 'id' }, // Accounting uses journalEntries
       'general-ledger': { key: 'journalEntries', idField: 'id' }, // General Ledger uses journalEntries
       'financial-reports': { key: 'journalEntries', idField: 'id' }, // Financial Reports uses journalEntries
@@ -407,6 +400,7 @@ const DBActivity = () => {
         case 'journal-entries': return journalEntryColumns;
         case 'notifications': return notificationColumns;
         case 'expenses': return expenseColumns;
+        case 'operational-expenses': return operationalExpenseColumns;
         case 'accounting': return journalEntryColumns; // Accounting uses journal entries
         case 'general-ledger': return journalEntryColumns; // General Ledger uses journal entries
         case 'financial-reports': return journalEntryColumns; // Financial Reports uses journal entries
@@ -591,8 +585,8 @@ const DBActivity = () => {
         return filterActiveItems(Array.isArray(qc) ? qc : []);
       }
       case 'delivery': {
-        // Try both delivery and deliveryNotes
-        const del = extractStorageValue(data.delivery || data.deliveryNotes);
+        // Try both delivery
+        const del = extractStorageValue(data.delivery);
         return filterActiveItems(Array.isArray(del) ? del : []);
       }
       case 'inventory': {
@@ -624,6 +618,10 @@ const DBActivity = () => {
       case 'expenses': {
         const exp = extractStorageValue(data.expenses);
         return filterActiveItems(Array.isArray(exp) ? exp : []);
+      }
+      case 'operational-expenses': {
+        const opExp = extractStorageValue(data.operationalExpenses);
+        return filterActiveItems(Array.isArray(opExp) ? opExp : []);
       }
       case 'accounting': {
         // Accounting uses journalEntries
@@ -748,6 +746,7 @@ const DBActivity = () => {
     { key: 'qc', label: 'QC Checks' },
     { key: 'delivery', label: 'Delivery Notes' },
     { key: 'expenses', label: 'Expenses' },
+    { key: 'operationalExpenses', label: 'Operational Expenses' },
     { key: 'audit', label: 'Audit Logs' },
     { key: 'outbox', label: 'Outbox Events' },
     { key: 'inventory', label: 'Inventory' },
@@ -792,6 +791,49 @@ const DBActivity = () => {
     setSelectedItemIds(new Set()); // Reset selected items when changing section
   };
 
+  const deleteItemFromServer = async (storageKey: string, itemId: string, idField: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      
+      // Get current data from server
+      const response = await axios.get(`${apiBaseUrl}/api/storage/${storageKey}`, {
+        timeout: 5000,
+      });
+      
+      if (!response.data?.success || !response.data?.data?.value) {
+        return { success: false, error: 'Failed to fetch current data from server' };
+      }
+      
+      let currentData = response.data.data.value;
+      if (!Array.isArray(currentData)) {
+        currentData = extractStorageValue(currentData);
+      }
+      
+      // Find and remove the item
+      const filteredData = currentData.filter((item: any) => {
+        const itemIdValue = String(item[idField] || item.id || '');
+        return itemIdValue !== itemId;
+      });
+      
+      if (filteredData.length === currentData.length) {
+        return { success: false, error: 'Item not found' };
+      }
+      
+      // Update server with filtered data
+      await axios.post(`${apiBaseUrl}/api/storage/${storageKey}`, {
+        value: filteredData,
+      }, {
+        timeout: 5000,
+      });
+      
+      console.log(`[DBActivity] ✅ Deleted item ${itemId} from server storage key: ${storageKey}`);
+      return { success: true };
+    } catch (error: any) {
+      console.error(`[DBActivity] Error deleting from server:`, error);
+      return { success: false, error: error.message || 'Unknown error' };
+    }
+  };
+
   const handleDeleteSingleItem = async (itemId: string, item: any) => {
     const config = getStorageConfig(activeSection);
     const itemName = item.nama || item.kode || item.soNo || item.poNo || item.prNo || item.spkNo || item.sjNo || item.invoiceNo || item.expenseNo || item.paymentNo || item.id || itemId;
@@ -801,28 +843,26 @@ const DBActivity = () => {
       async () => {
         setDeleteLoading(true);
         try {
-          // Special handling for notifications (can be from multiple storage keys)
           let deleteResult;
+          
+          // Try to delete from server first
           if (activeSection === 'notifications') {
-            // Try to delete from all notification storage keys
             const notificationKeys = ['productionNotifications', 'deliveryNotifications', 'invoiceNotifications', 'financeNotifications'];
             let deleted = false;
             for (const key of notificationKeys) {
-              const result = await deletePackagingItem(key, itemId, config.idField);
+              const result = await deleteItemFromServer(key, itemId, config.idField);
               if (result.success) {
                 deleted = true;
                 break;
               }
             }
-            deleteResult = deleted ? { success: true, itemFound: true } : { success: false, error: 'Notification not found in any storage key' };
+            deleteResult = deleted ? { success: true } : { success: false, error: 'Notification not found in any storage key' };
           } else {
-            deleteResult = await deletePackagingItem(config.key, itemId, config.idField);
+            deleteResult = await deleteItemFromServer(config.key, itemId, config.idField);
           }
           
           if (deleteResult.success) {
-            showAlert(`Item deleted successfully`, 'Success');
-            // 🚀 FIX: Reload data langsung (tidak perlu delay karena delete sudah instant di local)
-            // Filter akan otomatis hide deleted items
+            showAlert(`Item deleted successfully from server`, 'Success');
             loadData();
             setSelectedItemIds(new Set());
           } else {
@@ -854,44 +894,90 @@ const DBActivity = () => {
         setDeleteLoading(true);
         try {
           const itemIdsArray = Array.from(selectedItemIds);
+          const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001';
           
-          // Special handling for notifications (can be from multiple storage keys)
-          let deleteResult;
+          let totalSuccess = 0;
+          let totalFailed = 0;
+          const allErrors: string[] = [];
+          
           if (activeSection === 'notifications') {
-            // Try to delete from all notification storage keys
             const notificationKeys = ['productionNotifications', 'deliveryNotifications', 'invoiceNotifications', 'financeNotifications'];
-            let totalSuccess = 0;
-            let totalFailed = 0;
-            const allErrors: string[] = [];
             
             for (const key of notificationKeys) {
-              const result = await deletePackagingItems(key, itemIdsArray, config.idField);
-              totalSuccess += result.success;
-              totalFailed += result.failed;
-              allErrors.push(...result.errors);
+              try {
+                const response = await axios.get(`${apiBaseUrl}/api/storage/${key}`, {
+                  timeout: 5000,
+                });
+                
+                if (response.data?.success && response.data?.data?.value) {
+                  let currentData = response.data.data.value;
+                  if (!Array.isArray(currentData)) {
+                    currentData = extractStorageValue(currentData);
+                  }
+                  
+                  const filteredData = currentData.filter((item: any) => {
+                    const itemIdValue = String(item[config.idField] || item.id || '');
+                    return !itemIdsArray.includes(itemIdValue);
+                  });
+                  
+                  const deletedCount = currentData.length - filteredData.length;
+                  if (deletedCount > 0) {
+                    await axios.post(`${apiBaseUrl}/api/storage/${key}`, {
+                      value: filteredData,
+                    }, {
+                      timeout: 5000,
+                    });
+                    totalSuccess += deletedCount;
+                  }
+                }
+              } catch (error: any) {
+                console.warn(`[DBActivity] Error deleting from ${key}:`, error.message);
+              }
             }
-            
-            deleteResult = {
-              success: totalSuccess,
-              failed: totalFailed,
-              errors: allErrors
-            };
           } else {
-            deleteResult = await deletePackagingItems(config.key, itemIdsArray, config.idField);
+            try {
+              const response = await axios.get(`${apiBaseUrl}/api/storage/${config.key}`, {
+                timeout: 5000,
+              });
+              
+              if (response.data?.success && response.data?.data?.value) {
+                let currentData = response.data.data.value;
+                if (!Array.isArray(currentData)) {
+                  currentData = extractStorageValue(currentData);
+                }
+                
+                const filteredData = currentData.filter((item: any) => {
+                  const itemIdValue = String(item[config.idField] || item.id || '');
+                  return !itemIdsArray.includes(itemIdValue);
+                });
+                
+                totalSuccess = currentData.length - filteredData.length;
+                totalFailed = itemIdsArray.length - totalSuccess;
+                
+                if (totalSuccess > 0) {
+                  await axios.post(`${apiBaseUrl}/api/storage/${config.key}`, {
+                    value: filteredData,
+                  }, {
+                    timeout: 5000,
+                  });
+                }
+              }
+            } catch (error: any) {
+              console.error(`[DBActivity] Error deleting from server:`, error);
+              allErrors.push(error.message || 'Unknown error');
+            }
           }
           
-          if (deleteResult.success > 0) {
+          if (totalSuccess > 0) {
             showAlert(
-              `Successfully deleted ${deleteResult.success} item(s)${deleteResult.failed > 0 ? `\n${deleteResult.failed} item(s) failed to delete` : ''}`,
-              deleteResult.failed > 0 ? 'Partial Success' : 'Success'
+              `Successfully deleted ${totalSuccess} item(s) from server${totalFailed > 0 ? `\n${totalFailed} item(s) failed to delete` : ''}`,
+              totalFailed > 0 ? 'Partial Success' : 'Success'
             );
-            // 🚀 FIX: Reload data langsung (tidak perlu delay karena delete sudah instant di local)
-            // Filter akan otomatis hide deleted items
             loadData();
             setSelectedItemIds(new Set());
           } else {
             showAlert(
-              `Failed to delete items. Errors:\n${deleteResult.errors.slice(0, 5).join('\n')}${deleteResult.errors.length > 5 ? `\n... and ${deleteResult.errors.length - 5} more` : ''}`,
+              `Failed to delete items. Errors:\n${allErrors.slice(0, 5).join('\n')}${allErrors.length > 5 ? `\n... and ${allErrors.length - 5} more` : ''}`,
               'Error'
             );
           }
@@ -909,93 +995,95 @@ const DBActivity = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Load langsung dari localStorage untuk memastikan data yang sudah di-mark sebagai deleted tetap terbaca
-      // Sama seperti GT dan Trucking - baca local dulu, lebih cepat dan data lengkap
       const allData: any = {};
-      // Comprehensive list of all Packaging keys - must match allClearableKeys
       const keys = [
         // Master Data
         'products', 'customers', 'suppliers', 'materials', 'bom', 'staff',
         // Production Flow
         'spk', 'schedule', 'production', 'qc', 'productionResults', 'ptp',
         // Purchasing & Inventory
-        'purchaseRequests', 'purchaseOrders', 'grn', 'inventory', // grn akan map ke grnPackaging
+        'purchaseRequests', 'purchaseOrders', 'grn', 'inventory',
         // Sales & Delivery
-        'salesOrders', 'delivery', 'deliveryNotes',
+        'salesOrders', 'delivery',
         // Notifications
         'productionNotifications', 'deliveryNotifications', 'invoiceNotifications', 'financeNotifications',
         // Finance
-        'payments', 'journalEntries', 'accounts', 'invoices', 'expenses', 'taxRecords',
+        'payments', 'journalEntries', 'accounts', 'invoices', 'expenses', 'operationalExpenses', 'taxRecords',
         // Other
         'audit', 'outbox', 'companySettings',
       ];
       
-      // Key mapping untuk handle multiple key formats
       const keyMapping: { [key: string]: string[] } = {
-        'grn': ['grnPackaging', 'grn'], // GRN bisa pakai grnPackaging atau grn
-        'delivery': ['delivery', 'deliveryNotes'], // Delivery bisa pakai delivery atau deliveryNotes
+        'grn': ['grnPackaging', 'grn'],
+        'delivery': ['delivery'],
       };
       
-      // Load langsung dari localStorage (sama seperti GT dan Trucking)
+      // Load dari server API
+      const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      
       for (const key of keys) {
         try {
-          // Get mapped keys if exists, otherwise use original key
           const mappedKeys = keyMapping[key] || [key];
-          
-          // Try multiple key formats for each mapped key
-          const possibleKeys: string[] = [];
-          for (const mappedKey of mappedKeys) {
-            possibleKeys.push(`packaging/${mappedKey}`); // With business prefix
-            possibleKeys.push(mappedKey); // Direct key
-          }
-          
           let dataArray: any[] = [];
-          let foundInLocalStorage = false;
+          let foundOnServer = false;
           
-          for (const storageKey of possibleKeys) {
-            const valueStr = localStorage.getItem(storageKey);
-            if (valueStr) {
-              try {
-                const parsed = JSON.parse(valueStr);
-                // Use extractStorageValue untuk konsistensi dengan GT
-                const extracted = extractStorageValue(parsed);
+          // Try to fetch from server for each mapped key
+          for (const mappedKey of mappedKeys) {
+            try {
+              const response = await axios.get(`${apiBaseUrl}/api/storage/${mappedKey}`, {
+                timeout: 5000,
+              });
+              
+              if (response.data?.success && response.data?.data?.value) {
+                const value = response.data.data.value;
+                const extracted = extractStorageValue(value);
                 if (extracted.length > 0) {
                   dataArray = extracted;
-                  foundInLocalStorage = true;
-                  console.log(`[DBActivity] ✅ Loaded ${key} from localStorage key: ${storageKey} (${dataArray.length} items)`);
-                  break; // Found data, use this
+                  foundOnServer = true;
+                  console.log(`[DBActivity] ✅ Loaded ${key} from server (${dataArray.length} items)`);
+                  break;
                 }
-              } catch (e) {
-                console.warn(`[DBActivity] Error parsing localStorage key ${storageKey}:`, e);
-                // Invalid JSON, try next key
+              }
+            } catch (error: any) {
+              if (error.response?.status !== 404) {
+                console.warn(`[DBActivity] Error fetching ${mappedKey} from server:`, error.message);
               }
             }
           }
           
-          // IMPORTANT: JANGAN panggil storageService.get() karena akan trigger sync ke server
-          // DB Activity hanya baca dari localStorage saja untuk menghindari timeout
-          // Jika data tidak ada di localStorage, berarti memang belum ada data
-          if (!foundInLocalStorage && dataArray.length === 0) {
-            console.log(`[DBActivity] ⚠️ ${key} tidak ditemukan di localStorage - skip (tidak akan sync ke server)`);
-            dataArray = []; // Set empty array
-          } else if (foundInLocalStorage) {
-            console.log(`[DBActivity] ✅ ${key} loaded dari localStorage (${dataArray.length} items) - skip storageService.get()`);
+          // Fallback to localStorage if not found on server
+          if (!foundOnServer) {
+            for (const mappedKey of mappedKeys) {
+              const possibleKeys = [`packaging/${mappedKey}`, mappedKey];
+              for (const storageKey of possibleKeys) {
+                const valueStr = localStorage.getItem(storageKey);
+                if (valueStr) {
+                  try {
+                    const parsed = JSON.parse(valueStr);
+                    const extracted = extractStorageValue(parsed);
+                    if (extracted.length > 0) {
+                      dataArray = extracted;
+                      console.log(`[DBActivity] ⚠️ Loaded ${key} from localStorage (server not available)`);
+                      break;
+                    }
+                  } catch (e) {
+                    console.warn(`[DBActivity] Error parsing localStorage key ${storageKey}:`, e);
+                  }
+                }
+              }
+              if (dataArray.length > 0) break;
+            }
           }
           
-          // 🚀 FIX: Filter deleted items langsung saat load (bukan nanti di getAllData)
-          // Ini memastikan deleted items tidak muncul meskipun refresh cepat
           const activeDataArray = filterActiveItems(dataArray);
           const deletedCount = dataArray.length - activeDataArray.length;
           console.log(`[DBActivity] Final ${key}: ${dataArray.length} items (${deletedCount} deleted, ${activeDataArray.length} active)`);
-          allData[key] = activeDataArray; // Simpan hanya active items
+          allData[key] = activeDataArray;
           
-          // IMPORTANT: Set data ke mapped keys juga untuk konsistensi count
-          // Contoh: jika key='grn' dan mapping=['grnPackaging', 'grn'], set data ke kedua key
           if (keyMapping[key]) {
             for (const mappedKey of keyMapping[key]) {
               if (mappedKey !== key) {
-                allData[mappedKey] = activeDataArray; // Juga filter untuk mapped keys
-                console.log(`[DBActivity] Also set ${mappedKey} = ${key} (${activeDataArray.length} active items) for count consistency`);
+                allData[mappedKey] = activeDataArray;
               }
             }
           }
@@ -1005,95 +1093,8 @@ const DBActivity = () => {
         }
       }
       
-      // Aggregate audit logs from all dates (audit logs are stored per date: audit/YYYY-MM-DD)
-      // IMPORTANT: Hanya aggregate audit logs Packaging, bukan GT atau Trucking
-      const auditLogs: any[] = [];
-      if (allData.audit && Array.isArray(allData.audit)) {
-        auditLogs.push(...allData.audit);
-      }
-      
-      // Also try to scan localStorage for Packaging keys (fallback)
-      try {
-        // Scan localStorage for keys that might not be in the list
-        // IMPORTANT: Hanya scan key Packaging, skip GT dan Trucking
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (!key) continue;
-          
-          // Skip GT dan Trucking keys
-          if (key.startsWith('gt_') || key.startsWith('trucking_') || 
-              key.startsWith('general-trading/') || key.startsWith('trucking/') ||
-              key.startsWith('storage_config') || key.startsWith('selectedBusiness')) {
-            continue;
-          }
-          
-          // Process key Packaging atau key tanpa prefix (default Packaging)
-          // Skip key yang jelas-jelas GT atau Trucking
-          const isPackagingKey = key.startsWith('packaging/') || 
-                                 (!key.includes('/') && !key.startsWith('gt_') && !key.startsWith('trucking_'));
-          
-          if (isPackagingKey) {
-            // Skip jika sudah ada di allData
-            if (allData[key]) continue;
-            
-            try {
-              const valueStr = localStorage.getItem(key);
-              if (valueStr) {
-                const parsed = JSON.parse(valueStr);
-                // Use extractStorageValue untuk konsistensi
-                const extracted = extractStorageValue(parsed);
-                if (extracted.length > 0) {
-                  // Check if this is an audit log key (format: audit/YYYY-MM-DD or YYYY-MM-DD)
-                  // Hanya untuk Packaging, bukan GT atau Trucking
-                  const auditDatePattern = /^(audit\/)?(\d{4}-\d{2}-\d{2})$/;
-                  const auditMatch = key.match(auditDatePattern);
-                  
-                  if (auditMatch) {
-                    // Aggregate audit logs from all dates (Packaging only)
-                    // Key format: audit/YYYY-MM-DD atau YYYY-MM-DD (tanpa prefix business)
-                    if (Array.isArray(extracted)) {
-                      auditLogs.push(...extracted);
-                      console.log(`[DBActivity] Found Packaging audit logs from ${key}: ${extracted.length} items`);
-                    }
-                  } else {
-                    // Normalize key (remove prefix if exists)
-                    let normalizedKey = key.replace('packaging/', '');
-                    normalizedKey = normalizedKey.replace(/\.json$/, ''); // Remove .json extension if exists
-                    // Skip jika key adalah format tanggal saja tanpa prefix (bisa jadi dari business lain)
-                    if (!normalizedKey.match(/^\d{4}-\d{2}-\d{2}$/) && 
-                        !allData[normalizedKey] && 
-                        !normalizedKey.startsWith('storage_config') && 
-                        !normalizedKey.startsWith('selectedBusiness')) {
-                      // 🚀 FIX: Filter deleted items juga untuk additional keys
-                      const activeExtracted = filterActiveItems(extracted);
-                      allData[normalizedKey] = activeExtracted;
-                      console.log(`[DBActivity] Found additional Packaging key in localStorage: ${key} -> ${normalizedKey} (${activeExtracted.length} active items from ${extracted.length} total)`);
-                    }
-                  }
-                }
-              }
-            } catch (e) {
-              // Ignore parse errors
-            }
-          }
-        }
-      } catch (error) {
-        console.warn('[DBActivity] Error scanning localStorage:', error);
-      }
-      
-      // IMPORTANT: Jangan scan audit logs dari GT atau Trucking untuk Packaging DB Activity
-      // Hanya aggregate audit logs Packaging saja
-      
-      // Save aggregated audit logs (audit logs tidak perlu filter karena bukan data yang bisa di-delete)
-      if (auditLogs.length > 0) {
-        allData.audit = auditLogs;
-        console.log(`[DBActivity] ✅ Aggregated ${auditLogs.length} audit logs from all dates`);
-      }
-      
-      // 🚀 FIX: Set data dengan filter sudah diterapkan di loadData
-      // Ini memastikan deleted items tidak muncul meskipun refresh cepat
       setData(allData);
-      console.log('[DBActivity] Loaded data from localStorage:', Object.keys(allData).map(k => `${k}: ${allData[k]?.length || 0}`).join(', '));
+      console.log('[DBActivity] Loaded data from server:', Object.keys(allData).map(k => `${k}: ${allData[k]?.length || 0}`).join(', '));
     } catch (error) {
       console.error('[DBActivity] Error loading data:', error);
     } finally {
@@ -1107,24 +1108,8 @@ const DBActivity = () => {
     setSeedMessage('');
 
     try {
-      const result = await storageService.importFromBundle();
-      
-      if (result.imported > 0) {
-        const details = result.errors.length > 0 
-          ? ` (${result.errors.length} errors occurred)` 
-          : '';
-        setSeedMessage(`✓ Imported ${result.imported} data files from bundle${details}`);
-        setTimeout(() => {
-          loadData();
-        }, 500);
-      } else if (result.errors.length > 0) {
-        const errorMsg = result.errors.length === 1 
-          ? result.errors[0] 
-          : `${result.errors[0]} (and ${result.errors.length - 1} more errors)`;
-        setSeedMessage(`✗ ${errorMsg}`);
-      } else {
-        setSeedMessage(`✗ No bundle data found in application`);
-      }
+      setSeedMessage('✗ Import from bundle is not available in this version');
+      return;
     } catch (error: any) {
       console.error('Import from bundle error:', error);
       setSeedMessage(`✗ Error: ${error.message || 'Failed to import from bundle'}`);
@@ -1172,7 +1157,7 @@ const DBActivity = () => {
         'products', 'customers', 'suppliers', 'materials', 'bom', 'staff',
         'spk', 'schedule', 'production', 'qc', 'productionResults', 'ptp',
         'purchaseRequests', 'purchaseOrders', 'grn', 'grnPackaging', 'inventory',
-        'salesOrders', 'delivery', 'deliveryNotes',
+        'salesOrders', 'delivery',
         'productionNotifications', 'deliveryNotifications', 'invoiceNotifications', 'financeNotifications',
         'payments', 'journalEntries', 'accounts', 'invoices', 'expenses',
         'audit', 'outbox', 'companySettings'
@@ -1301,24 +1286,8 @@ const DBActivity = () => {
     setSeedMessage('');
 
     try {
-      const result = await storageService.importFromJsonFiles();
-      
-      if (result.imported > 0) {
-        const details = result.errors.length > 0 
-          ? ` (${result.errors.length} errors occurred)` 
-          : '';
-        setSeedMessage(`✓ Imported ${result.imported} data files from data/ folder${details}`);
-        setTimeout(() => {
-          loadData();
-        }, 500);
-      } else if (result.errors.length > 0) {
-        const errorMsg = result.errors.length === 1 
-          ? result.errors[0] 
-          : `${result.errors[0]} (and ${result.errors.length - 1} more errors)`;
-        setSeedMessage(`✗ ${errorMsg}`);
-      } else {
-        setSeedMessage(`✗ No data files found in data/ folder`);
-      }
+      setSeedMessage('✗ Import from JSON files is not available in this version');
+      return;
     } catch (error: any) {
       console.error('Import from files error:', error);
       setSeedMessage(`✗ Error: ${error.message || 'Failed to import data'}`);
@@ -1334,25 +1303,8 @@ const DBActivity = () => {
     setSeedMessage('');
 
     try {
-      const result = await storageService.seedTruckingFromPC();
-      
-      if (result.imported > 0) {
-        const details = result.errors && result.errors.length > 0 
-          ? ` (${result.errors.length} errors occurred)` 
-          : '';
-        const message = result.message || `✓ Imported ${result.imported} trucking files from PC utama${details}`;
-        setSeedMessage(message);
-        setTimeout(() => {
-          loadData();
-        }, 500);
-      } else if (result.errors && result.errors.length > 0) {
-        const errorMsg = result.errors.length === 1 
-          ? result.errors[0] 
-          : `${result.errors[0]} (and ${result.errors.length - 1} more errors)`;
-        setSeedMessage(`✗ ${errorMsg}`);
-      } else {
-        setSeedMessage(`✗ No trucking data found in PC utama folder`);
-      }
+      setSeedMessage('✗ Seed trucking from PC is not available in this version');
+      return;
     } catch (error: any) {
       console.error('Seed trucking from PC error:', error);
       setSeedMessage(`✗ Error: ${error.message || 'Failed to seed trucking data'}`);
@@ -1371,36 +1323,92 @@ const DBActivity = () => {
     setExportMessage('');
 
     try {
-      const result = await storageService.exportAllData();
-      
-      if (result.success && result.data) {
-        // If Electron, it's already saved via IPC
-        const electronAPI = (window as any).electronAPI;
-        if (electronAPI && electronAPI.exportLocalStorage) {
-          setExportMessage(`✓ Exported ${Object.keys(result.data).length} data files to data/localStorage/`);
-        } else {
-          // Browser: download as JSON
-          const jsonStr = JSON.stringify(result.data, null, 2);
-          const blob = new Blob([jsonStr], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `erp-export-${new Date().toISOString().split('T')[0]}.json`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          setExportMessage(`✓ Exported ${Object.keys(result.data).length} data files (downloaded)`);
-        }
-      } else {
-        setExportMessage(`✗ Export failed: ${result.error || 'Unknown error'}`);
-      }
+      setExportMessage('✗ Export is not available in this version');
+      return;
     } catch (error: any) {
       console.error('Export error:', error);
       setExportMessage(`✗ Error: ${error.message || 'Failed to export data'}`);
     } finally {
       setExportLoading(false);
       setTimeout(() => setExportMessage(''), 10000);
+    }
+  };
+
+  const handleImportJson = async (data: any, storageKey: string) => {
+    setImportLoading(true);
+    setImportMessage('');
+
+    try {
+      if (!Array.isArray(data)) {
+        throw new Error('Data must be an array');
+      }
+
+      console.log(`📥 [Import] Importing ${data.length} items to ${storageKey}`);
+      
+      // Save to storage using storageService
+      await storageService.set(storageKey, data);
+      
+      setImportMessage(`✓ Successfully imported ${data.length} items to ${storageKey}`);
+      console.log(`✅ [Import] Successfully imported ${data.length} items`);
+      
+      // Reload data after import
+      setTimeout(() => {
+        loadData();
+      }, 500);
+    } catch (error: any) {
+      console.error('❌ [Import] Error:', error);
+      setImportMessage(`✗ Error: ${error.message || 'Failed to import data'}`);
+    } finally {
+      setImportLoading(false);
+      setTimeout(() => setImportMessage(''), 10000);
+    }
+  };
+
+  const handleBulkImport = async (type: 'products' | 'salesOrders' | 'deliveryNotes' | 'invoices', data: any[]) => {
+    setImportLoading(true);
+    setImportMessage('');
+
+    try {
+      if (!Array.isArray(data)) {
+        throw new Error('Data must be an array');
+      }
+
+      // Map import type to storage key
+      const storageKeyMap: Record<string, string> = {
+        'products': 'products',
+        'salesOrders': 'salesOrders',
+        'deliveryNotes': 'delivery',
+        'invoices': 'invoices',
+      };
+
+      const storageKey = storageKeyMap[type];
+      if (!storageKey) {
+        throw new Error(`Unknown import type: ${type}`);
+      }
+
+      console.log(`📥 [Bulk Import] Importing ${data.length} ${type} to ${storageKey}`);
+      
+      // Save to server using API
+      const apiBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      await axios.post(`${apiBaseUrl}/api/storage/${storageKey}`, {
+        value: data,
+      }, {
+        timeout: 10000,
+      });
+      
+      setImportMessage(`✓ Successfully imported ${data.length} ${type}`);
+      console.log(`✅ [Bulk Import] Successfully imported ${data.length} ${type}`);
+      
+      // Reload data after import
+      setTimeout(() => {
+        loadData();
+      }, 500);
+    } catch (error: any) {
+      console.error('❌ [Bulk Import] Error:', error);
+      setImportMessage(`✗ Error: ${error.message || 'Failed to import data'}`);
+    } finally {
+      setImportLoading(false);
+      setTimeout(() => setImportMessage(''), 10000);
     }
   };
 
@@ -1448,7 +1456,7 @@ const DBActivity = () => {
         // Key mapping untuk handle multiple key formats (sama seperti loadData)
         const keyMapping: { [key: string]: string[] } = {
           'grn': ['grnPackaging', 'grn'], // GRN bisa pakai grnPackaging atau grn
-          'delivery': ['delivery', 'deliveryNotes'], // Delivery bisa pakai delivery atau deliveryNotes
+          'delivery': ['delivery'], // Delivery uses 'delivery' key only
         };
         
         // Clear from file storage (if Electron)
@@ -1760,6 +1768,22 @@ const DBActivity = () => {
             {exportLoading ? 'Exporting...' : 'Export Data'}
           </Button>
           <Button 
+            variant="secondary" 
+            onClick={() => setShowImportDialog(true)}
+            disabled={importLoading}
+            style={{ marginLeft: '8px' }}
+          >
+            {importLoading ? 'Importing...' : 'Import JSON'}
+          </Button>
+          <Button 
+            variant="primary" 
+            onClick={() => setShowBulkImportDialog(true)}
+            disabled={importLoading}
+            style={{ marginLeft: '8px' }}
+          >
+            📥 Bulk Import CSV
+          </Button>
+          <Button 
             variant="danger" 
             onClick={handleClear}
             disabled={clearLoading}
@@ -1792,6 +1816,15 @@ const DBActivity = () => {
               marginLeft: '8px'
             }}>
               {exportMessage}
+            </span>
+          )}
+          {importMessage && (
+            <span style={{ 
+              color: importMessage.startsWith('✓') ? 'var(--success)' : 'var(--error)',
+              fontSize: '13px',
+              marginLeft: '8px'
+            }}>
+              {importMessage}
             </span>
           )}
         </div>
@@ -2336,7 +2369,7 @@ const DBActivity = () => {
                     // Key mapping untuk handle multiple key formats (sama seperti loadData)
                     const keyMapping: { [key: string]: string[] } = {
                       'grn': ['grnPackaging', 'grn'], // GRN bisa pakai grnPackaging atau grn
-                      'delivery': ['delivery', 'deliveryNotes'], // Delivery bisa pakai delivery atau deliveryNotes
+                      'delivery': ['delivery'], // Delivery uses 'delivery' key only
                     };
                     
                     // Get mapped keys if exists, otherwise use original key
@@ -2446,6 +2479,18 @@ const DBActivity = () => {
         </div>
       )}
 
+      <ImportJsonDialog
+        show={showImportDialog}
+        onClose={() => setShowImportDialog(false)}
+        onImport={handleImportJson}
+      />
+
+      <BulkImportDialog
+        show={showBulkImportDialog}
+        onClose={() => setShowBulkImportDialog(false)}
+        onImport={handleBulkImport}
+        loading={importLoading}
+      />
     </div>
   );
 };

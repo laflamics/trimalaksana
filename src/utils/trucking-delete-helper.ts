@@ -70,21 +70,8 @@ export async function deleteTruckingItem(
     const storageKeyForLocal = (storageService as any).getStorageKey(storageKey);
     let currentData: any[] = [];
     
-    // Try load dari localStorage dulu (instant, no sync trigger)
-    const stored = localStorage.getItem(storageKeyForLocal);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        const extracted = parsed.value !== undefined ? parsed.value : parsed;
-        currentData = Array.isArray(extracted) ? extracted : [];
-      } catch (e) {
-        // Parse error, fallback ke storageService.get()
-        currentData = await storageService.get<any[]>(storageKey) || [];
-      }
-    } else {
-      // Tidak ada di localStorage, fallback ke storageService.get()
-      currentData = await storageService.get<any[]>(storageKey) || [];
-    }
+    // Load from storageService (which will fetch from server in server mode)
+    currentData = await storageService.get<any[]>(storageKey) || [];
     
     if (!Array.isArray(currentData)) {
       return {
@@ -142,23 +129,9 @@ export async function deleteTruckingItem(
       };
     }
     
-    // 🚀 FIX 2: Save langsung ke localStorage untuk instant update (avoid race condition)
-    // storageService.set() akan trigger syncToServer, tapi kita save dulu ke localStorage
-    // untuk memastikan delete flag langsung ter-apply sebelum sync
-    try {
-      const storageKeyForLocal = (storageService as any).getStorageKey(storageKey);
-      const storageValue = {
-        value: updatedData,
-        timestamp: Date.now(),
-        _timestamp: Date.now(),
-      };
-      localStorage.setItem(storageKeyForLocal, JSON.stringify(storageValue));
-    } catch (e) {
-      // Jika localStorage penuh atau error, tetap lanjut dengan storageService.set()
-    }
-    
     // 🚀 FIX 3: Save via storageService untuk trigger sync ke server
-    await storageService.set(storageKey, updatedData);
+    // (No need to save to localStorage first - storageService handles it)
+    await storageService.set(storageKey, updatedData, true); // immediateSync = true for delete operations
     
     return {
       success: true,

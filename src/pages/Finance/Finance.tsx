@@ -3,8 +3,9 @@ import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
-import { storageService } from '../../services/storage';
+import { storageService, StorageKeys } from '../../services/storage';
 import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
+import BlobService from '../../services/blob-service';
 import '../../styles/common.css';
 
 const Finance = () => {
@@ -81,7 +82,7 @@ const Finance = () => {
     // Load notifications dari semua business context (Packaging, GT, Trucking)
     const [packagingNotifications, gtNotifications, truckingNotifications] = await Promise.all([
       storageService.get<any[]>('financeNotifications') || [],
-      storageService.get<any[]>('gt_financeNotifications') || [],
+      storageService.get<any[]>(StorageKeys.GENERAL_TRADING.FINANCE_NOTIFICATIONS) || [],
       storageService.get<any[]>('trucking_financeNotifications') || []
     ]);
     
@@ -105,7 +106,7 @@ const Finance = () => {
     // Load semua PO dari semua business context
     const [packagingPOs, gtPOs, truckingPOs] = await Promise.all([
       storageService.get<any[]>('purchaseOrders') || [],
-      storageService.get<any[]>('gt_purchaseOrders') || [],
+      storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PURCHASE_ORDERS) || [],
       storageService.get<any[]>('trucking_purchaseOrders') || []
     ]);
     
@@ -137,7 +138,7 @@ const Finance = () => {
           materialItem: n.materialItem || po?.materialItem || po?.productItem || '-',
           qty: n.qty || po?.qty || 0,
           receiptDate: n.receivedDate || po?.receiptDate || '-',
-          suratJalan: n.suratJalan,
+          suratJalanId: n.suratJalanId,
           suratJalanName: n.suratJalanName,
           grnNo: n.grnNo,
           businessContext: n.businessContext || (n.poNo?.includes('GT') ? 'GT' : (n.poNo?.includes('TR') ? 'Trucking' : 'Packaging')),
@@ -169,7 +170,7 @@ const Finance = () => {
     setExpenses(expArray);
   };
 
-  const handleMarkAsPaid = async (item: any, paymentProof?: string, paymentProofName?: string) => {
+  const handleMarkAsPaid = async (item: any, paymentProofId?: string, paymentProofName?: string) => {
     showConfirm(
       `Mark payment for PO: ${item.poNo} as CLOSE?\n\nThis will close the PO.`,
       async () => {
@@ -182,8 +183,8 @@ const Finance = () => {
           let purchaseOrdersKey = 'purchaseOrders';
           
           if (businessContext === 'GT') {
-            financeNotificationsKey = 'gt_financeNotifications';
-            purchaseOrdersKey = 'gt_purchaseOrders';
+            financeNotificationsKey = StorageKeys.GENERAL_TRADING.FINANCE_NOTIFICATIONS;
+            purchaseOrdersKey = StorageKeys.GENERAL_TRADING.PURCHASE_ORDERS;
           } else if (businessContext === 'Trucking') {
             financeNotificationsKey = 'trucking_financeNotifications';
             purchaseOrdersKey = 'trucking_purchaseOrders';
@@ -194,7 +195,7 @@ const Finance = () => {
           const financeNotificationsArray = Array.isArray(financeNotifications) ? financeNotifications : [];
           const updatedNotifications = financeNotificationsArray.map((n: any) =>
             n.id === item.id || (n.soNo === item.soNo && n.type === 'SUPPLIER_PAYMENT' && n.poNo === item.poNo)
-              ? { ...n, status: 'CLOSE', paidAt: new Date().toISOString(), paymentProof, paymentProofName }
+              ? { ...n, status: 'CLOSE', paidAt: new Date().toISOString(), paymentProofId, paymentProofName }
               : n
           );
           await storageService.set(financeNotificationsKey, updatedNotifications);
@@ -242,7 +243,7 @@ const Finance = () => {
                 created: new Date().toISOString(),
               };
               
-              await storageService.set('payments', [...existingPaymentsArray, newPayment]);
+              await storageService.set(StorageKeys.PACKAGING.PAYMENTS, [...existingPaymentsArray, newPayment]);
             }
           } catch (error: any) {
             console.error('Error creating payment record:', error);
@@ -295,7 +296,7 @@ const Finance = () => {
                 id: `${Date.now()}-${idx + 1}`,
                 no: baseLength + idx + 1,
               }));
-              await storageService.set('journalEntries', [...journalEntries, ...entriesWithNo]);
+              await storageService.set(StorageKeys.PACKAGING.JOURNAL_ENTRIES, [...journalEntries, ...entriesWithNo]);
             }
           } catch (error: any) {
             console.error('Error creating journal entries for supplier payment:', error);
@@ -689,19 +690,27 @@ const PaymentDialog = ({ payment, onClose, onMarkAsPaid }: { payment: any; onClo
   };
 
   const handleSubmit = async () => {
-    let proofBase64 = payment.paymentProof;
-    let proofName = payment.paymentProofName;
+    try {
+      let proofFileId = payment.paymentProofId;
+      let proofName = payment.paymentProofName;
 
-    if (paymentProof) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        proofBase64 = e.target?.result as string;
+      if (paymentProof) {
+        // Validate file
+        const validation = BlobService.validateFile(paymentProof, 50, ['image/*', 'application/pdf']);
+        if (!validation.valid) {
+          showAlert(validation.error || 'Invalid file', 'Error');
+          return;
+        }
+
+        // Upload to MinIO
+        const result = await BlobService.uploadFile(paymentProof, 'packaging');
+        proofFileId = result.fileId;
         proofName = paymentProof.name;
-        onMarkAsPaid(payment, proofBase64, proofName);
-      };
-      reader.readAsDataURL(paymentProof);
-    } else {
-      onMarkAsPaid(payment);
+      }
+
+      onMarkAsPaid(payment, proofFileId, proofName);
+    } catch (error: any) {
+      showAlert(`Error uploading file: ${error.message}`, 'Error');
     }
   };
 
@@ -714,47 +723,22 @@ const PaymentDialog = ({ payment, onClose, onMarkAsPaid }: { payment: any; onClo
   }, [viewSJData]);
 
   const handleViewSuratJalan = () => {
-    if (!payment?.suratJalan) {
+    if (!payment?.suratJalanId) {
       showAlert('Tidak ada file surat jalan yang diupload.', 'Information');
       return;
     }
     
     try {
-      let documentSrc = payment.suratJalan.startsWith('data:')
-        ? payment.suratJalan
-        : `data:application/pdf;base64,${payment.suratJalan}`;
-      let isBlob = false;
-      
-      if (documentSrc.startsWith('data:application/pdf') || 
-          payment.suratJalanName?.toLowerCase().endsWith('.pdf')) {
-        try {
-          const base64Data = documentSrc.includes(',') 
-            ? documentSrc.split(',')[1] 
-            : (payment.suratJalan.startsWith('data:') ? payment.suratJalan.split(',')[1] : payment.suratJalan);
-          
-          const byteCharacters = atob(base64Data);
-          const byteNumbers = new Array(byteCharacters.length);
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-          }
-          const byteArray = new Uint8Array(byteNumbers);
-          const blob = new Blob([byteArray], { type: 'application/pdf' });
-          
-          documentSrc = URL.createObjectURL(blob);
-          isBlob = true;
-        } catch (blobError) {
-          console.warn('Failed to convert PDF to blob, using base64 directly:', blobError);
-        }
-      }
+      // Use MinIO URL directly
+      const documentSrc = BlobService.getDownloadUrl(payment.suratJalanId, 'packaging');
       
       setViewSJData({
         url: documentSrc,
         name: payment.suratJalanName || 'Surat Jalan',
-        isBlob,
+        isBlob: false,
       });
     } catch (error: any) {
-      console.error('Error viewing Surat Jalan:', error);
-      showAlert(`Error viewing Surat Jalan: ${error.message}`, 'Error');
+      showAlert(`Error viewing document: ${error.message}`, 'Error');
     }
   };
 
@@ -791,7 +775,7 @@ const PaymentDialog = ({ payment, onClose, onMarkAsPaid }: { payment: any; onClo
                 {payment.grnNo && <div><strong>GRN No:</strong> {payment.grnNo}</div>}
                 {payment.suratJalanName && <div><strong>Surat Jalan:</strong> {payment.suratJalanName}</div>}
               </div>
-              {payment.suratJalan && (
+              {payment.suratJalanId && (
                 <Button
                   variant="secondary"
                   onClick={handleViewSuratJalan}

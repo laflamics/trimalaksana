@@ -3,15 +3,17 @@ import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
+import DateRangeFilter from '../../components/DateRangeFilter';
 import ScheduleTable from '../../components/ScheduleTable';
 import ScheduleDialog from '../../components/ScheduleDialog';
 import NotificationBell from '../../components/NotificationBell';
-import { storageService, extractStorageValue } from '../../services/storage';
+import { storageService, extractStorageValue, StorageKeys } from '../../services/storage';
 import { materialAllocator } from '../../services/material-allocator';
 import { filterActiveItems } from '../../utils/data-persistence-helper';
 import { openPrintWindow } from '../../utils/actions';
 import { generateWOHtml } from '../../pdf/wo-pdf-template';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
+import { useLanguage } from '../../hooks/useLanguage';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
 import '../../styles/common.css';
@@ -53,6 +55,8 @@ interface InventoryItem {
   id: string;
   supplierName: string;
   codeItem: string;
+  item_code?: string; // New standardized field
+  type?: 'material' | 'product' | 'unknown'; // New standardized field
   description: string;
   kategori: string;
   satuan: string;
@@ -74,6 +78,7 @@ interface InventoryItem {
 const normalize = (value: any): string => (value ?? '').toString().trim().toUpperCase();
 
 const Production = () => {
+  const { t } = useLanguage();
   const [productions, setProductions] = useState<Production[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -84,10 +89,21 @@ const Production = () => {
   const [materials, setMaterials] = useState<any[]>([]);
   const [selectedScheduleItem, setSelectedScheduleItem] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [productionViewMode, setProductionViewMode] = useState<'cards' | 'table'>('cards');
   const [selectedProductionForSubmit, setSelectedProductionForSubmit] = useState<Production | null>(null);
+  const [productionCurrentPage, setProductionCurrentPage] = useState(1);
+  const [outstandingProductionPage, setOutstandingProductionPage] = useState(1);
+  const itemsPerPage = 20;
   const [viewPdfData, setViewPdfData] = useState<{ html: string; spkNo: string; productionId: string } | null>(null);
   const [showNotificationsPanel, setShowNotificationsPanel] = useState<boolean>(false);
+  const [signedSpkViewer, setSignedSpkViewer] = useState<{
+    data: string;
+    fileName: string;
+    isPDF: boolean;
+    productionId: string;
+  } | null>(null);
   
   // Custom Dialog state (untuk ganti confirm/alert)
   const [dialogState, setDialogState] = useState<{
@@ -250,7 +266,7 @@ const Production = () => {
     
     // Save updated data jika ada perubahan
     if (hasUpdates) {
-      await storageService.set('production', updatedData);
+      await storageService.set(StorageKeys.PACKAGING.PRODUCTION, updatedData);
       data = updatedData;
     }
     
@@ -327,7 +343,8 @@ const Production = () => {
       const grnSpkNo = (grn.spkNo || '').toString().trim();
       if (!grnSpkNo) return;
       
-      const materialId = (grn.materialId || '').toString().trim();
+      // Support both material_id (new) and materialId (old)
+      const materialId = (grn.material_id || grn.materialId || '').toString().trim();
       if (!materialId) return;
       
       const materialKey = normalizeKey(materialId);
@@ -340,7 +357,8 @@ const Production = () => {
 
     const inventoryMap: Record<string, any> = {};
     inventoryItems.forEach((item: any) => {
-      const key = normalizeKey(item.codeItem);
+      // Support both item_code (new) and codeItem (old)
+      const key = normalizeKey(item.item_code || item.codeItem);
       if (key && !inventoryMap[key]) {
         inventoryMap[key] = item;
       }
@@ -518,11 +536,11 @@ const Production = () => {
         
         materialRequirements.push({
           materialId: materialKey,
-          materialName: material?.name || material?.material_name || bom.material_name || materialKey,
+          materialName: material?.nama || material?.name || material?.material_name || bom.material_name || materialKey,
           materialCode: material?.kode || material?.material_id || materialKey,
           ratio: ratio,
           requiredQty: requiredQty,
-          unit: material?.unit || bom.unit || 'PCS',
+          unit: material?.satuan || material?.unit || bom.unit || 'PCS',
         });
       });
       
@@ -818,7 +836,7 @@ const Production = () => {
       
       if (isMainSPK) {
         // Cek apakah ada notifikasi lain dengan SPK yang sama tapi dengan batch suffix (A, B, C, dll)
-        const hasBatchSPKs = cleanedNotifications.some((otherNotif: any) => {
+        const hasBatchSPKs = (Array.isArray(cleanedNotifications) && cleanedNotifications.some((otherNotif: any) => {
           if (otherNotif.id === n.id) return false; // Skip diri sendiri
           const otherSpk = (otherNotif.spkNo || '').toString().trim();
           const otherSpkNormalized = normalizeSPK(otherSpk);
@@ -829,7 +847,7 @@ const Production = () => {
           return otherSpkNormalized === nSpkNormalized && 
                  otherSpk !== otherSpkNormalized && 
                  /-[A-Z]$/.test(otherSpk); // Pastikan ada suffix -A, -B, dll di akhir
-        });
+        })) || false;
         
         if (hasBatchSPKs) {
           return false; // Hapus notifikasi SPK utama
@@ -872,7 +890,7 @@ const Production = () => {
       
       if (isMainSPK) {
         // Cek apakah ada notifikasi lain dengan SPK yang sama tapi dengan batch suffix (A, B, C, dll)
-        const hasBatchSPKs = enrichedUpdatedNotifications.some((otherNotif: any) => {
+        const hasBatchSPKs = (Array.isArray(enrichedUpdatedNotifications) && enrichedUpdatedNotifications.some((otherNotif: any) => {
           if (otherNotif.id === n.id) return false; // Skip diri sendiri
           const otherSpk = (otherNotif.spkNo || '').toString().trim();
           const otherSpkNormalized = normalizeSPK(otherSpk);
@@ -881,7 +899,7 @@ const Production = () => {
           return otherSpkNormalized === nSpkNormalized && 
                  otherSpk !== otherSpkNormalized && 
                  /-[A-Z]$/.test(otherSpk); // Pastikan ada suffix -A, -B, dll di akhir
-        });
+        })) || false;
         
         if (hasBatchSPKs) {
           return false; // Hapus notifikasi SPK utama
@@ -906,7 +924,7 @@ const Production = () => {
     }) || notificationsToSave.length !== productionNotifications.length;
     
     if (hasChanges) {
-      await storageService.set('productionNotifications', notificationsToSave);
+      await storageService.set(StorageKeys.PACKAGING.PRODUCTION_NOTIFICATIONS, notificationsToSave);
       const cleanedCount = productionNotifications.length - notificationsToSave.length;
       const updatedCount = notificationsToSave.filter((n: any) => {
         const original = productionNotifications.find((o: any) => (o.id === n.id) || (o.spkNo === n.spkNo && o.spkNo));
@@ -1017,10 +1035,19 @@ const Production = () => {
       }).filter((item: any) => item !== null); // Remove null items
     }
     
-    if (!searchQuery) return filtered;
+    if (!searchQuery && !dateFrom && !dateTo) return filtered;
     
     const query = searchQuery.toLowerCase();
     return filtered.filter((item: any) => {
+      // Date filter
+      if (dateFrom || dateTo) {
+        const itemDate = item.productionList?.[0]?.date || item.productionList?.[0]?.created || '';
+        if (dateFrom && itemDate < dateFrom) return false;
+        if (dateTo && itemDate > dateTo) return false;
+      }
+      
+      if (!searchQuery) return true;
+      
       if (
         (item.soNo || '').toLowerCase().includes(query) ||
         (item.customer || '').toLowerCase().includes(query)
@@ -1045,7 +1072,7 @@ const Production = () => {
         );
       });
     });
-  }, [groupedProductionData, searchQuery, activeTab]);
+  }, [groupedProductionData, searchQuery, activeTab, dateFrom, dateTo]);
 
   const handleExportExcel = () => {
     try {
@@ -1421,7 +1448,7 @@ const Production = () => {
       let updated = scheduleArray.filter(s => s.spkNo !== spkNo);
       updated.push(scheduleItem);
       
-      await storageService.set('schedule', updated);
+      await storageService.set(StorageKeys.PACKAGING.SCHEDULE, updated);
       setScheduleData(updated);
       showAlert('Schedule saved successfully', 'Success');
       setSelectedScheduleItem(null);
@@ -1433,12 +1460,20 @@ const Production = () => {
 
   const generateSpkHtmlContent = async (item: Production) => {
     // Load data yang diperlukan untuk generate SPK PDF
-    const spkList = await storageService.get<any[]>('spk') || [];
-    const salesOrders = await storageService.get<any[]>('salesOrders') || [];
+    const spkListRaw = await storageService.get<any[]>('spk');
+    const salesOrdersRaw = await storageService.get<any[]>('salesOrders');
+    const materialsListRaw = await storageService.get<any[]>('materials');
+    const bomListRaw = await storageService.get<any[]>('bom');
+    const scheduleListRaw = await storageService.get<any[]>('schedule');
+    
+    // CRITICAL: Extract wrapped objects BEFORE using
+    const spkList = extractStorageValue(spkListRaw) || [];
+    const salesOrders = extractStorageValue(salesOrdersRaw) || [];
     const productsList = products; // Use products state instead of loading from storage
-    const materialsList = await storageService.get<any[]>('materials') || [];
-    const bomList = await storageService.get<any[]>('bom') || [];
-    const scheduleList = await storageService.get<any[]>('schedule') || [];
+    const materialsList = extractStorageValue(materialsListRaw) || [];
+    const bomList = extractStorageValue(bomListRaw) || [];
+    const scheduleList = extractStorageValue(scheduleListRaw) || [];
+    const productionNotificationsList = extractStorageValue(await storageService.get<any[]>('productionNotifications')) || [];
 
     const targetSpkNo = normalize(item.spkNo || item.productionNo || item.id);
     const targetSoNoRaw = item.soNo || (item as any).so || '';
@@ -1451,6 +1486,14 @@ const Production = () => {
         const soNoNorm = normalize(s.soNo || s.so_no || '');
         return (targetSpkNo && spkNoNorm === targetSpkNo) || (targetSoNo && soNoNorm === targetSoNo);
       }) || null;
+
+    console.log('[WO Generation] SPK lookup:', {
+      targetSpkNo: targetSpkNo,
+      spkFound: !!spk,
+      spkHasBom: !!spk?.bom,
+      spkBomLength: spk?.bom?.length || 0,
+      spkBomSample: spk?.bom?.slice(0, 3),
+    });
 
     const fallbackSpk = {
       spkNo: item.spkNo || item.productionNo || item.id,
@@ -1546,53 +1589,134 @@ const Production = () => {
 
     // Format materials dari BOM dengan mempertimbangkan bomOverride dari SPK
     const woMaterials: any[] = [];
-    // IMPORTANT: Ambil bomOverride dari SPK
-    const spkBOMOverride = spk?.bomOverride || {}; // SPK-specific BOM override: { materialId: qty }
-    const spkQty = spk?.qty || item.target || item.targetQty || 0;
     
-    productItems.forEach((soItem: any) => {
-      const productId = (soItem.productId || soItem.productKode || '').toString().trim();
-      const productBOM = bomList.filter((b: any) => {
-        const bomProductId = (b.product_id || b.kode || '').toString().trim();
-        return bomProductId === productId;
+    console.log('[WO Generation] Starting material building...', {
+      itemSpkNo: item.spkNo,
+      itemId: item.id,
+      productionNotificationsCount: productionNotificationsList.length,
+    });
+    
+    // IMPORTANT: Cek apakah ada materialRequirements di notification (dari PPIC)
+    const relatedNotification = productionNotificationsList.find((n: any) => {
+      const nSpkNo = normalize(n.spkNo || n.id || '');
+      const itemSpkNo = normalize(item.spkNo || item.productionNo || item.id);
+      return nSpkNo === itemSpkNo;
+    });
+    
+    console.log('[WO Generation] Debug info:', {
+      itemSpkNo: normalize(item.spkNo || item.productionNo || item.id),
+      itemId: item.id,
+      itemSpkNoRaw: item.spkNo,
+      notificationsCount: productionNotificationsList.length,
+      notificationSample: productionNotificationsList.slice(0, 2).map(n => ({
+        spkNo: n.spkNo,
+        id: n.id,
+        hasMaterialReqs: !!n.materialRequirements,
+        materialReqsLength: n.materialRequirements?.length || 0,
+        materialReqsSample: n.materialRequirements?.slice(0, 2)
+      })),
+      relatedNotificationFound: !!relatedNotification,
+      relatedNotificationSpkNo: relatedNotification?.spkNo,
+      relatedNotificationHasMaterials: !!relatedNotification?.materialRequirements,
+      relatedNotificationMaterialsLength: relatedNotification?.materialRequirements?.length || 0,
+      relatedNotificationMaterialsSample: relatedNotification?.materialRequirements?.slice(0, 2),
+    });
+    
+    // Jika ada materialRequirements di notification, gunakan itu (prioritas tertinggi)
+    if (relatedNotification?.materialRequirements && Array.isArray(relatedNotification.materialRequirements) && relatedNotification.materialRequirements.length > 0) {
+      console.log('[WO Generation] ✅ Using materialRequirements from notification:', relatedNotification.materialRequirements.length, 'materials');
+      relatedNotification.materialRequirements.forEach((matReq: any) => {
+        woMaterials.push({
+          materialId: matReq.materialId || matReq.material_id || '',
+          materialCode: matReq.materialId || matReq.material_id || '',
+          materialName: matReq.materialName || matReq.material_name || '',
+          name: matReq.materialName || matReq.material_name || '',
+          panjang: matReq.panjang || '0.00',
+          lebar: matReq.lebar || '0.00',
+          tinggi: matReq.tinggi || '0.00',
+          unit: matReq.unit || matReq.satuan || 'PCS',
+          qtyPerUnit: matReq.qtyPerUnit || 1,
+          qty: matReq.qty || 0,
+        });
       });
-
-      productBOM.forEach((bom: any) => {
-        const material = materialsList.find((m: any) =>
-          (m.material_id || m.kode || '').toString().trim() === (bom.material_id || '').toString().trim()
-        );
-
-        if (material) {
-          const materialId = (material.material_id || material.kode || '').toString().trim();
+    } else {
+      console.log('[WO Generation] ⚠️ No materialRequirements found, enriching from BOM now...');
+      
+      // Try multiple product IDs to find BOM
+      const productIdsToTry = [
+        effectiveSpk.product_id,
+        effectiveSpk.kode,
+        item.productId,
+        item.productCode,
+        item.product,
+      ].filter(Boolean);
+      
+      console.log('[WO Generation] Trying product IDs:', productIdsToTry);
+      
+      const spkBOMOverride = effectiveSpk?.bomOverride || {};
+      const spkQty = effectiveSpk?.qty || item.target || item.targetQty || 0;
+      
+      // Try each product ID until we find BOM
+      for (const productId of productIdsToTry) {
+        const productBOM = bomList.filter((b: any) => {
+          const bomProductId = (b.product_id || b.kode || '').toString().trim();
+          return bomProductId === productId;
+        });
+        
+        if (productBOM.length > 0) {
+          console.log('[WO Generation] ✅ Found BOM for productId:', productId, 'with', productBOM.length, 'materials');
           
-          // IMPORTANT: Hitung qty dengan mempertimbangkan override dari SPK
-          let materialQty: number;
-          let qtyPerUnit: number;
-          
-          if (spkBOMOverride[materialId] !== undefined && spkBOMOverride[materialId] !== null) {
-            // Gunakan override qty dari PPIC (tidak mengikuti ratio)
-            materialQty = Math.max(Math.ceil(parseFloat(spkBOMOverride[materialId]) || 0), 0);
-            qtyPerUnit = spkQty > 0 ? materialQty / spkQty : (bom.ratio || 1);
-          } else {
-            // Gunakan ratio calculation (default)
-            qtyPerUnit = parseFloat(bom.ratio || 1) || 1;
-            materialQty = Math.max(Math.ceil((soItem.qty || 0) * qtyPerUnit), 0);
-          }
-          
-          woMaterials.push({
-            materialId: material.material_id || material.kode || '',
-            materialCode: material.material_id || material.kode || '',
-            materialName: material.nama || '',
-            name: material.nama || '',
-            panjang: material.panjang || '0.00',
-            lebar: material.lebar || '0.00',
-            tinggi: material.tinggi || '0.00',
-            unit: material.satuan || 'PCS',
-            qtyPerUnit: qtyPerUnit,
-            qty: materialQty,
+          // Build materialRequirements dari BOM
+          productBOM.forEach((bom: any) => {
+            const materialKey = (bom.material_id || bom.kode || bom.materialId || '').toString().trim().toLowerCase();
+            
+            // Find material dari master materials
+            const material = materialsList.find((m: any) => {
+              const mId = (m.material_id || m.kode || '').toString().trim().toLowerCase();
+              return mId === materialKey;
+            });
+            
+            if (material) {
+              let requiredQty: number;
+              
+              if (spkBOMOverride[materialKey] !== undefined && spkBOMOverride[materialKey] !== null) {
+                requiredQty = Math.max(Math.ceil(parseFloat(spkBOMOverride[materialKey]) || 0), 0);
+              } else {
+                const ratio = parseFloat(bom.ratio || 1) || 1;
+                requiredQty = Math.max(Math.ceil(spkQty * ratio), 0);
+              }
+              
+              woMaterials.push({
+                materialId: material.material_id || material.kode || '',
+                materialCode: material.material_id || material.kode || '',
+                materialName: material.nama || '',
+                name: material.nama || '',
+                panjang: material.panjang || '0.00',
+                lebar: material.lebar || '0.00',
+                tinggi: material.tinggi || '0.00',
+                unit: material.satuan || 'PCS',
+                qtyPerUnit: spkQty > 0 ? requiredQty / spkQty : 1,
+                qty: requiredQty,
+              });
+            }
           });
+          
+          break; // Stop after finding BOM for first matching product
         }
-      });
+      }
+      
+      if (woMaterials.length === 0) {
+        console.log('[WO Generation] ⚠️ No BOM found for any product ID');
+      }
+    }
+
+    console.log('[WO Generation] ✅ woMaterials built:', {
+      count: woMaterials.length,
+      sample: woMaterials.slice(0, 3).map(m => ({
+        materialName: m.materialName,
+        qty: m.qty,
+        unit: m.unit
+      }))
     });
 
     // Format products untuk template
@@ -1608,14 +1732,19 @@ const Production = () => {
         });
 
         const bomMaterials = productBOM.map((bom: any) => {
-          const material = materialsList.find((m: any) =>
-            (m.material_id || m.kode || '').toString().trim() === (bom.material_id || '').toString().trim()
-          );
+          // IMPORTANT: Try multiple field names for material_id (material_id, materialId, kode)
+          const bomMaterialId = (bom.material_id || bom.materialId || bom.kode || '').toString().trim().toLowerCase();
+          
+          const material = materialsList.find((m: any) => {
+            const mId = (m.material_id || m.materialId || m.kode || '').toString().trim().toLowerCase();
+            return mId === bomMaterialId && bomMaterialId !== '';
+          });
+          
           return {
             panjang: material?.panjang || '0.00',
             lebar: material?.lebar || '0.00',
             tinggi: material?.tinggi || '0.00',
-            unit: material?.satuan || 'PCS',
+            unit: material?.satuan || material?.unit || 'PCS',
           };
         });
 
@@ -1656,6 +1785,12 @@ const Production = () => {
       },
     };
 
+    console.log('[WO Generation] Final WO object:', {
+      woId: wo.id,
+      woMaterialsCount: wo.materials.length,
+      woMaterials: wo.materials,
+    });
+
     // Format SO untuk template
     const templateSO = {
       soNo: so?.soNo || effectiveSpk.soNo || effectiveSpk.spkNo || '-',
@@ -1676,7 +1811,7 @@ const Production = () => {
     let logo = await loadLogoAsBase64();
 
     // Generate HTML menggunakan template
-    return generateWOHtml({
+    const html = generateWOHtml({
       logo,
       company,
       wo,
@@ -1692,6 +1827,8 @@ const Production = () => {
       })),
       rawMaterials: [],
     });
+
+    return html;
   };
 
   const handlePrint = async (item: Production) => {
@@ -1706,8 +1843,15 @@ const Production = () => {
   const handleViewDetail = async (item: Production) => {
     try {
       const html = await generateSpkHtmlContent(item);
+      
+      if (!html || html.length === 0) {
+        showAlert('Error: HTML SPK kosong. Silakan cek console untuk detail.', 'Error');
+        return;
+      }
+      
       setViewPdfData({ html, spkNo: item.spkNo || item.productionNo || item.id, productionId: item.id });
     } catch (error: any) {
+      console.error('❌ Error in handleViewDetail:', error);
       showAlert(`Error menampilkan SPK: ${error.message}`, 'Error');
     }
   };
@@ -1744,7 +1888,7 @@ const Production = () => {
                 }
               : p
           );
-          await storageService.set('production', updatedProductions);
+          await storageService.set(StorageKeys.PACKAGING.PRODUCTION, updatedProductions);
           setProductions(updatedProductions);
           showAlert('SPK bertanda tangan berhasil diupload.', 'Success');
         } catch (error: any) {
@@ -1761,19 +1905,27 @@ const Production = () => {
       showAlert('Belum ada SPK bertanda tangan yang diupload.', 'Info');
       return;
     }
-    const win = window.open('', '_blank');
-    if (!win) {
-      showAlert('Popup diblokir browser. Izinkan popup untuk melihat dokumen.', 'Warning');
-      return;
-    }
-    win.document.write(`
-      <html>
-        <head><title>${production.signedSpkFileName || 'SPK Signed'}</title></head>
-        <body style="margin:0;">
-          <iframe src="${production.signedSpkFile}" style="border:0;width:100%;height:100vh;"></iframe>
-        </body>
-      </html>
-    `);
+    
+    // Gunakan modal viewer seperti DeliveryNote (lebih reliable, tidak kena CSP)
+    const fileName = production.signedSpkFileName || 'SPK Signed';
+    const signedDocument = production.signedSpkFile;
+    
+    // Deteksi tipe file
+    const isPDF = fileName.toLowerCase().endsWith('.pdf') ||
+      signedDocument.startsWith('data:application/pdf') ||
+      (signedDocument.length > 100 && signedDocument.substring(0, 100).includes('JVBERi0')); // PDF magic bytes
+    
+    // Set viewer state
+    setSignedSpkViewer({
+      data: signedDocument,
+      fileName: fileName,
+      isPDF: isPDF,
+      productionId: production.id
+    });
+  };
+
+  const closeSignedSpkViewer = () => {
+    setSignedSpkViewer(null);
   };
 
   const handleDownloadSpkPdf = async () => {
@@ -1805,13 +1957,17 @@ const Production = () => {
   const updateInventoryFromProduction = async (item: Production, materialsUsedData: any[] = []) => {
     try {
       // Load required data
-      const salesOrders = await storageService.get<any[]>('salesOrders') || [];
-      const bomData = await storageService.get<any[]>('bom') || [];
-      const materials = await storageService.get<any[]>('materials') || [];
-      const products = await storageService.get<any[]>('products') || [];
-      const suppliers = await storageService.get<any[]>('suppliers') || [];
-      const purchaseOrders = await storageService.get<any[]>('purchaseOrders') || [];
-      const inventory = await storageService.get<InventoryItem[]>('inventory') || [];
+      const salesOrdersRaw = await storageService.get<any[]>('salesOrders');
+      const productsRaw = await storageService.get<any[]>('products');
+      const inventoryRaw = await storageService.get<InventoryItem[]>('inventory');
+      
+      // CRITICAL: Extract wrapped objects BEFORE using
+      const salesOrders = extractStorageValue(salesOrdersRaw) || [];
+      const products = extractStorageValue(productsRaw) || [];
+      let inventory = extractStorageValue(inventoryRaw) || [];
+      
+      // Ensure inventory is always an array
+      inventory = Array.isArray(inventory) ? inventory : [];
 
       // Find SO to get product info
       const so = salesOrders.find(s => s.soNo === item.soNo);
@@ -1819,187 +1975,66 @@ const Production = () => {
         return;
       }
 
-      // IMPORTANT: Baca material usage dari productionResults per product (key jelas: product + material)
-      // Setiap product punya productionResult sendiri dengan materials yang jelas
-      const productionResults = await storageService.get<any[]>('productionResults') || [];
-      const productionResultsForSO = productionResults.filter((pr: any) => pr.soNo === item.soNo);
-      
-      // Aggregate material usage dari semua productionResults (per product, key jelas)
-      const materialUsageMap: { [materialId: string]: { materialName: string; materialUsed: number } } = {};
+      // SIMPLE: Build material usage map dari dialog data (prioritas utama)
+      const materialUsageMap: { [materialId: string]: number } = {};
 
-      // Jika ada data dari dialog (materialsUsedData), pakai itu (untuk production yang baru di-submit)
       if (materialsUsedData.length > 0) {
         materialsUsedData.forEach((m: any) => {
           const materialId = (m.materialId || '').toString().trim();
           const qtyUsed = parseFloat(m.qtyUsed || '0') || 0;
-          if (materialId) {
-            // Aggregate jika material yang sama muncul lebih dari sekali
-            materialUsageMap[materialId] = {
-              materialName: m.materialName || '',
-              materialUsed: (materialUsageMap[materialId]?.materialUsed || 0) + qtyUsed,
-            };
+          if (materialId && qtyUsed > 0) {
+            materialUsageMap[materialId] = (materialUsageMap[materialId] || 0) + qtyUsed;
           }
         });
-      }
-      
-      // IMPORTANT: Jangan baca dari productionResults jika materialsUsedData sudah ada
-      // Ini untuk avoid double counting - materialsUsedData dari dialog form sudah mencakup material usage yang benar
-      // Hanya baca dari productionResults jika materialsUsedData tidak ada (untuk backward compatibility)
-      if (materialsUsedData.length === 0 && productionResultsForSO.length > 0) {
-        productionResultsForSO.forEach((pr: any) => {
-          if (pr.materials && Array.isArray(pr.materials)) {
-            pr.materials.forEach((m: any) => {
-              const materialId = (m.materialId || '').toString().trim();
-              const qtyUsed = parseFloat(m.qtyUsed || '0') || 0;
-              if (materialId) {
-                // Aggregate material usage dari semua productionResults
-                materialUsageMap[materialId] = {
-                  materialName: m.materialName || '',
-                  materialUsed: (materialUsageMap[materialId]?.materialUsed || 0) + qtyUsed,
-                };
-              }
-            });
-          }
-        });
-      }
-
-      // Fallback: Kalau tidak ada data dari dialog dan productionResults, hitung dari BOM per product
-      if (materialsUsedData.length === 0 && productionResultsForSO.length === 0) {
-        for (const soItem of so.items) {
-          const productId = soItem.productId || soItem.productKode;
-          const productQty = soItem.qty || 0; // Qty per product di SO
-          
-          if (productQty <= 0) continue;
-          
-          const productBOM = bomData.filter(b => {
-            const bomProductId = (b.product_id || b.kode || '').toString().trim().toLowerCase();
-            const searchProductId = (productId || '').toString().trim().toLowerCase();
-            return bomProductId === searchProductId;
-          });
-
-          productBOM.forEach((bom: any) => {
-            const material = materials.find(m => (m.material_id || m.kode) === bom.material_id);
-            if (!material) return;
-            
-            const materialId = (material.material_id || material.kode || '').toString().trim();
-            const materialUsed = productQty * (bom.ratio || 1);
-            
-            if (materialId) {
-              materialUsageMap[materialId] = {
-                materialName: material.nama || '',
-                materialUsed: (materialUsageMap[materialId]?.materialUsed || 0) + materialUsed,
-              };
-            }
-          });
-        }
       }
 
       // Process materials (update inventory OUTGOING)
+      // SIMPLE & ROBUST: Langsung update outgoing untuk setiap material yang dipakai
       for (const materialId in materialUsageMap) {
-        const materialData = materialUsageMap[materialId];
-        const materialUsed = materialData.materialUsed;
-        const materialName = materialData.materialName;
+        const materialUsed = materialUsageMap[materialId];
+        if (materialUsed <= 0) continue;
 
-        // Update inventory for MATERIAL - TAMBAHKAN OUTGOING
-        // Matching yang lebih robust: coba beberapa cara
-        const materialIdTrimmed = materialId.toString().trim();
+        // ROBUST MATCHING: Cari inventory item dengan berbagai cara
+        const materialIdLower = materialId.toString().trim().toLowerCase();
+        
+        // Try 1: Match dengan item_code atau codeItem (exact match)
         let existingMaterialInventory = inventory.find(inv => {
-          const invCode = (inv.codeItem || '').toString().trim();
-          return invCode.toLowerCase() === materialIdTrimmed.toLowerCase();
+          if (!inv) return false;
+          const invCode = ((inv.item_code || inv.codeItem || '').toString().trim().toLowerCase());
+          return invCode === materialIdLower;
         });
         
-        // Jika tidak ketemu, coba match dengan material_id atau kode dari master
+        // Try 2: Match dengan description (exact match)
         if (!existingMaterialInventory) {
-          const materialFromMaster = materials.find(m => {
-            const mId = ((m.material_id || m.kode) || '').toString().trim();
-            return mId.toLowerCase() === materialIdTrimmed.toLowerCase();
+          existingMaterialInventory = inventory.find(inv => {
+            if (!inv) return false;
+            const invDesc = ((inv.description || '').toString().trim().toLowerCase());
+            return invDesc === materialIdLower;
           });
-          
-          if (materialFromMaster) {
-            const masterCode = ((materialFromMaster.material_id || materialFromMaster.kode) || '').toString().trim();
-            existingMaterialInventory = inventory.find(inv => {
-              const invCode = (inv.codeItem || '').toString().trim();
-              return invCode.toLowerCase() === masterCode.toLowerCase();
-            });
-          }
         }
 
-        // ANTI-DUPLICATE: Cek di inventory apakah PO number sudah pernah diproses untuk material ini
-        // Key tracking: PO number (bukan production number), karena material berasal dari PO
-        // Cari PO yang terkait dengan material ini untuk production ini
-        // IMPORTANT: Cari PO yang sudah CLOSE (ada receiptDate) untuk material ini
-        const relatedPO = purchaseOrders.find((po: any) => {
-          const poMaterialId = (po.materialId || '').toString().trim();
-          const poSoNo = (po.soNo || '').toString().trim();
-          const poSpkNo = (po.spkNo || '').toString().trim();
-          const prodSoNo = (item.soNo || '').toString().trim();
-          const prodSpkNo = (item.spkNo || '').toString().trim();
-          // PO harus sudah CLOSE dan punya receiptDate (material sudah received)
-          const isPOReceived = (po.status === 'CLOSE' || po.receiptDate) && po.receiptDate;
-          return poMaterialId.toLowerCase() === materialIdTrimmed.toLowerCase() &&
-                 (poSoNo === prodSoNo || poSpkNo === prodSpkNo) &&
-                 isPOReceived;
-        });
-        
-        const poNo = relatedPO?.poNo || '';
-        
-        // IMPORTANT: Material yang sudah dialokasikan saat create PR hanya reserve material
-        // Material baru benar-benar digunakan saat production di-submit
-        // Jadi outgoing HARUS di-update saat production di-submit, tidak boleh skip
-        // allocatedSPKs hanya untuk tracking material allocation, bukan untuk skip outgoing update
-        
-        // ANTI-DUPLICATE: Track per production submission, bukan per PO
-        // Satu PO bisa digunakan untuk multiple production submissions (misalnya produksi 300 pertama, lalu 300 kedua)
-        // Jadi kita perlu track per production number + material ID untuk unique tracking
-        const productionNo = item.productionNo || item.id || '';
-        // Gunakan production number + material ID + timestamp untuk unique tracking per submission
-        const productionResultId = materialsUsedData.length > 0 ? `${productionNo || item.id || 'PR'}-${materialId}-${Date.now()}` : '';
-        const trackingKey = productionResultId || `${productionNo || item.id || 'PROD'}-${item.spkNo || ''}-${materialId}`;
-        
-        // Cek apakah production submission ini sudah pernah diproses untuk material ini
-        // Gunakan processedProductions untuk track production submissions
-        if (existingMaterialInventory) {
-          const processedProductions = existingMaterialInventory.processedProductions || [];
-          if (processedProductions.includes(trackingKey)) {
-            continue; // Skip material ini, lanjut ke material berikutnya
-          }
+        // Try 3: Partial match (jika materialId ada di code atau description)
+        if (!existingMaterialInventory) {
+          existingMaterialInventory = inventory.find(inv => {
+            if (!inv) return false;
+            const invCode = ((inv.item_code || inv.codeItem || '').toString().trim().toLowerCase());
+            const invDesc = ((inv.description || '').toString().trim().toLowerCase());
+            return invCode.includes(materialIdLower) || invDesc.includes(materialIdLower);
+          });
         }
 
+        // Update inventory jika ditemukan
         if (existingMaterialInventory) {
-          // Update existing material inventory - TAMBAHKAN OUTGOING
           const oldOutgoing = existingMaterialInventory.outgoing || 0;
           const newOutgoing = oldOutgoing + materialUsed;
           
-          // Track production submission untuk anti-duplicate (bukan PO, karena satu PO bisa multiple submissions)
-          const processedProductions = existingMaterialInventory.processedProductions || [];
-          if (trackingKey && !processedProductions.includes(trackingKey)) {
-            processedProductions.push(trackingKey);
-          }
-          existingMaterialInventory.processedProductions = processedProductions;
-          
-          // Track PO untuk reference (tapi tidak untuk skip update)
-          const existingProcessedPOs = existingMaterialInventory.processedPOs || [];
-          if (poNo && !existingProcessedPOs.includes(poNo)) {
-            existingProcessedPOs.push(poNo);
-          }
-          existingMaterialInventory.processedPOs = existingProcessedPOs;
-          
           existingMaterialInventory.outgoing = newOutgoing;
-          
-          // Recalculate nextStock: stockPremonth + receive - outgoing + return
           existingMaterialInventory.nextStock =
             (existingMaterialInventory.stockPremonth || 0) +
             (existingMaterialInventory.receive || 0) -
             newOutgoing +
             (existingMaterialInventory.return || 0);
           existingMaterialInventory.lastUpdate = new Date().toISOString();
-        } else {
-          // Material tidak ditemukan di inventory - SKIP update, jangan create entry baru
-          // CRITICAL: Produksi hanya cek inventory, bukan create material inventory
-          // Material harus sudah ada di inventory (dari GRN) sebelum bisa digunakan untuk produksi
-          
-          // JANGAN create entry baru - hanya log error dan skip
-          // Material inventory hanya bisa dibuat melalui GRN (Purchasing), bukan dari Production
         }
       }
 
@@ -2057,7 +2092,8 @@ const Production = () => {
             
             // Cari existing product inventory - coba beberapa cara matching
             let existingProductInventory = inventory.find((inv: any) => {
-              const invCode = (inv.codeItem || '').toString().trim().toLowerCase();
+              // Support both item_code (new) and codeItem (old)
+              const invCode = (inv.item_code || inv.codeItem || '').toString().trim().toLowerCase();
               const invDesc = (inv.description || '').toString().trim().toLowerCase();
               const searchCode = productCode.toLowerCase();
               const searchName = productNameFinal.toLowerCase();
@@ -2130,10 +2166,10 @@ const Production = () => {
       }
 
       // Save updated inventory
-      await storageService.set('inventory', inventory);
+      await storageService.set(StorageKeys.PACKAGING.INVENTORY, inventory);
     } catch (error: any) {
-      showAlert(`Error updating inventory from production: ${error.message}`, 'Error');
-      throw error;
+      // Silent fail - jangan throw error, biar submit tetap jalan
+      console.error('⚠️ Error updating inventory:', error.message);
     }
   };
 
@@ -2157,7 +2193,8 @@ const Production = () => {
       async () => {
 
     try {
-      const productionList = await storageService.get<any[]>('production') || [];
+      const productionListRaw = await storageService.get<any[]>('production');
+      const productionList = extractStorageValue(productionListRaw) || [];
       const closedProductions = productionList.filter((p: any) => p.status === 'CLOSE');
       
       if (closedProductions.length === 0) {
@@ -2166,10 +2203,10 @@ const Production = () => {
         return;
       }
 
-      const inventory = await storageService.get<InventoryItem[]>('inventory') || [];
-      const salesOrders = await storageService.get<any[]>('salesOrders') || [];
-      const bomDataForFix = await storageService.get<any[]>('bom') || [];
-      const materialsForFix = await storageService.get<any[]>('materials') || [];
+      const inventory = extractStorageValue(await storageService.get<InventoryItem[]>('inventory')) || [];
+      const salesOrders = extractStorageValue(await storageService.get<any[]>('salesOrders')) || [];
+      const bomDataForFix = extractStorageValue(await storageService.get<any[]>('bom')) || [];
+      const materialsForFix = extractStorageValue(await storageService.get<any[]>('materials')) || [];
 
       // Aggregate material usage dari semua closed production
       // Key: codeItem dari inventory (bukan material_id dari BOM, untuk menghindari duplikasi)
@@ -2308,7 +2345,7 @@ const Production = () => {
       }
 
       // Save updated inventory
-      await storageService.set('inventory', inventory);
+      await storageService.set(StorageKeys.PACKAGING.INVENTORY, inventory);
 
       let alertMessage = `✅ Inventory Fixed!\n\n`;
       alertMessage += `📊 ${closedProductions.length} production(s) processed\n`;
@@ -2398,7 +2435,7 @@ const Production = () => {
             }
           : p
       );
-      await storageService.set('production', updated);
+      await storageService.set(StorageKeys.PACKAGING.PRODUCTION, updated);
       setProductions(updated);
 
       // Update inventory automatically dengan data dari dialog
@@ -2422,12 +2459,12 @@ const Production = () => {
       await updateInventoryFromProduction(updatedProductionContext, allMaterialsUsed);
       
       // Save production result SETELAH inventory di-update
-      const productionResults = await storageService.get<any[]>('productionResults') || [];
+      const productionResults = extractStorageValue(await storageService.get<any[]>('productionResults')) || [];
       productionResults.push(newProductionResult);
-      await storageService.set('productionResults', productionResults);
+      await storageService.set(StorageKeys.PACKAGING.PRODUCTION_RESULTS, productionResults);
       
       // Update Schedule progress/close ketika sudah selesai
-      const scheduleList = await storageService.get<any[]>('schedule') || [];
+      const scheduleList = extractStorageValue(await storageService.get<any[]>('schedule')) || [];
       const updatedSchedules = scheduleList.map((s: any) => {
         if (s.spkNo !== selectedProductionForSubmit.spkNo) return s;
         
@@ -2441,10 +2478,10 @@ const Production = () => {
           remaining: remainingQty,
         };
       });
-      await storageService.set('schedule', updatedSchedules);
+      await storageService.set(StorageKeys.PACKAGING.SCHEDULE, updatedSchedules);
 
       // Update Production notifications (reminder jika masih kurang)
-      const productionNotifications = await storageService.get<any[]>('productionNotifications') || [];
+      const productionNotifications = extractStorageValue(await storageService.get<any[]>('productionNotifications')) || [];
       const notifIndex = productionNotifications.findIndex((n: any) => {
         if (selectedProductionForSubmit.spkNo) {
           return n.spkNo === selectedProductionForSubmit.spkNo;
@@ -2460,7 +2497,7 @@ const Production = () => {
             pendingQty: 0,
             updated: nowIso,
           };
-          await storageService.set('productionNotifications', productionNotifications);
+          await storageService.set(StorageKeys.PACKAGING.PRODUCTION_NOTIFICATIONS, productionNotifications);
         }
       } else {
         const reminderNotification = {
@@ -2492,14 +2529,14 @@ const Production = () => {
         } else {
           productionNotifications.push(reminderNotification);
         }
-        await storageService.set('productionNotifications', productionNotifications);
+        await storageService.set(StorageKeys.PACKAGING.PRODUCTION_NOTIFICATIONS, productionNotifications);
       }
 
       // Create QC record untuk notifikasi ke QAQC hanya jika produksi sudah selesai
       // IMPORTANT: QC dibuat per SPK dan per batch (jika ada batch di schedule)
       // Mirip dengan delivery batch trigger, QC juga dibuat per batch dengan sjGroupId
       if (shouldCloseProduction) {
-        let qcList = await storageService.get<any[]>('qc') || [];
+        let qcList = extractStorageValue(await storageService.get<any[]>('qc')) || [];
         // Ensure qcList is always an array
         qcList = Array.isArray(qcList) ? qcList : [];
         
@@ -2519,7 +2556,7 @@ const Production = () => {
         const productionSpkNo = selectedProductionForSubmit.spkNo || '';
         
         // Load schedule untuk mendapatkan batch info dan deliveryBatches
-        const scheduleList = await storageService.get<any[]>('schedule') || [];
+        const scheduleList = extractStorageValue(await storageService.get<any[]>('schedule')) || [];
         const relatedSchedule = scheduleList.find((s: any) => {
           if (!s.spkNo) return false;
           return matchSPK(s.spkNo, productionSpkNo);
@@ -2603,12 +2640,12 @@ const Production = () => {
               created: nowIso,
             };
             qcList.push(newQC);
-            await storageService.set('qc', qcList);
+            await storageService.set(StorageKeys.PACKAGING.QC, qcList);
           }
         }
         
         // Save QC list setelah semua batch diproses
-        await storageService.set('qc', qcList);
+        await storageService.set(StorageKeys.PACKAGING.QC, qcList);
       }
 
       const alertMessage = shouldCloseProduction
@@ -2755,34 +2792,45 @@ const Production = () => {
           return bomProductId === searchProductId;
         });
         
-        // IMPORTANT: Deduplikasi BOM berdasarkan material_id dan enrich dengan override qty dari SPK
-        const bomMap = new Map<string, any>();
-        prodBOMRaw.forEach((bom: any) => {
-          const materialId = (bom.material_id || '').toString().trim();
-          if (!materialId) return;
-          
-          if (!bomMap.has(materialId)) {
-            // IMPORTANT: Hitung requiredQty dengan mempertimbangkan override dari SPK
-            let requiredQty: number;
-            if (spkBOMOverride[materialId] !== undefined && spkBOMOverride[materialId] !== null) {
-              // Gunakan override qty dari PPIC (tidak mengikuti ratio)
-              requiredQty = Math.max(Math.ceil(parseFloat(spkBOMOverride[materialId]) || 0), 0);
-            } else {
-              // Gunakan ratio calculation (default)
-              const ratio = parseFloat(bom.ratio || 1) || 1;
-              requiredQty = Math.max(Math.ceil(spkQty * ratio), 0);
-            }
-            
-            bomMap.set(materialId, {
-              ...bom,
-              requiredQty: requiredQty, // Store calculated requiredQty
-            });
-          } else {
-            // Jika material sudah ada, keep yang pertama (skip duplikasi)
-          }
-        });
+        // IMPORTANT: Jika tidak ada BOM, gunakan product itu sendiri sebagai "material" untuk tracking
+        let prodBOM: any[] = [];
         
-        const prodBOM = Array.from(bomMap.values());
+        if (prodBOMRaw.length > 0) {
+          // Ada BOM - gunakan BOM data
+          const bomMap = new Map<string, any>();
+          prodBOMRaw.forEach((bom: any) => {
+            const materialId = (bom.material_id || '').toString().trim();
+            if (!materialId) return;
+            
+            if (!bomMap.has(materialId)) {
+              let requiredQty: number;
+              if (spkBOMOverride[materialId] !== undefined && spkBOMOverride[materialId] !== null) {
+                requiredQty = Math.max(Math.ceil(parseFloat(spkBOMOverride[materialId]) || 0), 0);
+              } else {
+                const ratio = parseFloat(bom.ratio || 1) || 1;
+                requiredQty = Math.max(Math.ceil(spkQty * ratio), 0);
+              }
+              
+              bomMap.set(materialId, {
+                ...bom,
+                requiredQty: requiredQty,
+              });
+            }
+          });
+          prodBOM = Array.from(bomMap.values());
+        } else {
+          // Tidak ada BOM - gunakan product itu sendiri sebagai material
+          // Ini untuk simplify flow ketika BOM belum di-setup
+          prodBOM = [{
+            id: `product-as-material-${prod.id}`,
+            product_id: productId,
+            material_id: productId, // Gunakan product_id sebagai material_id
+            description: prod.product || prod.productName || '',
+            ratio: 1,
+            requiredQty: prod.target || 0,
+            unit: 'PCS',
+          }];
+        }
 
         const progress = prod.progress || 0;
         const target = prod.target || 0;
@@ -2937,11 +2985,27 @@ const Production = () => {
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                       {prodBOM.slice(0, 3).map((bom: any, bomIdx: number) => {
-                        const material = materials.find((m: any) => 
-                          ((m.material_id || m.kode || '').toString().trim()) === ((bom.material_id || '').toString().trim())
-                        );
+                        // IMPORTANT: Try multiple ways to find material
+                        const bomMaterialId = (bom.material_id || bom.materialId || '').toString().trim().toLowerCase();
+                        const material = materials.find((m: any) => {
+                          const mId = (m.material_id || m.materialId || m.kode || '').toString().trim().toLowerCase();
+                          const mNama = (m.nama || m.name || '').toString().trim().toLowerCase();
+                          return mId === bomMaterialId || (bomMaterialId && mNama === bomMaterialId);
+                        });
+                        
                         // IMPORTANT: Gunakan requiredQty yang sudah dihitung dari SPK (dengan override jika ada)
                         const requiredQty = bom.requiredQty || Math.ceil((prod.target || 0) * (bom.ratio || 1));
+                        
+                        // Display material name or fallback to material_id or description
+                        let materialName = material?.nama || material?.name || bom.material_id || bom.materialId || bom.description || '-';
+                        
+                        // Truncate long material names to fit in card (max 40 chars)
+                        if (materialName.length > 40) {
+                          materialName = materialName.substring(0, 37) + '...';
+                        }
+                        
+                        const materialUnit = material?.satuan || material?.unit || bom.unit || 'PCS';
+                        
                         return (
                           <div 
                             key={bom.id || bomIdx}
@@ -2954,21 +3018,42 @@ const Production = () => {
                               borderRadius: '3px',
                               fontSize: '9px',
                               border: '1px solid var(--border-color)',
+                              maxWidth: '100%',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
                             }}
                       >
-                        <span style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>
-                          {material?.nama || bom.material_id || '-'}
+                        <span style={{ fontWeight: 'bold', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {materialName}
                         </span>
-                        <span style={{ color: 'var(--text-secondary)' }}>
-                          Required: {requiredQty}
+                        <span style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                          {requiredQty}
                         </span>
-                        <span style={{ color: 'var(--text-secondary)' }}>
-                          {material?.satuan || bom.unit || 'PCS'}
+                        <span style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                          {materialUnit}
                         </span>
                       </div>
                     );
                   })}
                 </div>
+                  </div>
+                )}
+
+                {prodBOM.length === 0 && (
+                  <div style={{ 
+                    padding: '6px',
+                    backgroundColor: 'var(--bg-tertiary)',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border-color)',
+                    fontSize: '10px',
+                    color: 'var(--text-secondary)',
+                  }}>
+                    <div style={{ fontWeight: 'bold', color: 'var(--warning)', marginBottom: '4px' }}>
+                      📦 Materials (0)
+                    </div>
+                    <div style={{ fontSize: '9px', fontStyle: 'italic' }}>
+                      No BOM data. Showing product as material.
+                    </div>
                   </div>
                 )}
               </div>
@@ -3162,24 +3247,24 @@ const Production = () => {
     return flattened;
   }, [filteredProductionData, scheduleData, spkData, productionViewMode]);
 
-  const columns = [
+  const columns = useMemo(() => [
     { 
       key: 'soNo', 
-      header: 'SO No',
+      header: t('salesOrder.number') || 'SO No',
       render: (item: any) => (
         <strong style={{ color: '#2e7d32', fontSize: '13px' }}>{item.soNo}</strong>
       ),
     },
     { 
       key: 'customer', 
-      header: 'Customer',
+      header: t('master.customerName') || 'Customer',
       render: (item: any) => (
         <span style={{ fontSize: '13px' }}>{item.customer}</span>
       ),
     },
     {
       key: 'spkNo',
-      header: 'SPK No',
+      header: t('production.spk') || 'SPK No',
       render: (item: any) => (
         <strong style={{ fontSize: '13px', color: 'var(--primary)' }}>{item.spkNo}</strong>
       ),
@@ -3193,21 +3278,21 @@ const Production = () => {
     },
     {
       key: 'productCode',
-      header: 'Product Code',
+      header: t('master.productCode') || 'Product Code',
       render: (item: any) => (
         <span style={{ fontSize: '12px' }}>{item.productCode}</span>
       ),
     },
     {
       key: 'product',
-      header: 'Product',
+      header: t('master.productName') || 'Product',
       render: (item: any) => (
         <span style={{ fontSize: '13px' }}>{item.product}</span>
       ),
     },
     {
       key: 'qty',
-      header: 'Qty',
+      header: t('common.quantity') || 'Qty',
       render: (item: any) => (
         <span style={{ fontSize: '13px', textAlign: 'right', display: 'block' }}>
           {formatNumber(item.qty)} PCS
@@ -3257,7 +3342,7 @@ const Production = () => {
     },
     {
       key: 'status',
-      header: 'Status',
+      header: t('common.status') || 'Status',
       render: (item: any) => (
         <span className={`status-badge status-${item.status?.toLowerCase() || 'draft'}`} style={{ fontSize: '11px' }}>
           {item.status || 'DRAFT'}
@@ -3266,7 +3351,7 @@ const Production = () => {
     },
     {
       key: 'date',
-      header: 'Date',
+      header: t('common.date') || 'Date',
       render: (item: any) => (
         <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
           {item.date && item.date !== '-' ? formatDateSimple(item.date) : '-'}
@@ -3293,7 +3378,7 @@ const Production = () => {
     },
     { 
       key: 'created', 
-      header: 'Created',
+      header: t('common.createdAt') || 'Created',
       render: (item: any) => {
         const createdDate = item.created || item.date || '';
         const { date, time } = formatDateSimpleWithTime(createdDate);
@@ -3305,7 +3390,7 @@ const Production = () => {
         );
       },
     },
-  ];
+  ], [t]);
 
   const handleStartProduction = async (notif: any, batch?: any) => {
     // Tutup semua dialog yang mungkin masih terbuka
@@ -3354,8 +3439,12 @@ const Production = () => {
         // IMPORTANT: Filter deleted items untuk prevent data resurrection
         const inventoryItemsRaw = await storageService.get<any[]>('inventory') || [];
         const inventoryItems = filterActiveItems(inventoryItemsRaw);
-        const bomList = await storageService.get<any[]>('bom') || [];
-        const materialsList = await storageService.get<any[]>('materials') || [];
+        const bomListRaw = await storageService.get<any[]>('bom');
+        const materialsListRaw = await storageService.get<any[]>('materials');
+        
+        // CRITICAL: Extract wrapped objects BEFORE using
+        const bomList = extractStorageValue(bomListRaw) || [];
+        const materialsList = extractStorageValue(materialsListRaw) || [];
         
         const normalizeKey = (value: any) => (value ?? '').toString().trim().toLowerCase();
         const toNumber = (value: any) => {
@@ -3574,7 +3663,7 @@ const Production = () => {
 
       // Update productions state immediately (no reload needed)
       const updatedProductions = [...productions, newProduction];
-      await storageService.set('production', updatedProductions);
+      await storageService.set(StorageKeys.PACKAGING.PRODUCTION, updatedProductions);
       setProductions(updatedProductions);
 
       // Update notification status ke IN_PRODUCTION
@@ -3582,7 +3671,7 @@ const Production = () => {
       const updatedNotifications = productionNotifications.map((n: any) =>
         n.id === notif.id ? { ...n, status: 'IN_PRODUCTION', lastUpdate: new Date().toISOString() } : n
       );
-      await storageService.set('productionNotifications', updatedNotifications);
+      await storageService.set(StorageKeys.PACKAGING.PRODUCTION_NOTIFICATIONS, updatedNotifications);
       
       // Force sync to server immediately untuk prevent data conflict
       const config = storageService.getConfig();
@@ -3627,7 +3716,7 @@ const Production = () => {
       
       // Clean up: Hapus notification yang sudah tidak relevan dari storage
       if (filteredNotifications.length < updatedNotifications.length) {
-        await storageService.set('productionNotifications', filteredNotifications);
+        await storageService.set(StorageKeys.PACKAGING.PRODUCTION_NOTIFICATIONS, filteredNotifications);
       }
 
       const batchText = batch ? `\nBatch: ${batch.batchNo || batch.batchName || ''}` : '';
@@ -3665,6 +3754,42 @@ const Production = () => {
     { id: 'outstanding', label: `Outstanding (${productions.filter(p => p.status === 'OPEN').length})` },
     { id: 'schedule', label: 'Schedule' },
   ];
+
+  // Paginated production data
+  const paginatedProductionData = useMemo(() => {
+    const startIndex = (productionCurrentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredProductionData.slice(startIndex, endIndex);
+  }, [filteredProductionData, productionCurrentPage, itemsPerPage]);
+
+  const productionTotalPages = Math.ceil(filteredProductionData.length / itemsPerPage);
+
+  // Outstanding production data (filtered for OPEN status)
+  const outstandingProductionData = useMemo(() => {
+    return filteredProductionData.filter((item: any) => {
+      return item.productionList.some((prod: any) => prod.status === 'OPEN');
+    });
+  }, [filteredProductionData]);
+
+  const paginatedOutstandingProductionData = useMemo(() => {
+    const startIndex = (outstandingProductionPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return outstandingProductionData.slice(startIndex, endIndex);
+  }, [outstandingProductionData, outstandingProductionPage, itemsPerPage]);
+
+  const outstandingProductionTotalPages = Math.ceil(outstandingProductionData.length / itemsPerPage);
+
+  // Reset pagination when tab changes
+  useEffect(() => {
+    setProductionCurrentPage(1);
+    setOutstandingProductionPage(1);
+  }, [activeTab]);
+
+  // Reset pagination when search query changes
+  useEffect(() => {
+    setProductionCurrentPage(1);
+    setOutstandingProductionPage(1);
+  }, [searchQuery]);
 
   return (
     <div className="module-compact">
@@ -3838,7 +3963,7 @@ const Production = () => {
         </Card>
       )}
 
-      <Card>
+      <Card style={{ position: 'sticky', top: 0, zIndex: 100, marginBottom: '16px' }}>
         <div className="tab-container">
           {tabs.map((tab) => (
             <button
@@ -3863,18 +3988,21 @@ const Production = () => {
                     placeholder="Search by SO No, Customer, Production No, SPK No, Product, Status..."
                   />
                 </div>
+                <div style={{ flex: '1 1 400px', minWidth: '300px' }}>
+                  <DateRangeFilter
+                    onDateChange={(from, to) => {
+                      setDateFrom(from);
+                      setDateTo(to);
+                    }}
+                    defaultFrom={dateFrom}
+                    defaultTo={dateTo}
+                  />
+                </div>
                 {renderViewModeToggle()}
-                <Button 
-                  variant="secondary" 
-                  onClick={handleFixInventory}
-                  style={{ marginTop: '24px', backgroundColor: '#ff9800', color: '#fff', alignSelf: 'flex-end' }}
-                >
-                  🔧 Fix Inventory
-                </Button>
               </div>
               {productionViewMode === 'cards'
                 ? renderProductionCardView(
-                    filteredProductionData,
+                    paginatedProductionData,
                     searchQuery ? "No Production data found matching your search" : "No Production data"
                   )
                 : (
@@ -3887,6 +4015,86 @@ const Production = () => {
                     })}
                   />
                 )}
+              
+              {/* Pagination Controls for Production */}
+              {filteredProductionData.length > itemsPerPage && (
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginTop: '16px',
+                  flexWrap: 'wrap',
+                }}>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setProductionCurrentPage(Math.max(1, productionCurrentPage - 1))}
+                    disabled={productionCurrentPage === 1}
+                    style={{ padding: '6px 12px', fontSize: '12px' }}
+                  >
+                    ← Previous
+                  </Button>
+                  
+                  {(() => {
+                    const pages: (number | string)[] = [];
+                    if (productionTotalPages <= 5) {
+                      for (let i = 1; i <= productionTotalPages; i++) pages.push(i);
+                    } else {
+                      pages.push(1);
+                      if (productionCurrentPage > 3) pages.push('...');
+                      
+                      const startPage = Math.max(2, productionCurrentPage - 1);
+                      const endPage = Math.min(productionTotalPages - 1, productionCurrentPage + 1);
+                      
+                      for (let i = startPage; i <= endPage; i++) {
+                        pages.push(i);
+                      }
+                      
+                      if (productionCurrentPage < productionTotalPages - 2) pages.push('...');
+                      pages.push(productionTotalPages);
+                    }
+                    
+                    return pages.map((page, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => typeof page === 'number' && setProductionCurrentPage(page)}
+                        disabled={page === '...'}
+                        style={{
+                          padding: '6px 10px',
+                          border: page === productionCurrentPage ? '2px solid var(--primary-color)' : '1px solid var(--border-color)',
+                          backgroundColor: page === productionCurrentPage ? 'var(--primary-color)' : 'var(--bg-primary)',
+                          color: page === productionCurrentPage ? '#fff' : 'var(--text-primary)',
+                          borderRadius: '4px',
+                          cursor: page === '...' ? 'default' : 'pointer',
+                          fontSize: '12px',
+                          fontWeight: page === productionCurrentPage ? '600' : '400',
+                          opacity: page === '...' ? 0.5 : 1,
+                        }}
+                      >
+                        {page}
+                      </button>
+                    ));
+                  })()}
+                  
+                  <Button
+                    variant="secondary"
+                    onClick={() => setProductionCurrentPage(Math.min(productionTotalPages, productionCurrentPage + 1))}
+                    disabled={productionCurrentPage === productionTotalPages}
+                    style={{ padding: '6px 12px', fontSize: '12px' }}
+                  >
+                    Next →
+                  </Button>
+                </div>
+              )}
+              
+              <div style={{
+                textAlign: 'center',
+                marginTop: '8px',
+                fontSize: '12px',
+                color: 'var(--text-secondary)',
+              }}>
+                Page {productionCurrentPage} of {productionTotalPages} ({filteredProductionData.length} total)
+              </div>
             </>
           )}
           {activeTab === 'outstanding' && (
@@ -3904,7 +4112,7 @@ const Production = () => {
               </div>
               {productionViewMode === 'cards'
                 ? renderProductionCardView(
-                    filteredProductionData,
+                    paginatedOutstandingProductionData,
                     searchQuery ? "No Production data found matching your search" : "No outstanding production data"
                   )
                 : (
@@ -3917,6 +4125,86 @@ const Production = () => {
                     })}
                   />
                 )}
+              
+              {/* Pagination Controls for Outstanding Production */}
+              {outstandingProductionData.length > itemsPerPage && (
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginTop: '16px',
+                  flexWrap: 'wrap',
+                }}>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setOutstandingProductionPage(Math.max(1, outstandingProductionPage - 1))}
+                    disabled={outstandingProductionPage === 1}
+                    style={{ padding: '6px 12px', fontSize: '12px' }}
+                  >
+                    ← Previous
+                  </Button>
+                  
+                  {(() => {
+                    const pages: (number | string)[] = [];
+                    if (outstandingProductionTotalPages <= 5) {
+                      for (let i = 1; i <= outstandingProductionTotalPages; i++) pages.push(i);
+                    } else {
+                      pages.push(1);
+                      if (outstandingProductionPage > 3) pages.push('...');
+                      
+                      const startPage = Math.max(2, outstandingProductionPage - 1);
+                      const endPage = Math.min(outstandingProductionTotalPages - 1, outstandingProductionPage + 1);
+                      
+                      for (let i = startPage; i <= endPage; i++) {
+                        pages.push(i);
+                      }
+                      
+                      if (outstandingProductionPage < outstandingProductionTotalPages - 2) pages.push('...');
+                      pages.push(outstandingProductionTotalPages);
+                    }
+                    
+                    return pages.map((page, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => typeof page === 'number' && setOutstandingProductionPage(page)}
+                        disabled={page === '...'}
+                        style={{
+                          padding: '6px 10px',
+                          border: page === outstandingProductionPage ? '2px solid var(--primary-color)' : '1px solid var(--border-color)',
+                          backgroundColor: page === outstandingProductionPage ? 'var(--primary-color)' : 'var(--bg-primary)',
+                          color: page === outstandingProductionPage ? '#fff' : 'var(--text-primary)',
+                          borderRadius: '4px',
+                          cursor: page === '...' ? 'default' : 'pointer',
+                          fontSize: '12px',
+                          fontWeight: page === outstandingProductionPage ? '600' : '400',
+                          opacity: page === '...' ? 0.5 : 1,
+                        }}
+                      >
+                        {page}
+                      </button>
+                    ));
+                  })()}
+                  
+                  <Button
+                    variant="secondary"
+                    onClick={() => setOutstandingProductionPage(Math.min(outstandingProductionTotalPages, outstandingProductionPage + 1))}
+                    disabled={outstandingProductionPage === outstandingProductionTotalPages}
+                    style={{ padding: '6px 12px', fontSize: '12px' }}
+                  >
+                    Next →
+                  </Button>
+                </div>
+              )}
+              
+              <div style={{
+                textAlign: 'center',
+                marginTop: '8px',
+                fontSize: '12px',
+                color: 'var(--text-secondary)',
+              }}>
+                Page {outstandingProductionPage} of {outstandingProductionTotalPages} ({outstandingProductionData.length} total)
+              </div>
             </>
           )}
           {activeTab === 'schedule' && (
@@ -4091,6 +4379,61 @@ const Production = () => {
           </div>
         </div>
       )}
+
+      {/* Signed SPK Viewer Modal */}
+      {signedSpkViewer && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            display: 'flex',
+            flexDirection: 'column',
+            zIndex: 10002,
+            backdropFilter: 'blur(8px)',
+          }}
+          onClick={closeSignedSpkViewer}
+        >
+          <div style={{
+            padding: '20px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            borderBottom: '1px solid rgba(255,255,255,0.1)',
+          }}>
+            <div>
+              <h3 style={{ margin: 0, color: '#fff', fontSize: '20px', fontWeight: '600' }}>
+                {signedSpkViewer.fileName}
+              </h3>
+              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '14px' }}>
+                {signedSpkViewer.isPDF ? 'PDF Document' : 'Image Document'}
+              </div>
+            </div>
+            <button onClick={closeSignedSpkViewer} style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', backgroundColor: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: '24px', cursor: 'pointer' }}>
+              ×
+            </button>
+          </div>
+          <div style={{ flex: 1, padding: '20px', display: 'flex', justifyContent: 'center', alignItems: signedSpkViewer.isPDF ? 'flex-start' : 'center' }} onClick={(e) => e.stopPropagation()}>
+            {signedSpkViewer.isPDF ? (
+              <div style={{ width: '100%', maxWidth: '1200px', height: '100%', backgroundColor: '#fff', borderRadius: '8px', overflow: 'hidden' }}>
+                <object data={signedSpkViewer.data} type="application/pdf" style={{ width: '100%', height: '100%' }} title={signedSpkViewer.fileName}>
+                  <embed src={signedSpkViewer.data} type="application/pdf" style={{ width: '100%', height: '100%' }} />
+                </object>
+              </div>
+            ) : (
+              <img src={signedSpkViewer.data} alt={signedSpkViewer.fileName} style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: '8px' }} />
+            )}
+          </div>
+          <div style={{ padding: '20px', display: 'flex', justifyContent: 'center', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+            <button onClick={closeSignedSpkViewer} style={{ padding: '10px 24px', borderRadius: '6px', border: 'none', backgroundColor: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: '14px', cursor: 'pointer' }}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -4159,8 +4502,11 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
     setMaterialsUsed([]);
     setLeftovers([]);
     // Load data fresh dari inventory
-    loadBOMData();
-    loadAvailableMaterials();
+    const loadData = async () => {
+      await loadBOMData();
+      await loadAvailableMaterials();
+    };
+    loadData();
   }, [production]);
 
   const loadAvailableMaterials = async () => {
@@ -4168,10 +4514,23 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
       const inventoryRaw = await storageService.get<any[]>('inventory');
       const materialsDataRaw = await storageService.get<any[]>('materials');
       
+      console.log('📦 loadAvailableMaterials - Raw data:', {
+        inventoryRaw: inventoryRaw ? (Array.isArray(inventoryRaw) ? `Array(${inventoryRaw.length})` : typeof inventoryRaw) : 'null',
+        materialsDataRaw: materialsDataRaw ? (Array.isArray(materialsDataRaw) ? `Array(${materialsDataRaw.length})` : typeof materialsDataRaw) : 'null',
+      });
+      
+      // IMPORTANT: Use extractStorageValue to handle wrapped objects
+      const inventoryRawArray = extractStorageValue(inventoryRaw);
+      const materialsDataArray = extractStorageValue(materialsDataRaw);
+      
       // IMPORTANT: Filter deleted items untuk prevent data resurrection
-      const inventoryRawArray = Array.isArray(inventoryRaw) ? inventoryRaw : [];
       const inventory = filterActiveItems(inventoryRawArray);
-      const materialsData = Array.isArray(materialsDataRaw) ? materialsDataRaw : [];
+      const materialsData = filterActiveItems(materialsDataArray);
+      
+      console.log('📦 loadAvailableMaterials - After filtering:', {
+        inventoryCount: inventory.length,
+        materialsCount: materialsData.length,
+      });
       
       const normalizeKey = (value: any) => (value ?? '').toString().trim().toLowerCase();
       const toNumber = (value: any) => {
@@ -4180,13 +4539,20 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
         return Number.isNaN(parsed) ? 0 : parsed;
       };
       
-      // Get available materials from inventory (materials that have stock > 0)
+      // Get available materials from inventory (show ALL materials, even if stock = 0)
       const available: any[] = [];
       // Ensure inventory is always an array
       const inventoryArray = Array.isArray(inventory) ? inventory : [];
-      inventoryArray.forEach((inv: any) => {
-        const invCode = normalizeKey(inv.codeItem);
-        if (!invCode) return;
+      
+      console.log('📦 Processing inventory items:', inventoryArray.length);
+      
+      inventoryArray.forEach((inv: any, invIdx: number) => {
+        // Support both item_code (new) and codeItem (old)
+        const invCode = normalizeKey(inv.item_code || inv.codeItem);
+        if (!invCode) {
+          console.warn(`⚠️ Inventory item ${invIdx} has no code:`, inv);
+          return;
+        }
         
         // Get available stock
         const getAvailableStock = (item: any) => {
@@ -4203,18 +4569,19 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
         };
         
         const availableStock = getAvailableStock(inv);
-        if (availableStock <= 0) return;
+        // IMPORTANT: Don't filter by stock - show ALL materials even if stock = 0
+        // User can add materials manually even if not in stock
         
         // Find material info - ensure materialsData is always an array
         const materialsDataArray = Array.isArray(materialsData) ? materialsData : [];
         const material = materialsDataArray.find((m: any) => {
-          const matCode = normalizeKey(m.material_id || m.kode);
+          const matCode = normalizeKey(m.material_id || m.kode || m.id);
           return matCode === invCode;
         });
         
         if (material) {
           available.push({
-            materialId: (material.material_id || material.kode || '').toString().trim(),
+            materialId: (material.material_id || material.kode || material.id || '').toString().trim(),
             materialName: material.nama || inv.description || inv.codeItem,
             unit: material.satuan || inv.satuan || 'PCS',
             availableStock: availableStock,
@@ -4222,13 +4589,15 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
         } else {
           // If material not found in materials, use inventory data
           available.push({
-            materialId: inv.codeItem,
+            materialId: inv.item_code || inv.codeItem,
             materialName: inv.description || inv.codeItem,
             unit: inv.satuan || 'PCS',
             availableStock: availableStock,
           });
         }
       });
+      
+      console.log('📦 Available materials before dedup:', available.length);
       
       // Remove duplicates
       const uniqueMaterials = available.filter((m, idx, self) => {
@@ -4237,9 +4606,17 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
         return idx === selfArray.findIndex((t: any) => normalizeKey(t.materialId) === normalizeKey(m.materialId));
       });
       
+      console.log('📦 loadAvailableMaterials - Final result:', {
+        availableCount: available.length,
+        uniqueCount: uniqueMaterials.length,
+        firstItem: uniqueMaterials[0],
+      });
+      
       // Ensure uniqueMaterials is always an array before setting
       setAvailableMaterials(Array.isArray(uniqueMaterials) ? uniqueMaterials : []);
     } catch (error: any) {
+      console.error('❌ Error in loadAvailableMaterials:', error);
+      showAlert(`Error loading available materials: ${error.message || 'Unknown error'}`, 'Error');
     }
   };
 
@@ -4271,12 +4648,28 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
       const inventoryRaw = await storageService.get<any[]>('inventory');
       const productionResultsRaw = await storageService.get<any[]>('productionResults');
       
-      // Ensure data is always an array and filter deleted items
-      const spkData = Array.isArray(spkDataRaw) ? filterActiveItems(spkDataRaw) : [];
-      const bomData = Array.isArray(bomDataRaw) ? filterActiveItems(bomDataRaw) : [];
-      const materialsData = Array.isArray(materialsDataRaw) ? filterActiveItems(materialsDataRaw) : [];
-      const inventory = Array.isArray(inventoryRaw) ? filterActiveItems(inventoryRaw) : []; // Exclude deleted inventory
-      const productionResults = Array.isArray(productionResultsRaw) ? filterActiveItems(productionResultsRaw) : [];
+      console.log('📋 loadBOMData - Raw data:', {
+        spkDataRaw: spkDataRaw ? (Array.isArray(spkDataRaw) ? `Array(${spkDataRaw.length})` : typeof spkDataRaw) : 'null',
+        bomDataRaw: bomDataRaw ? (Array.isArray(bomDataRaw) ? `Array(${bomDataRaw.length})` : typeof bomDataRaw) : 'null',
+        materialsDataRaw: materialsDataRaw ? (Array.isArray(materialsDataRaw) ? `Array(${materialsDataRaw.length})` : typeof materialsDataRaw) : 'null',
+        inventoryRaw: inventoryRaw ? (Array.isArray(inventoryRaw) ? `Array(${inventoryRaw.length})` : typeof inventoryRaw) : 'null',
+        productionResultsRaw: productionResultsRaw ? (Array.isArray(productionResultsRaw) ? `Array(${productionResultsRaw.length})` : typeof productionResultsRaw) : 'null',
+      });
+      
+      // IMPORTANT: Use extractStorageValue to handle wrapped objects
+      const spkData = filterActiveItems(extractStorageValue(spkDataRaw));
+      const bomData = filterActiveItems(extractStorageValue(bomDataRaw));
+      const materialsData = filterActiveItems(extractStorageValue(materialsDataRaw));
+      const inventory = filterActiveItems(extractStorageValue(inventoryRaw)); // Exclude deleted inventory
+      const productionResults = filterActiveItems(extractStorageValue(productionResultsRaw));
+      
+      console.log('📋 loadBOMData - After filtering:', {
+        spkCount: spkData.length,
+        bomCount: bomData.length,
+        materialsCount: materialsData.length,
+        inventoryCount: inventory.length,
+        productionResultsCount: productionResults.length,
+      });
       
       const spk = spkData.find((s: any) => {
         const prodSpkNo = (production.spkNo || '').toString().trim();
@@ -4381,7 +4774,8 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
         const inventoryItem = inventory.find((inv: any) => {
           // Skip deleted items
           if (inv.deleted || inv._deleted) return false;
-          const invCode = normalizeKey(inv.codeItem);
+          // Support both item_code (new) and codeItem (old)
+          const invCode = normalizeKey(inv.item_code || inv.codeItem);
           const matCode = normalizeKey(materialId);
           const isMatch = invCode === matCode;
           return isMatch;
@@ -4390,7 +4784,7 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
         // Debug log untuk material yang tidak ditemukan
         if (!inventoryItem) {
         }
-        
+        1.
         // Available stock = nextStock (sudah dikurangi outgoing dari production sebelumnya)
         const getAvailableStock = (item: any) => {
           if (!item) return 0;
@@ -4483,9 +4877,17 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
         }
       });
 
+      console.log('📋 loadBOMData - Final result:', {
+        matsUsedCount: matsUsed.length,
+        leftsCount: lefts.length,
+        firstMaterial: matsUsed[0],
+      });
+
       setMaterialsUsed(matsUsed);
       setLeftovers(lefts);
     } catch (error: any) {
+      console.error('❌ Error in loadBOMData:', error);
+      showAlert(`Error loading BOM data: ${error.message || 'Unknown error'}`, 'Error');
     }
   };
 
@@ -4494,10 +4896,14 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
     if (materialsUsed.length > 0 && qtyProduced) {
       const recalculateMaterialUsage = async () => {
         try {
-          const bomData = await storageService.get<any[]>('bom') || [];
-          const spkData = await storageService.get<any[]>('spk') || [];
-          const inventoryRaw = await storageService.get<any[]>('inventory') || [];
-          const inventory = Array.isArray(inventoryRaw) ? filterActiveItems(inventoryRaw) : [];
+          const bomDataRaw = await storageService.get<any[]>('bom');
+          const spkDataRaw = await storageService.get<any[]>('spk');
+          const inventoryRaw = await storageService.get<any[]>('inventory');
+          
+          // CRITICAL: Extract wrapped objects BEFORE using
+          const bomData = extractStorageValue(bomDataRaw) || [];
+          const spkData = extractStorageValue(spkDataRaw) || [];
+          const inventory = Array.isArray(extractStorageValue(inventoryRaw)) ? filterActiveItems(extractStorageValue(inventoryRaw)) : [];
           
           const spk = spkData.find((s: any) => s.spkNo === production.spkNo || s.soNo === production.soNo);
           const productId = (production.productId || spk?.product_id || spk?.kode || '').toString().trim();
@@ -4634,7 +5040,13 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
   };
 
   const handleAddActualMaterial = () => {
+    console.log('🔍 handleAddActualMaterial called:', {
+      availableMaterialsCount: availableMaterials.length,
+      availableMaterials: availableMaterials,
+    });
+    
     if (availableMaterials.length === 0) {
+      console.warn('⚠️ No available materials!');
       showAlert('Tidak ada material yang tersedia di inventory', 'Information');
       return;
     }
@@ -4727,14 +5139,20 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
       const materialsDataRaw = await storageService.get<any[]>('materials');
       const spkDataRaw = await storageService.get<any[]>('spk');
       
+      // CRITICAL: Extract wrapped objects BEFORE checking Array.isArray
+      const inventory = extractStorageValue(inventoryRaw) || [];
+      const bomData = extractStorageValue(bomDataRaw) || [];
+      const materialsData = extractStorageValue(materialsDataRaw) || [];
+      const spkData = extractStorageValue(spkDataRaw) || [];
+      
       // Ensure data is always an array - defensive check
-      const inventory = Array.isArray(inventoryRaw) ? inventoryRaw : [];
-      const bomData = Array.isArray(bomDataRaw) ? bomDataRaw : [];
-      const materialsData = Array.isArray(materialsDataRaw) ? materialsDataRaw : [];
-      const spkData = Array.isArray(spkDataRaw) ? spkDataRaw : [];
+      const inventoryArray = Array.isArray(inventory) ? inventory : [];
+      const bomDataArray = Array.isArray(bomData) ? bomData : [];
+      const materialsDataArray = Array.isArray(materialsData) ? materialsData : [];
+      const spkDataArray = Array.isArray(spkData) ? spkData : [];
     
     // Get product ID
-    const spk = spkData.find((s: any) => s.spkNo === production.spkNo || s.soNo === production.soNo);
+    const spk = spkDataArray.find((s: any) => s.spkNo === production.spkNo || s.soNo === production.soNo);
     const productId = (production.productId || spk?.product_id || spk?.kode || '').toString().trim();
     
     // Info material BOM (tidak block, hanya kasih info)
@@ -4745,7 +5163,7 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
     const insufficientBOMMaterials: string[] = [];
     
     if (productId && !hasActualMaterials) {
-      const spkBOM = bomData.filter((b: any) => {
+      const spkBOM = bomDataArray.filter((b: any) => {
         const bomProductId = (b.product_id || b.kode || '').toString().trim().toLowerCase();
         const searchProductId = productId.toLowerCase();
         return bomProductId === searchProductId;
@@ -4754,7 +5172,7 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
       // Cek stock untuk setiap material BOM (hanya untuk info, tidak block)
       for (const bom of spkBOM) {
         const bomMaterialId = (bom.material_id || '').toString().trim();
-        const material = materialsData.find((m: any) => {
+        const material = materialsDataArray.find((m: any) => {
           const mId = (m.material_id || m.kode || '').toString().trim();
           return mId === bomMaterialId;
         });
@@ -4765,7 +5183,7 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
         const requiredQty = qtyProducedNum * ratio;
         
         // Cek stock material
-        const inventoryItem = inventory.find((inv: any) => {
+        const inventoryItem = inventoryArray.find((inv: any) => {
           const invCode = (inv.codeItem || '').toString().trim();
           return invCode.toLowerCase() === bomMaterialId.toLowerCase();
         });
@@ -4808,6 +5226,15 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
         
         showAlert(infoMessage, 'Material BOM Info');
       }
+      
+      // CRITICAL: Jika ada missing materials dan user tidak menambahkan actual materials, BLOCK submit
+      if (missingBOMMaterials.length > 0 && !hasActualMaterials) {
+        showAlert(
+          `❌ TIDAK BISA SUBMIT!\n\nMaterial BOM tidak ditemukan di inventory:\n\n${missingBOMMaterials.map(m => `• ${m}`).join('\n')}\n\nAlasan: Material ini tidak ada di master inventory.\n\nSolusi:\n1. Pastikan material sudah di-input ke inventory terlebih dahulu\n2. Atau gunakan "Actual Material Usage" untuk menambahkan material lain yang tersedia`,
+          'Missing Materials - Cannot Submit'
+        );
+        return;
+      }
     }
     
     // Validasi stock untuk actual materials (jika ada)
@@ -4816,7 +5243,7 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
         const qtyUsed = parseFloat(actualMat.qtyUsed || '0') || 0;
         if (qtyUsed <= 0) continue;
         
-        const inventoryItem = inventory.find((inv: any) => {
+        const inventoryItem = inventoryArray.find((inv: any) => {
           const invCode = (inv.codeItem || '').toString().trim();
           return invCode.toLowerCase() === (actualMat.materialId || '').toString().trim().toLowerCase();
         });
@@ -5370,6 +5797,120 @@ const SubmitProductionResultDialog = ({ production, onClose, onSave }: { product
           </div>
         </Card>
       </div>
+
+      {/* Material Selection Dialog */}
+      {showMaterialDialog && (
+        <div className="dialog-overlay" onClick={() => setShowMaterialDialog(false)} style={{ zIndex: 10002 }}>
+          <div className="dialog-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%', maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)' }}>
+                Select Material
+              </h3>
+            </div>
+            
+            {/* Search Input */}
+            <div style={{ marginBottom: '16px' }}>
+              <input
+                type="text"
+                placeholder="Search material by ID or name... (or type custom material)"
+                value={materialDialogSearch}
+                onChange={(e) => setMaterialDialogSearch(e.target.value)}
+                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)', fontSize: '14px' }}
+              />
+            </div>
+            
+            {/* Custom Material Option (if search text doesn't match any material) */}
+            {materialDialogSearch && !filteredMaterialsForDialog?.some((m: any) => 
+              (m.materialId || '').toLowerCase().includes(materialDialogSearch.toLowerCase()) ||
+              (m.materialName || '').toLowerCase().includes(materialDialogSearch.toLowerCase())
+            ) && (
+              <div style={{ marginBottom: '16px' }}>
+                <div
+                  onClick={() => {
+                    handleSelectMaterialFromDialog({
+                      materialId: materialDialogSearch,
+                      materialName: materialDialogSearch,
+                      unit: 'PCS',
+                      availableStock: 0,
+                    });
+                  }}
+                  style={{
+                    padding: '12px',
+                    border: '2px dashed var(--border-color)',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    backgroundColor: 'var(--bg-secondary)',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.borderColor = 'var(--primary-color)';
+                    (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--bg-hover)';
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-color)';
+                    (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--bg-secondary)';
+                  }}
+                >
+                  <div style={{ fontWeight: '600', fontSize: '14px', marginBottom: '4px', color: 'var(--primary-color)' }}>
+                    ➕ Create Custom Material
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    "{materialDialogSearch}"
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Material List */}
+            <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '4px' }}>
+              {filteredMaterialsForDialog && filteredMaterialsForDialog.length > 0 ? (
+                <div>
+                  {filteredMaterialsForDialog.map((material: any, idx: number) => (
+                    <div
+                      key={idx}
+                      onClick={() => handleSelectMaterialFromDialog(material)}
+                      style={{
+                        padding: '12px',
+                        borderBottom: '1px solid var(--border-color)',
+                        cursor: 'pointer',
+                        backgroundColor: idx % 2 === 0 ? 'var(--bg-secondary)' : 'transparent',
+                        transition: 'background-color 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--bg-hover)';
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = idx % 2 === 0 ? 'var(--bg-secondary)' : 'transparent';
+                      }}
+                    >
+                      <div style={{ fontWeight: '600', fontSize: '14px', marginBottom: '4px' }}>
+                        {material.materialId}
+                      </div>
+                      <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                        {material.materialName}
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                        Unit: {material.unit} | Stock: {material.availableStock || 0}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                  {materialDialogSearch ? 'No materials found - use "Create Custom Material" option above' : 'No materials available'}
+                </div>
+              )}
+            </div>
+            
+            {/* Close Button */}
+            <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
+              <Button variant="secondary" onClick={() => setShowMaterialDialog(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Custom Dialog untuk Alert/Confirm */}
       {dialogState.show && (

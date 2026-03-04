@@ -1,0 +1,131 @@
+================================================================================
+                    RUN THIS ON PC UTAMA NOW
+================================================================================
+
+LOCATION:
+  D:\trimalaksanaapps\possgresql\docker\start-services.bat
+
+HOW TO RUN:
+  Option 1: Double-click the file
+  Option 2: Open PowerShell and run: .\start-services.bat
+  Option 3: Open Command Prompt and run: start-services.bat
+
+WHAT IT DOES:
+  ✓ Kills old Node.js processes
+  ✓ Stops old services
+  ✓ Starts fresh services (PostgreSQL, MinIO, pgAdmin, Node.js)
+  ✓ Tests all endpoints
+  ✓ Shows credentials and next steps
+
+WAIT FOR:
+  - Script to complete (about 2-3 minutes)
+  - All 4 containers to be running
+  - Health checks to pass
+
+EXPECTED OUTPUT:
+  ✓ All services started successfully!
+  ✓ Node.js server is ready on port 9999
+  ✓ Tailscale endpoint is ready
+
+================================================================================
+                    AFTER SCRIPT COMPLETES
+================================================================================
+
+ON PC UTAMA:
+  1. Verify services: docker ps
+  2. Test Node.js: curl http://localhost:9999/health
+  3. Test Tailscale: curl https://server-tljp.tail75a421.ts.net/health
+  4. Access MinIO: http://localhost:9001
+  5. Access pgAdmin: http://localhost:5051
+
+ON LAPTOP DEV:
+  1. Clear browser cache: localStorage.clear()
+  2. Go to Settings > Check Connection
+  3. Should show: "Connected"
+  4. Test adding new product
+  5. Data should persist after refresh
+
+================================================================================
+                    CREDENTIALS
+================================================================================
+
+PostgreSQL:
+  User: trimalaksana
+  Pass: trimalaksana123
+
+MinIO:
+  User: minioadmin
+  Pass: minioadmin123
+
+pgAdmin:
+  Email: admin@trimalaksana.com
+  Pass:  admin123
+
+================================================================================
+                    PORT MAPPING
+================================================================================
+
+PostgreSQL:       localhost:5432
+MinIO API:        localhost:9000
+MinIO Console:    http://localhost:9001
+pgAdmin:          http://localhost:5051
+Fresh Node.js:    http://localhost:9999
+Old Node.js:      http://localhost:8888 (if still running)
+Tailscale:        wss://server-tljp.tail75a421.ts.net/ws
+
+================================================================================
+                    TROUBLESHOOTING
+================================================================================
+
+Script fails to start?
+  - Make sure you're in: D:\trimalaksanaapps\possgresql\docker
+  - Make sure Docker Desktop is running
+  - Make sure docker-compose-migration.yml exists
+
+Services don't start?
+  - Check Docker logs: docker-compose logs
+  - Verify Docker is running
+  - Try: docker-compose down && docker-compose up -d
+
+Node.js not responding?
+  - Wait 30 more seconds for startup
+  - Check logs: docker-compose logs storage-server
+  - Verify port 9999 is not in use
+
+Tailscale endpoint not responding?
+  - Verify Tailscale is running: tailscale status
+  - Check Tailscale connection
+  - Restart Tailscale if needed
+
+================================================================================
+                    USEFUL COMMANDS
+================================================================================
+
+View logs:
+  docker-compose -f docker-compose-migration.yml logs
+
+Stop services:
+  docker-compose -f docker-compose-migration.yml down
+
+Restart services:
+  docker-compose -f docker-compose-migration.yml restart
+
+Check containers:
+  docker ps
+
+Test endpoints:
+  curl http://localhost:9999/health
+  curl https://server-tljp.tail75a421.ts.net/health
+
+================================================================================
+                    NEXT STEPS
+================================================================================
+
+1. Run start-services.bat on PC Utama
+2. Wait for script to complete
+3. Verify all services running
+4. Clear browser cache on Laptop Dev
+5. Test fresh data sync
+6. Verify data persists
+
+================================================================================

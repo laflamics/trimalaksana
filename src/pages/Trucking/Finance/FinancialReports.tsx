@@ -3,8 +3,9 @@ import { Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaCh
 import Card from '../../../components/Card';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService } from '../../../services/storage';
+import { storageService, StorageKeys } from '../../../services/storage';
 import { filterActiveItems } from '../../../utils/data-persistence-helper';
+import { setupRealTimeSync, TRUCKING_SYNC_KEYS } from '../../../utils/real-time-sync-helper';
 import { useDialog } from '../../../hooks/useDialog';
 import * as XLSX from 'xlsx';
 import '../../../styles/common.css';
@@ -45,12 +46,20 @@ const FinancialReports = () => {
 
   useEffect(() => {
     loadData();
+    
+    // Real-time listener untuk server updates
+    const cleanup = setupRealTimeSync({
+      keys: [TRUCKING_SYNC_KEYS.JOURNAL_ENTRIES, TRUCKING_SYNC_KEYS.ACCOUNTS],
+      onUpdate: loadData,
+    });
+    
+    return cleanup;
   }, []);
 
   const loadData = async () => {
     const [ent, acc] = await Promise.all([
-      storageService.get<JournalEntry[]>('trucking_journalEntries') || [],
-      storageService.get<Account[]>('trucking_accounts') || [],
+      storageService.get<JournalEntry[]>(StorageKeys.TRUCKING.JOURNAL_ENTRIES) || [],
+      storageService.get<Account[]>(StorageKeys.TRUCKING.ACCOUNTS) || [],
     ]);
     
     // Filter out deleted items menggunakan helper function
@@ -66,7 +75,7 @@ const FinancialReports = () => {
   };
 
   const loadAccounts = async () => {
-    const dataRaw = await storageService.get<Account[]>('trucking_accounts') || [];
+    const dataRaw = await storageService.get<Account[]>(StorageKeys.TRUCKING.ACCOUNTS) || [];
     // Filter out deleted items menggunakan helper function
     const data = filterActiveItems(dataRaw || []);
     setAccounts(data);

@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import Card from '../../../components/Card';
 import Table from '../../../components/Table';
-import { storageService, extractStorageValue } from '../../../services/storage';
+import { storageService, extractStorageValue, StorageKeys } from '../../../services/storage';
 import { filterActiveItems } from '../../../utils/data-persistence-helper';
+import { setupRealTimeSync, TRUCKING_SYNC_KEYS } from '../../../utils/real-time-sync-helper';
 import '../../../styles/common.css';
 
 interface DeliverySchedule {
@@ -24,17 +25,28 @@ const DeliverySchedules = () => {
 
   useEffect(() => {
     loadSchedules();
+    
+    // Real-time listener untuk server updates
+    const cleanup = setupRealTimeSync({
+      keys: [TRUCKING_SYNC_KEYS.UNIT_SCHEDULES, TRUCKING_SYNC_KEYS.DELIVERY_ORDERS],
+      onUpdate: loadSchedules,
+    });
+    
     // Optimasi: Refresh setiap 30 detik untuk mengurangi bandwidth (sebelumnya 10 detik)
     const interval = setInterval(loadSchedules, 30000); // 30 detik - cukup untuk schedule updates
-    return () => clearInterval(interval);
+    
+    return () => {
+      clearInterval(interval);
+      cleanup();
+    };
   }, []);
 
   const loadSchedules = async () => {
     try {
       // Load data menggunakan storageService untuk membaca dari file storage juga
       const [ordersRaw, plansRaw] = await Promise.all([
-        storageService.get<any[]>('trucking_delivery_orders'),
-        storageService.get<any[]>('trucking_route_plans'),
+        storageService.get<any[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS),
+        storageService.get<any[]>(StorageKeys.TRUCKING.ROUTE_PLANS),
       ]);
       
       // CRITICAL: Extract array from storage wrapper if needed

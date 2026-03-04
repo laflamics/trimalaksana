@@ -4,6 +4,8 @@
  * Strict workflow validation dan business rules enforcement
  */
 
+import { StorageKeys } from './storage';
+
 export type WorkflowEntity = 'salesOrder' | 'spk' | 'purchaseOrder' | 'grn' | 'production' | 'qc' | 'delivery' | 'invoice';
 export type WorkflowStatus = 'DRAFT' | 'OPEN' | 'CONFIRMED' | 'APPROVED' | 'IN_PROGRESS' | 'COMPLETED' | 'CLOSE' | 'VOID' | 'CANCELLED';
 
@@ -236,8 +238,8 @@ class WorkflowStateMachine {
             missingRequirements: await this.getMissingRequirements(entity, entityData, transition)
           };
         }
-      } catch (error) {
-        return { valid: false, message: `Condition check failed: ${error.message}` };
+      } catch (error: any) {
+        return { valid: false, message: `Condition check failed: ${error instanceof Error ? error.message : String(error)}` };
       }
     }
 
@@ -310,14 +312,9 @@ class WorkflowStateMachine {
    */
   private async getEntityData(entity: WorkflowEntity, id: string): Promise<any> {
     const storageKey = this.getStorageKey(entity);
-    const stored = localStorage.getItem(storageKey);
     
-    if (!stored) {
-      throw new Error(`No data found for ${entity}`);
-    }
-
-    const parsed = JSON.parse(stored);
-    const data = parsed && typeof parsed === 'object' && 'value' in parsed ? parsed.value : parsed;
+    // Use storageService instead of localStorage directly
+    const data = await storageService.get<any[]>(storageKey);
     const items = Array.isArray(data) ? data : [];
     
     const item = items.find(item => item.id === id);
@@ -333,13 +330,9 @@ class WorkflowStateMachine {
    */
   private async updateEntityStatus(entity: WorkflowEntity, id: string, status: WorkflowStatus): Promise<void> {
     const storageKey = this.getStorageKey(entity);
-    const stored = localStorage.getItem(storageKey);
     
-    if (!stored) return;
-
-    const parsed = JSON.parse(stored);
-    const isWrapped = parsed && typeof parsed === 'object' && 'value' in parsed;
-    const data = isWrapped ? parsed.value : parsed;
+    // Use storageService instead of localStorage directly
+    const data = await storageService.get<any[]>(storageKey);
     const items = Array.isArray(data) ? data : [];
     
     const itemIndex = items.findIndex(item => item.id === id);
@@ -347,8 +340,8 @@ class WorkflowStateMachine {
       items[itemIndex].status = status;
       items[itemIndex].lastUpdated = new Date().toISOString();
       
-      const updatedData = isWrapped ? { ...parsed, value: items, timestamp: Date.now() } : items;
-      localStorage.setItem(storageKey, JSON.stringify(updatedData));
+      // Save back to storage service (will sync to server if in server mode)
+      await storageService.set(storageKey, items, true);
       
       // Emit storage change event
       window.dispatchEvent(new CustomEvent('app-storage-changed', {
@@ -361,15 +354,15 @@ class WorkflowStateMachine {
    * Get storage key for entity
    */
   private getStorageKey(entity: WorkflowEntity): string {
-    const keyMap: Record<WorkflowEntity, string> = {
-      'salesOrder': 'salesOrders',
-      'spk': 'spk',
-      'purchaseOrder': 'purchaseOrders',
-      'grn': 'grn',
-      'production': 'production',
-      'qc': 'qc',
-      'delivery': 'delivery',
-      'invoice': 'invoices'
+    const keyMap: Record<WorkflowEntity, typeof StorageKeys.PACKAGING[keyof typeof StorageKeys.PACKAGING]> = {
+      'salesOrder': StorageKeys.PACKAGING.SALES_ORDERS,
+      'spk': StorageKeys.PACKAGING.SPK,
+      'purchaseOrder': StorageKeys.PACKAGING.PURCHASE_ORDERS,
+      'grn': StorageKeys.PACKAGING.GRN,
+      'production': StorageKeys.PACKAGING.PRODUCTION,
+      'qc': StorageKeys.PACKAGING.QC,
+      'delivery': StorageKeys.PACKAGING.DELIVERY,
+      'invoice': StorageKeys.PACKAGING.INVOICES
     };
     
     return keyMap[entity] || entity;
@@ -517,7 +510,7 @@ class WorkflowStateMachine {
 
   // Helper methods to get related data
   private async getRelatedSPKs(soId: string): Promise<any[]> {
-    const stored = localStorage.getItem('spk');
+    const stored = localStorage.getItem(StorageKeys.PACKAGING.SPK);
     if (!stored) return [];
     
     const parsed = JSON.parse(stored);
@@ -528,35 +521,20 @@ class WorkflowStateMachine {
   }
 
   private async getRelatedProductions(spkNo: string): Promise<any[]> {
-    const stored = localStorage.getItem('production');
-    if (!stored) return [];
-    
-    const parsed = JSON.parse(stored);
-    const data = parsed && typeof parsed === 'object' && 'value' in parsed ? parsed.value : parsed;
+    const data = await storageService.get<any[]>(StorageKeys.PACKAGING.PRODUCTION);
     const productions = Array.isArray(data) ? data : [];
-    
     return productions.filter(prod => prod.spkNo === spkNo);
   }
 
   private async getRelatedQC(soNo: string): Promise<any[]> {
-    const stored = localStorage.getItem('qc');
-    if (!stored) return [];
-    
-    const parsed = JSON.parse(stored);
-    const data = parsed && typeof parsed === 'object' && 'value' in parsed ? parsed.value : parsed;
+    const data = await storageService.get<any[]>(StorageKeys.PACKAGING.QC);
     const qcs = Array.isArray(data) ? data : [];
-    
     return qcs.filter(qc => qc.soNo === soNo);
   }
 
   private async getRelatedGRNs(poId: string): Promise<any[]> {
-    const stored = localStorage.getItem('grn');
-    if (!stored) return [];
-    
-    const parsed = JSON.parse(stored);
-    const data = parsed && typeof parsed === 'object' && 'value' in parsed ? parsed.value : parsed;
+    const data = await storageService.get<any[]>(StorageKeys.PACKAGING.GRN);
     const grns = Array.isArray(data) ? data : [];
-    
     return grns.filter(grn => grn.poId === poId);
   }
 }

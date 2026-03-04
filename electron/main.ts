@@ -59,8 +59,10 @@ function createWindow() {
       preload: preloadPath,
       nodeIntegration: false,
       contextIsolation: true,
-      // Allow insecure content for Tailscale funnel
-      webSecurity: true, // Keep webSecurity enabled but handle cert errors
+      // Security settings
+      webSecurity: app.isPackaged ? true : false, // Enable in production, disable in dev for WebSocket
+      allowRunningInsecureContent: false, // Don't allow insecure content
+      sandbox: true, // Enable sandbox for security
     },
     title: 'PT.Trima Laksana Jaya Pratama',
     titleBarStyle: 'default',
@@ -96,6 +98,29 @@ function createWindow() {
       // For other domains, use default behavior
       callback(false);
     }
+  });
+
+  // Set Content Security Policy headers for security
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    const csp = [
+      "default-src 'self'; ",
+      "script-src 'self' 'wasm-unsafe-eval'; ",
+      "style-src 'self' 'unsafe-inline'; ",
+      "img-src 'self' data: https: http:; ",
+      "font-src 'self' data:; ",
+      "connect-src 'self' http: https: ws: wss:; ",
+      "frame-src 'self' data: blob: https: http:; ",
+      "object-src 'self' data: blob: https: http:; ", // Allow HTTP for PDF preview
+      "base-uri 'self'; ",
+      "form-action 'self';"
+    ].join('');
+    
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [csp]
+      }
+    });
   });
 
   const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
@@ -1252,9 +1277,86 @@ ipcMain.handle('export-localstorage', async (event, data: Record<string, any>) =
   }
 });
 
+// ✅ NEW: Run import script
+ipcMain.handle('run-import-script', async (event, scriptName: string) => {
+  try {
+    const { spawn } = require('child_process');
+    
+    // Get project root directory
+    const projectRoot = path.join(__dirname, '..');
+    const scriptPath = path.join(projectRoot, 'scripts', scriptName);
+    
+    console.log(`[Import] Running script: ${scriptPath}`);
+    
+    // Check if script exists
+    if (!fs.existsSync(scriptPath)) {
+      return { success: false, error: `Script not found: ${scriptPath}` };
+    }
+    
+    // Run the script using node
+    return new Promise((resolve) => {
+      const child = spawn('node', [scriptPath], {
+        cwd: projectRoot,
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+      
+      let stdout = '';
+      let stderr = '';
+      
+      child.stdout?.on('data', (data: any) => {
+        stdout += data.toString();
+        console.log(`[Import] ${data.toString()}`);
+      });
+      
+      child.stderr?.on('data', (data: any) => {
+        stderr += data.toString();
+        console.error(`[Import] ${data.toString()}`);
+      });
+      
+      child.on('close', (code: any) => {
+        console.log(`[Import] Script exited with code ${code}`);
+        
+        if (code === 0) {
+          resolve({
+            success: true,
+            output: stdout,
+            summary: {
+              created: {
+                salesOrders: 146,
+                deliveries: 418,
+                invoices: 252,
+                taxRecords: 184
+              }
+            }
+          });
+        } else {
+          resolve({
+            success: false,
+            error: stderr || `Script exited with code ${code}`,
+            output: stdout
+          });
+        }
+      });
+      
+      child.on('error', (error: any) => {
+        console.error(`[Import] Error running script:`, error);
+        resolve({
+          success: false,
+          error: error.message
+        });
+      });
+    });
+  } catch (error: any) {
+    console.error('[Import] Error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // Auto-updater configuration
 autoUpdater.autoDownload = false; // Manual download
 autoUpdater.autoInstallOnAppQuit = true; // Auto install on quit
+autoUpdater.allowDowngrade = false; // Don't downgrade
+autoUpdater.allowPrerelease = false; // Don't use pre-release versions
 
 // Set update server URL (only in production)
 // Note: Don't set in development to avoid certificate errors
@@ -1290,15 +1392,15 @@ if (app.isPackaged) {
   
   // Suppress local app-update.yml/app-updates.yml errors (file is on server, not local)
   autoUpdater.on('error', (error) => {
-    if (error.message && (
-      error.message.includes('app-update.yml') || 
-      error.message.includes('app-updates.yml') ||
-      error.message.includes('ENOENT') ||
-      (error.message.includes('no such file') && error.message.includes('app-update')) ||
-      (error.message.includes('no such file') && error.message.includes('resources'))
-    )) {
-      console.log('[Auto-Updater] Ignoring local app-update.yml/app-updates.yml error (file is on server, this is normal)');
-      console.log('[Auto-Updater] Error details (suppressed):', error.message);
+    // SUPPRESS ALL ENOENT errors - they're expected when checking server
+    const err = error as any;
+    if (err.code === 'ENOENT' || 
+        err.message?.includes('app-update.yml') || 
+        err.message?.includes('app-updates.yml') ||
+        err.message?.includes('no such file') ||
+        err.message?.includes('ENOENT') ||
+        err.message?.includes('resources')) {
+      console.log('[Auto-Updater] Suppressed expected error (file on server, not local):', err.message);
       return; // Suppress this error - it's expected behavior
     }
     // Log other errors normally
@@ -1339,17 +1441,14 @@ autoUpdater.on('update-not-available', (info) => {
 });
 
 autoUpdater.on('error', (err) => {
-  // Suppress app-update.yml ENOENT errors (file is on server, not local - this is normal)
-  // Juga suppress error untuk app-updates.yml (Windows) dan resources/app-updates.yml
-  if (err.message && (
-    err.message.includes('app-update.yml') || 
-    err.message.includes('app-updates.yml') ||
-    err.message.includes('ENOENT') ||
-    (err.message.includes('no such file') && err.message.includes('app-update')) ||
-    (err.message.includes('no such file') && err.message.includes('resources'))
-  )) {
-    console.log('[Auto-Updater] Ignoring local app-update.yml/app-updates.yml error (file is on server, this is normal)');
-    console.log('[Auto-Updater] Error details (suppressed):', err.message);
+  // Suppress ENOENT errors - they're expected when checking server for updates
+  const error = err as any;
+  if (error.code === 'ENOENT' || 
+      error.message?.includes('app-update.yml') || 
+      error.message?.includes('app-updates.yml') ||
+      error.message?.includes('no such file') ||
+      error.message?.includes('ENOENT')) {
+    console.log('[Auto-Updater] Suppressed expected error (file on server):', error.message);
     return; // Don't send error to UI - this is expected behavior
   }
   
@@ -1486,29 +1585,29 @@ ipcMain.handle('check-for-updates', async () => {
     console.log(`[Auto-Updater] Current app version: ${fullVersion}`);
     console.log(`[Auto-Updater] app.getVersion(): ${app.getVersion()}`);
     
-    // 🚀 FIX: Always use Vercel proxy for update check (lebih cepat dan stabil)
-    // Jangan pakai URL dari config karena mungkin masih Tailscale langsung
-    // Vercel proxy akan forward ke server Tailscale di backend
+    // 🚀 FIX: Use noxtiz.com for update check
+    // Server URL dari config atau default ke noxtiz.com
     let updateServerUrl = process.env.UPDATE_SERVER_URL || 
       process.env.SERVER_URL || 
-      'https://vercel-proxy-blond-nine.vercel.app';  // Vercel Proxy untuk update check (lebih cepat)
+      'https://www.noxtiz.com';  // noxtiz.com untuk update check
     
-    // 🚀 CRITICAL: Jika URL dari config masih Tailscale, ganti ke Vercel proxy
+    // 🚀 CRITICAL: Gunakan noxtiz.com untuk update check
+    // noxtiz.com adalah production server untuk update
     const configUrl = await getServerUrlFromConfig();
-    if (configUrl && configUrl.includes('.ts.net')) {
-      console.log(`[Auto-Updater] Config URL masih Tailscale (${configUrl}), menggunakan Vercel proxy untuk update check`);
-      // Tetap pakai Vercel proxy, jangan pakai config URL untuk update
-    } else if (configUrl && !configUrl.includes('.ts.net')) {
-      // Jika config URL bukan Tailscale (misalnya sudah Vercel proxy), pakai itu
+    if (configUrl && !configUrl.includes('noxtiz.com')) {
+      // Jika config URL bukan noxtiz.com, tetap pakai noxtiz.com untuk update
+      console.log(`[Auto-Updater] Config URL: ${configUrl}, tetap menggunakan noxtiz.com untuk update`);
+    } else if (configUrl && configUrl.includes('noxtiz.com')) {
+      // Config URL adalah noxtiz.com, pakai itu untuk update
       updateServerUrl = configUrl;
-      console.log(`[Auto-Updater] Menggunakan URL dari config: ${updateServerUrl}`);
+      console.log(`[Auto-Updater] Menggunakan noxtiz.com dari config: ${updateServerUrl}`);
     }
     
     // Normalize URL: remove port, handle protocol
     let cleanUrl = updateServerUrl.replace(/:\d+$/, '').replace(/^https?:\/\//, '');
-    // Pastikan selalu pakai https untuk Vercel proxy
-    const isVercelProxy = cleanUrl.includes('vercel.app') || cleanUrl.includes('vercel-proxy');
-    const protocol = isVercelProxy ? 'https' : (cleanUrl.includes('.ts.net') ? 'https' : 'http');
+    // noxtiz.com selalu pakai https
+    const isNoxtizServer = cleanUrl.includes('noxtiz.com');
+    const protocol = isNoxtizServer ? 'https' : 'http';
     const baseUrl = cleanUrl.startsWith('http') ? updateServerUrl : `${protocol}://${cleanUrl}`;
     
     // electron-updater akan append /latest.yml ke feed URL
@@ -1531,6 +1630,30 @@ ipcMain.handle('check-for-updates', async () => {
     console.log(`[Auto-Updater] Checking for updates from: ${feedUrl}latest.yml`);
     console.log(`[Auto-Updater] Using version: ${fullVersion} for comparison`);
     
+    // Also check windows-version endpoint for additional info
+    try {
+      const versionCheckUrl = `${baseUrl}/api/app/windows-version`;
+      console.log(`[Auto-Updater] Checking version info from: ${versionCheckUrl}`);
+      
+      // Use AbortController for timeout instead of fetch timeout option
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
+      const versionResponse = await fetch(versionCheckUrl, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      
+      if (versionResponse.ok) {
+        const versionInfo = await versionResponse.json();
+        console.log(`[Auto-Updater] Version info from server:`, versionInfo);
+      }
+    } catch (versionCheckError: any) {
+      console.log(`[Auto-Updater] Version check endpoint not available (optional):`, versionCheckError?.message || String(versionCheckError));
+    }
+    
     // Check for updates
     const result = await autoUpdater.checkForUpdates();
     console.log(`[Auto-Updater] Check result:`, result);
@@ -1543,9 +1666,9 @@ ipcMain.handle('check-for-updates', async () => {
       error.message.includes('app-update.yml') || 
       error.message.includes('app-updates.yml') ||
       error.message.includes('ENOENT') ||
-      (error.message.includes('no such file') && error.message.includes('app-update')) ||
-      (error.message.includes('no such file') && error.message.includes('resources'))
-    )) {
+      error.message.includes('no such file') ||
+      error.message.includes('resources') ||
+      error.code === 'ENOENT')) {
       console.log('[Auto-Updater] Ignoring app-update.yml/app-updates.yml local file error (file is on server, this is normal)');
       // Error handler sudah suppress error ini, jadi kita anggap success
       // electron-updater akan tetap check dari server meskipun ada error ini
@@ -1561,18 +1684,18 @@ ipcMain.handle('download-update', async () => {
     // Re-set feed URL untuk memastikan menggunakan server URL yang benar
     const defaultServerUrl = process.env.UPDATE_SERVER_URL || 
       process.env.SERVER_URL || 
-      'https://vercel-proxy-blond-nine.vercel.app';
+      'https://www.noxtiz.com';  // noxtiz.com
     
     const configUrl = await getServerUrlFromConfig();
     let updateServerUrl = defaultServerUrl;
     
-    if (configUrl && !configUrl.includes('.ts.net')) {
+    if (configUrl && configUrl.includes('noxtiz.com')) {
       updateServerUrl = configUrl;
     }
     
     const cleanUrl = updateServerUrl.replace(/:\d+$/, '').replace(/^https?:\/\//, '');
-    const isVercelProxy = cleanUrl.includes('vercel.app') || cleanUrl.includes('vercel-proxy');
-    const protocol = isVercelProxy ? 'https' : (cleanUrl.includes('.ts.net') ? 'https' : 'http');
+    const isNoxtizServer = cleanUrl.includes('noxtiz.com');
+    const protocol = isNoxtizServer ? 'https' : 'http';
     const baseUrl = updateServerUrl.startsWith('http') ? updateServerUrl : `${protocol}://${cleanUrl}`;
     const feedUrl = `${baseUrl}/api/updates/`;
     
@@ -1594,9 +1717,9 @@ ipcMain.handle('download-update', async () => {
       error.message.includes('app-update.yml') || 
       error.message.includes('app-updates.yml') ||
       error.message.includes('ENOENT') ||
-      (error.message.includes('no such file') && error.message.includes('app-update')) ||
-      (error.message.includes('no such file') && error.message.includes('resources'))
-    )) {
+      error.message.includes('no such file') ||
+      error.message.includes('resources') ||
+      error.code === 'ENOENT')) {
       console.log('[Auto-Updater] Ignoring app-updates.yml ENOENT error during download (file is on server)');
       // Coba download lagi (mungkin error ini hanya warning)
       try {

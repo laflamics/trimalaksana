@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
-import { storageService } from '../../services/storage';
+import { storageService, StorageKeys } from '../../services/storage';
 import * as XLSX from 'xlsx';
 import '../../styles/common.css';
 import '../../styles/compact.css';
@@ -134,8 +134,8 @@ const AllBusinessFinancialReports = () => {
     const [packagingEntriesRaw, packagingAccountsRaw, gtEntriesRaw, gtAccountsRaw, trackingEntriesRaw, trackingAccountsRaw] = await Promise.all([
       storageService.get<JournalEntry[]>('journalEntries') || [],
       storageService.get<Account[]>('accounts') || [],
-      storageService.get<JournalEntry[]>('gt_journalEntries') || [],
-      storageService.get<Account[]>('gt_accounts') || [],
+      storageService.get<JournalEntry[]>(StorageKeys.GENERAL_TRADING.JOURNAL_ENTRIES) || [],
+      storageService.get<Account[]>(StorageKeys.GENERAL_TRADING.ACCOUNTS) || [],
       storageService.get<JournalEntry[]>('trucking_journalEntries') || [],
       storageService.get<Account[]>('trucking_accounts') || [],
     ]);

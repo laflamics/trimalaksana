@@ -21,3 +21,27 @@
   background: var(--hover-bg);
 }
 
+/* Force enable input fields in GT Inventory dialog */
+.dialog-card input,
+.dialog-card textarea,
+.dialog-card select {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border) !important;
+}
+
+.dialog-card input:disabled,
+.dialog-card textarea:disabled,
+.dialog-card select:disabled,
+.dialog-card input[readonly],
+.dialog-card textarea[readonly],
+.dialog-card select[readonly] {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border) !important;
+}
+

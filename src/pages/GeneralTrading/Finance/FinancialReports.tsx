@@ -3,9 +3,8 @@ import { Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaCh
 import Card from '../../../components/Card';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService } from '../../../services/storage';
-import { loadGTDataFromLocalStorage } from '../../../utils/gtStorageHelper';
-import { filterActiveItems } from '../../../utils/data-persistence-helper';
+import DateRangeFilter from '../../../components/DateRangeFilter';
+import { storageService, StorageKeys } from '../../../services/storage';
 import * as XLSX from 'xlsx';
  import '../../../styles/common.css';
 import '../../../styles/compact.css';
@@ -27,8 +26,11 @@ interface Account {
 const FinancialReports = () => {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [reportType, setReportType] = useState<'balance' | 'pl' | 'cashflow'>('balance');
+  const [inventory, setInventory] = useState<any[]>([]);
+  const [reportType, setReportType] = useState<'balance' | 'pl' | 'cashflow' | 'inventory'>('balance');
   const [dateFrom, setDateFrom] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
+  const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0]);
+
   // Custom Dialog state
   const [dialogState, setDialogState] = useState<{
     show: boolean;
@@ -57,19 +59,6 @@ const FinancialReports = () => {
     });
   };
 
-  const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'confirm',
-      title,
-      message,
-      onConfirm,
-      onCancel,
-    });
-  };
 
   const closeDialog = () => {
     if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
@@ -83,50 +72,85 @@ const FinancialReports = () => {
     });
   };
 
-  const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0]);
-
   useEffect(() => {
     loadData();
   }, []);
 
+  // Helper function untuk deduplicate inventory berdasarkan codeItem
+  const deduplicateInventory = (inventoryData: any[]): any[] => {
+    const inventoryMap = new Map<string, any>();
+    
+    inventoryData.forEach((item) => {
+      const codeItem = (item.codeItem || '').toString().trim().toUpperCase();
+      if (!codeItem) return; // Skip jika tidak ada codeItem
+      
+      const existing = inventoryMap.get(codeItem);
+      
+      // Jika belum ada atau item ini lebih baru, simpan
+      if (!existing || (item.lastUpdate && existing.lastUpdate && 
+          new Date(item.lastUpdate) > new Date(existing.lastUpdate))) {
+        inventoryMap.set(codeItem, item);
+      }
+    });
+    
+    return Array.from(inventoryMap.values());
+  };
+
   const loadData = async () => {
     try {
-      // Load langsung dari localStorage untuk memastikan data terbaru
-      const [ent, acc] = await Promise.all([
-        loadGTDataFromLocalStorage<JournalEntry>(
-          'gt_journalEntries',
-          async () => await storageService.get<JournalEntry[]>('gt_journalEntries') || []
-        ),
-        loadGTDataFromLocalStorage<Account>(
-          'gt_accounts',
-          async () => await storageService.get<Account[]>('gt_accounts') || []
-        ),
+      const [ent, acc, inv] = await Promise.all([
+        storageService.get<JournalEntry[]>('gt_journalEntries') || [],
+        storageService.get<Account[]>('gt_accounts') || [],
+        storageService.get<any[]>('gt_inventory') || [],
       ]);
-      // Filter out deleted items menggunakan helper function
-      const activeEntries = filterActiveItems(ent || []);
-      const activeAccounts = filterActiveItems(acc || []);
       
-      setEntries(activeEntries);
-      if (!activeAccounts || activeAccounts.length === 0) {
+      // Ensure entries is always an array
+      const entriesArray = Array.isArray(ent) ? ent : [];
+      setEntries(entriesArray);
+      
+      // Ensure accounts is always an array
+      const accountsArray = Array.isArray(acc) ? acc : [];
+      if (accountsArray.length === 0) {
         await loadAccounts();
       } else {
-        setAccounts(activeAccounts);
+        setAccounts(accountsArray);
       }
-    } catch (error: any) {
-      console.error('Error loading report data:', error);
-      showAlert(`Error loading report data: ${error.message}`, 'Error');
+      
+      // Load inventory data dan deduplicate berdasarkan codeItem
+      const inventoryArray = Array.isArray(inv) ? inv : [];
+      const uniqueInventory = deduplicateInventory(inventoryArray);
+      setInventory(uniqueInventory);
+    } catch (error) {
+      showAlert('Error loading financial data. Please refresh the page.', 'Error');
     }
   };
 
   const loadAccounts = async () => {
-    // Load langsung dari localStorage untuk memastikan data terbaru
-    const dataRaw = await loadGTDataFromLocalStorage<Account>(
-      'gt_accounts',
-      async () => await storageService.get<Account[]>('gt_accounts') || []
-    );
-    // Filter out deleted items menggunakan helper function
-    const data = filterActiveItems(dataRaw || []);
-    setAccounts(data);
+    const data = await storageService.get<Account[]>('gt_accounts') || [];
+    
+    if (!data || data.length === 0) {
+      // Load default accounts jika data kosong
+      const defaultAccounts: Account[] = [
+        { code: '1000', name: 'Cash', type: 'Asset' },
+        { code: '1100', name: 'Accounts Receivable', type: 'Asset' },
+        { code: '1200', name: 'Inventory', type: 'Asset' },
+        { code: '1300', name: 'Fixed Assets', type: 'Asset' },
+        { code: '2000', name: 'Accounts Payable', type: 'Liability' },
+        { code: '2100', name: 'Accrued Expenses', type: 'Liability' },
+        { code: '3000', name: 'Equity', type: 'Equity' },
+        { code: '3100', name: 'Retained Earnings', type: 'Equity' },
+        { code: '4000', name: 'Sales Revenue', type: 'Revenue' },
+        { code: '4100', name: 'Other Income', type: 'Revenue' },
+        { code: '5000', name: 'Cost of Goods Sold', type: 'Expense' },
+        { code: '6000', name: 'Operating Expenses', type: 'Expense' },
+        { code: '6100', name: 'Administrative Expenses', type: 'Expense' },
+        { code: '6200', name: 'Financial Expenses', type: 'Expense' },
+      ];
+      await storageService.set(StorageKeys.GENERAL_TRADING.ACCOUNTS, defaultAccounts);
+      setAccounts(defaultAccounts);
+    } else {
+      setAccounts(data);
+    }
   };
 
   const calculateAccountBalances = () => {
@@ -144,20 +168,61 @@ const FinancialReports = () => {
     
     // Ensure filteredEntries is always an array
     const filteredEntriesArray = Array.isArray(filteredEntries) ? filteredEntries : [];
+    
     filteredEntriesArray.forEach(entry => {
-      if (!balances[entry.account]) {
-        balances[entry.account] = { debit: 0, credit: 0, balance: 0 };
+      const accountCode = entry.account || '';
+      
+      // Map simple account codes (from journal entries) to COA format
+      // Journal entries use: "1000", "1100", "2000", "4000", etc.
+      // COA uses: "1-1110", "1-1210", "2-1100", "4-0000", etc.
+      let mappedAccountCode = accountCode;
+      
+      // Ensure accounts is always an array
+      const accountsArray = Array.isArray(accounts) ? accounts : [];
+      
+      // Check if account code exists in COA
+      const accountExists = accountsArray.some(acc => acc.code === accountCode);
+      
+      if (!accountExists && accountsArray.length > 0) {
+        // Try to find matching account by mapping simple codes to COA format
+        const mappingRules: Record<string, string[]> = {
+          '1000': ['1-1110', '1-1120', '1-1121', '1-1130'], // Cash -> KAS/BANK accounts
+          '1100': ['1-1210', '1-1200'], // AR -> PIUTANG accounts
+          '2000': ['2-1101', '2-1100'], // AP -> HUTANG accounts
+          '4000': ['4-0000'], // Revenue -> PENDAPATAN
+          '5000': ['5-0000'], // COGS -> HPP
+        };
+        
+        const possibleCodes = mappingRules[accountCode] || [];
+        const foundAccount = accountsArray.find(acc => possibleCodes.includes(acc.code));
+        
+        if (foundAccount) {
+          mappedAccountCode = foundAccount.code;
+        } else {
+          // Try to find by first digit match (e.g., "1" -> "1-xxxx")
+          const firstDigit = accountCode.charAt(0);
+          const matchingAccount = accountsArray.find(acc => acc.code.startsWith(firstDigit + '-'));
+          if (matchingAccount) {
+            mappedAccountCode = matchingAccount.code;
+          }
+        }
       }
-      balances[entry.account].debit += entry.debit || 0;
-      balances[entry.account].credit += entry.credit || 0;
+      
+      if (!balances[mappedAccountCode]) {
+        balances[mappedAccountCode] = { debit: 0, credit: 0, balance: 0 };
+      }
+      balances[mappedAccountCode].debit += entry.debit || 0;
+      balances[mappedAccountCode].credit += entry.credit || 0;
     });
     
     // Ensure accounts is always an array
     const accountsArray = Array.isArray(accounts) ? accounts : [];
+    
     accountsArray.forEach(acc => {
       if (!balances[acc.code]) {
         balances[acc.code] = { debit: 0, credit: 0, balance: 0 };
       }
+      
       if (acc.type === 'Asset' || acc.type === 'Expense') {
         balances[acc.code].balance = balances[acc.code].debit - balances[acc.code].credit;
       } else {
@@ -170,8 +235,7 @@ const FinancialReports = () => {
   };
 
   const balanceSheet = useMemo(() => {
-    try {
-      const balances = calculateAccountBalances();
+    const balances = calculateAccountBalances();
     
     // Ensure accounts is always an array
     const accountsArray = Array.isArray(accounts) ? accounts : [];
@@ -225,34 +289,20 @@ const FinancialReports = () => {
     // Pastikan Total Assets = Total Liabilities + Equity
     const totalLiabilitiesAndEquity = totalLiabilities + totalEquity;
     
-      return { 
-        assets, 
-        liabilities, 
-        equity, 
-        totalAssets, 
-        totalLiabilities, 
-        totalEquity,
-        totalLiabilitiesAndEquity,
-        netProfit,
-      };
-    } catch (error: any) {
-      console.error('Error calculating balance sheet:', error);
-      return {
-        assets: [],
-        liabilities: [],
-        equity: [],
-        totalAssets: 0,
-        totalLiabilities: 0,
-        totalEquity: 0,
-        totalLiabilitiesAndEquity: 0,
-        netProfit: 0,
-      };
-    }
+    return { 
+      assets, 
+      liabilities, 
+      equity, 
+      totalAssets, 
+      totalLiabilities, 
+      totalEquity,
+      totalLiabilitiesAndEquity,
+      netProfit,
+    };
   }, [entries, accounts, dateFrom, dateTo]);
 
   const profitLoss = useMemo(() => {
-    try {
-      const balances = calculateAccountBalances();
+    const balances = calculateAccountBalances();
     
     // Ensure accounts is always an array
     const accountsArray = Array.isArray(accounts) ? accounts : [];
@@ -273,20 +323,15 @@ const FinancialReports = () => {
         balance: balances[acc.code]?.balance || 0,
       }));
     
-      const totalRevenue = revenue.reduce((sum, r) => sum + r.balance, 0);
-      const totalExpenses = expenses.reduce((sum, e) => sum + e.balance, 0);
-      const netProfit = totalRevenue - totalExpenses;
-      
-      return { revenue, expenses, totalRevenue, totalExpenses, netProfit };
-    } catch (error: any) {
-      console.error('Error calculating profit loss:', error);
-      return { revenue: [], expenses: [], totalRevenue: 0, totalExpenses: 0, netProfit: 0 };
-    }
+    const totalRevenue = revenue.reduce((sum, r) => sum + r.balance, 0);
+    const totalExpenses = expenses.reduce((sum, e) => sum + e.balance, 0);
+    const netProfit = totalRevenue - totalExpenses;
+    
+    return { revenue, expenses, totalRevenue, totalExpenses, netProfit };
   }, [entries, accounts, dateFrom, dateTo]);
 
   const cashFlow = useMemo(() => {
-    try {
-      const balances = calculateAccountBalances();
+    const balances = calculateAccountBalances();
     
     // Operating Activities
     const operating = {
@@ -310,27 +355,13 @@ const FinancialReports = () => {
       equity: balances['3000']?.balance || 0,
       retainedEarnings: balances['3100']?.balance || 0,
     };
-      const financingCash = financing.equity + financing.retainedEarnings;
-      
-      const netCashFlow = operatingCash + investingCash + financingCash;
-      const beginningCash = balances['1000']?.balance || 0;
-      const endingCash = beginningCash + netCashFlow;
-      
-      return { operating, operatingCash, investing, investingCash, financing, financingCash, netCashFlow, beginningCash, endingCash };
-    } catch (error: any) {
-      console.error('Error calculating cash flow:', error);
-      return {
-        operating: { netProfit: 0, depreciation: 0, accountsReceivable: 0, inventory: 0, accountsPayable: 0 },
-        operatingCash: 0,
-        investing: { fixedAssets: 0 },
-        investingCash: 0,
-        financing: { equity: 0, retainedEarnings: 0 },
-        financingCash: 0,
-        netCashFlow: 0,
-        beginningCash: 0,
-        endingCash: 0,
-      };
-    }
+    const financingCash = financing.equity + financing.retainedEarnings;
+    
+    const netCashFlow = operatingCash + investingCash + financingCash;
+    const beginningCash = balances['1000']?.balance || 0;
+    const endingCash = beginningCash + netCashFlow;
+    
+    return { operating, operatingCash, investing, investingCash, financing, financingCash, netCashFlow, beginningCash, endingCash };
   }, [entries, accounts, dateFrom, dateTo, profitLoss]);
 
   // Chart data untuk trend over time
@@ -364,11 +395,40 @@ const FinancialReports = () => {
       // Calculate balances for this month
       const monthBalances: Record<string, { debit: number; credit: number; balance: number }> = {};
       monthEntries.forEach((entry: any) => {
-        if (!monthBalances[entry.account]) {
-          monthBalances[entry.account] = { debit: 0, credit: 0, balance: 0 };
+        const accountCode = entry.account || '';
+        
+        // Apply same mapping as in calculateAccountBalances
+        let mappedAccountCode = accountCode;
+        const accountExists = accountsArray.some(acc => acc.code === accountCode);
+        
+        if (!accountExists && accountsArray.length > 0) {
+          const mappingRules: Record<string, string[]> = {
+            '1000': ['1-1110', '1-1120', '1-1121', '1-1130'],
+            '1100': ['1-1210', '1-1200'],
+            '2000': ['2-1101', '2-1100'],
+            '4000': ['4-0000'],
+            '5000': ['5-0000'],
+          };
+          
+          const possibleCodes = mappingRules[accountCode] || [];
+          const foundAccount = accountsArray.find(acc => possibleCodes.includes(acc.code));
+          
+          if (foundAccount) {
+            mappedAccountCode = foundAccount.code;
+          } else {
+            const firstDigit = accountCode.charAt(0);
+            const matchingAccount = accountsArray.find(acc => acc.code.startsWith(firstDigit + '-'));
+            if (matchingAccount) {
+              mappedAccountCode = matchingAccount.code;
+            }
+          }
         }
-        monthBalances[entry.account].debit += entry.debit || 0;
-        monthBalances[entry.account].credit += entry.credit || 0;
+        
+        if (!monthBalances[mappedAccountCode]) {
+          monthBalances[mappedAccountCode] = { debit: 0, credit: 0, balance: 0 };
+        }
+        monthBalances[mappedAccountCode].debit += entry.debit || 0;
+        monthBalances[mappedAccountCode].credit += entry.credit || 0;
       });
       
       // accountsArray already declared above in useMemo scope
@@ -406,9 +466,11 @@ const FinancialReports = () => {
         value = monthBalances['1000']?.balance || 0;
       }
       
+      // Ensure value is a valid number
+      const chartValue = isNaN(value) ? 0 : value;
       data.push({
         month: monthKey,
-        value: Math.max(0, value), // Ensure non-negative for chart
+        value: chartValue,
       });
       
       // Move to next month
@@ -460,6 +522,57 @@ const FinancialReports = () => {
       });
       content += `\nTotal Expenses: Rp ${profitLoss.totalExpenses.toLocaleString('id-ID')}\n\n`;
       content += `Net Profit: Rp ${profitLoss.netProfit.toLocaleString('id-ID')}\n`;
+    } else if (reportType === 'inventory') {
+      content = `Inventory Report\nAs of ${new Date().toLocaleDateString('id-ID')}\n\n`;
+      
+      const materialInventory = inventory.filter((inv: any) => {
+        const kategori = (inv.kategori || inv.category || inv.type || '').toLowerCase().trim();
+        if (!kategori) return false;
+        const materialCategories = ['material', 'bahan', 'bahan baku', 'raw material', 'materials'];
+        return materialCategories.some(cat => kategori.includes(cat));
+      });
+      
+      const productInventory = inventory.filter((inv: any) => {
+        const kategori = (inv.kategori || inv.category || inv.type || '').toLowerCase().trim();
+        if (!kategori) return false;
+        const productCategories = ['product', 'produk', 'finished goods', 'barang jadi'];
+        return productCategories.some(cat => kategori.includes(cat));
+      });
+      
+      content += 'MATERIAL INVENTORY\n';
+      materialInventory.forEach((inv: any) => {
+        const stock = inv.nextStock || inv.stock || inv.qty || inv.quantity || 0;
+        const price = inv.price || inv.unitPrice || 0;
+        const total = stock * price;
+        const itemName = inv.description || inv.itemName || inv.name || inv.codeItem || 'Unknown';
+        const itemCode = inv.codeItem || inv.kode || inv.itemCode || inv.id || '';
+        content += `${itemCode} - ${itemName}: ${stock} x Rp ${price.toLocaleString('id-ID')} = Rp ${total.toLocaleString('id-ID')}\n`;
+      });
+      const materialTotal = materialInventory.reduce((sum: number, inv: any) => {
+        const stock = inv.nextStock || inv.stock || inv.qty || inv.quantity || 0;
+        const price = inv.price || inv.unitPrice || 0;
+        return sum + (stock * price);
+      }, 0);
+      content += `\nTotal Material Inventory: Rp ${materialTotal.toLocaleString('id-ID')}\n\n`;
+      
+      content += 'PRODUCT INVENTORY\n';
+      productInventory.forEach((inv: any) => {
+        const stock = inv.nextStock || inv.stock || inv.qty || inv.quantity || 0;
+        const price = inv.price || inv.unitPrice || 0;
+        const total = stock * price;
+        const itemName = inv.description || inv.itemName || inv.name || inv.codeItem || 'Unknown';
+        const itemCode = inv.codeItem || inv.kode || inv.itemCode || inv.id || '';
+        content += `${itemCode} - ${itemName}: ${stock} x Rp ${price.toLocaleString('id-ID')} = Rp ${total.toLocaleString('id-ID')}\n`;
+      });
+      const productTotal = productInventory.reduce((sum: number, inv: any) => {
+        const stock = inv.nextStock || inv.stock || inv.qty || inv.quantity || 0;
+        const price = inv.price || inv.unitPrice || 0;
+        return sum + (stock * price);
+      }, 0);
+      content += `\nTotal Product Inventory: Rp ${productTotal.toLocaleString('id-ID')}\n\n`;
+      
+      const grandTotal = materialTotal + productTotal;
+      content += `Total Inventory Value: Rp ${grandTotal.toLocaleString('id-ID')}\n`;
     } else {
       content = `Cash Flow Statement\nPeriod: ${dateFrom} to ${dateTo}\n\n`;
       content += 'OPERATING ACTIVITIES\n';
@@ -483,7 +596,7 @@ const FinancialReports = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${reportType === 'balance' ? 'BalanceSheet' : reportType === 'pl' ? 'ProfitLoss' : 'CashFlow'}_${dateFrom}_${dateTo}.txt`;
+    a.download = `${reportType === 'balance' ? 'BalanceSheet' : reportType === 'pl' ? 'ProfitLoss' : reportType === 'cashflow' ? 'CashFlow' : 'Inventory'}_${dateFrom}_${dateTo}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -627,9 +740,78 @@ const FinancialReports = () => {
       }
       XLSX.utils.book_append_sheet(wb, wsSummary, 'Sheet 4 - Summary');
       
+      // Sheet 5: Inventory Report
+      const materialInventory = inventory.filter((inv: any) => {
+        const kategori = (inv.kategori || inv.category || inv.type || '').toLowerCase().trim();
+        if (!kategori) return false;
+        const materialCategories = ['material', 'bahan', 'bahan baku', 'raw material', 'materials'];
+        return materialCategories.some(cat => kategori.includes(cat));
+      });
+      
+      const productInventory = inventory.filter((inv: any) => {
+        const kategori = (inv.kategori || inv.category || inv.type || '').toLowerCase().trim();
+        if (!kategori) return false;
+        const productCategories = ['product', 'produk', 'finished goods', 'barang jadi'];
+        return productCategories.some(cat => kategori.includes(cat));
+      });
+      
+      const inventoryData = [
+        ['MATERIAL INVENTORY'],
+        ['Code', 'Item Name', 'Quantity', 'Unit Price', 'Total Value'],
+        ...materialInventory.map((inv: any) => {
+          const stock = inv.nextStock || inv.stock || inv.qty || inv.quantity || 0;
+          const price = inv.price || inv.unitPrice || 0;
+          const total = stock * price;
+          const itemName = inv.description || inv.itemName || inv.name || inv.codeItem || 'Unknown';
+          const itemCode = inv.codeItem || inv.kode || inv.itemCode || inv.id || '';
+          return [itemCode, itemName, stock, price, total];
+        }),
+        ['', '', '', 'Total Material', materialInventory.reduce((sum: number, inv: any) => {
+          const stock = inv.nextStock || inv.stock || inv.qty || inv.quantity || 0;
+          const price = inv.price || inv.unitPrice || 0;
+          return sum + (stock * price);
+        }, 0)],
+        [],
+        ['PRODUCT INVENTORY'],
+        ['Code', 'Item Name', 'Quantity', 'Unit Price', 'Total Value'],
+        ...productInventory.map((inv: any) => {
+          const stock = inv.nextStock || inv.stock || inv.qty || inv.quantity || 0;
+          const price = inv.price || inv.unitPrice || 0;
+          const total = stock * price;
+          const itemName = inv.description || inv.itemName || inv.name || inv.codeItem || 'Unknown';
+          const itemCode = inv.codeItem || inv.kode || inv.itemCode || inv.id || '';
+          return [itemCode, itemName, stock, price, total];
+        }),
+        ['', '', '', 'Total Product', productInventory.reduce((sum: number, inv: any) => {
+          const stock = inv.nextStock || inv.stock || inv.qty || inv.quantity || 0;
+          const price = inv.price || inv.unitPrice || 0;
+          return sum + (stock * price);
+        }, 0)],
+        [],
+        ['', '', '', 'Grand Total', inventory.reduce((sum: number, inv: any) => {
+          const stock = inv.nextStock || inv.stock || inv.qty || inv.quantity || 0;
+          const price = inv.price || inv.unitPrice || 0;
+          return sum + (stock * price);
+        }, 0)],
+      ];
+      const wsInventory = XLSX.utils.aoa_to_sheet(inventoryData);
+      setWidths(wsInventory, [20, 40, 15, 20, 20]);
+      const inventoryRange = XLSX.utils.decode_range(wsInventory['!ref'] || 'A1');
+      for (let row = 2; row <= inventoryRange.e.r; row++) {
+        const priceCell = XLSX.utils.encode_cell({ r: row, c: 3 });
+        const totalCell = XLSX.utils.encode_cell({ r: row, c: 4 });
+        if (wsInventory[priceCell] && typeof wsInventory[priceCell].v === 'number') {
+          wsInventory[priceCell].z = '#,##0';
+        }
+        if (wsInventory[totalCell] && typeof wsInventory[totalCell].v === 'number') {
+          wsInventory[totalCell].z = '#,##0';
+        }
+      }
+      XLSX.utils.book_append_sheet(wb, wsInventory, 'Sheet 5 - Inventory');
+      
       const fileName = `Financial_Reports_Complete_${dateFrom}_${dateTo}.xlsx`;
       XLSX.writeFile(wb, fileName);
-      showAlert(`✅ Exported complete financial reports (Balance Sheet, P&L, Cash Flow, Summary) to ${fileName}`, 'Success');
+      showAlert(`✅ Exported complete financial reports (Balance Sheet, P&L, Cash Flow, Summary, Inventory) to ${fileName}`, 'Success');
     } catch (error: any) {
       showAlert(`Error exporting to Excel: ${error.message}`, 'Error');
     }
@@ -638,9 +820,9 @@ const FinancialReports = () => {
   return (
     <div className="module-compact">
       <Card>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '12px' }}>
           <h2 style={{ fontSize: '18px', margin: 0 }}>Financial Reports</h2>
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
             <select
               value={reportType}
               onChange={(e) => setReportType(e.target.value as any)}
@@ -650,16 +832,16 @@ const FinancialReports = () => {
               <option value="pl">Profit & Loss</option>
               <option value="cashflow">Cash Flow Statement</option>
             </select>
-            <Input
-              type="date"
-              value={dateFrom}
-              onChange={(value) => setDateFrom(value)}
-            />
-            <Input
-              type="date"
-              value={dateTo}
-              onChange={(value) => setDateTo(value)}
-            />
+            <div style={{ flex: 1, minWidth: '300px' }}>
+              <DateRangeFilter
+                onDateChange={(from, to) => {
+                  setDateFrom(from);
+                  setDateTo(to);
+                }}
+                defaultFrom={dateFrom}
+                defaultTo={dateTo}
+              />
+            </div>
             <Button onClick={handlePrint} style={{ padding: '4px 12px', fontSize: '12px' }}>Print</Button>
             <Button onClick={handleExportExcel} style={{ padding: '4px 12px', fontSize: '12px' }}>📥 Export Excel</Button>
             <Button onClick={handleExport} style={{ padding: '4px 12px', fontSize: '12px' }}>Export Text</Button>
@@ -741,7 +923,24 @@ const FinancialReports = () => {
                           cx="50%"
                           cy="50%"
                           labelLine={false}
-                          label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
+                          label={({ name, percent }) => {
+                            if (!name) return null;
+                            // Shorten long names
+                            const shortName = name.length > 12 ? name.substring(0, 12) + '...' : name;
+                            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                            return (
+                              <text 
+                                x={0} 
+                                y={0} 
+                                fill={isDark ? '#f1f5f9' : '#1e293b'} 
+                                textAnchor="middle" 
+                                dominantBaseline="central"
+                                style={{ fontSize: '8px', fontWeight: '600' }}
+                              >
+                                {shortName}: {((percent || 0) * 100).toFixed(0)}%
+                              </text>
+                            );
+                          }}
                           outerRadius={60}
                           fill="#8884d8"
                           dataKey="value"
@@ -753,10 +952,10 @@ const FinancialReports = () => {
                         </Pie>
                         <Tooltip 
                           contentStyle={{ 
-                            backgroundColor: '#1e293b', 
-                            border: '1px solid #334155',
+                            backgroundColor: document.documentElement.getAttribute('data-theme') === 'dark' ? '#1e293b' : '#ffffff',
+                            border: `1px solid ${document.documentElement.getAttribute('data-theme') === 'dark' ? '#334155' : '#e2e8f0'}`,
                             borderRadius: '6px',
-                            color: '#f1f5f9',
+                            color: document.documentElement.getAttribute('data-theme') === 'dark' ? '#f1f5f9' : '#1e293b',
                             fontSize: '11px'
                           }}
                           formatter={(value: any) => `Rp ${value.toLocaleString('id-ID')}`}
@@ -772,8 +971,8 @@ const FinancialReports = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div>
                     <h4 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '4px', marginBottom: '6px', fontSize: '11px', fontWeight: '600' }}>ASSETS</h4>
-                    {balanceSheet.assets.filter(asset => asset.balance !== 0).map(asset => (
-                      <div key={asset.code} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid var(--border-color)', fontSize: '10px' }}>
+                    {balanceSheet.assets.filter(asset => asset.balance !== 0).map((asset, index) => (
+                      <div key={`asset-${asset.code}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid var(--border-color)', fontSize: '10px' }}>
                         <span>{asset.code} - {asset.name}</span>
                         <span style={{ fontWeight: '600', fontSize: '9px' }}>Rp {asset.balance.toLocaleString('id-ID')}</span>
                       </div>
@@ -786,8 +985,8 @@ const FinancialReports = () => {
                   
                   <div>
                     <h4 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '4px', marginBottom: '6px', fontSize: '11px', fontWeight: '600' }}>LIABILITIES</h4>
-                    {balanceSheet.liabilities.filter(liability => liability.balance !== 0).map(liability => (
-                      <div key={liability.code} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid var(--border-color)', fontSize: '10px' }}>
+                    {balanceSheet.liabilities.filter(liability => liability.balance !== 0).map((liability, index) => (
+                      <div key={`liability-${liability.code}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid var(--border-color)', fontSize: '10px' }}>
                         <span>{liability.code} - {liability.name}</span>
                         <span style={{ fontWeight: '600', fontSize: '9px' }}>Rp {liability.balance.toLocaleString('id-ID')}</span>
                       </div>
@@ -798,8 +997,8 @@ const FinancialReports = () => {
                     </div>
                     
                     <h4 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '4px', marginTop: '12px', marginBottom: '6px', fontSize: '11px', fontWeight: '600' }}>EQUITY</h4>
-                    {balanceSheet.equity.filter(equity => equity.balance !== 0).map(equity => (
-                      <div key={equity.code} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid var(--border-color)', fontSize: '10px' }}>
+                    {balanceSheet.equity.filter(equity => equity.balance !== 0).map((equity, index) => (
+                      <div key={`equity-${equity.code}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid var(--border-color)', fontSize: '10px' }}>
                         <span>{equity.code} - {equity.name}</span>
                         <span style={{ fontWeight: '600', fontSize: '9px' }}>Rp {equity.balance.toLocaleString('id-ID')}</span>
                       </div>
@@ -897,7 +1096,22 @@ const FinancialReports = () => {
                           cx="50%"
                           cy="50%"
                           labelLine={false}
-                          label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
+                          label={({ name, percent }) => {
+                            if (!name) return null;
+                            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                            return (
+                              <text 
+                                x={0} 
+                                y={0} 
+                                fill={isDark ? '#f1f5f9' : '#1e293b'} 
+                                textAnchor="middle" 
+                                dominantBaseline="central"
+                                style={{ fontSize: '8px', fontWeight: '600' }}
+                              >
+                                {name}: {((percent || 0) * 100).toFixed(0)}%
+                              </text>
+                            );
+                          }}
                           outerRadius={60}
                           fill="#8884d8"
                           dataKey="value"
@@ -907,16 +1121,19 @@ const FinancialReports = () => {
                         </Pie>
                         <Tooltip 
                           contentStyle={{ 
-                            backgroundColor: '#1e293b', 
-                            border: '1px solid #334155',
+                            backgroundColor: document.documentElement.getAttribute('data-theme') === 'dark' ? '#1e293b' : '#ffffff',
+                            border: `1px solid ${document.documentElement.getAttribute('data-theme') === 'dark' ? '#334155' : '#e2e8f0'}`,
                             borderRadius: '6px',
-                            color: '#f1f5f9',
+                            color: document.documentElement.getAttribute('data-theme') === 'dark' ? '#f1f5f9' : '#1e293b',
                             fontSize: '11px'
                           }}
                           formatter={(value: any) => `Rp ${value.toLocaleString('id-ID')}`}
                         />
                         <Legend 
-                          wrapperStyle={{ fontSize: '10px', color: '#f1f5f9' }}
+                          wrapperStyle={{ 
+                            fontSize: '10px', 
+                            color: document.documentElement.getAttribute('data-theme') === 'dark' ? '#f1f5f9' : '#1e293b'
+                          }}
                         />
                       </PieChart>
                     </ResponsiveContainer>
@@ -928,8 +1145,8 @@ const FinancialReports = () => {
               <Card style={{ padding: '8px' }}>
                 <div style={{ maxWidth: '100%' }}>
                   <h4 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '4px', marginBottom: '6px', fontSize: '11px', fontWeight: '600' }}>REVENUE</h4>
-                  {profitLoss.revenue.filter(rev => rev.balance !== 0).map(rev => (
-                    <div key={rev.code} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid var(--border-color)', fontSize: '10px' }}>
+                  {profitLoss.revenue.filter(rev => rev.balance !== 0).map((rev, index) => (
+                    <div key={`revenue-${rev.code}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid var(--border-color)', fontSize: '10px' }}>
                       <span>{rev.code} - {rev.name}</span>
                       <span style={{ fontWeight: '600', fontSize: '9px' }}>Rp {rev.balance.toLocaleString('id-ID')}</span>
                     </div>
@@ -940,8 +1157,8 @@ const FinancialReports = () => {
                   </div>
                   
                   <h4 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '4px', marginTop: '12px', marginBottom: '6px', fontSize: '11px', fontWeight: '600' }}>EXPENSES</h4>
-                  {profitLoss.expenses.filter(exp => exp.balance !== 0).map(exp => (
-                    <div key={exp.code} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid var(--border-color)', fontSize: '10px' }}>
+                  {profitLoss.expenses.filter(exp => exp.balance !== 0).map((exp, index) => (
+                    <div key={`expense-${exp.code}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid var(--border-color)', fontSize: '10px' }}>
                       <span>{exp.code} - {exp.name}</span>
                       <span style={{ fontWeight: '600', fontSize: '9px' }}>Rp {exp.balance.toLocaleString('id-ID')}</span>
                     </div>
@@ -1040,7 +1257,22 @@ const FinancialReports = () => {
                           cx="50%"
                           cy="50%"
                           labelLine={false}
-                          label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
+                          label={({ name, percent }) => {
+                            if (!name) return null;
+                            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                            return (
+                              <text 
+                                x={0} 
+                                y={0} 
+                                fill={isDark ? '#f1f5f9' : '#1e293b'} 
+                                textAnchor="middle" 
+                                dominantBaseline="central"
+                                style={{ fontSize: '8px', fontWeight: '600' }}
+                              >
+                                {name}: {((percent || 0) * 100).toFixed(0)}%
+                              </text>
+                            );
+                          }}
                           outerRadius={60}
                           fill="#8884d8"
                           dataKey="value"
@@ -1051,16 +1283,19 @@ const FinancialReports = () => {
                         </Pie>
                         <Tooltip 
                           contentStyle={{ 
-                            backgroundColor: '#1e293b', 
-                            border: '1px solid #334155',
+                            backgroundColor: document.documentElement.getAttribute('data-theme') === 'dark' ? '#1e293b' : '#ffffff',
+                            border: `1px solid ${document.documentElement.getAttribute('data-theme') === 'dark' ? '#334155' : '#e2e8f0'}`,
                             borderRadius: '6px',
-                            color: '#f1f5f9',
+                            color: document.documentElement.getAttribute('data-theme') === 'dark' ? '#f1f5f9' : '#1e293b',
                             fontSize: '11px'
                           }}
                           formatter={(value: any) => `Rp ${value.toLocaleString('id-ID')}`}
                         />
                         <Legend 
-                          wrapperStyle={{ fontSize: '10px', color: '#f1f5f9' }}
+                          wrapperStyle={{ 
+                            fontSize: '10px', 
+                            color: document.documentElement.getAttribute('data-theme') === 'dark' ? '#f1f5f9' : '#1e293b'
+                          }}
                         />
                       </PieChart>
                     </ResponsiveContainer>
@@ -1130,7 +1365,173 @@ const FinancialReports = () => {
             </div>
           </div>
         )}
+
+        {reportType === 'inventory' && (
+          <div style={{ padding: '8px' }}>
+            <h3 style={{ textAlign: 'center', marginBottom: '12px', fontSize: '14px' }}>
+              Inventory Report<br />
+              <span style={{ fontSize: '10px', fontWeight: 'normal' }}>
+                As of {new Date().toLocaleDateString('id-ID')}
+              </span>
+            </h3>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              {/* Material Inventory */}
+              <Card style={{ padding: '8px' }}>
+                <h4 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '4px', marginBottom: '6px', fontSize: '11px', fontWeight: '600' }}>MATERIAL INVENTORY</h4>
+                {(() => {
+                  const materialInventory = inventory.filter((inv: any) => {
+                    // Check kategori field (primary) - ini field yang digunakan di Inventory.tsx
+                    const kategori = (inv.kategori || inv.category || inv.type || '').toLowerCase().trim();
+                    if (!kategori) return false;
+                    
+                    // Material categories (dari Inventory.tsx logic)
+                    const materialCategories = ['material', 'bahan', 'bahan baku', 'raw material', 'materials'];
+                    return materialCategories.some(cat => kategori.includes(cat));
+                  });
+                  
+                  const materialTotal = materialInventory.reduce((sum: number, inv: any) => {
+                    // Use nextStock (calculated stock) instead of qty/quantity
+                    const stock = inv.nextStock || inv.stock || inv.qty || inv.quantity || 0;
+                    const price = inv.price || inv.unitPrice || 0;
+                    return sum + (stock * price);
+                  }, 0);
+                  
+                  return (
+                    <>
+                      {materialInventory.length > 0 ? (
+                        <>
+                          {materialInventory.map((inv: any, index: number) => {
+                            // Use nextStock (calculated stock) instead of qty/quantity
+                            const stock = inv.nextStock || inv.stock || inv.qty || inv.quantity || 0;
+                            const price = inv.price || inv.unitPrice || 0;
+                            const total = stock * price;
+                            const itemName = inv.description || inv.itemName || inv.name || inv.codeItem || 'Unknown';
+                            const itemCode = inv.codeItem || inv.kode || inv.itemCode || inv.id || '';
+                            
+                            return (
+                              <div key={`material-${inv.id || index}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid var(--border-color)', fontSize: '10px' }}>
+                                <span title={itemName}>{itemCode} - {itemName.length > 30 ? itemName.substring(0, 30) + '...' : itemName}</span>
+                                <span style={{ fontWeight: '600', fontSize: '9px' }}>
+                                  {stock.toLocaleString('id-ID')} x Rp {price.toLocaleString('id-ID')} = Rp {total.toLocaleString('id-ID')}
+                                </span>
+                              </div>
+                            );
+                          })}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', marginTop: '4px', borderTop: '1px solid var(--border-color)', fontWeight: 'bold', fontSize: '11px' }}>
+                            <span>Total Material Inventory</span>
+                            <span>Rp {materialTotal.toLocaleString('id-ID')}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ padding: '12px', textAlign: 'center', fontSize: '10px', color: 'var(--text-secondary)' }}>
+                          No material inventory data
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </Card>
+              
+              {/* Product Inventory */}
+              <Card style={{ padding: '8px' }}>
+                <h4 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '4px', marginBottom: '6px', fontSize: '11px', fontWeight: '600' }}>PRODUCT INVENTORY</h4>
+                {(() => {
+                  const productInventory = inventory.filter((inv: any) => {
+                    // Check kategori field (primary) - ini field yang digunakan di Inventory.tsx
+                    const kategori = (inv.kategori || inv.category || inv.type || '').toLowerCase().trim();
+                    if (!kategori) return false;
+                    
+                    // Product categories (dari Inventory.tsx logic)
+                    const productCategories = ['product', 'produk', 'finished goods', 'barang jadi'];
+                    return productCategories.some(cat => kategori.includes(cat));
+                  });
+                  
+                  const productTotal = productInventory.reduce((sum: number, inv: any) => {
+                    // Use nextStock (calculated stock) instead of qty/quantity
+                    const stock = inv.nextStock || inv.stock || inv.qty || inv.quantity || 0;
+                    const price = inv.price || inv.unitPrice || 0;
+                    return sum + (stock * price);
+                  }, 0);
+                  
+                  return (
+                    <>
+                      {productInventory.length > 0 ? (
+                        <>
+                          {productInventory.map((inv: any, index: number) => {
+                            // Use nextStock (calculated stock) instead of qty/quantity
+                            const stock = inv.nextStock || inv.stock || inv.qty || inv.quantity || 0;
+                            const price = inv.price || inv.unitPrice || 0;
+                            const total = stock * price;
+                            const itemName = inv.description || inv.itemName || inv.name || inv.codeItem || 'Unknown';
+                            const itemCode = inv.codeItem || inv.kode || inv.itemCode || inv.id || '';
+                            
+                            return (
+                              <div key={`product-${inv.id || index}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid var(--border-color)', fontSize: '10px' }}>
+                                <span title={itemName}>{itemCode} - {itemName.length > 30 ? itemName.substring(0, 30) + '...' : itemName}</span>
+                                <span style={{ fontWeight: '600', fontSize: '9px' }}>
+                                  {stock.toLocaleString('id-ID')} x Rp {price.toLocaleString('id-ID')} = Rp {total.toLocaleString('id-ID')}
+                                </span>
+                              </div>
+                            );
+                          })}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', marginTop: '4px', borderTop: '1px solid var(--border-color)', fontWeight: 'bold', fontSize: '11px' }}>
+                            <span>Total Product Inventory</span>
+                            <span>Rp {productTotal.toLocaleString('id-ID')}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ padding: '12px', textAlign: 'center', fontSize: '10px', color: 'var(--text-secondary)' }}>
+                          No product inventory data
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </Card>
+            </div>
+            
+            {/* Summary */}
+            <Card style={{ padding: '8px', marginTop: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: '10px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                    Total Inventory Items: {inventory.length}
+                  </div>
+                  <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
+                    Material: {inventory.filter((inv: any) => {
+                      const kategori = (inv.kategori || inv.category || inv.type || '').toLowerCase().trim();
+                      if (!kategori) return false;
+                      const materialCategories = ['material', 'bahan', 'bahan baku', 'raw material', 'materials'];
+                      return materialCategories.some(cat => kategori.includes(cat));
+                    }).length} items | Product: {inventory.filter((inv: any) => {
+                      const kategori = (inv.kategori || inv.category || inv.type || '').toLowerCase().trim();
+                      if (!kategori) return false;
+                      const productCategories = ['product', 'produk', 'finished goods', 'barang jadi'];
+                      return productCategories.some(cat => kategori.includes(cat));
+                    }).length} items
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Total Inventory Value</div>
+                  <div style={{ fontSize: '16px', fontWeight: 'bold' }}>
+                    Rp {(() => {
+                      const total = inventory.reduce((sum: number, inv: any) => {
+                        // Use nextStock (calculated stock) instead of qty/quantity
+                        const stock = inv.nextStock || inv.stock || inv.qty || inv.quantity || 0;
+                        const price = inv.price || inv.unitPrice || 0;
+                        return sum + (stock * price);
+                      }, 0);
+                      return total.toLocaleString('id-ID');
+                    })()}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
       </Card>
+
       {/* Custom Dialog */}
       {dialogState.show && (
         <div className="dialog-overlay" onClick={closeDialog}>
@@ -1159,7 +1560,6 @@ const FinancialReports = () => {
           </div>
         </div>
       )}
-
     </div>
   );
 };

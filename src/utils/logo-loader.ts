@@ -13,14 +13,14 @@ const DEFAULT_PLACEHOLDER = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZ
 export async function loadLogoAsBase64(): Promise<string> {
   // List of possible logo paths (dalam urutan prioritas)
   const logoPaths = [
-    '/noxtiz.png',           // Primary: noxtiz.png di public folder
-    '/noxtiz.ico',           // Fallback 1: noxtiz.ico di public folder
+    '/tljp.png',           // Primary: tljp.png di public folder
+    '/tljp.ico',           // Fallback 1: tljp.ico di public folder
     '/Logo.gif',             // Fallback 2: Logo.gif di public folder
-    './noxtiz.png',          // Fallback 3: Relative path
-    './noxtiz.ico',          // Fallback 4: Relative path
+    './tljp.png',          // Fallback 3: Relative path
+    './tljp.ico',          // Fallback 4: Relative path
     './Logo.gif',            // Fallback 5: Relative path
-    'public/noxtiz.png',     // Fallback 6: Explicit public path
-    'public/noxtiz.ico',     // Fallback 7: Explicit public path
+    'public/tljp.png',     // Fallback 6: Explicit public path
+    'public/tljp.ico',     // Fallback 7: Explicit public path
     'public/Logo.gif',       // Fallback 8: Explicit public path
   ];
 
@@ -29,12 +29,12 @@ export async function loadLogoAsBase64(): Promise<string> {
   const electronAPI = (window as any).electronAPI;
   if (electronAPI && electronAPI.getResourceBase64) {
     try {
-      // Coba noxtiz.png dulu, lalu noxtiz.ico sebagai base64
-      const base64Png = await electronAPI.getResourceBase64('noxtiz.png');
+      // Coba tljp.png dulu, lalu tljp.ico sebagai base64
+      const base64Png = await electronAPI.getResourceBase64('tljp.png');
       if (base64Png && base64Png.startsWith('data:')) {
         return base64Png; // Return langsung jika berhasil
       }
-      const base64Ico = await electronAPI.getResourceBase64('noxtiz.ico');
+      const base64Ico = await electronAPI.getResourceBase64('tljp.ico');
       if (base64Ico && base64Ico.startsWith('data:')) {
         return base64Ico; // Return langsung jika berhasil
       }
@@ -46,12 +46,12 @@ export async function loadLogoAsBase64(): Promise<string> {
   // Fallback: coba getResourcePath (tapi skip jika file://)
   if (electronAPI && electronAPI.getResourcePath) {
     try {
-      // Coba noxtiz.png dulu, lalu noxtiz.ico
-      const resourcePathPng = await electronAPI.getResourcePath('noxtiz.png');
+      // Coba tljp.png dulu, lalu tljp.ico
+      const resourcePathPng = await electronAPI.getResourcePath('tljp.png');
       if (resourcePathPng && !resourcePathPng.startsWith('file://') && !resourcePathPng.match(/^[A-Z]:\\/) && !resourcePathPng.match(/^[A-Z]:\//)) {
         logoPaths.unshift(resourcePathPng); // Prioritas tertinggi untuk Electron (hanya jika path valid)
       }
-      const resourcePathIco = await electronAPI.getResourcePath('noxtiz.ico');
+      const resourcePathIco = await electronAPI.getResourcePath('tljp.ico');
       if (resourcePathIco && !resourcePathIco.startsWith('file://') && !resourcePathIco.match(/^[A-Z]:\\/) && !resourcePathIco.match(/^[A-Z]:\//)) {
         logoPaths.unshift(resourcePathIco); // Prioritas tertinggi untuk Electron (hanya jika path valid)
       }

@@ -1,0 +1,84 @@
+================================================================================
+PETTY CASH IMPORT HEADERS - OPERATIONAL EXPENSES MODULE
+================================================================================
+
+REQUIRED COLUMN HEADERS (use exactly as shown):
+
+1. Date                    (Format: YYYY-MM-DD, e.g., 2026-02-07)
+2. Type                    (Must contain "PettyCash" or "PC")
+3. Category                (Electricity, Water, Gas, Salary, Logistics, Other)
+4. Description             (Required - cannot be empty)
+5. Amount                  (Numbers only, e.g., 500000)
+6. Payment Method          (Cash, Bank Transfer, Check, Credit Card)
+7. Approved By             (Optional - manager/approver name)
+8. Requestor               (Optional - employee who requested)
+9. Notes                   (Optional - additional notes)
+
+================================================================================
+ALTERNATIVE HEADER NAMES (case-insensitive):
+================================================================================
+
+Date:
+  - Date, DATE, Tanggal, TANGGAL, Expense Date, expense date
+
+Type:
+  - Type, TYPE, Tipe, TIPE
+  - MUST contain "petty" or "pc" to be recognized as Petty Cash
+
+Category:
+  - Category, CATEGORY, Kategori, KATEGORI
+
+Description:
+  - Description, DESCRIPTION, Deskripsi, DESKRIPSI
+
+Amount:
+  - Amount, AMOUNT, Jumlah, JUMLAH
+
+Payment Method:
+  - Payment Method, PAYMENT METHOD, Metode Pembayaran, metode pembayaran
+
+Approved By:
+  - Approved By, APPROVED BY, Disetujui Oleh, disetujui oleh
+
+Requestor:
+  - Requestor, REQUESTOR, Peminta, PEMINTA
+
+Notes:
+  - Notes, NOTES, Catatan, CATATAN
+
+================================================================================
+EXAMPLE DATA:
+================================================================================
+
+Date          Type        Category    Description              Amount   Payment Method  Approved By  Requestor    Notes
+2026-02-07    PettyCash   Electricity Monthly electricity bill 500000   Cash             Manager      John Doe     Feb 2026
+2026-02-07    PettyCash   Logistics   Fuel for delivery        250000   Bank Transfer    Manager      Jane Smith   
+2026-02-08    PettyCash   Other       Office supplies          150000   Cash             Manager      Bob Johnson  Pens & paper
+
+================================================================================
+IMPORTANT RULES:
+================================================================================
+
+✓ Date Format: YYYY-MM-DD (required)
+✓ Type: Must contain "petty" or "pc" (case-insensitive)
+✓ Category: Must be one of the 6 valid options
+✓ Description: Required - cannot be empty
+✓ Amount: Required - numbers only, no currency symbols
+✓ Payment Method: Must be one of the 4 valid options
+✓ Requestor: Specific to Petty Cash (shows who requested the expense)
+✓ Empty rows: Will be skipped automatically
+
+================================================================================
+TROUBLESHOOTING:
+================================================================================
+
+If import fails:
+1. Check that Date and Description columns are NOT empty
+2. Verify Type contains "petty" or "pc"
+3. Ensure Amount contains only numbers (no Rp, commas, etc.)
+4. Check that Category is one of: Electricity, Water, Gas, Salary, Logistics, Other
+5. Verify Payment Method is one of: Cash, Bank Transfer, Check, Credit Card
+6. Make sure column headers match exactly (or use alternatives listed above)
+7. Check for extra spaces in header names
+
+================================================================================

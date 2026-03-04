@@ -3,9 +3,10 @@ import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
-import { storageService } from '../../services/storage';
+import { storageService, StorageKeys } from '../../services/storage';
 import { filterActiveItems } from '../../utils/data-persistence-helper';
 import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
+import { useLanguage } from '../../hooks/useLanguage';
 import * as XLSX from 'xlsx';
 import '../../styles/common.css';
 import './Master.css';
@@ -24,6 +25,7 @@ interface Supplier {
 }
 
 const Suppliers = () => {
+  const { t } = useLanguage();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<Supplier | null>(null);
@@ -132,7 +134,7 @@ const Suppliers = () => {
     // Save cleaned data back to storage if duplicates were removed
     if (uniqueData.length < data.length) {
       console.log('[Suppliers] Saving cleaned data to storage...');
-      await storageService.set('suppliers', numberedData);
+      await storageService.set(StorageKeys.PACKAGING.SUPPLIERS, numberedData);
     }
   };
 
@@ -160,7 +162,7 @@ const Suppliers = () => {
             ? { ...formData, id: editingItem.id, no: editingItem.no } as Supplier
             : s
         );
-        await storageService.set('suppliers', updated);
+        await storageService.set(StorageKeys.PACKAGING.SUPPLIERS, updated);
         setSuppliers(updated.map((s, idx) => ({ ...s, no: idx + 1 })));
       } else {
         const newSupplier: Supplier = {
@@ -170,7 +172,7 @@ const Suppliers = () => {
           kode: formData.kode.trim(), // Pastikan kode di-trim
         } as Supplier;
         const updated = [...suppliers, newSupplier];
-        await storageService.set('suppliers', updated);
+        await storageService.set(StorageKeys.PACKAGING.SUPPLIERS, updated);
         setSuppliers(updated.map((s, idx) => ({ ...s, no: idx + 1 })));
       }
       setShowForm(false);
@@ -373,7 +375,7 @@ const Suppliers = () => {
           });
 
           const renumbered = updatedSuppliers.map((s, idx) => ({ ...s, no: idx + 1 }));
-          await storageService.set('suppliers', renumbered);
+          await storageService.set(StorageKeys.PACKAGING.SUPPLIERS, renumbered);
           setSuppliers(renumbered);
 
           if (errors.length > 0) {
@@ -486,18 +488,18 @@ const Suppliers = () => {
     if (suppliers.length === 0) {
       // Default columns if no data
       return [
-        { key: 'no', header: 'No' },
-        { key: 'kode', header: 'Kode (ID)' },
-        { key: 'nama', header: 'Nama (Company Name)' },
-        { key: 'alamat', header: 'Alamat (Address)' },
-        { key: 'kategori', header: 'Kategori' },
+        { key: 'no', header: t('common.number') || 'No' },
+        { key: 'kode', header: t('master.supplierCode') || 'Kode (ID)' },
+        { key: 'nama', header: t('master.supplierName') || 'Nama (Company Name)' },
+        { key: 'alamat', header: t('common.address') || 'Alamat (Address)' },
+        { key: 'kategori', header: t('master.category') || 'Kategori' },
         {
           key: 'actions',
-          header: 'Actions',
+          header: t('common.actions') || 'Actions',
         render: () => (
           <div style={{ display: 'flex', gap: '8px' }}>
-            <Button variant="secondary" onClick={() => showAlert('No data to edit', 'Information')}>Edit</Button>
-            <Button variant="danger" onClick={() => showAlert('No data to delete', 'Information')}>Delete</Button>
+            <Button variant="secondary" onClick={() => showAlert('No data to edit', 'Information')}>{t('common.edit') || 'Edit'}</Button>
+            <Button variant="danger" onClick={() => showAlert('No data to delete', 'Information')}>{t('common.delete') || 'Delete'}</Button>
           </div>
         ),
         },
@@ -515,10 +517,10 @@ const Suppliers = () => {
 
     // Define optional columns with their fill percentages
     const optionalColumns = [
-      { key: 'kontak' as keyof Supplier, header: 'Kontak (PIC Name)', fillPercent: getFillPercentage('kontak') },
-      { key: 'npwp' as keyof Supplier, header: 'NPWP', fillPercent: getFillPercentage('npwp') },
-      { key: 'email' as keyof Supplier, header: 'Email', fillPercent: getFillPercentage('email') },
-      { key: 'telepon' as keyof Supplier, header: 'Telepon (Phone)', fillPercent: getFillPercentage('telepon') },
+      { key: 'kontak' as keyof Supplier, header: t('master.contactPerson') || 'Kontak (PIC Name)', fillPercent: getFillPercentage('kontak') },
+      { key: 'npwp' as keyof Supplier, header: t('settings.npwp') || 'NPWP', fillPercent: getFillPercentage('npwp') },
+      { key: 'email' as keyof Supplier, header: t('common.email') || 'Email', fillPercent: getFillPercentage('email') },
+      { key: 'telepon' as keyof Supplier, header: t('common.phone') || 'Telepon (Phone)', fillPercent: getFillPercentage('telepon') },
     ];
 
     // Filter: only show columns with >= 50% filled
@@ -530,9 +532,9 @@ const Suppliers = () => {
 
     // Build final columns: base columns + sorted optional columns + remaining columns
     const baseColumns = [
-      { key: 'no', header: 'No' },
-      { key: 'kode', header: 'Kode (ID)' },
-      { key: 'nama', header: 'Nama (Company Name)' },
+      { key: 'no', header: t('common.number') || 'No' },
+      { key: 'kode', header: t('master.supplierCode') || 'Kode (ID)' },
+      { key: 'nama', header: t('master.supplierName') || 'Nama (Company Name)' },
     ];
 
     // Add optional columns (sorted by fill percentage, highest first)
@@ -540,27 +542,27 @@ const Suppliers = () => {
 
     // Add remaining columns
     baseColumns.push(
-      { key: 'alamat', header: 'Alamat (Address)' },
-      { key: 'kategori', header: 'Kategori' },
+      { key: 'alamat', header: t('common.address') || 'Alamat (Address)' },
+      { key: 'kategori', header: t('master.category') || 'Kategori' },
       {
         key: 'actions',
-        header: 'Actions',
+        header: t('common.actions') || 'Actions',
         render: (item: Supplier) => (
           <div style={{ display: 'flex', gap: '8px' }}>
-            <Button variant="secondary" onClick={() => handleEdit(item)}>Edit</Button>
-            <Button variant="danger" onClick={() => handleDelete(item)}>Delete</Button>
+            <Button variant="secondary" onClick={() => handleEdit(item)}>{t('common.edit') || 'Edit'}</Button>
+            <Button variant="danger" onClick={() => handleDelete(item)}>{t('common.delete') || 'Delete'}</Button>
           </div>
         ),
       } as any
     );
 
     return baseColumns;
-  }, [suppliers]);
+  }, [suppliers, t]);
 
   return (
     <div className="master-compact">
       <div className="page-header">
-        <h1>Master Suppliers</h1>
+        <h1>Master Pemasok</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
           <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
           <Button variant="secondary" onClick={handleDownloadTemplate}>📋 Download Template</Button>
@@ -570,7 +572,7 @@ const Suppliers = () => {
             setEditingItem(null);
             setShowForm(true);
           }}>
-            + Add Supplier
+            + Tambah Pemasok
           </Button>
         </div>
       </div>
@@ -578,7 +580,7 @@ const Suppliers = () => {
       {showForm && (
         <div className="dialog-overlay" onClick={() => { setShowForm(false); setEditingItem(null); setFormData({ kode: '', nama: '', kontak: '', npwp: '', email: '', telepon: '', alamat: '', kategori: '' }); }} style={{ zIndex: 10000 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', width: '90%', maxHeight: '90vh', overflowY: 'auto', zIndex: 10001 }}>
-            <Card title={editingItem ? "Edit Supplier" : "Add New Supplier"} className="dialog-card">
+            <Card title={editingItem ? "Edit Pemasok" : "Tambah Pemasok Baru"} className="dialog-card">
           <Input
             label="Kode *"
             value={formData.kode || ''}
@@ -626,10 +628,10 @@ const Suppliers = () => {
           </p>
           <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
             <Button onClick={() => { setShowForm(false); setEditingItem(null); setFormData({ kode: '', nama: '', kontak: '', npwp: '', email: '', telepon: '', alamat: '', kategori: '' }); }} variant="secondary">
-              Cancel
+              Batal
             </Button>
             <Button onClick={handleSave} variant="primary">
-              {editingItem ? 'Update Supplier' : 'Save Supplier'}
+              {editingItem ? 'Update Pemasok' : 'Simpan Pemasok'}
             </Button>
           </div>
         </Card>
@@ -656,7 +658,7 @@ const Suppliers = () => {
             }}
           />
         </div>
-        <Table columns={columns} data={filteredSuppliers} emptyMessage={searchQuery ? "No suppliers found matching your search" : "No suppliers data"} />
+        <Table columns={columns} data={filteredSuppliers} emptyMessage={searchQuery ? "Tidak ada pemasok yang cocok dengan pencarian" : "Tidak ada data pemasok"} />
       </Card>
 
       {/* Custom Dialog */}

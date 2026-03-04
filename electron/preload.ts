@@ -36,5 +36,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   loadUploadedFile: (filePath: string) => ipcRenderer.invoke('load-uploaded-file', filePath),
   // Open PDF viewer in new window
   openPdfViewer: (fileData: string, fileName: string) => ipcRenderer.invoke('open-pdf-viewer', fileData, fileName),
+  // ✅ NEW: Run import script
+  runImportScript: (scriptName: string) => ipcRenderer.invoke('run-import-script', scriptName),
 });
 

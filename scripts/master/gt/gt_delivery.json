@@ -1,0 +1,4394 @@
+[
+  {
+    "id": "dn_1770829742432_y5wpi2u3b",
+    "sjNo": "12342-270126",
+    "soNo": "082/PO/AIP-TLJP/I/25",
+    "customer": "\"ARDON INTI PRESISI, PT\"",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "FLANGE BOLT M14 X 1.5 X 15",
+        "productCode": "TRM0284",
+        "qty": 50,
+        "unit": "PCS",
+        "soNo": "082/PO/AIP-TLJP/I/25"
+      },
+      {
+        "product": "NUT WELDING M.8 X 1.25",
+        "productCode": "TRM0243",
+        "qty": 30000,
+        "unit": "PCS",
+        "soNo": "082/PO/AIP-TLJP/I/25"
+      }
+    ],
+    "deliveryDate": "2026-01-27",
+    "notes": "PO : 082/PO/AIP-TLJP/I/25 DO : 12342-270126",
+    "timestamp": 1770829742432
+  },
+  {
+    "id": "dn_1770829742432_1bn90bx7b",
+    "sjNo": "12393-070126",
+    "soNo": "5701690021",
+    "customer": "PT Hanjaya Mandala Sampoerna Tbk",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "CHECKLIST APAR",
+        "productCode": "TRM2606",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "5701690021"
+      },
+      {
+        "product": "CHECKLIST TANGGA DORONG",
+        "productCode": "TRM2595",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "5701690021"
+      },
+      {
+        "product": "CHECKLIST BODY HARNESS",
+        "productCode": "TRM2602",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "5701690021"
+      },
+      {
+        "product": "CHECKLIST FALL ARRESTER",
+        "productCode": "TRM2596",
+        "qty": 200,
+        "unit": "PCS",
+        "soNo": "5701690021"
+      },
+      {
+        "product": "CHECKLIST EYEWASH",
+        "productCode": "TRM2598",
+        "qty": 200,
+        "unit": "PCS",
+        "soNo": "5701690021"
+      },
+      {
+        "product": "CHECKLIST HAND PALLET",
+        "productCode": "TRM2597",
+        "qty": 200,
+        "unit": "PCS",
+        "soNo": "5701690021"
+      }
+    ],
+    "deliveryDate": "2026-01-07",
+    "notes": "PO : 5701690021 DO : 12393-070126",
+    "timestamp": 1770829742432
+  },
+  {
+    "id": "dn_1770829742432_gcqra37fo",
+    "sjNo": "12394-070126",
+    "soNo": "5701690028",
+    "customer": "PT Hanjaya Mandala Sampoerna Tbk",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "CHECKLIST MEWP",
+        "productCode": "TRM4466",
+        "qty": 50,
+        "unit": "PCS",
+        "soNo": "5701690028"
+      },
+      {
+        "product": "CHECKLIST EMERGENCY CABINET",
+        "productCode": "TRM4467",
+        "qty": 50,
+        "unit": "PCS",
+        "soNo": "5701690028"
+      }
+    ],
+    "deliveryDate": "2026-01-07",
+    "notes": "PO : 5701690028 DO : 12394-070126",
+    "timestamp": 1770829742432
+  },
+  {
+    "id": "dn_1770829742433_igscofwam",
+    "sjNo": "12278-070125",
+    "soNo": "PO-L-202512000210",
+    "customer": "PT INTEGRASI MEDIKA PRIMA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "TEMPAT PAPAN NAMA 30 X 7.5CM",
+        "productCode": "TRM4454",
+        "qty": 14,
+        "unit": "PCS",
+        "soNo": "PO-L-202512000210"
+      },
+      {
+        "product": "PAPAN NAMA 34 X 4.5CM",
+        "productCode": "TRM4455",
+        "qty": 19,
+        "unit": "PCS",
+        "soNo": "PO-L-202512000210"
+      },
+      {
+        "product": "PAPAN NAMA 30 X 7CM",
+        "productCode": "TRM4456",
+        "qty": 19,
+        "unit": "PCS",
+        "soNo": "PO-L-202512000210"
+      }
+    ],
+    "deliveryDate": "2026-01-07",
+    "notes": "PO : PO-L-202512000210 DO : 12278-070125",
+    "timestamp": 1770829742433
+  },
+  {
+    "id": "dn_1770829742433_7xqnlowhp",
+    "sjNo": "12280-080126",
+    "soNo": "PO-L-202601000027",
+    "customer": "PT INTEGRASI MEDIKA PRIMA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "PRINT CARTON UK 41 X 60CM",
+        "productCode": "TRM3440",
+        "qty": 2,
+        "unit": "PCS",
+        "soNo": "PO-L-202601000027"
+      }
+    ],
+    "deliveryDate": "2026-01-08",
+    "notes": "PO : PO-L-202601000027 DO : 12280-080126",
+    "timestamp": 1770829742433
+  },
+  {
+    "id": "dn_1770829742433_d87l9iurr",
+    "sjNo": "12314-140126",
+    "soNo": "PO-L-20260100071",
+    "customer": "PT INTEGRASI MEDIKA PRIMA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"STICKER LASA A4 @170 PCS (2,5 X 1,3CM)\"",
+        "productCode": "TRM2265",
+        "qty": 10,
+        "unit": "LBR",
+        "soNo": "PO-L-20260100071"
+      },
+      {
+        "product": "STICKER ENCERKAN A4 @170 PCS (1.3 X 2.5 CM)",
+        "productCode": "TRM3294",
+        "qty": 10,
+        "unit": "LBR",
+        "soNo": "PO-L-20260100071"
+      }
+    ],
+    "deliveryDate": "2026-01-15",
+    "notes": "PO : PO-L-20260100071 DO : 12314-140126",
+    "timestamp": 1770829742433
+  },
+  {
+    "id": "dn_1770829742433_n27i52z9e",
+    "sjNo": "12344-270126",
+    "soNo": "PO-L-202601000142",
+    "customer": "PT INTEGRASI MEDIKA PRIMA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "LAMPU LED 60X60 29W",
+        "productCode": "TRM3764",
+        "qty": 4,
+        "unit": "PCS",
+        "soNo": "PO-L-202601000142"
+      },
+      {
+        "product": "LAMPU LED 30X120 29W",
+        "productCode": "TRM3220",
+        "qty": 4,
+        "unit": "PC",
+        "soNo": "PO-L-202601000142"
+      }
+    ],
+    "deliveryDate": "2026-01-27",
+    "notes": "PO : PO-L-202601000142 DO : 12344-270126",
+    "timestamp": 1770829742433
+  },
+  {
+    "id": "dn_1770829742433_0fvcqw8nr",
+    "sjNo": "12136-140126",
+    "soNo": "POV2601044",
+    "customer": "PT. ADVANEX PRECISION INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "TEKIRO HEX KEY ELECTRO SET (KUNCI L ELEKTRONIK) HK-EL1198 0.71-3MM 1 SET (7PCS)",
+        "productCode": "TRM4472",
+        "qty": 3,
+        "unit": "PCS",
+        "soNo": "POV2601044"
+      },
+      {
+        "product": "HONEYWELL KACAMATA SAFETY KINGS KY8811A ANTI-SCRATCH - ANTI SINAR UV",
+        "productCode": "TRM4473",
+        "qty": 20,
+        "unit": "PCS",
+        "soNo": "POV2601044"
+      }
+    ],
+    "deliveryDate": "2026-01-14",
+    "notes": "PO : POV2601044 DO : 12136-140126",
+    "timestamp": 1770829742433
+  },
+  {
+    "id": "dn_1770829742433_u17i30k1s",
+    "sjNo": "12330-210126",
+    "soNo": "POV2601058",
+    "customer": "PT. ADVANEX PRECISION INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "BATERAI CR2477N ORIGINAL RENATA BATTERY LITHIUM 3V",
+        "productCode": "TRM4476",
+        "qty": 5,
+        "unit": "PCS",
+        "soNo": "POV2601058"
+      },
+      {
+        "product": "RELAY MY4N-GS-R AC220/240 BY OMZ OMRON",
+        "productCode": "TRM4477",
+        "qty": 10,
+        "unit": "PCS",
+        "soNo": "POV2601058"
+      },
+      {
+        "product": "WIPRO ADAPTOR FOR IMPACT WRENCH AND RATCHET WRENCHES AW-1214",
+        "productCode": "TRM4478",
+        "qty": 2,
+        "unit": "PCS",
+        "soNo": "POV2601058"
+      }
+    ],
+    "deliveryDate": "2026-01-21",
+    "notes": "PO : POV2601058 DO : 12330-210126",
+    "timestamp": 1770829742433
+  },
+  {
+    "id": "dn_1770829742434_oih9xyo60",
+    "sjNo": "12312-140126",
+    "soNo": "PO ASI/26/0035",
+    "customer": "PT. ASAHI SUKSES INDUSTRI",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "STRAPING BAND EYZER 19MM ROLL",
+        "productCode": "TRM4471",
+        "qty": 1,
+        "unit": "ROL",
+        "soNo": "PO ASI/26/0035"
+      }
+    ],
+    "deliveryDate": "2026-01-13",
+    "notes": "PO : PO ASI/26/0035 DO : 12312-140126",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "dn_1770829742434_rn1t827lu",
+    "sjNo": "12326-200126",
+    "soNo": "PO-000010277",
+    "customer": "PT. Essilorluxottica Professional Solutions Indonesia",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "LAKBAN COKLAT BESAR",
+        "productCode": "TRM1375",
+        "qty": 288,
+        "unit": "PCS",
+        "soNo": "PO-000010277"
+      }
+    ],
+    "deliveryDate": "2026-01-20",
+    "notes": "PO : PO-000010277 DO : 12326-200126",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "dn_1770829742434_q2inde8on",
+    "sjNo": "12334-230126",
+    "soNo": "PO-000010847",
+    "customer": "PT. Essilorluxottica Professional Solutions Indonesia",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "HVS PAPER A4 PINK 70GR",
+        "productCode": "TRM1555",
+        "qty": 15,
+        "unit": "RIM",
+        "soNo": "PO-000010847"
+      }
+    ],
+    "deliveryDate": "2026-01-23",
+    "notes": "PO : PO-000010847 DO : 12334-230126",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "dn_1770829742434_er2pgz7rf",
+    "sjNo": "12295-080126",
+    "soNo": "HKB/PO/12/025/3375",
+    "customer": "PT. HANYA KARYA BAHANA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "PLASTIK WAYANG UK 15X20",
+        "productCode": "TRM0382",
+        "qty": 10,
+        "unit": "KG",
+        "soNo": "HKB/PO/12/025/3375"
+      },
+      {
+        "product": "KERTAS VCI 30 x 33",
+        "productCode": "TRM0532",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "HKB/PO/12/025/3375"
+      },
+      {
+        "product": "NABAKEM",
+        "productCode": "TRM1216",
+        "qty": 2,
+        "unit": "PAIL",
+        "soNo": "HKB/PO/12/025/3375"
+      },
+      {
+        "product": "OIL SINGER 1 LITER",
+        "productCode": "TRM0214",
+        "qty": 2,
+        "unit": "LTR",
+        "soNo": "HKB/PO/12/025/3375"
+      }
+    ],
+    "deliveryDate": "2026-01-08",
+    "notes": "PO : HKB/PO/12/025/3375 DO : 12295-080126",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "dn_1770829742434_ehwku45op",
+    "sjNo": "12274-060125",
+    "soNo": "001/TO/PURCH/XI/25",
+    "customer": "PT. INDOSAFETY SENTOSA INDUSTRY",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"LAKBAN OKAMOTO 2\"\"\"\"X50M\"",
+        "productCode": "TRM4452",
+        "qty": 10,
+        "unit": "ROL",
+        "soNo": "001/TO/PURCH/XI/25"
+      },
+      {
+        "product": "EKA TAPE 45MM X 85 Y",
+        "productCode": "TRM4447",
+        "qty": 10,
+        "unit": "ROL",
+        "soNo": "001/TO/PURCH/XI/25"
+      }
+    ],
+    "deliveryDate": "2026-01-06",
+    "notes": "PO : 001/TO/PURCH/XI/25 DO : 12274-060125",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "dn_1770829742434_bvrhu0sst",
+    "sjNo": "12353-290126",
+    "soNo": "PO/IS510/260101077",
+    "customer": "PT. INDOSAFETY SENTOSA INDUSTRY",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"LAKBAN OKAMOTO 2\"\"\"\"X50M\"",
+        "productCode": "TRM4452",
+        "qty": 122,
+        "unit": "ROL",
+        "soNo": "PO/IS510/260101077"
+      },
+      {
+        "product": "EKATAPE 45MM X 85Y COKLAT",
+        "productCode": "TRM4458",
+        "qty": 40,
+        "unit": "ROL",
+        "soNo": "PO/IS510/260101077"
+      }
+    ],
+    "deliveryDate": "2026-01-29",
+    "notes": "PO : PO/IS510/260101077 DO : 12353-290126",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "dn_1770829742434_rqvpgmuns",
+    "sjNo": "12293-090126",
+    "soNo": "JRE-KARAWANG-GA/137/01/2026",
+    "customer": "PT. JAYA REFRIGERATION EQUIPMENT",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "APAR TEMATIK",
+        "productCode": "TRM4453",
+        "qty": 17,
+        "unit": "PCS",
+        "soNo": "JRE-KARAWANG-GA/137/01/2026"
+      }
+    ],
+    "deliveryDate": "2026-01-09",
+    "notes": "PO : JRE-KARAWANG-GA/137/01/2026 DO : 12293-090126",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "dn_1770829742434_ets84gdm4",
+    "sjNo": "12297-100126",
+    "soNo": "C90738",
+    "customer": "PT. KAWASAKI MOTOR INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "BOLT FLANGE 8X20 MC3 G7 (K1410-0025)",
+        "productCode": "TRM0487",
+        "qty": 126000,
+        "unit": "PCS",
+        "soNo": "C90738"
+      }
+    ],
+    "deliveryDate": "2026-01-10",
+    "notes": "PO : C90738 DO : 12297-100126",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "dn_1770829742434_hrhcwlk7a",
+    "sjNo": "12272-060125",
+    "soNo": "KIPO25090293",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "TERMINAL BLOCK UPUN UTD 10 (RD201)",
+        "productCode": "TRM0231",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO25090293"
+      }
+    ],
+    "deliveryDate": "2026-01-06",
+    "notes": "PO : KIPO25090293 DO : 12272-060125",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "dn_1770829742434_zzfg9ht9s",
+    "sjNo": "12270-060125",
+    "soNo": "KIPO25110014",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "FLOW METER WIEBROCK FOR AIR 20°C 1 ATM NI/MIN (OP-DF15)",
+        "productCode": "TRM3446",
+        "qty": 2,
+        "unit": "PCS",
+        "soNo": "KIPO25110014"
+      }
+    ],
+    "deliveryDate": "2026-01-06",
+    "notes": "PO : KIPO25110014 DO : 12270-060125",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "dn_1770829742434_hshr0aaa4",
+    "sjNo": "12266-060125",
+    "soNo": "KIPO25120172",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"TOWER LIGHT LED (Q-LIGHT) ST45LF-BZ 3-3 220-AC220V RAG (RED, AMBER, GREEN) BRACKET TYPE SZ18 C/W BUZZER (FLASHING) FOR DRYER TYPE (RG087)\"",
+        "productCode": "TRM1929",
+        "qty": 2,
+        "unit": "PCS",
+        "soNo": "KIPO25120172"
+      }
+    ],
+    "deliveryDate": "2026-01-06",
+    "notes": "PO : KIPO25120172 DO : 12266-060125",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "dn_1770829742434_c6ea09iea",
+    "sjNo": "12265-060125",
+    "soNo": "KIPO25120191",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "FLAT WASHER / RING PLATE (SS400) Ø8 LEBAR (GALVANIZED) (NB419)",
+        "productCode": "TRM0671",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO25120191"
+      },
+      {
+        "product": "BOLT (BAUT HEXAGONAL) M8XP1.25XL25MM (GALVANIZED) (HA059)",
+        "productCode": "TRM0298",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO25120191"
+      },
+      {
+        "product": "CLAMP HOSE BAND (SILVER) Ø42 - Ø48 (DOUBLE WIRE CLAMP) FOR PVC HOSE Ø38 /SILICONE HOSE Ø43 (SUNTRAC) (NB060-1)",
+        "productCode": "TRM2158",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO25120191"
+      }
+    ],
+    "deliveryDate": "2026-01-06",
+    "notes": "PO : KIPO25120191 DO : 12265-060125",
+    "timestamp": 1770829742434
+  },
+  {
+    "id": "dn_1770829742435_jdjwn6r42",
+    "sjNo": "12269-060125",
+    "soNo": "KIPO25110221",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"REVOLVING WARNING LIGHT (RED) DV LTD-1101J MULTI VOLT 220VAC, 24VDC, 12VDC C/W BUZZER (RG141)\"",
+        "productCode": "TRM0061",
+        "qty": 100,
+        "unit": "PCS",
+        "soNo": "KIPO25110221"
+      },
+      {
+        "product": "MAGNETIC (SENSOR) LEAD SWITCH SENSOR SNS CSI-U DC 12-24V 2 WIRE (DL030)",
+        "productCode": "TRM0045",
+        "qty": 100,
+        "unit": "PCS",
+        "soNo": "KIPO25110221"
+      },
+      {
+        "product": "TERMINAL BLOCK UPUN UTD 15 (RD207)",
+        "productCode": "TRM0232",
+        "qty": 300,
+        "unit": "PCS",
+        "soNo": "KIPO25110221"
+      },
+      {
+        "product": "TERMINAL BLOCK UPUN UTD 10 (RD201)",
+        "productCode": "TRM0231",
+        "qty": 2396,
+        "unit": "PCS",
+        "soNo": "KIPO25110221"
+      }
+    ],
+    "deliveryDate": "2026-01-06",
+    "notes": "PO : KIPO25110221 DO : 12269-060125",
+    "timestamp": 1770829742435
+  },
+  {
+    "id": "dn_1770829742435_0d239n404",
+    "sjNo": "12268-060125",
+    "soNo": "KIPO25120095",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"TOWER LIGHT LED (Q-LIGHT) QTG50 LF-BZ 2-2 220-AC220V RA (RED, AMBER) BRACKET TYPE QZ18 C/W BUZZER (RG084)\"",
+        "productCode": "TRM0237",
+        "qty": 1,
+        "unit": "PCS",
+        "soNo": "KIPO25120095"
+      }
+    ],
+    "deliveryDate": "2026-01-06",
+    "notes": "PO : KIPO25120095 DO : 12268-060125",
+    "timestamp": 1770829742435
+  },
+  {
+    "id": "dn_1770829742435_xak25sn88",
+    "sjNo": "12271-060125",
+    "soNo": "KIPO25100071",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "PLYWOOD (KAYU TRIPLEK) L=240 W=120 T=9MM (NB019)",
+        "productCode": "TRM0057",
+        "qty": 323,
+        "unit": "LBR",
+        "soNo": "KIPO25100071"
+      },
+      {
+        "product": "WAINSCOT (KAYU LIST) L=250 W=7 T=2 (NB018)",
+        "productCode": "TRM0340",
+        "qty": 836,
+        "unit": "BTG",
+        "soNo": "KIPO25100071"
+      },
+      {
+        "product": "BEAMWOOD (KAYU BALOK) L=150 W=8 T=5 (NB017)",
+        "productCode": "TRM0004",
+        "qty": 960,
+        "unit": "BTG",
+        "soNo": "KIPO25100071"
+      },
+      {
+        "product": "BEAMWOOD (KAYU BALOK) L=200 X W=8 X T=5 (NB1343)",
+        "productCode": "TRM0005",
+        "qty": 154,
+        "unit": "BTG",
+        "soNo": "KIPO25100071"
+      }
+    ],
+    "deliveryDate": "2026-01-06",
+    "notes": "PO : KIPO25100071 DO : 12271-060125",
+    "timestamp": 1770829742435
+  },
+  {
+    "id": "dn_1770829742435_0mivaldfo",
+    "sjNo": "12267-060125",
+    "soNo": "KIPO25120147",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "PNEUMATIC VIBRATORS VIBTEC GT-10 (NB050)",
+        "productCode": "TRM0667",
+        "qty": 2,
+        "unit": "PCS",
+        "soNo": "KIPO25120147"
+      },
+      {
+        "product": "PNEUMATIC VIBRATORS VIBTEC GT-10 (NB050)",
+        "productCode": "TRM0667",
+        "qty": 2,
+        "unit": "PCS",
+        "soNo": "KIPO25120147"
+      }
+    ],
+    "deliveryDate": "2026-01-06",
+    "notes": "PO : KIPO25120147 DO : 12267-060125",
+    "timestamp": 1770829742435
+  },
+  {
+    "id": "dn_1770829742435_bnmoisxek",
+    "sjNo": "12264-060125",
+    "soNo": "KIPO25120209",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "RTV MULTI PERPOSE SEALENT DOW CORNING 732 CLEAR 300ML (ANB026)",
+        "productCode": "TRM0065",
+        "qty": 12,
+        "unit": "TUBE",
+        "soNo": "KIPO25120209"
+      }
+    ],
+    "deliveryDate": "2026-01-06",
+    "notes": "PO : KIPO25120209 DO : 12264-060125",
+    "timestamp": 1770829742435
+  },
+  {
+    "id": "dn_1770829742435_outdhsz9z",
+    "sjNo": "12276-070125",
+    "soNo": "KIPO26010013",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "CABLE NYAF Ø0.50MM2 (BLUE) [100MTR/ROLL] (CC481)",
+        "productCode": "TRM0012",
+        "qty": 1000,
+        "unit": "MTR",
+        "soNo": "KIPO26010013"
+      },
+      {
+        "product": "CABLE NYAF Ø1.50MM2 (WHITE) [100MTR/ROLL] (CC474-1)",
+        "productCode": "TRM0134",
+        "qty": 500,
+        "unit": "MTR",
+        "soNo": "KIPO26010013"
+      }
+    ],
+    "deliveryDate": "2026-01-07",
+    "notes": "PO : KIPO26010013 DO : 12276-070125",
+    "timestamp": 1770829742435
+  },
+  {
+    "id": "dn_1770829742435_4sw6ghc09",
+    "sjNo": "12277-070125",
+    "soNo": "KIPO26010043",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"CASTER WHEEL NYLON (KASTOR RODA) 4\"\"\"\" C/W BRAKE (ODØ 101.6MM) SWIPEL FLANGE (SLOT 70MMX85MM Ø12) (CD038)\"",
+        "productCode": "TRM0019",
+        "qty": 100,
+        "unit": "PCS",
+        "soNo": "KIPO26010043"
+      },
+      {
+        "product": "\"CASTER WHEEL NYLON (KASTOR RODA) 4\"\"\"\" W/O BRAKE (ODØ 101.6MM) SWIPEL FLANGE (SLOT 70MMX85MM Ø12) (CD037)\"",
+        "productCode": "TRM0020",
+        "qty": 100,
+        "unit": "PCS",
+        "soNo": "KIPO26010043"
+      }
+    ],
+    "deliveryDate": "2026-01-07",
+    "notes": "PO : KIPO26010043 DO : 12277-070125",
+    "timestamp": 1770829742435
+  },
+  {
+    "id": "dn_1770829742435_xq7emrrd7",
+    "sjNo": "12275-070125",
+    "soNo": "KIPO26010022",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "INK RIBBON (BLACK) LETATWIN LM-1R300B (5PCS/BOX) FOR LETATWIN LM-370A (NB304-1)",
+        "productCode": "TRM0036",
+        "qty": 50,
+        "unit": "PCS",
+        "soNo": "KIPO26010022"
+      },
+      {
+        "product": "TERMINAL LUG RING R1.25-4 (SPECIAL) (NB982)",
+        "productCode": "TRM0235",
+        "qty": 2000,
+        "unit": "PCS",
+        "soNo": "KIPO26010022"
+      },
+      {
+        "product": "SOCKET CONNECTOR 2 PIN MALE (NB470)",
+        "productCode": "TRM0070",
+        "qty": 200,
+        "unit": "PCS",
+        "soNo": "KIPO26010022"
+      },
+      {
+        "product": "SOCKET CONNECTOR 2 PIN FEMALE (NB471)",
+        "productCode": "TRM0069",
+        "qty": 200,
+        "unit": "PCS",
+        "soNo": "KIPO26010022"
+      },
+      {
+        "product": "MARKER TUBE MOTP WHITE 3.2 (200MTR/ROL) (CC104-1)",
+        "productCode": "TRM0046",
+        "qty": 400,
+        "unit": "MTR",
+        "soNo": "KIPO26010022"
+      },
+      {
+        "product": "NYLON CABLE GLAND PG-13.5 (BLACK) FOR (Ø20.4 HOLE) (NB479-1)",
+        "productCode": "TRM2344",
+        "qty": 100,
+        "unit": "PCS",
+        "soNo": "KIPO26010022"
+      },
+      {
+        "product": "FIBERGLASS SLEEVING Ø10MM (WHITE) (NB136-1)",
+        "productCode": "TRM0033",
+        "qty": 200,
+        "unit": "MTR",
+        "soNo": "KIPO26010022"
+      },
+      {
+        "product": "FIBERGLASS SLEEVING Ø15MM (WHITE) (NB619)",
+        "productCode": "TRM0034",
+        "qty": 200,
+        "unit": "MTR",
+        "soNo": "KIPO26010022"
+      },
+      {
+        "product": "CABLE NYAF Ø2.50 MM2 (WHITE) (100MTR/ROLL) (CC476-1)",
+        "productCode": "TRM0152",
+        "qty": 100,
+        "unit": "MTR",
+        "soNo": "KIPO26010022"
+      },
+      {
+        "product": "CABLE NYAF Ø0.50MM2 (YELLOW) [100MTR/ROLL] (CC491-1)",
+        "productCode": "TRM0131",
+        "qty": 500,
+        "unit": "MTR",
+        "soNo": "KIPO26010022"
+      }
+    ],
+    "deliveryDate": "2026-01-07",
+    "notes": "PO : KIPO26010022 DO : 12275-070125",
+    "timestamp": 1770829742435
+  },
+  {
+    "id": "dn_1770829742436_sjf2zoaqu",
+    "sjNo": "12281-080126",
+    "soNo": "KIPO25120231",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "BOLT (BAUT JT) M4XP0.7XL12MM (SUS304) (NB180)",
+        "productCode": "TRM0672",
+        "qty": 4,
+        "unit": "PCS",
+        "soNo": "KIPO25120231"
+      },
+      {
+        "product": "BOLT (BAUT L) M6XP1.0XL20MM (SUS304) (NB204)",
+        "productCode": "TRM0114",
+        "qty": 6,
+        "unit": "PCS",
+        "soNo": "KIPO25120231"
+      },
+      {
+        "product": "SPACER NUT M6X18MM (GALVANIZED) FOR XF-400RA (CN050)",
+        "productCode": "TRM4307",
+        "qty": 4,
+        "unit": "PCS",
+        "soNo": "KIPO25120231"
+      },
+      {
+        "product": "BOLT (BAUT JT) M4XP0.7XL12MM (SUS304) (NB180)",
+        "productCode": "TRM0672",
+        "qty": 20,
+        "unit": "PCS",
+        "soNo": "KIPO25120231"
+      },
+      {
+        "product": "BOLT (BAUT L) M4XP0.7XL20MM (SUS304) (HC026)",
+        "productCode": "TRM3917",
+        "qty": 30,
+        "unit": "PCS",
+        "soNo": "KIPO25120231"
+      }
+    ],
+    "deliveryDate": "2026-01-08",
+    "notes": "PO : KIPO25120231 DO : 12281-080126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "dn_1770829742436_lil2mvr0s",
+    "sjNo": "12284-080126",
+    "soNo": "KIPO26010033",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "BOLT (BAUT JP) M4XP0.7XL30MM (GALVANIZED) (NB1026)",
+        "productCode": "TRM2019",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26010033"
+      }
+    ],
+    "deliveryDate": "2026-01-08",
+    "notes": "PO : KIPO26010033 DO : 12284-080126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "dn_1770829742436_um17h5z9p",
+    "sjNo": "12282-080126",
+    "soNo": "KIPO25120221",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"TOWER LIGHT LED (Q-LIGHT) QTG50 LF-BZ 2-2 220-AC220V RA (RED, AMBER) BRACKET TYPE QZ18 C/W BUZZER (RG084)\"",
+        "productCode": "TRM0237",
+        "qty": 1,
+        "unit": "PCS",
+        "soNo": "KIPO25120221"
+      }
+    ],
+    "deliveryDate": "2026-01-08",
+    "notes": "PO : KIPO25120221 DO : 12282-080126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "dn_1770829742436_oox6kwe8g",
+    "sjNo": "12286-080126",
+    "soNo": "KIPO26010022",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "TERMINAL LUG RING R1.25-3 (SPECIAL) (NB901)",
+        "productCode": "TRM0234",
+        "qty": 2000,
+        "unit": "PCS",
+        "soNo": "KIPO26010022"
+      }
+    ],
+    "deliveryDate": "2026-01-08",
+    "notes": "PO : KIPO26010022 DO : 12286-080126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "dn_1770829742436_fnxi7frj7",
+    "sjNo": "12288-090126",
+    "soNo": "KIPO26010022",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "CABLE NYAF Ø0.50MM2 (YELLOW) [100MTR/ROLL] (CC491-1)",
+        "productCode": "TRM0131",
+        "qty": 500,
+        "unit": "MTR",
+        "soNo": "KIPO26010022"
+      }
+    ],
+    "deliveryDate": "2026-01-09",
+    "notes": "PO : KIPO26010022 DO : 12288-090126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "dn_1770829742436_fnws2uqo9",
+    "sjNo": "12289-090126",
+    "soNo": "KIPO26010033",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "TOGGLE SWITCH C513B (SPDT) ON/OFF/ON (CNTD) 15A 250VAC SELF-LOCKING (RC802)",
+        "productCode": "TRM3713",
+        "qty": 10,
+        "unit": "PCS",
+        "soNo": "KIPO26010033"
+      }
+    ],
+    "deliveryDate": "2026-01-09",
+    "notes": "PO : KIPO26010033 DO : 12289-090126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "dn_1770829742436_i7d66qi3r",
+    "sjNo": "12292-090126",
+    "soNo": "KIPO26010061",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "BOLT (BAUT L) M8XP1.25XL25MM (GALVANIZED) (NB031-1)",
+        "productCode": "TRM0118",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26010061"
+      },
+      {
+        "product": "FLAT WASHER / RING PLATE (SS400) M6 (GALVANIZED) (NB033)",
+        "productCode": "TRM0348",
+        "qty": 2000,
+        "unit": "PCS",
+        "soNo": "KIPO26010061"
+      },
+      {
+        "product": "FLAT WASHER / RING PLATE (SS400) M6 GALVANIZED LEBAR (NB041)",
+        "productCode": "TRM0593",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26010061"
+      },
+      {
+        "product": "BOLT (BAUT JP) M4XP0.7XL10MM (GALVANIZED) (NB107-1)",
+        "productCode": "TRM0097",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26010061"
+      },
+      {
+        "product": "FLAT WASHER / RING PLATE M8 (SUS304) (NB348)",
+        "productCode": "TRM0592",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26010061"
+      }
+    ],
+    "deliveryDate": "2026-01-09",
+    "notes": "PO : KIPO26010061 DO : 12292-090126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "dn_1770829742436_m064dq7yx",
+    "sjNo": "12291-090126",
+    "soNo": "KIPO26010062",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "SUPER SEAL SIZE : 7MM X 3MM X 15M (15MTR/ROLL) PTFE JOINT SEALENT (NB356-1)",
+        "productCode": "TRM0073",
+        "qty": 5,
+        "unit": "ROL",
+        "soNo": "KIPO26010062"
+      },
+      {
+        "product": "STRAPPING BAND SIZE : 15MMW X 0.6MMT X 2.500MTR/ROLL (NB064)",
+        "productCode": "TRM1089",
+        "qty": 2,
+        "unit": "ROL",
+        "soNo": "KIPO26010062"
+      },
+      {
+        "product": "STEREO FOAM 3MM (NB233)",
+        "productCode": "TRM0072",
+        "qty": 1,
+        "unit": "ROL",
+        "soNo": "KIPO26010062"
+      },
+      {
+        "product": "METERAN 5M (NB467)",
+        "productCode": "TRM0051",
+        "qty": 1,
+        "unit": "PCS",
+        "soNo": "KIPO26010062"
+      }
+    ],
+    "deliveryDate": "2026-01-09",
+    "notes": "PO : KIPO26010062 DO : 12291-090126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "dn_1770829742436_8f7exg105",
+    "sjNo": "12300-120126",
+    "soNo": "KIPO26010022",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "TERMINAL LUG RING TYPE KSS R1.25-6 [100PCS./PACK] (SKUN RING POLOR FOR WIRE 0.50-1.50MM2) (NB144-1)",
+        "productCode": "TRM1213",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26010022"
+      }
+    ],
+    "deliveryDate": "2026-01-12",
+    "notes": "PO : KIPO26010022 DO : 12300-120126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "dn_1770829742436_xfhk00eil",
+    "sjNo": "12301-120126",
+    "soNo": "KIPO26010071",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "BOLT (BAUT L) M8XP1.25XL30MM (GALVANIZED) (NB407)",
+        "productCode": "TRM0116",
+        "qty": 300,
+        "unit": "PCS",
+        "soNo": "KIPO26010071"
+      },
+      {
+        "product": "BOLT (BAUT L) M8XP1.25XL25MM (GALVANIZED) (NB031-1)",
+        "productCode": "TRM0118",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26010071"
+      },
+      {
+        "product": "BOLT (BAUT L) M10XP1.5XL20MM (GALVANIZED) (HC088)",
+        "productCode": "TRM0430",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26010071"
+      },
+      {
+        "product": "BOLT (BAUT HEXAGONAL) M6XP1.0XL15MM (GALVANIZED) (HA041)",
+        "productCode": "TRM0543",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26010071"
+      },
+      {
+        "product": "BOLT (BAUT HEXAGONAL) M10XP1.5XL25MM (GALVANIZED) (HA078)",
+        "productCode": "TRM1195",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26010071"
+      }
+    ],
+    "deliveryDate": "2026-01-12",
+    "notes": "PO : KIPO26010071 DO : 12301-120126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "dn_1770829742436_xjsqs8zxf",
+    "sjNo": "12304-130126",
+    "soNo": "KIPO26010080",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "TESPEN (NB109-1)",
+        "productCode": "TRM3027",
+        "qty": 3,
+        "unit": "PCS",
+        "soNo": "KIPO26010080"
+      }
+    ],
+    "deliveryDate": "2026-01-13",
+    "notes": "PO : KIPO26010080 DO : 12304-130126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "dn_1770829742436_436qmb4g6",
+    "sjNo": "12308-130126",
+    "soNo": "KIPO26010086",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"CASTER WHEEL NYLON (KASTOR RODA) 4\"\"\"\" W/O BRAKE (ODØ 101.6MM) SWIPEL FLANGE (SLOT 70MMX85MM Ø12) (CD037)\"",
+        "productCode": "TRM0020",
+        "qty": 50,
+        "unit": "PCS",
+        "soNo": "KIPO26010086"
+      },
+      {
+        "product": "\"CASTER WHEEL NYLON (KASTOR RODA) 4\"\"\"\" C/W BRAKE (ODØ 101.6MM) SWIPEL FLANGE (SLOT 70MMX85MM Ø12) (CD038)\"",
+        "productCode": "TRM0019",
+        "qty": 50,
+        "unit": "PCS",
+        "soNo": "KIPO26010086"
+      },
+      {
+        "product": "SUPER SEAL SIZE : 7MM X 3MM X 15M (15MTR/ROLL) PTFE JOINT SEALENT (NB356-1)",
+        "productCode": "TRM0073",
+        "qty": 2,
+        "unit": "ROL",
+        "soNo": "KIPO26010086"
+      },
+      {
+        "product": "BOLT (BAUT JP) M4XP.07XL50MM (GALVANIZED) (NB488-1)",
+        "productCode": "TRM0099",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26010086"
+      }
+    ],
+    "deliveryDate": "2026-01-13",
+    "notes": "PO : KIPO26010086 DO : 12308-130126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "dn_1770829742436_25u3rlpm3",
+    "sjNo": "12307-130126",
+    "soNo": "KIPO26010069",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "SPRING WASHER / RING PER M8 (S20C) (ZINC PLATED) (JH057)",
+        "productCode": "TRM0542",
+        "qty": 2000,
+        "unit": "PCS",
+        "soNo": "KIPO26010069"
+      },
+      {
+        "product": "FLAT WASHER / RING PLATE (S20C) M8 (ZINC PLATED) (JJ007)",
+        "productCode": "TRM0350",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26010069"
+      },
+      {
+        "product": "FLAT WASHER / RING PLATE M6 (SUS304) (NB089-1)",
+        "productCode": "TRM0161",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26010069"
+      },
+      {
+        "product": "SPRING WASHER / RING PER M6 (SUS304) (JH156)",
+        "productCode": "TRM0591",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26010069"
+      },
+      {
+        "product": "SPRING WASHER / RING PER M4 (SUS304) (NB829-1)",
+        "productCode": "TRM0590",
+        "qty": 2000,
+        "unit": "PCS",
+        "soNo": "KIPO26010069"
+      }
+    ],
+    "deliveryDate": "2026-01-13",
+    "notes": "PO : KIPO26010069 DO : 12307-130126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "dn_1770829742436_chsjjexo9",
+    "sjNo": "12306-130126",
+    "soNo": "KIPO26010094",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "KEYLESS CAM LOCK TYPE MS720 (CL005)",
+        "productCode": "TRM0040",
+        "qty": 100,
+        "unit": "PCS",
+        "soNo": "KIPO26010094"
+      },
+      {
+        "product": "EYE BOLT M12X1.75XL20MM MATERIAL CASTING (ZINC PLATED) (HF003-1)",
+        "productCode": "TRM0030",
+        "qty": 200,
+        "unit": "PCS",
+        "soNo": "KIPO26010094"
+      },
+      {
+        "product": "EYE BOLT M16X2.0XL20MM MATERIAL CASTING (ZINC PLATED) (HF004)",
+        "productCode": "TRM0031",
+        "qty": 100,
+        "unit": "PCS",
+        "soNo": "KIPO26010094"
+      },
+      {
+        "product": "KNOB STAR COLOR BLACK FOR FILTER CASE (M10) (IDR0015-6401)",
+        "productCode": "TRM0041",
+        "qty": 150,
+        "unit": "PCS",
+        "soNo": "KIPO26010094"
+      },
+      {
+        "product": "HINGE (ENGSEL PANEL) BLACK 40X40X9MM (IDR0015-6400)",
+        "productCode": "TRM0038",
+        "qty": 100,
+        "unit": "PCS",
+        "soNo": "KIPO26010094"
+      },
+      {
+        "product": "HASP (LOCK DOOR HOPPER) TYPE PP-21-2 (SUS304) (DJ004)",
+        "productCode": "TRM0037",
+        "qty": 100,
+        "unit": "PCS",
+        "soNo": "KIPO26010094"
+      }
+    ],
+    "deliveryDate": "2026-01-13",
+    "notes": "PO : KIPO26010094 DO : 12306-130126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "dn_1770829742436_8zquuzi8l",
+    "sjNo": "12305-130126",
+    "soNo": "KIPO26010062",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "OBENG SHOCK M8 (NB314-5)",
+        "productCode": "TRM4468",
+        "qty": 1,
+        "unit": "PCS",
+        "soNo": "KIPO26010062"
+      }
+    ],
+    "deliveryDate": "2026-01-13",
+    "notes": "PO : KIPO26010062 DO : 12305-130126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "dn_1770829742436_3miawvi9z",
+    "sjNo": "12305-140126",
+    "soNo": "KIPO26010062",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "PLYWOOD (KAYU TRIPLEK) L=240 W=120 T=9MM (NB019)",
+        "productCode": "TRM0057",
+        "qty": 90,
+        "unit": "LBR",
+        "soNo": "KIPO26010062"
+      },
+      {
+        "product": "WAINSCOT (KAYU LIST) L=250 W=7 T=2 (NB018)",
+        "productCode": "TRM0340",
+        "qty": 620,
+        "unit": "BTG",
+        "soNo": "KIPO26010062"
+      },
+      {
+        "product": "BEAMWOOD (KAYU BALOK) L=150 W=8 T=5 (NB017)",
+        "productCode": "TRM0004",
+        "qty": 660,
+        "unit": "BTG",
+        "soNo": "KIPO26010062"
+      },
+      {
+        "product": "BEAMWOOD (KAYU BALOK) L=200 X W=8 X T=5 (NB1343)",
+        "productCode": "TRM0005",
+        "qty": 33,
+        "unit": "BTG",
+        "soNo": "KIPO26010062"
+      }
+    ],
+    "deliveryDate": "2026-01-14",
+    "notes": "PO : KIPO26010062 DO : 12305-140126",
+    "timestamp": 1770829742436
+  },
+  {
+    "id": "dn_1770829742437_upldeqam0",
+    "sjNo": "12320-150126",
+    "soNo": "KIPO26010118",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "ACETONE (20LTR/TIN) (NB156)",
+        "productCode": "TRM0002",
+        "qty": 4,
+        "unit": "TIN",
+        "soNo": "KIPO26010118"
+      },
+      {
+        "product": "ALCOHOL 100% (NB155)",
+        "productCode": "TRM0001",
+        "qty": 1,
+        "unit": "TIN",
+        "soNo": "KIPO26010118"
+      }
+    ],
+    "deliveryDate": "2026-01-15",
+    "notes": "PO : KIPO26010118 DO : 12320-150126",
+    "timestamp": 1770829742437
+  },
+  {
+    "id": "dn_1770829742437_2u3dy6oo3",
+    "sjNo": "12318-1501226",
+    "soNo": "KIPO26010071",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "BOLT (BAUT L) M10XP1.5XL30MM (GALVANIZED)(NB391-1)",
+        "productCode": "TRM2462",
+        "qty": 300,
+        "unit": "PCS",
+        "soNo": "KIPO26010071"
+      }
+    ],
+    "deliveryDate": "2026-01-15",
+    "notes": "PO : KIPO26010071 DO : 12318-1501226",
+    "timestamp": 1770829742437
+  },
+  {
+    "id": "dn_1770829742437_6cvd13e70",
+    "sjNo": "12328-210126",
+    "soNo": "KIPO26010132",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"BRONZE SWING CHECK VALVE 32A (1 1/4\"\"\"\") (CS067)\"",
+        "productCode": "TRM0295",
+        "qty": 12,
+        "unit": "PCS",
+        "soNo": "KIPO26010132"
+      },
+      {
+        "product": "\"BRONZE SWING CHECK VALVE 25A(1\"\"\"\") (CS066)\"",
+        "productCode": "TRM0010",
+        "qty": 18,
+        "unit": "PCS",
+        "soNo": "KIPO26010132"
+      },
+      {
+        "product": "\"BRONZE SWING CHECK VALVE 40A(1 1/2\"\"\"\") (CS068)\"",
+        "productCode": "TRM0126",
+        "qty": 20,
+        "unit": "PCS",
+        "soNo": "KIPO26010132"
+      }
+    ],
+    "deliveryDate": "2026-01-21",
+    "notes": "PO : KIPO26010132 DO :12328-210126",
+    "timestamp": 1770829742437
+  },
+  {
+    "id": "dn_1770829742437_okxbtcx9s",
+    "sjNo": "12333-230126",
+    "soNo": "KIPO26010162",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "ACETONE (20LTR/TIN) (NB156)",
+        "productCode": "TRM0002",
+        "qty": 5,
+        "unit": "TIN",
+        "soNo": "KIPO26010162"
+      }
+    ],
+    "deliveryDate": "2026-01-23",
+    "notes": "PO : KIPO26010162 DO : 12333-230126",
+    "timestamp": 1770829742437
+  },
+  {
+    "id": "dn_1770829742437_7dbzqnspg",
+    "sjNo": "12338-260126",
+    "soNo": "KIPO26010132",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"BRONZE SWING CHECK VALVE 32A (1 1/4\"\"\"\") (CS067)\"",
+        "productCode": "TRM0295",
+        "qty": 8,
+        "unit": "PCS",
+        "soNo": "KIPO26010132"
+      },
+      {
+        "product": "\"BRONZE SWING CHECK VALVE 25A(1\"\"\"\") (CS066)\"",
+        "productCode": "TRM0010",
+        "qty": 32,
+        "unit": "PCS",
+        "soNo": "KIPO26010132"
+      },
+      {
+        "product": "\"BRONZE SWING CHECK VALVE 50A(2\"\"\"\") (CS069)\"",
+        "productCode": "TRM0353",
+        "qty": 30,
+        "unit": "PCS",
+        "soNo": "KIPO26010132"
+      },
+      {
+        "product": "\"BRONZE SWING CHECK VALVE 65A(2 1/2\"\"\"\") (CS070)\"",
+        "productCode": "TRM0833",
+        "qty": 10,
+        "unit": "PCS",
+        "soNo": "KIPO26010132"
+      }
+    ],
+    "deliveryDate": "2026-01-26",
+    "notes": "PO : KIPO26010132 DO : 12338-260126",
+    "timestamp": 1770829742437
+  },
+  {
+    "id": "dn_1770829742437_7jy9w5607",
+    "sjNo": "12337-260126",
+    "soNo": "KIPO26010162",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"BRONZE SWING CHECK VALVE 32A (1 1/4\"\"\"\") (CS067)\"",
+        "productCode": "TRM0295",
+        "qty": 30,
+        "unit": "PCS",
+        "soNo": "KIPO26010162"
+      },
+      {
+        "product": "\"BRONZE SWING CHECK VALVE 50A(2\"\"\"\") (CS069)\"",
+        "productCode": "TRM0353",
+        "qty": 10,
+        "unit": "PCS",
+        "soNo": "KIPO26010162"
+      }
+    ],
+    "deliveryDate": "2026-01-26",
+    "notes": "PO : KIPO26010162 DO : 12337-260126",
+    "timestamp": 1770829742437
+  },
+  {
+    "id": "dn_1770829742437_6brue3p80",
+    "sjNo": "123346-270126",
+    "soNo": "KIPO26010182",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "LEM EPOTEC (NB132)",
+        "productCode": "TRM0042",
+        "qty": 1,
+        "unit": "BOX",
+        "soNo": "KIPO26010182"
+      },
+      {
+        "product": "BOLT (BAUT L) M6XP1.0XL16MM (GALVANIZED) (NB030)",
+        "productCode": "TRM0113",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26010182"
+      },
+      {
+        "product": "BOLT (BAUT L) M5XP0.8XL12MM (GALVANIZED) (NB008-1)",
+        "productCode": "TRM0111",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26010182"
+      },
+      {
+        "product": "BOLT (BAUT JP) M3XP0.3XL60MM (GALVANIZED) (NB319)",
+        "productCode": "TRM0341",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26010182"
+      },
+      {
+        "product": "BOLT (BAUT L) M8XP1.25XL20MM (GALVANIZED) (NB360)",
+        "productCode": "TRM0299",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26010182"
+      },
+      {
+        "product": "BOLT (BAUT JT PHILIP) M5XP0.8XL10MM (GALVANIZED) (NC387)",
+        "productCode": "TRM0545",
+        "qty": 2000,
+        "unit": "PCS",
+        "soNo": "KIPO26010182"
+      },
+      {
+        "product": "BOLT (BAUT JP) M5XP0.8XL10MM (SUS304) (NB575)",
+        "productCode": "TRM0101",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26010182"
+      },
+      {
+        "product": "BOLT (BAUT L) M6XP1.0XL20MM (SUS304) (NB204)",
+        "productCode": "TRM0114",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26010182"
+      },
+      {
+        "product": "BOLT(BAUT JT) M4XP0.7XL12MM (GALVANIZED) (NB180-1)",
+        "productCode": "TRM4486",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26010182"
+      }
+    ],
+    "deliveryDate": "2026-01-27",
+    "notes": "PO : KIPO26010182 DO : 123346-270126",
+    "timestamp": 1770829742437
+  },
+  {
+    "id": "dn_1770829742437_u9t00j3cx",
+    "sjNo": "12351-300126",
+    "soNo": "KIPO26010162",
+    "customer": "PT. KAWATA INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"BRONZE SWING CHECK VALVE 50A(2\"\"\"\") (CS069)\"",
+        "productCode": "TRM0353",
+        "qty": 10,
+        "unit": "PCS",
+        "soNo": "KIPO26010162"
+      }
+    ],
+    "deliveryDate": "2026-01-30",
+    "notes": "PO : KIPO26010162 DO : 12351-300126",
+    "timestamp": 1770829742437
+  },
+  {
+    "id": "dn_1770829742438_i3mmr01eg",
+    "sjNo": "12317-140126",
+    "soNo": "SA26011 MM",
+    "customer": "PT. SUBANG AUTOCOMP INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "KARET GELANG BESAR",
+        "productCode": "TRM0172",
+        "qty": 10,
+        "unit": "KG",
+        "soNo": "SA26011 MM"
+      }
+    ],
+    "deliveryDate": "2026-01-14",
+    "notes": "PO : SA26011 MM DO : 12317-140126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_cjb9rt97c",
+    "sjNo": "12322-160126",
+    "soNo": "SUAI.TLJ-852512-001",
+    "customer": "PT. SUBANG AUTOCOMP INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "KARET KUMIS TRANSPARAN 5CM (COKLAT)",
+        "productCode": "TRM3454",
+        "qty": 62,
+        "unit": "KG",
+        "soNo": "SUAI.TLJ-852512-001"
+      }
+    ],
+    "deliveryDate": "2026-01-16",
+    "notes": "PO : SUAI.TLJ-852512-001 DO : 12322-160126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_srpd2stfw",
+    "sjNo": "12322-190126",
+    "soNo": "PO-000004079",
+    "customer": "\"PT. SUPRAVISI RAMA OPTIK, MANUFACTURING\"",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "LAMPU PHILIPS LED PANEL 40W",
+        "productCode": "TRM3217",
+        "qty": 4,
+        "unit": "PCS",
+        "soNo": "PO-000004079"
+      }
+    ],
+    "deliveryDate": "2026-01-19",
+    "notes": "PO : PO-000004079 DO : 12322-190126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_vmy5vt8bt",
+    "sjNo": "12323-190126",
+    "soNo": "PO-000004089",
+    "customer": "\"PT. SUPRAVISI RAMA OPTIK, MANUFACTURING\"",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "PLASTIK SAMPAH 90x120",
+        "productCode": "TRM1580",
+        "qty": 150,
+        "unit": "PCK",
+        "soNo": "PO-000004089"
+      },
+      {
+        "product": "THERMAL PAPER ROLL 80X140",
+        "productCode": "TRM1799",
+        "qty": 20,
+        "unit": "ROL",
+        "soNo": "PO-000004089"
+      },
+      {
+        "product": "SARUNG TANGAN KAIN KASAR",
+        "productCode": "TRM1715",
+        "qty": 50,
+        "unit": "PCK",
+        "soNo": "PO-000004089"
+      },
+      {
+        "product": "KARUNG PLASTIK POLOS 60X90",
+        "productCode": "TRM1581",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "PO-000004089"
+      }
+    ],
+    "deliveryDate": "2026-01-19",
+    "notes": "PO : PO-000004089 DO : 12323-190126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_b5p103jhc",
+    "sjNo": "12332-220126",
+    "soNo": "PO-000004114",
+    "customer": "\"PT. SUPRAVISI RAMA OPTIK, MANUFACTURING\"",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "FILTER INNOVTECH 50 MICRON ABSOLUTE",
+        "productCode": "TRM4482",
+        "qty": 10,
+        "unit": "PCS",
+        "soNo": "PO-000004114"
+      }
+    ],
+    "deliveryDate": "2026-01-22",
+    "notes": "PO : PO-000004114 DO : 12332-220126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_w1lskpele",
+    "sjNo": "12324-150126",
+    "soNo": "PO-379/SAI-T/PUR-SAI/XI/25",
+    "customer": "PT. SURABAYA AUTOCOMP INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "MATE-0017626 KARET KUMIS LIGHT BROWN",
+        "productCode": "TRM3980",
+        "qty": 135,
+        "unit": "KG",
+        "soNo": "PO-379/SAI-T/PUR-SAI/XI/25"
+      }
+    ],
+    "deliveryDate": "2026-01-15",
+    "notes": "PO : PO-379/SAI-T/PUR-SAI/XI/25 DO : 12324-150126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_78hp9t8v5",
+    "sjNo": "12323-150126",
+    "soNo": "PO-035/SAI-T/PUR-SAI/XII/25",
+    "customer": "PT. SURABAYA AUTOCOMP INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "MATE-0017626 KARET KUMIS LIGHT BROWN",
+        "productCode": "TRM3980",
+        "qty": 20,
+        "unit": "KG",
+        "soNo": "PO-035/SAI-T/PUR-SAI/XII/25"
+      },
+      {
+        "product": "MATE-0017626 KARET KUMIS LIGHT BROWN",
+        "productCode": "TRM3980",
+        "qty": 20,
+        "unit": "KG",
+        "soNo": "PO-035/SAI-T/PUR-SAI/XII/25"
+      },
+      {
+        "product": "MATE-0017626 KARET KUMIS LIGHT BROWN",
+        "productCode": "TRM3980",
+        "qty": 20,
+        "unit": "KG",
+        "soNo": "PO-035/SAI-T/PUR-SAI/XII/25"
+      },
+      {
+        "product": "MATE-0017626 KARET KUMIS LIGHT BROWN",
+        "productCode": "TRM3980",
+        "qty": 20,
+        "unit": "KG",
+        "soNo": "PO-035/SAI-T/PUR-SAI/XII/25"
+      },
+      {
+        "product": "MATE-0017626 KARET KUMIS LIGHT BROWN",
+        "productCode": "TRM3980",
+        "qty": 20,
+        "unit": "KG",
+        "soNo": "PO-035/SAI-T/PUR-SAI/XII/25"
+      },
+      {
+        "product": "MATE-0017626 KARET KUMIS LIGHT BROWN",
+        "productCode": "TRM3980",
+        "qty": 20,
+        "unit": "KG",
+        "soNo": "PO-035/SAI-T/PUR-SAI/XII/25"
+      },
+      {
+        "product": "MATE-0017626 KARET KUMIS LIGHT BROWN",
+        "productCode": "TRM3980",
+        "qty": 10,
+        "unit": "KG",
+        "soNo": "PO-035/SAI-T/PUR-SAI/XII/25"
+      }
+    ],
+    "deliveryDate": "2026-01-15",
+    "notes": "PO : PO-035/SAI-T/PUR-SAI/XII/25 DO : 12323-150126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_oxql99ege",
+    "sjNo": "12299-120126",
+    "soNo": "PO26-006-12",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "RUMAH LAMPU 120 CM",
+        "productCode": "TRM1087",
+        "qty": 16,
+        "unit": "PCS",
+        "soNo": "PO26-006-12"
+      },
+      {
+        "product": "KABEL TIES 300 SIGMA",
+        "productCode": "TRM2000",
+        "qty": 5,
+        "unit": "PCK",
+        "soNo": "PO26-006-12"
+      },
+      {
+        "product": "KONEKTOR LAMPU 30 CM",
+        "productCode": "TRM3898",
+        "qty": 16,
+        "unit": "PCS",
+        "soNo": "PO26-006-12"
+      },
+      {
+        "product": "NIPPON RESIBON MATA GERINDA",
+        "productCode": "TRM4130",
+        "qty": 20,
+        "unit": "PCS",
+        "soNo": "PO26-006-12"
+      },
+      {
+        "product": "SIKAT KAWAT UNION HI-11",
+        "productCode": "TRM3864",
+        "qty": 5,
+        "unit": "PCS",
+        "soNo": "PO26-006-12"
+      },
+      {
+        "product": "DYNABOLT M8 X 40",
+        "productCode": "TRM2253",
+        "qty": 50,
+        "unit": "PCS",
+        "soNo": "PO26-006-12"
+      },
+      {
+        "product": "DYNABOLT M10 X 60",
+        "productCode": "TRM2254",
+        "qty": 50,
+        "unit": "PCS",
+        "soNo": "PO26-006-12"
+      },
+      {
+        "product": "SAKLAR OUTBOW ISI 4",
+        "productCode": "TRM1372",
+        "qty": 5,
+        "unit": "PCS",
+        "soNo": "PO26-006-12"
+      },
+      {
+        "product": "LAMPU LED 120 CM SAFE LIGHT",
+        "productCode": "TRM4483",
+        "qty": 16,
+        "unit": "PCS",
+        "soNo": "PO26-006-12"
+      }
+    ],
+    "deliveryDate": "2026-01-12",
+    "notes": "PO : PO26-006-12 DO : 12299-120126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_fx6rxon2n",
+    "sjNo": "12290-120126",
+    "soNo": "PO25-575-1",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "LAMPU LED 120 CM",
+        "productCode": "TRM1085",
+        "qty": 8,
+        "unit": "PCS",
+        "soNo": "PO25-575-1"
+      },
+      {
+        "product": "RUMAH LAMPU 120 CM",
+        "productCode": "TRM1087",
+        "qty": 8,
+        "unit": "PCS",
+        "soNo": "PO25-575-1"
+      },
+      {
+        "product": "KABEL KONEKTOR LAMPU LED",
+        "productCode": "TRM3899",
+        "qty": 15,
+        "unit": "PCS",
+        "soNo": "PO25-575-1"
+      },
+      {
+        "product": "KABEL TIES 200 SIGMA",
+        "productCode": "TRM1999",
+        "qty": 5,
+        "unit": "PCK",
+        "soNo": "PO25-575-1"
+      },
+      {
+        "product": "SELANG ANGIN SPIRAL DIAMETER 12MM PANJANG 6M",
+        "productCode": "TRM4429",
+        "qty": 8,
+        "unit": "ROL",
+        "soNo": "PO25-575-1"
+      },
+      {
+        "product": "SIKAT KAWAT UNION HI-11",
+        "productCode": "TRM3864",
+        "qty": 4,
+        "unit": "PCS",
+        "soNo": "PO25-575-1"
+      },
+      {
+        "product": "SAKLAR OUTBOW ISI 4",
+        "productCode": "TRM3909",
+        "qty": 5,
+        "unit": "PCS",
+        "soNo": "PO25-575-1"
+      },
+      {
+        "product": "LAMPU INLITE 30W",
+        "productCode": "TRM4430",
+        "qty": 2,
+        "unit": "PCS",
+        "soNo": "PO25-575-1"
+      },
+      {
+        "product": "COUPLER QUICK 2 CABANG",
+        "productCode": "TRM2823",
+        "qty": 2,
+        "unit": "PCS",
+        "soNo": "PO25-575-1"
+      },
+      {
+        "product": "TIE MOUNT FORT 25X25",
+        "productCode": "TRM4284",
+        "qty": 2,
+        "unit": "PAK",
+        "soNo": "PO25-575-1"
+      },
+      {
+        "product": "SLING 4 KAKI 6X37 WRC RRT 12MM X 81 CM",
+        "productCode": "TRM0800",
+        "qty": 2,
+        "unit": "PCS",
+        "soNo": "PO25-575-1"
+      },
+      {
+        "product": "RUMAH LAMPU 120 CM",
+        "productCode": "TRM1087",
+        "qty": 1,
+        "unit": "PCS",
+        "soNo": "PO25-575-1"
+      },
+      {
+        "product": "FLEXIBLE DISC WHEEL 100X2X16 NIPPON RESIBON",
+        "productCode": "TRM4258",
+        "qty": 20,
+        "unit": "PCS",
+        "soNo": "PO25-575-1"
+      },
+      {
+        "product": "LAMPU LED 120 CM SAFE LIGHT",
+        "productCode": "TRM4483",
+        "qty": 3,
+        "unit": "PCS",
+        "soNo": "PO25-575-1"
+      }
+    ],
+    "deliveryDate": "2026-01-12",
+    "notes": "PO : PO25-575-1 DO : 12290-120126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_pts5ak3al",
+    "sjNo": "12298-120126",
+    "soNo": "PO26-004-12",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "KABEL FEDERAL ISI 3",
+        "productCode": "TRM3897",
+        "qty": 1,
+        "unit": "ROL",
+        "soNo": "PO26-004-12"
+      },
+      {
+        "product": "TERMINAL 3 LUBANG 15330",
+        "productCode": "TRM2417",
+        "qty": 5,
+        "unit": "PCS",
+        "soNo": "PO26-004-12"
+      },
+      {
+        "product": "TERMINAL 2 LUBANG 15321",
+        "productCode": "TRM4459",
+        "qty": 3,
+        "unit": "PCS",
+        "soNo": "PO26-004-12"
+      },
+      {
+        "product": "SAKLAR LAMPU BROCO DOUBLE 16220",
+        "productCode": "TRM4460",
+        "qty": 4,
+        "unit": "PCS",
+        "soNo": "PO26-004-12"
+      },
+      {
+        "product": "STECKER BROCO",
+        "productCode": "TRM0566",
+        "qty": 5,
+        "unit": "PCS",
+        "soNo": "PO26-004-12"
+      },
+      {
+        "product": "KIPAS ANGIN PANASONIC F EQ-405",
+        "productCode": "TRM0175",
+        "qty": 5,
+        "unit": "PCS",
+        "soNo": "PO26-004-12"
+      },
+      {
+        "product": "TERMINAL CH FEMALE MALE",
+        "productCode": "TRM4040",
+        "qty": 80,
+        "unit": "PCS",
+        "soNo": "PO26-004-12"
+      }
+    ],
+    "deliveryDate": "2026-01-12",
+    "notes": "PO : PO26-004-12 DO : 12298-120126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_77t6c2bfx",
+    "sjNo": "12310-140126",
+    "soNo": "PO26-013-1",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"STEEL WIRE BRUSH 8\"\"\"\" MULTI PRO\"",
+        "productCode": "TRM3525",
+        "qty": 11,
+        "unit": "PCS",
+        "soNo": "PO26-013-1"
+      }
+    ],
+    "deliveryDate": "2026-01-14",
+    "notes": "PO : PO26-013-1 DO : 12310-140126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_y9nfvxuem",
+    "sjNo": "12311-140126",
+    "soNo": "PO26-003-12",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "ACRYLIC BENING 1.2 X 2.4 M X 5MM",
+        "productCode": "TRM2612",
+        "qty": 5,
+        "unit": "SHEET",
+        "soNo": "PO26-003-12"
+      },
+      {
+        "product": "PYLOX PUTIH",
+        "productCode": "TRM2854",
+        "qty": 5,
+        "unit": "PCS",
+        "soNo": "PO26-003-12"
+      }
+    ],
+    "deliveryDate": "2026-01-14",
+    "notes": "PO : PO26-003-12 DO : 12311-140126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_fhqz2bicm",
+    "sjNo": "12336-260126",
+    "soNo": "PO26-049-1",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "SELANG TOGAWA 6X11",
+        "productCode": "TRM3953",
+        "qty": 1,
+        "unit": "PCS",
+        "soNo": "PO26-049-1"
+      },
+      {
+        "product": "REGULATOR CROWN NON HEATER",
+        "productCode": "TRM4485",
+        "qty": 1,
+        "unit": "PCS",
+        "soNo": "PO26-049-1"
+      }
+    ],
+    "deliveryDate": "2026-01-26",
+    "notes": "PO : PO26-049-1 DO : 12336-260126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_ov6atwaut",
+    "sjNo": "12352-300126",
+    "soNo": "PO26-040-1",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "MICRO CLEANER JIP 141",
+        "productCode": "TRM1466",
+        "qty": 3,
+        "unit": "CAN",
+        "soNo": "PO26-040-1"
+      },
+      {
+        "product": "BATERAI LITHIUM LS 14250 3.6V",
+        "productCode": "TRM1905",
+        "qty": 6,
+        "unit": "PCS",
+        "soNo": "PO26-040-1"
+      }
+    ],
+    "deliveryDate": "2026-01-30",
+    "notes": "PO : PO26-040-1 DO : 12352-300126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_788uk0e8g",
+    "sjNo": "DLV-2601123420",
+    "soNo": "PO02-2026/A/004/GEN",
+    "customer": "PT. TRI SAUDARA SENTOSA INDUSTRI",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"POCKET KANBAN/LABEL (P28XL9.5CM, TEBAL 0.5MM)\"",
+        "productCode": "TRM4287",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "PO02-2026/A/004/GEN"
+      }
+    ],
+    "deliveryDate": "2026-01-12",
+    "notes": "PO : PO02-2026/A/004/GEN DO : DLV-2601123420",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_xdwusybpg",
+    "sjNo": "12349-290126",
+    "soNo": "BKS/PO/000104320",
+    "customer": "PT. UNIVERSAL AGRI BISNISINDO",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "SUSU ULTRA UK 125 ML PLAIN",
+        "productCode": "TRM2452",
+        "qty": 5940,
+        "unit": "PCS",
+        "soNo": "BKS/PO/000104320"
+      },
+      {
+        "product": "SUSU ULTRA UK 250 ML RASA COKLAT",
+        "productCode": "TRM0354",
+        "qty": 145,
+        "unit": "PCS",
+        "soNo": "BKS/PO/000104320"
+      },
+      {
+        "product": "SUSU BEAR BRAND",
+        "productCode": "TRM0355",
+        "qty": 72,
+        "unit": "PCS",
+        "soNo": "BKS/PO/000104320"
+      },
+      {
+        "product": "SUSU BEAR BRAND",
+        "productCode": "TRM0355",
+        "qty": 266,
+        "unit": "PCS",
+        "soNo": "BKS/PO/000104320"
+      },
+      {
+        "product": "SUSU BEAR BRAND",
+        "productCode": "TRM0355",
+        "qty": 322,
+        "unit": "PCS",
+        "soNo": "BKS/PO/000104320"
+      },
+      {
+        "product": "SUSU BEAR BRAND",
+        "productCode": "TRM0355",
+        "qty": 108,
+        "unit": "PCS",
+        "soNo": "BKS/PO/000104320"
+      },
+      {
+        "product": "SUSU BEAR BRAND",
+        "productCode": "TRM0355",
+        "qty": 24,
+        "unit": "PCS",
+        "soNo": "BKS/PO/000104320"
+      },
+      {
+        "product": "PLASTIK KRESEK",
+        "productCode": "TRM0385",
+        "qty": 6,
+        "unit": "PAK",
+        "soNo": "BKS/PO/000104320"
+      },
+      {
+        "product": "GAS 3KG",
+        "productCode": "TRM0384",
+        "qty": 2,
+        "unit": "PCS",
+        "soNo": "BKS/PO/000104320"
+      },
+      {
+        "product": "TELUR",
+        "productCode": "TRM0383",
+        "qty": 51,
+        "unit": "KG",
+        "soNo": "BKS/PO/000104320"
+      }
+    ],
+    "deliveryDate": "2026-01-29",
+    "notes": "PO : BKS/PO/000104320 DO : 12349-290126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_jgvtxf1kd",
+    "sjNo": "12287-090126",
+    "soNo": "CTP/PO/000021733",
+    "customer": "PT. WELGRO FEEDMILL (INDONESIA)",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "SUSU ULTRA UK 125 ML PLAIN",
+        "productCode": "TRM2452",
+        "qty": 3000,
+        "unit": "PCS",
+        "soNo": "CTP/PO/000021733"
+      }
+    ],
+    "deliveryDate": "2026-01-09",
+    "notes": "PO : CTP/PO/000021733 DO : 12287-090126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_3rq9adfv2",
+    "sjNo": "12263-060125",
+    "soNo": "PL2600003",
+    "customer": "\"SANOH INDONESIA, PT\"",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "KARET GELANG BESAR",
+        "productCode": "TRM0172",
+        "qty": 150,
+        "unit": "PCS",
+        "soNo": "PL2600003"
+      },
+      {
+        "product": "KAWAT LAS NICHO 2.6 MM",
+        "productCode": "TRM0245",
+        "qty": 35,
+        "unit": "PCS",
+        "soNo": "PL2600003"
+      },
+      {
+        "product": "MASKING TAVE",
+        "productCode": "TRM0211",
+        "qty": 192,
+        "unit": "PCS",
+        "soNo": "PL2600003"
+      },
+      {
+        "product": "MASKER KAIN",
+        "productCode": "TRM0208",
+        "qty": 150,
+        "unit": "PCS",
+        "soNo": "PL2600003"
+      },
+      {
+        "product": "MARKING LT. BLUE (ARTLINE)",
+        "productCode": "TRM0183",
+        "qty": 120,
+        "unit": "PCS",
+        "soNo": "PL2600003"
+      },
+      {
+        "product": "MARKING SNOWMAN BLACK",
+        "productCode": "TRM0189",
+        "qty": 120,
+        "unit": "PCS",
+        "soNo": "PL2600003"
+      },
+      {
+        "product": "MARKING SNOWMAN BLUE",
+        "productCode": "TRM0185",
+        "qty": 240,
+        "unit": "PCS",
+        "soNo": "PL2600003"
+      },
+      {
+        "product": "MARKING SNOWMAN GREEN",
+        "productCode": "TRM0188",
+        "qty": 120,
+        "unit": "PCS",
+        "soNo": "PL2600003"
+      },
+      {
+        "product": "MARKING SNOWMAN ORANGE",
+        "productCode": "TRM0192",
+        "qty": 120,
+        "unit": "PCS",
+        "soNo": "PL2600003"
+      },
+      {
+        "product": "MARKING SNOWMAN RED",
+        "productCode": "TRM0191",
+        "qty": 120,
+        "unit": "PCS",
+        "soNo": "PL2600003"
+      },
+      {
+        "product": "MARKING SNOWMAN YELLOW",
+        "productCode": "TRM0190",
+        "qty": 240,
+        "unit": "PCS",
+        "soNo": "PL2600003"
+      },
+      {
+        "product": "MARKING YELLOW GREEN (ARTLINE)",
+        "productCode": "TRM0184",
+        "qty": 120,
+        "unit": "PCS",
+        "soNo": "PL2600003"
+      }
+    ],
+    "deliveryDate": "2026-01-06",
+    "notes": "PO : PL2600003 DO : 12263-060125",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_pfh1nqt01",
+    "sjNo": "12313-140126",
+    "soNo": "PL2600119",
+    "customer": "\"SANOH INDONESIA, PT\"",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "FS-500H PLASTIC FILM SEALER",
+        "productCode": "TRM4474",
+        "qty": 1,
+        "unit": "PCS",
+        "soNo": "PL2600119"
+      }
+    ],
+    "deliveryDate": "2026-01-14",
+    "notes": "PO : PL2600119 DO : 12313-140126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_smoxns6qk",
+    "sjNo": "12325-200126",
+    "soNo": "PL2600167",
+    "customer": "\"SANOH INDONESIA, PT\"",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "POWER GLUE",
+        "productCode": "TRM0390",
+        "qty": 36,
+        "unit": "PCS",
+        "soNo": "PL2600167"
+      },
+      {
+        "product": "MAJUN WARNA",
+        "productCode": "TRM0181",
+        "qty": 150,
+        "unit": "KG",
+        "soNo": "PL2600167"
+      }
+    ],
+    "deliveryDate": "2026-01-20",
+    "notes": "PO : PL2600167 DO : 12325-200126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_4qflv6u4m",
+    "sjNo": "12345-270126",
+    "soNo": "PL2600217",
+    "customer": "\"SANOH INDONESIA, PT\"",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "MARKING SNOWMAN PINK",
+        "productCode": "TRM0193",
+        "qty": 240,
+        "unit": "PCS",
+        "soNo": "PL2600217"
+      }
+    ],
+    "deliveryDate": "2026-01-27",
+    "notes": "PO : PL2600217 DO : 12345-270126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_4t7mbmfyn",
+    "sjNo": "12324-200126",
+    "soNo": "083/PO/SBM-TLJP/I/26",
+    "customer": "\"SINAR BENGAWAN MANDIRI, PT\"",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "SARUNG TANGAN 5 BENANG",
+        "productCode": "TRM0182",
+        "qty": 10,
+        "unit": "LSN",
+        "soNo": "083/PO/SBM-TLJP/I/26"
+      },
+      {
+        "product": "MAJUN WARNA",
+        "productCode": "TRM0181",
+        "qty": 50,
+        "unit": "KG",
+        "soNo": "083/PO/SBM-TLJP/I/26"
+      }
+    ],
+    "deliveryDate": "2026-01-20",
+    "notes": "PO : 083/PO/SBM-TLJP/I/26 DO : 12324-200126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_cfm17pgd8",
+    "sjNo": "12355-240126",
+    "soNo": "088/PO/SBM-TLJP/I/26",
+    "customer": "\"SINAR BENGAWAN MANDIRI, PT\"",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"AMPLAS ROLL GRADE 150 UKURAN 4\"\"\"\" X 46 MTR\"",
+        "productCode": "TRM3423",
+        "qty": 1,
+        "unit": "ROL",
+        "soNo": "088/PO/SBM-TLJP/I/26"
+      }
+    ],
+    "deliveryDate": "2026-01-24",
+    "notes": "PO : 088/PO/SBM-TLJP/I/26 DO : 12355-240126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_nt3pv47rw",
+    "sjNo": "12329-210126",
+    "soNo": "PFA.PS-260120001",
+    "customer": "TRIMA ANUGERAH SEJAHTERA",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "STANG SEALANT HILTI",
+        "productCode": "TRM4479",
+        "qty": 1,
+        "unit": "PCS",
+        "soNo": "PFA.PS-260120001"
+      }
+    ],
+    "deliveryDate": "2026-01-21",
+    "notes": "PO : PFA.PS-260120001 DO : 12329-210126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_qeyyl1i77",
+    "sjNo": "12273-061225",
+    "soNo": "POQ012880",
+    "customer": "\"VALMET TECHNOLOGY CENTER, PT\"",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "MICROBACT 1 LITER",
+        "productCode": "TRM0568",
+        "qty": 20,
+        "unit": "PC",
+        "soNo": "POQ012880"
+      }
+    ],
+    "deliveryDate": "2026-01-06",
+    "notes": "PO : POQ012880 DO : 12273-061225",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dn_1770829742438_5cqv9hdz7",
+    "sjNo": "12331-220126",
+    "soNo": "S20030348",
+    "customer": "\"VALMET, PT\"",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "RUBBER CHICACO 3/4",
+        "productCode": "TRM4469",
+        "qty": 60,
+        "unit": "PCS",
+        "soNo": "S20030348"
+      }
+    ],
+    "deliveryDate": "2026-01-22",
+    "notes": "PO : S20030348 DO : 12331-220126",
+    "timestamp": 1770829742438
+  },
+  {
+    "id": "dlv_1771553267226_eqvjcefj3",
+    "sjNo": "12360-020226",
+    "soNo": "KIPO26010223",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "TERMINAL LUG RING TYPE KSS R3.5-6 [100PCS/PACK] (SKUN RING POLOS FOR WIRE 2.50-4.00MM2) (CC029)",
+        "productCode": "TRM0236",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26010223"
+      },
+      {
+        "product": "DIODA IN4002 (DN001)",
+        "productCode": "TRM0145",
+        "qty": 200,
+        "unit": "PCS",
+        "soNo": "KIPO26010223"
+      },
+      {
+        "product": "ROCK WOOL Ø16 X Ø26 (BESAR) (NB390)",
+        "productCode": "TRM0063",
+        "qty": 10,
+        "unit": "PCS",
+        "soNo": "KIPO26010223"
+      }
+    ],
+    "deliveryDate": "2026-02-02",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26010223 DO: 12360-020226"
+  },
+  {
+    "id": "dlv_1771553267227_foqsbhgka",
+    "sjNo": "12361-020226",
+    "soNo": "KIPO26010222",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "LONG DRAT M10X1.5 (GALVANIZE) [Q235] (1 METER/PC) FOR SHAFT HONEYCOMB DFG-SERIES",
+        "productCode": "TRM4494",
+        "qty": 50,
+        "unit": "PCS",
+        "soNo": "KIPO26010222"
+      }
+    ],
+    "deliveryDate": "2026-02-02",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26010222 DO: 12361-020226"
+  },
+  {
+    "id": "dlv_1771553267227_s8szl2ug9",
+    "sjNo": "12358-020226",
+    "soNo": "HKB/PO/01/0256/3456",
+    "customer": "PT. HANYA KARYA BAHANA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "KERTAS VCI 30 x 33",
+        "productCode": "TRM0532",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "HKB/PO/01/0256/3456"
+      }
+    ],
+    "deliveryDate": "2026-02-02",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: HKB/PO/01/0256/3456DO NO. : 12358-020226"
+  },
+  {
+    "id": "dlv_1771553267227_jq58qx937",
+    "sjNo": "12363-020226",
+    "soNo": "KIPO25100184",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "BUBBLE SHEET (NB058)",
+        "productCode": "TRM0079",
+        "qty": 4,
+        "unit": "ROL",
+        "soNo": "KIPO25100184"
+      },
+      {
+        "product": "POLYFOAM 200CMX100CMX2.6CM (NB059)",
+        "productCode": "TRM0220",
+        "qty": 15,
+        "unit": "LBR",
+        "soNo": "KIPO25100184"
+      },
+      {
+        "product": "METALIZING W 1.2XL.50M (NB148)",
+        "productCode": "TRM0212",
+        "qty": 18,
+        "unit": "ROL",
+        "soNo": "KIPO25100184"
+      },
+      {
+        "product": "STRAPPING BAND SIZE : 15MMW X 0.6MMT X 2.500MTR/ROLL (NB064)",
+        "productCode": "TRM1089",
+        "qty": 2,
+        "unit": "ROL",
+        "soNo": "KIPO25100184"
+      },
+      {
+        "product": "PYLOX : BLACK NIPPON/RJ (NB027)",
+        "productCode": "TRM0058",
+        "qty": 5,
+        "unit": "CAN",
+        "soNo": "KIPO25100184"
+      },
+      {
+        "product": "SILICA GEL 250GR/PACK (NB282)",
+        "productCode": "TRM0228",
+        "qty": 250,
+        "unit": "PCK",
+        "soNo": "KIPO25100184"
+      }
+    ],
+    "deliveryDate": "2026-02-02",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO25100184 DO: 12363-020226"
+  },
+  {
+    "id": "dlv_1771553267227_zk23evjas",
+    "sjNo": "12354-020226",
+    "soNo": "C90947",
+    "customer": "PT. KAWASAKI MOTOR INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "BOLT FLANGE 8X20 MC3 G7 (K1410-0025)",
+        "productCode": "TRM0487",
+        "qty": 39000,
+        "unit": "PCS",
+        "soNo": "C90947"
+      }
+    ],
+    "deliveryDate": "2026-02-02",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: C90947 DO: 12354-020226"
+  },
+  {
+    "id": "dlv_1771553267227_pat7ujvvq",
+    "sjNo": "12364-020226",
+    "soNo": "SUAI.TLJP-852601-001",
+    "customer": "PT. SUBANG AUTOCOMP INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "KARET KUMIS TRANSPARAN 5CM (COKLAT)",
+        "productCode": "TRM3454",
+        "qty": 65,
+        "unit": "KG",
+        "soNo": "SUAI.TLJP-852601-001"
+      }
+    ],
+    "deliveryDate": "2026-02-02",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: SUAI.TLJP-852601-001DO NO. : 12364-020226"
+  },
+  {
+    "id": "dlv_1771553267227_i2g7smuul",
+    "sjNo": "12355-020226",
+    "soNo": "PL2600295",
+    "customer": "\"SANOH INDONESIA, PT\"",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "KARET GELANG BESAR",
+        "productCode": "TRM0172",
+        "qty": 200,
+        "unit": "PCS",
+        "soNo": "PL2600295"
+      },
+      {
+        "product": "FOAM SHEET 2MM",
+        "productCode": "TRM0162",
+        "qty": 4,
+        "unit": "PCS",
+        "soNo": "PL2600295"
+      },
+      {
+        "product": "KAWAT LAS NICHO 2.6 MM",
+        "productCode": "TRM0245",
+        "qty": 25,
+        "unit": "PCS",
+        "soNo": "PL2600295"
+      },
+      {
+        "product": "MAJUN WARNA",
+        "productCode": "TRM0181",
+        "qty": 150,
+        "unit": "KG",
+        "soNo": "PL2600295"
+      },
+      {
+        "product": "MASKING TAVE",
+        "productCode": "TRM0211",
+        "qty": 96,
+        "unit": "PCS",
+        "soNo": "PL2600295"
+      },
+      {
+        "product": "MASKER KAIN",
+        "productCode": "TRM0208",
+        "qty": 150,
+        "unit": "PCS",
+        "soNo": "PL2600295"
+      },
+      {
+        "product": "MARKING SNOWMAN BLUE",
+        "productCode": "TRM0185",
+        "qty": 120,
+        "unit": "PCS",
+        "soNo": "PL2600295"
+      },
+      {
+        "product": "MARKING SNOWMAN GREEN",
+        "productCode": "TRM0188",
+        "qty": 120,
+        "unit": "PCS",
+        "soNo": "PL2600295"
+      },
+      {
+        "product": "MARKING SNOWMAN ORANGE",
+        "productCode": "TRM0192",
+        "qty": 120,
+        "unit": "PCS",
+        "soNo": "PL2600295"
+      },
+      {
+        "product": "MARKING SNOWMAN RED",
+        "productCode": "TRM0191",
+        "qty": 120,
+        "unit": "PCS",
+        "soNo": "PL2600295"
+      },
+      {
+        "product": "MARKING SNOWMAN WHITE",
+        "productCode": "TRM0194",
+        "qty": 240,
+        "unit": "PCS",
+        "soNo": "PL2600295"
+      },
+      {
+        "product": "MARKING SNOWMAN YELLOW",
+        "productCode": "TRM0190",
+        "qty": 120,
+        "unit": "PCS",
+        "soNo": "PL2600295"
+      }
+    ],
+    "deliveryDate": "2026-02-02",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: PL2600295 DO: 12355-020226"
+  },
+  {
+    "id": "dlv_1771553267227_k1oq70fsy",
+    "sjNo": "12366-030226",
+    "soNo": "KIPO25100184",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "STEREO FOAM 3MM (NB233)",
+        "productCode": "TRM0072",
+        "qty": 2,
+        "unit": "ROL",
+        "soNo": "KIPO25100184"
+      }
+    ],
+    "deliveryDate": "2026-02-03",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO25100184DO NO. : 12366-030226-KIPO25100184"
+  },
+  {
+    "id": "dlv_1771553267227_g0e1ca24a",
+    "sjNo": "12367-030226",
+    "soNo": "PO-000010914",
+    "customer": "PT. Essilorluxottica Professional Solutions Indonesia",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "LAKBAN BENING BESAR",
+        "productCode": "TRM1376",
+        "qty": 144,
+        "unit": "PCS",
+        "soNo": "PO-000010914"
+      },
+      {
+        "product": "LAKBAN COKLAT BESAR",
+        "productCode": "TRM1375",
+        "qty": 288,
+        "unit": "PCS",
+        "soNo": "PO-000010914"
+      }
+    ],
+    "deliveryDate": "2026-02-03",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: PO-000010914 DO: 12367-030226"
+  },
+  {
+    "id": "dlv_1771553267227_t8tvdd0zx",
+    "sjNo": "12368-030226",
+    "soNo": "PO-000004125",
+    "customer": "\"PT. SUPRAVISI RAMA OPTIK, MANUFACTURING\"",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "PAPER A5",
+        "productCode": "TRM1280",
+        "qty": 520,
+        "unit": "RIM",
+        "soNo": "PO-000004125"
+      }
+    ],
+    "deliveryDate": "2026-02-03",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: PO-000004125 DO: 12368-030226"
+  },
+  {
+    "id": "dlv_1771553267227_xrnwxaojg",
+    "sjNo": "12365-030226",
+    "soNo": "PO-000004034",
+    "customer": "\"PT. SUPRAVISI RAMA OPTIK, MANUFACTURING\"",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "SPONBON (CSUCMMS0020008)",
+        "productCode": "TRM1389",
+        "qty": 30000,
+        "unit": "PCS",
+        "soNo": "PO-000004034"
+      }
+    ],
+    "deliveryDate": "2026-02-03",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: PO-000004034 DO: 12365-030226"
+  },
+  {
+    "id": "dlv_1771553267228_k9zg4j4nc",
+    "sjNo": "12372-040226",
+    "soNo": "KIPO26020016",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"BRASS BALL VALVE 40A (LONG HANDLE ORANGE) MDT MODEL BV-600(1 1/2\"\"\"\") (CS099-1)\"",
+        "productCode": "TRM3030",
+        "qty": 3,
+        "unit": "PCS",
+        "soNo": "KIPO26020016"
+      }
+    ],
+    "deliveryDate": "2026-02-04",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26020016DEL. NO : 12372-040226-KIPO26020016"
+  },
+  {
+    "id": "dlv_1771553267228_rj8hpz2pp",
+    "sjNo": "12373-040226",
+    "soNo": "KIPO26020015",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "PLASTIC CLIP CLEAR 10CMX7CM [100PCS/PCK] (NB067-1)",
+        "productCode": "TRM0054",
+        "qty": 10,
+        "unit": "PCK",
+        "soNo": "KIPO26020015"
+      },
+      {
+        "product": "BUBBLE SHEET (NB058)",
+        "productCode": "TRM0079",
+        "qty": 3,
+        "unit": "ROL",
+        "soNo": "KIPO26020015"
+      }
+    ],
+    "deliveryDate": "2026-02-04",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26020015DEL. NO : 12373-040226-KIPO26020015"
+  },
+  {
+    "id": "dlv_1771553267228_aj4p7u2bc",
+    "sjNo": "12374-040226",
+    "soNo": "KIPO26010243",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "METAL CONNECTOR SINOCONTEC PLUG+ FLANGE SOCKET 19M-4A+4E (4PIN) ZINC ALLOY",
+        "productCode": "TRM1370",
+        "qty": 1,
+        "unit": "SET",
+        "soNo": "KIPO26010243"
+      }
+    ],
+    "deliveryDate": "2026-02-04",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26010243DEL. NO : 12374-040226-KIPO26010243"
+  },
+  {
+    "id": "dlv_1771553267228_d17ayounu",
+    "sjNo": "12375-040226",
+    "soNo": "KIPO26010263",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "SPRING WASHER / RING PER M5 (S20C) (ZINC PLATED) (JB003)",
+        "productCode": "TRM0670",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26010263"
+      },
+      {
+        "product": "SPRING WASHER / RING PER M6 (SS400) (ZINC PLATED) (NB345)",
+        "productCode": "TRM0301",
+        "qty": 2000,
+        "unit": "PCS",
+        "soNo": "KIPO26010263"
+      },
+      {
+        "product": "FLAT WASHER / RING PLATE (SS400) M6 (GALVANIZED) (NB033)",
+        "productCode": "TRM0348",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26010263"
+      },
+      {
+        "product": "HEX. NUT / MUR (S20C) M6X1.0 (GALVANIZED) (JA006)",
+        "productCode": "TRM0296",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26010263"
+      },
+      {
+        "product": "FLAT WASHER / RING PLATE (SS400) M4 (GALVANIZED) (NB512)",
+        "productCode": "TRM0347",
+        "qty": 2000,
+        "unit": "PCS",
+        "soNo": "KIPO26010263"
+      },
+      {
+        "product": "FLAT WASHER / RING PLATE (SS400) Ø8 LEBAR (GALVANIZED) (NB419)",
+        "productCode": "TRM0671",
+        "qty": 300,
+        "unit": "PCS",
+        "soNo": "KIPO26010263"
+      },
+      {
+        "product": "\"TAPING SCREW 8X3/8\"\"\"\" GALVANIZED (NB368)\"",
+        "productCode": "TRM0673",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26010263"
+      },
+      {
+        "product": "CLAMP HOSE BAND (SILVER) Ø42 - Ø48 (DOUBLE WIRE CLAMP) FOR PVC HOSE Ø38 /SILICONE HOSE Ø43 (SUNTRAC) (NB060-1)",
+        "productCode": "TRM2158",
+        "qty": 300,
+        "unit": "PCS",
+        "soNo": "KIPO26010263"
+      },
+      {
+        "product": "CLAMP HOSE BAND (SILVER) Ø50-Ø55 (DOUBLE WIRE CLAMP) FOR SILICON HOSE Ø51 (SUNTRAC) (NB065)",
+        "productCode": "TRM1158",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26010263"
+      },
+      {
+        "product": "BOLT (BAUT JP) M4XP.07XL50MM (GALVANIZED) (NB488-1)",
+        "productCode": "TRM0099",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26010263"
+      },
+      {
+        "product": "BOLT (BAUT L) M8XP1.25XL20MM (GALVANIZED) (NB360)",
+        "productCode": "TRM0299",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26010263"
+      },
+      {
+        "product": "BOLT (BAUT HEXAGONAL) M8XP1.25XL25MM (GALVANIZED) (HA059)",
+        "productCode": "TRM0298",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26010263"
+      },
+      {
+        "product": "BOLT (BAUT L) M8XP1.25XL16MM (GALVANIZED) (NB139)",
+        "productCode": "TRM0117",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26010263"
+      }
+    ],
+    "deliveryDate": "2026-02-04",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26010263DEL. NO : 12375-040226-KIPO26010263"
+  },
+  {
+    "id": "dlv_1771553267229_vx61lhlvy",
+    "sjNo": "12376-040226",
+    "soNo": "KIPO26010257",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "SARUNG TANGAN KARET SENSI SIZE : XL (NB145)",
+        "productCode": "TRM0697",
+        "qty": 3,
+        "unit": "BOX",
+        "soNo": "KIPO26010257"
+      }
+    ],
+    "deliveryDate": "2026-02-04",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26010257DEL. NO : 12376-040226-KIPO26010257"
+  },
+  {
+    "id": "dlv_1771553267229_i8p6ue414",
+    "sjNo": "12371-040226",
+    "soNo": "PO26-062-1",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "PALU KARET",
+        "productCode": "TRM4150",
+        "qty": 4,
+        "unit": "PCS",
+        "soNo": "PO26-062-1"
+      },
+      {
+        "product": "PALU BESI KAMBING",
+        "productCode": "TRM1300",
+        "qty": 4,
+        "unit": "PCS",
+        "soNo": "PO26-062-1"
+      },
+      {
+        "product": "PALU PLASTIK",
+        "productCode": "TRM4498",
+        "qty": 3,
+        "unit": "PCS",
+        "soNo": "PO26-062-1"
+      },
+      {
+        "product": "ARC MEN GEL (NPO NOZZLE CLEANER)",
+        "productCode": "TRM2128",
+        "qty": 5,
+        "unit": "PCS",
+        "soNo": "PO26-062-1"
+      }
+    ],
+    "deliveryDate": "2026-02-04",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO PO26-062-1DEL. NO : 12371-040226"
+  },
+  {
+    "id": "dlv_1771553267229_77ul4kjky",
+    "sjNo": "12377-040226",
+    "soNo": "FJI-2026/II/002/JB23",
+    "customer": "PT. FAKTA JABBAR INDUSTRI",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "BOX ODP 16-CORE DOUBLE LOCK ( KOSONGAN )",
+        "productCode": "TRM4499",
+        "qty": 30,
+        "unit": "PCS",
+        "soNo": "FJI-2026/II/002/JB23"
+      }
+    ],
+    "deliveryDate": "2026-02-04",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: FJI-2026/II/002/JB23DEL. NO : 12377-040226"
+  },
+  {
+    "id": "dlv_1771553267229_qgtm7emmb",
+    "sjNo": "12370-040226",
+    "soNo": "PO/IS720/260200484",
+    "customer": "PT. INDOSAFETY SENTOSA INDUSTRY",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "LAKBAN OKAMOTO",
+        "productCode": "\"TRM4452 (2\"\"\"\"x50M)\"",
+        "qty": 180,
+        "unit": "ROL",
+        "soNo": "PO/IS720/260200484"
+      },
+      {
+        "product": "LAKBAN EKATAPE",
+        "productCode": "TRM4458 (45MM X 85Y)",
+        "qty": 60,
+        "unit": "ROL",
+        "soNo": "PO/IS720/260200484"
+      }
+    ],
+    "deliveryDate": "2026-02-04",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: PO/IS720/260200484DEL. NO : 12370-040226"
+  },
+  {
+    "id": "dlv_1771553267229_a5e9ddy9s",
+    "sjNo": "12380-050226",
+    "soNo": "B-26/MCM/PPIC/035",
+    "customer": "PT. MENARA CIPTA METALINDO",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"DEMPUL, SAN POLAC (COPRSU053N)\"",
+        "productCode": "TRM1204",
+        "qty": 8,
+        "unit": "PAIL",
+        "soNo": "B-26/MCM/PPIC/035"
+      }
+    ],
+    "deliveryDate": "2026-02-05",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: B-26/MCM/PPIC/035 DO: 12380-050226"
+  },
+  {
+    "id": "dlv_1771553267229_9vzcflzn9",
+    "sjNo": "12379-050226",
+    "soNo": "KIPO26010263",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "CLAMP HOSE BAND (SILVER) Ø42 - Ø48 (DOUBLE WIRE CLAMP) FOR PVC HOSE Ø38 /SILICONE HOSE Ø43 (SUNTRAC) (NB060-1)",
+        "productCode": "TRM2158",
+        "qty": 200,
+        "unit": "PCS",
+        "soNo": "KIPO26010263"
+      },
+      {
+        "product": "LAMPU DOWNLIGHT 15W",
+        "productCode": "TRM3223",
+        "qty": 8,
+        "unit": "PCS",
+        "soNo": "PO-L-2026020000035"
+      }
+    ],
+    "deliveryDate": "2026-02-05",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26010263DEL. NO : 12379-050226-KIPO26010263"
+  },
+  {
+    "id": "dlv_1771553267229_d0awrgy8o",
+    "sjNo": "12001-050226",
+    "soNo": "KIPO26010223",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "CABLE NYAF Ø0.50MM2 (YELLOW) [100MTR/ROLL] (CC491-1)",
+        "productCode": "TRM0131",
+        "qty": 1000,
+        "unit": "MTR",
+        "soNo": "KIPO26010223"
+      },
+      {
+        "product": "CABLE NYAF Ø0.50MM2 (BLUE) [100MTR/ROLL] (CC481)",
+        "productCode": "TRM0012",
+        "qty": 1000,
+        "unit": "MTR",
+        "soNo": "KIPO26010223"
+      },
+      {
+        "product": "CABLE NYAF Ø6.00MM2 (WHITE) [100M/ROLL] (CC480)",
+        "productCode": "TRM1966",
+        "qty": 100,
+        "unit": "MTR",
+        "soNo": "KIPO26010223"
+      },
+      {
+        "product": "ROCK WOOL Ø16 X Ø26 (BESAR) (NB390)",
+        "productCode": "TRM0063",
+        "qty": 35,
+        "unit": "PCS",
+        "soNo": "KIPO26010223"
+      }
+    ],
+    "deliveryDate": "2026-02-05",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26010223 DO: 12001-050226-KIPO26010223"
+  },
+  {
+    "id": "dlv_1771553267229_erpxlvsmh",
+    "sjNo": "12369-050226",
+    "soNo": "PO-000004183",
+    "customer": "\"PT. SUPRAVISI RAMA OPTIK, MANUFACTURING\"",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "IBC TANK / KEMPU 1000 LITER",
+        "productCode": "TRM4484",
+        "qty": 1,
+        "unit": "UNIT",
+        "soNo": "PO-000004183"
+      }
+    ],
+    "deliveryDate": "2026-02-05",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: PO-000004183DEL. NO : 12369-050226"
+  },
+  {
+    "id": "dlv_1771553267230_ga3zeiuoo",
+    "sjNo": "12383-060226",
+    "soNo": "KIPO26010223",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "ROCK WOOL Ø16 X Ø26 (BESAR) (NB390)",
+        "productCode": "TRM0063",
+        "qty": 5,
+        "unit": "PCS",
+        "soNo": "KIPO26010223"
+      }
+    ],
+    "deliveryDate": "2026-02-06",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26010223 DO: 12383-060226"
+  },
+  {
+    "id": "dlv_1771553267230_3q2yam7j9",
+    "sjNo": "12382-060226",
+    "soNo": "KIPO26020015",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"PISAU POTONG CIRCLE GMT7\"\"\"\" (NB357)\"",
+        "productCode": "TRM1302",
+        "qty": 3,
+        "unit": "PCS",
+        "soNo": "KIPO26020015"
+      },
+      {
+        "product": "PAKU RENG 4CM (NB464)",
+        "productCode": "TRM1529",
+        "qty": 2,
+        "unit": "KG",
+        "soNo": "KIPO26020015"
+      }
+    ],
+    "deliveryDate": "2026-02-06",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26020015 DO: 12382-060226"
+  },
+  {
+    "id": "dlv_1771553267230_4drwqqyjz",
+    "sjNo": "12385-060226",
+    "soNo": "KIPO26020011",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "LEM PVC 45GR (ESURON) NO.73S (CP005)",
+        "productCode": "TRM3201",
+        "qty": 2,
+        "unit": "TUBE",
+        "soNo": "KIPO26020011"
+      }
+    ],
+    "deliveryDate": "2026-02-06",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26020011 DO: 12385-060226"
+  },
+  {
+    "id": "dlv_1771553267230_64xajhknu",
+    "sjNo": "12384-060226",
+    "soNo": "PO26-059-1",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "HYDRAULIC CYLINDER CAP. 5 TON STROKE 232 MM TYPE RSC-",
+        "productCode": "TRM4492",
+        "qty": 1,
+        "unit": "UNIT",
+        "soNo": "PO26-059-1"
+      }
+    ],
+    "deliveryDate": "2026-02-06",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: PO26-059-1DEL. NO : 12384-060226"
+  },
+  {
+    "id": "dlv_1771553267230_4w76bx6qq",
+    "sjNo": "12387-090226",
+    "soNo": "KIPO26010208",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "CABLE NYAF Ø2.50 MM2 (WHITE) (100MTR/ROLL) (CC476-1)",
+        "productCode": "TRM0152",
+        "qty": 100,
+        "unit": "MTR",
+        "soNo": "KIPO26010208"
+      }
+    ],
+    "deliveryDate": "2026-02-09",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26010208 DO: 12387-090226"
+  },
+  {
+    "id": "dlv_1771553267230_7z7awn0gd",
+    "sjNo": "12386-090226",
+    "soNo": "KIPO26010243",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "CORRUGATED FLEXIBLE CONDUIT HITAM IDØ7.0MM/OD.12MM TYPE FCP-7 [100MTR./ROLL](NB117-1)",
+        "productCode": "TRM4496",
+        "qty": 100,
+        "unit": "MTR",
+        "soNo": "KIPO26010243"
+      }
+    ],
+    "deliveryDate": "2026-02-09",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26010243 DO: 12386-090226"
+  },
+  {
+    "id": "dlv_1771553267230_i3re0w5h2",
+    "sjNo": "12388-090226",
+    "soNo": "KIPO26020051",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "TIMING BELT S5M-800 FOR HONEYCOMB DFG-15/150Z (IDF0050-7313)",
+        "productCode": "TRM0241",
+        "qty": 50,
+        "unit": "PCS",
+        "soNo": "KIPO26020051"
+      },
+      {
+        "product": "HINGE (ENGSEL PANEL) BLACK 40X40X9MM (IDR0015-6400)",
+        "productCode": "TRM0038",
+        "qty": 150,
+        "unit": "PCS",
+        "soNo": "KIPO26020051"
+      },
+      {
+        "product": "CLAMP LATCH LOCK FOR PANEL (ADB/ADG-15-300Z) SUS304 (IAD005-6403)",
+        "productCode": "TRM0024",
+        "qty": 50,
+        "unit": "PCS",
+        "soNo": "KIPO26020051"
+      }
+    ],
+    "deliveryDate": "2026-02-09",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26020051 DO: 12388-090226"
+  },
+  {
+    "id": "dlv_1771553267230_88f2hqabc",
+    "sjNo": "12391-090226",
+    "soNo": "KIPO26020038",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "REVOLVING WARNING LIGHT LTE-1101 AC220V (RED) W/O BUZZER (RG091)",
+        "productCode": "TRM0062",
+        "qty": 10,
+        "unit": "PCS",
+        "soNo": "KIPO26020038"
+      }
+    ],
+    "deliveryDate": "2026-02-09",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26020038 DO: 12391-090226"
+  },
+  {
+    "id": "dlv_1771553267230_r2xnb3n45",
+    "sjNo": "12390-090226",
+    "soNo": "KIPO26020033",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "PLASTIC CHAIN STAR 6X50M YELLOW (NB161)",
+        "productCode": "TRM0053",
+        "qty": 1,
+        "unit": "ROL",
+        "soNo": "KIPO26020033"
+      },
+      {
+        "product": "NYLON CABLE GLAND PG-13.5 (BLACK) FOR (Ø20.4 HOLE) (NB479-1)",
+        "productCode": "TRM2344",
+        "qty": 200,
+        "unit": "PCS",
+        "soNo": "KIPO26020033"
+      },
+      {
+        "product": "NYLON CABLE GLAND PG-29 (BLACK) FOR (Ø37.0 HOLE) (NB490)",
+        "productCode": "TRM0081",
+        "qty": 50,
+        "unit": "PCS",
+        "soNo": "KIPO26020033"
+      },
+      {
+        "product": "MARKER TUBE MOTP WHITE 3.2 (200MTR/ROL) (CC104-1)",
+        "productCode": "TRM0046",
+        "qty": 200,
+        "unit": "MTR",
+        "soNo": "KIPO26020033"
+      },
+      {
+        "product": "SOCKET CONNECTOR 2 PIN MALE (NB470)",
+        "productCode": "TRM0070",
+        "qty": 200,
+        "unit": "PCS",
+        "soNo": "KIPO26020033"
+      },
+      {
+        "product": "SOCKET CONNECTOR 2 PIN FEMALE (NB471)",
+        "productCode": "TRM0069",
+        "qty": 200,
+        "unit": "PCS",
+        "soNo": "KIPO26020033"
+      }
+    ],
+    "deliveryDate": "2026-02-09",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26020033 DO: 12390-090226"
+  },
+  {
+    "id": "dlv_1771553267230_agc9pffvc",
+    "sjNo": "12389-090226",
+    "soNo": "PO-000004136",
+    "customer": "\"PT. SUPRAVISI RAMA OPTIK, MANUFACTURING\"",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "FISHER TEMBOK ISI 100",
+        "productCode": "TRM4501",
+        "qty": 1,
+        "unit": "PCS",
+        "soNo": "PO-000004136"
+      },
+      {
+        "product": "BAUD FISHER 20MM",
+        "productCode": "TRM4502",
+        "qty": 40,
+        "unit": "PCS",
+        "soNo": "PO-000004136"
+      },
+      {
+        "product": "KABEL NYMHY 2X1.5MM SUPREME",
+        "productCode": "TRM4503",
+        "qty": 25,
+        "unit": "MTR",
+        "soNo": "PO-000004136"
+      },
+      {
+        "product": "LAMPU EMERGENCY MEVAL",
+        "productCode": "TRM4504",
+        "qty": 3,
+        "unit": "PCS",
+        "soNo": "PO-000004136"
+      },
+      {
+        "product": "CLAMP CONDUIT 20MM ISI 100",
+        "productCode": "TRM4505",
+        "qty": 1,
+        "unit": "PCS",
+        "soNo": "PO-000004136"
+      }
+    ],
+    "deliveryDate": "2026-02-09",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: PO-000004136 DO: 12389-090226"
+  },
+  {
+    "id": "dlv_1771553267230_x507xbh5j",
+    "sjNo": "12395-100226",
+    "soNo": "KIPO26010208",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "CABLE NYAF Ø2.50 MM2 (WHITE) (100MTR/ROLL) (CC476-1)",
+        "productCode": "TRM0152",
+        "qty": 100,
+        "unit": "MTR",
+        "soNo": "KIPO26010208"
+      }
+    ],
+    "deliveryDate": "2026-02-10",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26010208 DO: 12395-100226"
+  },
+  {
+    "id": "dlv_1771553267230_ezf2o2c31",
+    "sjNo": "12396-100226",
+    "soNo": "KIPO26010157",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"METAL CONNECTOR FEMALE TYPE \"\"\"\"S\"\"\"\" 2 PIN (NANABOSHI) NCS-162-P-CH (125V 5A) (448-9993)\"",
+        "productCode": "TRM0802",
+        "qty": 2,
+        "unit": "PCS",
+        "soNo": "KIPO26010157"
+      },
+      {
+        "product": "\"METAL CONNECTOR MALE TYPE \"\"\"\"S\"\"\"\" 2 PIN (NANABOSHI) NCS-162-ADF-CH (125V 5A) (NCC26)\"",
+        "productCode": "TRM0803",
+        "qty": 2,
+        "unit": "PCS",
+        "soNo": "KIPO26010157"
+      }
+    ],
+    "deliveryDate": "2026-02-10",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26010157 DO: 12396-100226"
+  },
+  {
+    "id": "dlv_1771553267230_jvvb78u23",
+    "sjNo": "12397-100226",
+    "soNo": "KIPO26020015",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "PLYWOOD (KAYU TRIPLEK) L=240 W=120 T=9MM (NB019)",
+        "productCode": "TRM0057",
+        "qty": 90,
+        "unit": "LBR",
+        "soNo": "KIPO26020015"
+      },
+      {
+        "product": "WAINSCOT (KAYU LIST) L=250 W=7 T=2 (NB018)",
+        "productCode": "TRM0340",
+        "qty": 750,
+        "unit": "BTG",
+        "soNo": "KIPO26020015"
+      },
+      {
+        "product": "BEAMWOOD (KAYU BALOK) L=150 W=8 T=5 (NB017)",
+        "productCode": "TRM0004",
+        "qty": 710,
+        "unit": "BTG",
+        "soNo": "KIPO26020015"
+      },
+      {
+        "product": "BEAMWOOD (KAYU BALOK) L=200 X W=8 X T=5 (NB1343)",
+        "productCode": "TRM0005",
+        "qty": 18,
+        "unit": "BTG",
+        "soNo": "KIPO26020015"
+      }
+    ],
+    "deliveryDate": "2026-02-10",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26020015 DO: 12397-100226"
+  },
+  {
+    "id": "dlv_1771553267230_zabxzp6ou",
+    "sjNo": "12399-110226",
+    "soNo": "KIPO26020083",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "DUCT TAPE (TECOM) NON ADHESIVE (4.5MMX12MTR/ROLL) (COLOR CREAM) (NA688)",
+        "productCode": "TRM3226",
+        "qty": 10,
+        "unit": "ROL",
+        "soNo": "KIPO26020083"
+      },
+      {
+        "product": "DUCT TAPE (TECOM) WITH ADHESIVE (4.5MMX12MTR/ROLL) (COLOR CREAM) (NA689)",
+        "productCode": "TRM3225",
+        "qty": 5,
+        "unit": "ROL",
+        "soNo": "KIPO26020083"
+      }
+    ],
+    "deliveryDate": "2026-02-11",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26020083 DO: 12399-110226"
+  },
+  {
+    "id": "dlv_1771553267230_2dd8p7rc2",
+    "sjNo": "12400-110226",
+    "soNo": "KIPO26020020",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"ELBOW HOSE NIPPLE 20A(3/4\"\"\"\") X DIA. 19 (BRASS BSPT) (CE005)\"",
+        "productCode": "TRM3497",
+        "qty": 7,
+        "unit": "PCS",
+        "soNo": "KIPO26020020"
+      }
+    ],
+    "deliveryDate": "2026-02-11",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26020020 DO: 12400-110226"
+  },
+  {
+    "id": "dlv_1771553267230_rzsjc1syj",
+    "sjNo": "12398-110226",
+    "soNo": "KIPO25100070",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "PLYWOOD (KAYU TRIPLEK) L=240 W=120 T=9MM (NB019)",
+        "productCode": "TRM0057",
+        "qty": 334,
+        "unit": "LBR",
+        "soNo": "KIPO25100070"
+      },
+      {
+        "product": "WAINSCOT (KAYU LIST) L=250 W=7 T=2 (NB018)",
+        "productCode": "TRM0340",
+        "qty": 864,
+        "unit": "BTG",
+        "soNo": "KIPO25100070"
+      },
+      {
+        "product": "BEAMWOOD (KAYU BALOK) L=150 W=8 T=5 (NB017)",
+        "productCode": "TRM0004",
+        "qty": 992,
+        "unit": "BTG",
+        "soNo": "KIPO25100070"
+      },
+      {
+        "product": "BEAMWOOD (KAYU BALOK) L=200 X W=8 X T=5 (NB1343)",
+        "productCode": "TRM0005",
+        "qty": 154,
+        "unit": "BTG",
+        "soNo": "KIPO25100070"
+      }
+    ],
+    "deliveryDate": "2026-02-11",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO25100070 DO: 12398-110226"
+  },
+  {
+    "id": "dlv_1771553267231_v20v8lwf8",
+    "sjNo": "12402-110226",
+    "soNo": "PL2600378",
+    "customer": "\"SANOH INDONESIA, PT\"",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "MINI CUPLA 33 SF",
+        "productCode": "TRM3983",
+        "qty": 6,
+        "unit": "PCS",
+        "soNo": "PL2600378"
+      },
+      {
+        "product": "PVC SHEET 5MM X 120CM X 240CM",
+        "productCode": "TRM4147",
+        "qty": 1,
+        "unit": "PCS",
+        "soNo": "PL2600378"
+      }
+    ],
+    "deliveryDate": "2026-02-11",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: PL2600378 1. 12402-110226 2. 12394-100226"
+  },
+  {
+    "id": "dlv_1771553267231_ocla8p6i0",
+    "sjNo": "12394-100226",
+    "soNo": "PL2600378",
+    "customer": "\"SANOH INDONESIA, PT\"",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "MINI CUPLA 33 SF",
+        "productCode": "TRM3983",
+        "qty": 6,
+        "unit": "PCS",
+        "soNo": "PL2600378"
+      },
+      {
+        "product": "PVC SHEET 5MM X 120CM X 240CM",
+        "productCode": "TRM4147",
+        "qty": 1,
+        "unit": "PCS",
+        "soNo": "PL2600378"
+      }
+    ],
+    "deliveryDate": "2026-02-11",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: PL2600378 1. 12402-110226 2. 12394-100226"
+  },
+  {
+    "id": "dlv_1771553267231_x074r8wa5",
+    "sjNo": "12401-110226",
+    "soNo": "PO-000004034",
+    "customer": "\"PT. SUPRAVISI RAMA OPTIK, MANUFACTURING\"",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "SPONBON (CSUCMMS0020008)",
+        "productCode": "TRM1389",
+        "qty": 30000,
+        "unit": "PCS",
+        "soNo": "PO-000004034"
+      }
+    ],
+    "deliveryDate": "2026-02-11",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: PO-000004034 DO: 12401-110226"
+  },
+  {
+    "id": "dlv_1771553267231_ywal5sgxl",
+    "sjNo": "12405-120226",
+    "soNo": "KIPO26020068",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "BOLT (BAUT L) M5XP.08XL12MM (GALVANIZED) (NB008-1)",
+        "productCode": "TRM0111",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26020068"
+      },
+      {
+        "product": "BOLT (BAUT JP) M4XP0.7XL6MM (GALVANIZED) (NB388)",
+        "productCode": "TRM0095",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26020068"
+      },
+      {
+        "product": "BOLT (BAUT HEXAGONAL) M8XP1.25XL25MM (GALVANIZED) (HA059)",
+        "productCode": "TRM0298",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26020068"
+      },
+      {
+        "product": "BOLT(BAUT JT) M4XP0.7XL12MM (GALVANIZED) (NB180-1)",
+        "productCode": "TRM4486",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26020068"
+      },
+      {
+        "product": "BOLT (BAUT JP) M5XP0.8XL6MM (SUS304) (NB241)",
+        "productCode": "TRM0853",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26020068"
+      },
+      {
+        "product": "FLAT WASHER/RING PLATE M4 (SUS304) (NB828-1)",
+        "productCode": "TRM0159",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26020068"
+      },
+      {
+        "product": "FLAT WASHER / RING PLATE (SS400) Ø8 LEBAR (GALVANIZED) (NB419)",
+        "productCode": "TRM0671",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26020068"
+      },
+      {
+        "product": "FLAT WASHER / RING PLATE (SS400) M4 (GALVANIZED) (NB512)",
+        "productCode": "TRM0347",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26020068"
+      },
+      {
+        "product": "SPRING WASHER / RING PER M5 (S20C) (ZINC PLATED) (JB003)",
+        "productCode": "TRM0670",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26020068"
+      },
+      {
+        "product": "FLAT WASHER / RING PLATE (SS400) M5 GALVANIZED (JB002)",
+        "productCode": "TRM0588",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26020068"
+      },
+      {
+        "product": "HEX. NUT / MUR (S20C) M6X1.0 (GALVANIZED) (JA006)",
+        "productCode": "TRM0296",
+        "qty": 500,
+        "unit": "PCS",
+        "soNo": "KIPO26020068"
+      },
+      {
+        "product": "SPRING WASHER / RING PER M8 (S20C) (ZINC PLATED) (JH057)",
+        "productCode": "TRM0542",
+        "qty": 2000,
+        "unit": "PCS",
+        "soNo": "KIPO26020068"
+      },
+      {
+        "product": "FLAT WASHER / RING PLATE (S20C) M8 (ZINC PLATED) (JJ007)",
+        "productCode": "TRM0350",
+        "qty": 2000,
+        "unit": "PCS",
+        "soNo": "KIPO26020068"
+      },
+      {
+        "product": "FLAT WASHER / RING PLATE (SS400) M10 (GALVANIZED) (NB242)",
+        "productCode": "TRM0346",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26020068"
+      },
+      {
+        "product": "SPRING WASHER / RING PER M10 (SS400) (ZINC PLATED) (NB265)",
+        "productCode": "TRM0345",
+        "qty": 1000,
+        "unit": "PCS",
+        "soNo": "KIPO26020068"
+      },
+      {
+        "product": "\"U BOLT 1 1/2\"\"\"\" PLATING (P-57MMXH=68MM) FOR PIPE Ø48MM (NB445-1)\"",
+        "productCode": "TRM2487",
+        "qty": 100,
+        "unit": "PCS",
+        "soNo": "KIPO26020068"
+      }
+    ],
+    "deliveryDate": "2026-02-12",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26020068DEL. NO : 12405-120226-KIPO26020068"
+  },
+  {
+    "id": "dlv_1771553267232_ngu73logh",
+    "sjNo": "12404-110226",
+    "soNo": "KIPO26020086",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"INSULATION PIPE INSULFLEX 1 1/4\"\"\"\"X (ID.23MM) T9MM (BLACK) 1.8 MTR/BTG (ISP-009)\"",
+        "productCode": "TRM3709",
+        "qty": 10,
+        "unit": "BTG",
+        "soNo": "KIPO26020086"
+      },
+      {
+        "product": "\"INSULATION SHEET INSULFLEX 3/8\"\"\"\"XT9MM (BLACK) (1.2MTRX0.9MTR) (ISP-014)\"",
+        "productCode": "TRM3708",
+        "qty": 5,
+        "unit": "PCS",
+        "soNo": "KIPO26020086"
+      }
+    ],
+    "deliveryDate": "2026-02-12",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26020086DEL. NO : 12404-110226-KIPO26020086"
+  },
+  {
+    "id": "dlv_1771553267232_3gb28uikw",
+    "sjNo": "12406-120226",
+    "soNo": "KIPO26020033",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "SKUN PIN 1.25-18 (100PCS/PCK)(NC250)",
+        "productCode": "TRM2445",
+        "qty": 10,
+        "unit": "PAK",
+        "soNo": "KIPO26020033"
+      }
+    ],
+    "deliveryDate": "2026-02-12",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26020033DEL. NO : 12406-120226-KIPO26020033"
+  },
+  {
+    "id": "dlv_1771553267232_9thv3zws3",
+    "sjNo": "12403-120226",
+    "soNo": "PL2600295",
+    "customer": "\"SANOH INDONESIA, PT\"",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "MAJUN WARNA",
+        "productCode": "TRM0181",
+        "qty": 100,
+        "unit": "KG",
+        "soNo": "PL2600295"
+      }
+    ],
+    "deliveryDate": "2026-02-12",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: PL2600295 DO: 12403-120226"
+  },
+  {
+    "id": "dlv_1771553267232_6lej7sfut",
+    "sjNo": "12415-130226",
+    "soNo": "KIPO26020103",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"BRASS BALL VALVE 50A (LONG HANDLE ORANGE) MDT MODEL BV-600 (2\"\"\"\") (CS096-1)\"",
+        "productCode": "TRM0008",
+        "qty": 2,
+        "unit": "PCS",
+        "soNo": "KIPO26020103"
+      }
+    ],
+    "deliveryDate": "2026-02-13",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26020103 DO: 12415-130226"
+  },
+  {
+    "id": "dlv_1771553267232_04wtemepm",
+    "sjNo": "12411-130226",
+    "soNo": "PO-L-202602000095",
+    "customer": "PT INTEGRASI MEDIKA PRIMA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "LAMPU LED 60X60 29W",
+        "productCode": "TRM3764",
+        "qty": 4,
+        "unit": "PCS",
+        "soNo": "PO-L-202602000095"
+      }
+    ],
+    "deliveryDate": "2026-02-13",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: PO-L-202602000095 DO: 12411-130226"
+  },
+  {
+    "id": "dlv_1771553267232_4fr8chkfg",
+    "sjNo": "12410-130226",
+    "soNo": "POV2601102",
+    "customer": "PT. ADVANEX PRECISION INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "KERTAS HVS ROLL 60GSM LEBAR 2CM",
+        "productCode": "TRM3888",
+        "qty": 20,
+        "unit": "PCS",
+        "soNo": "POV2601102"
+      }
+    ],
+    "deliveryDate": "2026-02-13",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: POV2601102 1. 12410-130226 2. 12356-020226"
+  },
+  {
+    "id": "dlv_1771553267232_6cjg7l12m",
+    "sjNo": "12356-020226",
+    "soNo": "POV2601102",
+    "customer": "PT. ADVANEX PRECISION INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "KERTAS HVS ROLL 60GSM LEBAR 2CM",
+        "productCode": "TRM3888",
+        "qty": 20,
+        "unit": "PCS",
+        "soNo": "POV2601102"
+      }
+    ],
+    "deliveryDate": "2026-02-13",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: POV2601102 1. 12410-130226 2. 12356-020226"
+  },
+  {
+    "id": "dlv_1771553267232_09e0x705h",
+    "sjNo": "12412-130226",
+    "soNo": "PO-L-202602000084",
+    "customer": "PT INTEGRASI MEDIKA PRIMA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "DIGITAL MULTIMETER",
+        "productCode": "TRM4518",
+        "qty": 1,
+        "unit": "UNIT",
+        "soNo": "PO-L-202602000084"
+      }
+    ],
+    "deliveryDate": "2026-02-13",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: PO-L-202602000084 DO: 12412-130226"
+  },
+  {
+    "id": "dlv_1771553267232_k8cbw8bjj",
+    "sjNo": "12413-130226",
+    "soNo": "PO26-084-1",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "RATCHET PULLER HHH-500K (INDENT 2 WEEKS)",
+        "productCode": "TRM3388",
+        "qty": 7,
+        "unit": "PCS",
+        "soNo": "PO26-084-1"
+      },
+      {
+        "product": "RATCHET PULLER HHH-700K (INDENT 2 WEEKS)",
+        "productCode": "TRM3433",
+        "qty": 8,
+        "unit": "PCS",
+        "soNo": "PO26-084-1"
+      },
+      {
+        "product": "WIRE BRUSH SWB-03",
+        "productCode": "TRM3564",
+        "qty": 4,
+        "unit": "PCS",
+        "soNo": "PO26-084-1"
+      }
+    ],
+    "deliveryDate": "2026-02-13",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: PO26-084-1 DO: 12413-130226"
+  },
+  {
+    "id": "dlv_1771553267232_24rde7yzr",
+    "sjNo": "12414-130226",
+    "soNo": "PO26-073-1",
+    "customer": "PT. TOYOTA BOSHOKU DEVICE INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "LAMPU LED 120 CM",
+        "productCode": "TRM1085",
+        "qty": 5,
+        "unit": "PCS",
+        "soNo": "PO26-073-1"
+      },
+      {
+        "product": "LAMPU LED 60 CM LIGHT",
+        "productCode": "TRM1084",
+        "qty": 5,
+        "unit": "PCS",
+        "soNo": "PO26-073-1"
+      },
+      {
+        "product": "RUMAH LAMPU LED 60 CM",
+        "productCode": "TRM1086",
+        "qty": 5,
+        "unit": "PCS",
+        "soNo": "PO26-073-1"
+      },
+      {
+        "product": "KABEL TIES 200 SIGMA",
+        "productCode": "TRM1999",
+        "qty": 5,
+        "unit": "PCK",
+        "soNo": "PO26-073-1"
+      },
+      {
+        "product": "BAUT HEXAGONAL M8X25 SUS304",
+        "productCode": "TRM4512",
+        "qty": 15,
+        "unit": "PCS",
+        "soNo": "PO26-073-1"
+      }
+    ],
+    "deliveryDate": "2026-02-13",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: PO26-073-1 DO: 12414-130226"
+  },
+  {
+    "id": "dlv_1771553267232_cg5glmt57",
+    "sjNo": "12408-130226",
+    "soNo": "PO-000004182",
+    "customer": "\"PT. SUPRAVISI RAMA OPTIK, MANUFACTURING\"",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "POMPA CELUP AIR KOTOR 2 IN 550 WATT OTOMATIS",
+        "productCode": "TRM4488",
+        "qty": 1,
+        "unit": "PCS",
+        "soNo": "PO-000004182"
+      }
+    ],
+    "deliveryDate": "2026-02-13",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: PO-000004182 DO: 12408-130226"
+  },
+  {
+    "id": "dlv_1771553267232_tniwhw7ga",
+    "sjNo": "12409-130226",
+    "soNo": "PO-000004218",
+    "customer": "\"PT. SUPRAVISI RAMA OPTIK, MANUFACTURING\"",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "KEBUTUHAN PART IMPROVE HEADER EWRS",
+        "productCode": "TRM4525",
+        "qty": 1,
+        "unit": "SET",
+        "soNo": "PO-000004218"
+      }
+    ],
+    "deliveryDate": "2026-02-13",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: PO-000004218 DO: 12409-130226"
+  },
+  {
+    "id": "dlv_1771553267232_k5vomplkr",
+    "sjNo": "12419-160226",
+    "soNo": "KIPO26020116",
+    "customer": "PT. KAWATA INDONESIA",
+    "customerAddress": "",
+    "customerPIC": "",
+    "customerPhone": "",
+    "status": "CLOSE",
+    "items": [
+      {
+        "product": "\"BRASS BALL VALVE 40A (LONG HANDLE ORANGE) MDT MODEL BV-600(1 1/2\"\"\"\") (CS099-1)\"",
+        "productCode": "TRM3030",
+        "qty": 2,
+        "unit": "PCS",
+        "soNo": "KIPO26020116"
+      }
+    ],
+    "deliveryDate": "2026-02-16",
+    "driver": "",
+    "vehicleNo": "",
+    "specNote": "PO: KIPO26020116 DO: 12419-160226"
+  }
+]

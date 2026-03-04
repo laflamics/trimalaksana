@@ -40,14 +40,14 @@ const Layout = ({ children }: LayoutProps) => {
 
   const menuItems = [
     {
-      title: 'MASTER',
+      title: 'MASTER DATA',
       type: 'section',
       items: [
-        { title: 'Products', path: '/master/products', icon: '📦' },
-        { title: 'Materials', path: '/master/materials', icon: '🧱' },
+        { title: 'Products', path: '/master/products', icon: '📋' },
+        { title: 'Materials', path: '/master/materials', icon: '🔩' },
         { title: 'Customers', path: '/master/customers', icon: '👥' },
-        { title: 'Suppliers', path: '/master/suppliers', icon: '🏭' },
-        { title: 'Inventory', path: '/master/inventory', icon: '📊' },
+        { title: 'Suppliers', path: '/master/suppliers', icon: '🏢' },
+        { title: 'Stock', path: '/master/inventory', icon: '📦' },
       ],
     },
     {
@@ -55,38 +55,52 @@ const Layout = ({ children }: LayoutProps) => {
       type: 'section',
       items: [
         { title: 'Workflow', path: '/packaging/workflow', icon: '🔄' },
-        { title: 'Sales Orders', path: '/packaging/sales-orders', icon: '📋' },
-        { title: 'PPIC', path: '/packaging/ppic', icon: '📅' },
+        { title: 'Orders', path: '/packaging/sales-orders', icon: '📋' },
+        { title: 'Planning', path: '/packaging/ppic', icon: '📅' },
         { title: 'Purchasing', path: '/packaging/purchasing', icon: '🛒' },
         { title: 'Production', path: '/packaging/production', icon: '⚙️' },
-        { title: 'QA/QC', path: '/packaging/qa-qc', icon: '✅' },
-        { title: 'WH/Delivery', path: '/packaging/delivery-note', icon: '🚚' },
+        { title: 'QC', path: '/packaging/qa-qc', icon: '✅' },
+        { title: 'Delivery', path: '/packaging/delivery-note', icon: '🚚' },
+        { title: 'Returns', path: '/packaging/returns', icon: '↩️' },
+      ],
+    },
+    {
+      title: 'REPORTS',
+      type: 'section',
+      items: [
+        { title: 'Dashboard', path: '/finance', icon: '📊' },
       ],
     },
     {
       title: 'FINANCE',
       type: 'section',
       items: [
-        { title: 'Finance', path: '/finance', icon: '💰' },
-        { title: 'Accounting', path: '/finance/accounting', icon: '📊' },
-        { title: 'AR', path: '/finance/ar', icon: '📈' },
-        { title: 'COA', path: '/finance/coa', icon: '📑' },
+        { title: 'Invoices', path: '/finance/invoices', icon: '📄' },
+        { title: 'Payments', path: '/finance/payments', icon: '💳' },
+        { title: 'Expenses', path: '/finance/expenses', icon: '💰' },
+        { title: 'Reports', path: '/finance/reports', icon: '📊' },
+        { title: 'Analytics', path: '/finance/analytics', icon: '📈' },
+        { title: 'Receivable', path: '/finance/ar', icon: '💰' },
+        { title: 'Payable', path: '/finance/ap', icon: '💸' },
+        { title: 'Tax', path: '/finance/tax', icon: '🧾' },
+        { title: 'Accounts', path: '/finance/coa', icon: '📑' },
       ],
     },
     {
       title: 'HR',
       type: 'section',
       items: [
-        { title: 'HRD', path: '/hr', icon: '👔' },
+        { title: 'Staff', path: '/hr', icon: '👤' },
+        { title: 'Config', path: '/hr/config', icon: '⚙️' },
       ],
     },
     {
-      title: 'SETTINGS',
+      title: 'ADMIN',
       type: 'section',
       items: [
         { title: 'Settings', path: '/settings', icon: '⚙️' },
-        { title: 'Report', path: '/settings/report', icon: '📄' },
-        { title: 'DB Activity', path: '/settings/db-activity', icon: '📝' },
+        { title: 'Data', path: '/settings/report', icon: '🗄️' },
+        { title: 'Access', path: '/settings/user-control', icon: '👤' },
       ],
     },
   ];

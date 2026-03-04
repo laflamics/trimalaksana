@@ -1,0 +1,804 @@
+[
+  {
+    "id": "do_1771553281795_kl2e4k2k9",
+    "no": 1,
+    "doNo": "0634/JL/CKRG/0226",
+    "orderDate": "2026-02-13",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-13",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "LOT",
+        "description": "TRW00002 - JASA ANGKUTAN"
+      },
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "LOT",
+        "description": "TRW00002 - JASA ANGKUTAN"
+      },
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "LOT",
+        "description": "TRW00002 - JASA ANGKUTAN"
+      },
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "LOT",
+        "description": "TRW00002 - JASA ANGKUTAN"
+      },
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "LOT",
+        "description": "TRW00002 - JASA ANGKUTAN"
+      },
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "LOT",
+        "description": "TRW00002 - JASA ANGKUTAN"
+      },
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "LOT",
+        "description": "TRW00002 - JASA ANGKUTAN"
+      },
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "LOT",
+        "description": "TRW00002 - JASA ANGKUTAN"
+      },
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "LOT",
+        "description": "TRW00002 - JASA ANGKUTAN"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-13",
+    "notes": "02/02/2026 SPO NO 8306062589 02/02/2026 SPO NO 8306062590 02/02/2026 SPO NO 8306062594 05/02/2026 SPO NO 8306062854 05/02/2026 SPO NO 8306062852 06/02/2026 SPO NO 8306062885 06/02/2026 SPO NO 8306062891 06/02/2026 SPO NO 8306062882 09/02/2026 SPO NO 8306062939",
+    "timestamp": 1771553281795
+  },
+  {
+    "id": "do_1771553281795_uirxqt9cg",
+    "no": 2,
+    "doNo": "0635/JL/CKRG/0226",
+    "orderDate": "2026-02-13",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-13",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "LOT",
+        "description": "TRW00002 - JASA ANGKUTAN"
+      },
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "LOT",
+        "description": "TRW00002 - JASA ANGKUTAN"
+      },
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "LOT",
+        "description": "TRW00002 - JASA ANGKUTAN"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-13",
+    "notes": "09/02/2026 SPO NO 8306062955 09/02/2026 SPO NO 8306062952 10/02/2026 SPO NO 8306063037",
+    "timestamp": 1771553281795
+  },
+  {
+    "id": "do_1771553281795_oan9txa7z",
+    "no": 3,
+    "doNo": "0692/JL/CKRG/0226",
+    "orderDate": "2026-02-18",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-18",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "UNIT",
+        "description": "TRW0002 - JASA ANGKUTAN"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-18",
+    "notes": "01/02/2026 SPO NO 8306062625",
+    "timestamp": 1771553281795
+  },
+  {
+    "id": "do_1771553281795_v4p5nfi4p",
+    "no": 4,
+    "doNo": "0693/JL/CKRG/0226",
+    "orderDate": "2026-02-18",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-18",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "UNIT",
+        "description": "TRW0002 - JASA ANGKUTAN"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-18",
+    "notes": "01/02/2026 SPO NO 8306062626",
+    "timestamp": 1771553281795
+  },
+  {
+    "id": "do_1771553281795_bppwy73je",
+    "no": 5,
+    "doNo": "0694/JL/CKRG/0226",
+    "orderDate": "2026-02-18",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-18",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "UNIT",
+        "description": "TRW0002 - JASA ANGKUTAN"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-18",
+    "notes": "02/02/2026 SPO NO 8306062672",
+    "timestamp": 1771553281795
+  },
+  {
+    "id": "do_1771553281795_xlbn4newm",
+    "no": 6,
+    "doNo": "0695/JL/CKRG/0226",
+    "orderDate": "2026-02-18",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-18",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "UNIT",
+        "description": "TRW0002 - JASA ANGKUTAN"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-18",
+    "notes": "03/02/2026 SPO NO 8306062745",
+    "timestamp": 1771553281795
+  },
+  {
+    "id": "do_1771553281795_y63q52fmv",
+    "no": 7,
+    "doNo": "0696/JL/CKRG/0226",
+    "orderDate": "2026-02-18",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-18",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "UNIT",
+        "description": "TRW0002 - JASA ANGKUTAN"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-18",
+    "notes": "05/02/2026 SPO NO 8306062832",
+    "timestamp": 1771553281795
+  },
+  {
+    "id": "do_1771553281795_4hn3ygjn8",
+    "no": 8,
+    "doNo": "0697/JL/CKRG/0226",
+    "orderDate": "2026-02-18",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-18",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "UNIT",
+        "description": "TRW0002 - JASA ANGKUTAN"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-18",
+    "notes": "05/02/2026 SPO NO 8306062802",
+    "timestamp": 1771553281795
+  },
+  {
+    "id": "do_1771553281795_sapc2xjf0",
+    "no": 9,
+    "doNo": "0698/JL/CKRG/0226",
+    "orderDate": "2026-02-18",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-18",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "UNIT",
+        "description": "TRW0002 - JASA ANGKUTAN"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-18",
+    "notes": "06/02/2026 SPO NO 8306062909",
+    "timestamp": 1771553281795
+  },
+  {
+    "id": "do_1771553281796_1qo2gzv38",
+    "no": 10,
+    "doNo": "0699/JL/CKRG/0226",
+    "orderDate": "2026-02-18",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-18",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "UNIT",
+        "description": "TRW0002 - JASA ANGKUTAN"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-18",
+    "notes": "08/02/2026 SPO NO 8306062988",
+    "timestamp": 1771553281796
+  },
+  {
+    "id": "do_1771553281796_wjb5obp8c",
+    "no": 11,
+    "doNo": "0700/JL/CKRG/0226",
+    "orderDate": "2026-02-18",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-18",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "UNIT",
+        "description": "TRW0002 - JASA ANGKUTAN"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-18",
+    "notes": "08/02/2026 SPO NO 8306062994",
+    "timestamp": 1771553281796
+  },
+  {
+    "id": "do_1771553281796_dwfsmwpz6",
+    "no": 12,
+    "doNo": "0701/JL/CKRG/0226",
+    "orderDate": "2026-02-18",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-18",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "UNIT",
+        "description": "TRW0002 - JASA ANGKUTAN"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-18",
+    "notes": "09/02/2026 SPO NO 8306063011",
+    "timestamp": 1771553281796
+  },
+  {
+    "id": "do_1771553281796_bq99h5c37",
+    "no": 13,
+    "doNo": "0702/JL/CKRG/0226",
+    "orderDate": "2026-02-18",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-18",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "UNIT",
+        "description": "TRW0002 - JASA ANGKUTAN"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-18",
+    "notes": "11/02/2026 SPO NO 8306063140",
+    "timestamp": 1771553281796
+  },
+  {
+    "id": "do_1771553281796_6hlo9f2xw",
+    "no": 14,
+    "doNo": "0703/JL/CKRG/0226",
+    "orderDate": "2026-02-18",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-18",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "UNIT",
+        "description": "TRW0002 - JASA ANGKUTAN"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-18",
+    "notes": "11/02/2026 SPO NO 8306063144",
+    "timestamp": 1771553281796
+  },
+  {
+    "id": "do_1771553281796_2q1bbbyk6",
+    "no": 15,
+    "doNo": "0704/JL/CKRG/0226",
+    "orderDate": "2026-02-18",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-18",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "UNIT",
+        "description": "TRW0002 - JASA ANGKUTAN"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-18",
+    "notes": "12/02/2026 SPO NO 8306063185",
+    "timestamp": 1771553281796
+  },
+  {
+    "id": "do_1771553281796_0ukkfrny2",
+    "no": 16,
+    "doNo": "0705/JL/CKRG/0226",
+    "orderDate": "2026-02-18",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-18",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "UNIT",
+        "description": "TRW0002 - JASA ANGKUTAN"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-18",
+    "notes": "12/02/2026 SPO NO 8306063187",
+    "timestamp": 1771553281796
+  },
+  {
+    "id": "do_1771553281796_iy97z7h16",
+    "no": 17,
+    "doNo": "0706/JL/CKRG/0226",
+    "orderDate": "2026-02-18",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-18",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "UNIT",
+        "description": "TRW0002 - JASA ANGKUTAN"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-18",
+    "notes": "13/02/2026 SPO NO 8306063245",
+    "timestamp": 1771553281796
+  },
+  {
+    "id": "do_1771553281796_p0q5cuzsx",
+    "no": 18,
+    "doNo": "0707/JL/CKRG/0226",
+    "orderDate": "2026-02-18",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-18",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "UNIT",
+        "description": "TRW0002 - JASA ANGKUTAN"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-18",
+    "notes": "15/02/2026 SPO NO 8306063289",
+    "timestamp": 1771553281796
+  },
+  {
+    "id": "do_1771553281796_gwz7ksywb",
+    "no": 19,
+    "doNo": "0708/JL/CKRG/0226",
+    "orderDate": "2026-02-18",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-18",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "UNIT",
+        "description": "TRW0002 - JASA ANGKUTAN"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-18",
+    "notes": "15/02/2026 SPO NO 8306063306",
+    "timestamp": 1771553281796
+  },
+  {
+    "id": "do_1771553281796_mtytgargy",
+    "no": 20,
+    "doNo": "0709/JL/CKRG/0226",
+    "orderDate": "2026-02-18",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-18",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "JASA ANGKUTAN",
+        "qty": 1,
+        "unit": "UNIT",
+        "description": "TRW0002 - JASA ANGKUTAN"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-18",
+    "notes": "17/02/2026 SPO NO 8306063349",
+    "timestamp": 1771553281796
+  },
+  {
+    "id": "do_1771553281796_a8jjczuso",
+    "no": 21,
+    "doNo": "0636/JL/CKRG/0226",
+    "orderDate": "2026-02-13",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-13",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "BIAYA PENGGANTIAN ONGKOS KULI",
+        "qty": 1,
+        "unit": "LOT",
+        "description": "TRW0004 - BIAYA PENGGANTIAN ONGKOS KULI"
+      },
+      {
+        "product": "BIAYA PENGGANTIAN ONGKOS KULI",
+        "qty": 1,
+        "unit": "LOT",
+        "description": "TRW0004 - BIAYA PENGGANTIAN ONGKOS KULI"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-13",
+    "notes": "02/02/2026 SPO NO 8308051330 09/02/2026 SPO NO 8308051330",
+    "timestamp": 1771553281796
+  },
+  {
+    "id": "do_1771553281796_u4evhe218",
+    "no": 22,
+    "doNo": "0710/JL/CKRG/0226",
+    "orderDate": "2026-02-18",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-18",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "PEMBAYARAN PENGGANTIAN KULI BONGKAR",
+        "qty": 1,
+        "unit": "UNIT",
+        "description": "TRW004 - PEMBAYARAN PENGGANTIAN KULI BONGKAR"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-18",
+    "notes": "18 FEBRUARI 2026",
+    "timestamp": 1771553281796
+  },
+  {
+    "id": "do_1771553281796_rih9vpr48",
+    "no": 23,
+    "doNo": "0711/JL/CKRG/0226",
+    "orderDate": "2026-02-18",
+    "customerCode": "",
+    "customerName": "PT WILMAR CAHAYA INDONESIA TBK",
+    "customerAddress": "",
+    "status": "Close",
+    "scheduledDate": "2026-02-18",
+    "scheduledTime": "08:00",
+    "items": [
+      {
+        "product": "PEMBAYARAN PENGGANTIAN KULI BONGKAR",
+        "qty": 1,
+        "unit": "UNIT",
+        "description": "TRW004 - PEMBAYARAN PENGGANTIAN KULI BONGKAR"
+      }
+    ],
+    "vehicleId": "",
+    "vehicleNo": "",
+    "driverId": "",
+    "driverName": "",
+    "routeId": "",
+    "routeName": "",
+    "customerDirectDeal": 0,
+    "customerVendorDeal": 0,
+    "totalDeal": 0,
+    "created": "2026-02-18",
+    "notes": "18 FEBRUARI 2026",
+    "timestamp": 1771553281796
+  }
+]

@@ -1,0 +1,65 @@
+TEST PRODUCTION SUBMIT MATERIAL LOADING - DETAILED
+
+STEP 1: Open Production page
+- Navigate to Packaging → Production
+
+STEP 2: Click Submit on any production
+- Find a production with status OPEN or DRAFT
+- Click the Submit button
+- Submit dialog should open
+
+STEP 3: Open browser console
+- Press F12 to open DevTools
+- Go to Console tab
+- Keep it open while testing
+
+STEP 4: Look for these logs (in order):
+1. 📦 loadAvailableMaterials - Raw data
+   - Should show inventoryRaw: "Array(327)" or similar
+   - Should show materialsDataRaw: "Array(821)" or similar
+
+2. 📦 loadAvailableMaterials - After filtering
+   - Should show inventoryCount: 327 or similar
+   - Should show materialsCount: 821 or similar
+
+3. 📦 Processing inventory items: 327
+   - Shows how many inventory items are being processed
+
+4. 📦 Available materials before dedup: 150
+   - Shows how many materials were found
+
+5. 📦 loadAvailableMaterials - Final result
+   - Should show availableCount > 0
+   - Should show uniqueCount > 0
+   - Should show firstItem with material details
+
+6. 📋 loadBOMData - Raw data
+   - Should show spkDataRaw, bomDataRaw, etc.
+
+7. 📋 loadBOMData - After filtering
+   - Should show spkCount, bomCount, etc.
+
+8. 📋 loadBOMData - Final result
+   - Should show matsUsedCount > 0
+
+STEP 5: Check if materials are displayed
+- Look at the dialog
+- Should see a table with materials
+- Each row should have: Material ID, Name, Unit, Qty Used, Received Qty
+
+STEP 6: Click "+ Add Material" button
+- Look for this log: 🔍 handleAddActualMaterial called
+- Should show availableMaterialsCount > 0
+- Material selection dialog should open
+
+STEP 7: If something fails
+- Look for error messages in console
+- Look for ⚠️ warnings
+- Check if any logs are missing
+
+WHAT TO REPORT:
+- Screenshot of console logs
+- Which logs appear and which don't
+- Whether materials load or not
+- Whether "Add Material" button works or not
+- Any error messages or warnings

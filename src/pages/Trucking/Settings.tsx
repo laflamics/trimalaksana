@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
-import { storageService } from '../../services/storage';
+import { storageService, StorageKeys } from '../../services/storage';
+import { useLanguage } from '../../hooks/useLanguage';
 import '../../styles/common.css';
 
 interface TruckingSettings {
@@ -16,6 +17,7 @@ interface TruckingSettings {
 }
 
 const Settings = () => {
+  const { t } = useLanguage();
   const [settings, setSettings] = useState<TruckingSettings>({
     defaultRate: 50000,
     defaultPaymentTerms: 30,
@@ -25,6 +27,7 @@ const Settings = () => {
     notificationEnabled: true,
     mapProvider: 'Google Maps',
   });
+  const [language, setLanguage] = useState<'id' | 'en'>('id');
   const [saved, setSaved] = useState(false);
   // Custom Dialog state
   const [dialogState, setDialogState] = useState<{
@@ -83,10 +86,15 @@ const Settings = () => {
 
   useEffect(() => {
     loadSettings();
+    // Load language preference from localStorage
+    const savedLanguage = localStorage.getItem('app_language') as 'id' | 'en' | null;
+    if (savedLanguage) {
+      setLanguage(savedLanguage);
+    }
   }, []);
 
   const loadSettings = async () => {
-    const data = await storageService.get<TruckingSettings>('trucking_settings');
+    const data = await storageService.get<TruckingSettings>(StorageKeys.TRUCKING.SETTINGS);
     if (data) {
       setSettings(data);
     }
@@ -94,7 +102,7 @@ const Settings = () => {
 
   const handleSave = async () => {
     try {
-      await storageService.set('trucking_settings', settings);
+      await storageService.set(StorageKeys.TRUCKING.SETTINGS, settings);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (error: any) {
@@ -102,11 +110,66 @@ const Settings = () => {
     }
   };
 
+  const handleLanguageChange = (newLanguage: 'id' | 'en') => {
+    setLanguage(newLanguage);
+    localStorage.setItem('app_language', newLanguage);
+    
+    // Trigger storage event for other tabs/windows
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'app_language',
+      newValue: newLanguage,
+      oldValue: language,
+      storageArea: localStorage,
+    }));
+
+    // Show saved message
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+
+    // Reload page to apply language changes
+    setTimeout(() => {
+      window.location.reload();
+    }, 500);
+  };
+
   return (
     <div>
       <div className="page-header">
-        <h1>Settings</h1>
+        <h1>{t('settings.title') || 'Settings'}</h1>
       </div>
+
+      {/* Language Selection */}
+      <Card title={t('settings.language') || 'Language'}>
+        <div style={{ display: 'flex', gap: '20px', marginTop: '10px' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+            <input
+              type="radio"
+              name="language"
+              value="id"
+              checked={language === 'id'}
+              onChange={() => handleLanguageChange('id')}
+              style={{ cursor: 'pointer' }}
+            />
+            <span>🇮🇩 Indonesian (Bahasa Indonesia)</span>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+            <input
+              type="radio"
+              name="language"
+              value="en"
+              checked={language === 'en'}
+              onChange={() => handleLanguageChange('en')}
+              style={{ cursor: 'pointer' }}
+            />
+            <span>🇬🇧 English</span>
+          </label>
+        </div>
+        {saved && (
+          <p style={{ color: '#28a745', marginTop: '10px', fontSize: '14px' }}>
+            ✓ {t('common.success') || 'Success'} - {t('settings.languageChanged') || 'Language changed'}
+          </p>
+        )}
+      </Card>
 
       <Card title="Trucking Settings">
         <Input

@@ -3,10 +3,13 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
+import DateRangeFilter from '../../../components/DateRangeFilter';
 import NotificationBell from '../../../components/NotificationBell';
-import { storageService } from '../../../services/storage';
+import { storageService, StorageKeys } from '../../../services/storage';
 import { deleteTruckingItem, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { setupRealTimeSync, TRUCKING_SYNC_KEYS } from '../../../utils/real-time-sync-helper';
 import { useDialog } from '../../../hooks/useDialog';
+import { useLanguage } from '../../../hooks/useLanguage';
 import { generateInvoiceHtml } from '../../../pdf/invoice-pdf-template';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../../utils/actions';
 import { loadLogoAsBase64 } from '../../../utils/logo-loader';
@@ -46,6 +49,8 @@ const Accounting = () => {
   const [products, setProducts] = useState<any[]>([]);
   const [salesOrders, setSalesOrders] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   
   // Custom Dialog - menggunakan hook terpusat
   const { showAlert: showAlertBase, showConfirm: showConfirmBase, DialogComponent } = useDialog();
@@ -71,20 +76,31 @@ const Accounting = () => {
 
   useEffect(() => {
     loadData();
+    
+    // Real-time listener untuk server updates
+    const cleanup = setupRealTimeSync({
+      keys: [TRUCKING_SYNC_KEYS.INVOICES, TRUCKING_SYNC_KEYS.SURAT_JALAN, TRUCKING_SYNC_KEYS.DELIVERY_ORDERS],
+      onUpdate: loadData,
+    });
+    
     // Refresh setiap 2 detik untuk cek notifikasi baru
     const interval = setInterval(() => {
       loadData();
     }, 2000);
-    return () => clearInterval(interval);
+    
+    return () => {
+      clearInterval(interval);
+      cleanup();
+    };
   }, []);
 
   const loadData = async () => {
-    const inv = await storageService.get<any[]>('trucking_invoices') || [];
-    const exp = await storageService.get<any[]>('trucking_expenses') || [];
-    const notifs = await storageService.get<any[]>('trucking_invoiceNotifications') || [];
-    const cust = await storageService.get<any[]>('trucking_customers') || [];
-    const prod = await storageService.get<any[]>('trucking_products') || [];
-    const so = await storageService.get<any[]>('trucking_salesOrders') || [];
+    const inv = await storageService.get<any[]>(StorageKeys.TRUCKING.INVOICES) || [];
+    const exp = await storageService.get<any[]>(StorageKeys.TRUCKING.EXPENSES) || [];
+    const notifs = await storageService.get<any[]>(StorageKeys.TRUCKING.INVOICE_NOTIFICATIONS) || [];
+    const cust = await storageService.get<any[]>(StorageKeys.TRUCKING.CUSTOMERS) || [];
+    const prod = await storageService.get<any[]>(StorageKeys.TRUCKING.PRODUCTS) || [];
+    const so = await storageService.get<any[]>(StorageKeys.TRUCKING.SALES_ORDERS) || [];
     
     // Filter out deleted items menggunakan helper function
     const activeInvoices = filterActiveItems(inv || []);
@@ -142,7 +158,7 @@ const Accounting = () => {
     
     // Update notifications di storage (cleanup yang sudah tidak relevan)
     if (JSON.stringify(cleanedNotifs) !== JSON.stringify(notifsArray)) {
-      await storageService.set('trucking_invoiceNotifications', cleanedNotifs);
+      await storageService.set(StorageKeys.TRUCKING.INVOICE_NOTIFICATIONS, cleanedNotifs);
       console.log(`🧹 Cleaned up ${notifsArray.length - cleanedNotifs.length} obsolete invoice notifications`);
     }
     
@@ -159,7 +175,7 @@ const Accounting = () => {
   const calculateCOGS = async (sj: any, invoiceLines: any[]): Promise<number> => {
     try {
       const [purchaseOrders, deliveryOrders] = await Promise.all([
-        storageService.get<any[]>('trucking_purchaseOrders') || [],
+        storageService.get<any[]>(StorageKeys.TRUCKING.PURCHASE_ORDERS) || [],
         storageService.get<any[]>('trucking/trucking_delivery_orders') || [],
       ]);
 
@@ -226,7 +242,7 @@ const Accounting = () => {
     }
     
     // Load Surat Jalan untuk validasi
-    const suratJalanList = await storageService.get<any[]>('trucking_suratJalan') || [];
+    const suratJalanList = await storageService.get<any[]>(StorageKeys.TRUCKING.SURAT_JALAN) || [];
     const sj = suratJalanList.find((s: any) => s.sjNo === item.sjNo);
     
     if (!sj) {
@@ -251,7 +267,7 @@ const Accounting = () => {
     const invoiceLines: any[] = [];
     
     // Load DO untuk mendapatkan harga (totalDeal)
-    const doList = await storageService.get<any[]>('trucking_delivery_orders') || [];
+    const doList = await storageService.get<any[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS) || [];
     const relatedDO = doList.find((doItem: any) => doItem.doNo === sj.doNo);
     
     // Ambil totalDeal dari DO sebagai total harga
@@ -261,7 +277,7 @@ const Accounting = () => {
     const totalQty = (sj.items || []).reduce((sum: number, itm: any) => sum + (Number(itm.qty) || 0), 0);
     
     // Load inventory sekali di luar loop
-    const inventory = await storageService.get<any[]>('trucking_inventory') || [];
+    const inventory = await storageService.get<any[]>(StorageKeys.TRUCKING.EXPENSES) || [];
     
     // Gunakan items dari SJ
     if (sj.items && Array.isArray(sj.items) && sj.items.length > 0) {
@@ -403,7 +419,7 @@ const Accounting = () => {
       
       // invoicesArray already declared above
       const updated = [...invoicesArray, newInvoice];
-      await storageService.set('trucking_invoices', updated);
+      await storageService.set(StorageKeys.TRUCKING.INVOICES, updated);
       // Filter out deleted items setelah update
       const activeUpdated = filterActiveItems(updated);
       setInvoices(activeUpdated);
@@ -412,9 +428,9 @@ const Accounting = () => {
       let cogsAmount = 0; // Simpan untuk ditampilkan di alert (scope di luar try-catch)
       try {
             // Reload journalEntries dari storage untuk prevent duplicate (filter out deleted items)
-            const journalEntriesRaw = await storageService.get<any[]>('trucking_journalEntries') || [];
+            const journalEntriesRaw = await storageService.get<any[]>(StorageKeys.TRUCKING.JOURNAL_ENTRIES) || [];
             const journalEntries = filterActiveItems(Array.isArray(journalEntriesRaw) ? journalEntriesRaw : []);
-        const accounts = await storageService.get<any[]>('trucking_accounts') || [];
+        const accounts = await storageService.get<any[]>(StorageKeys.TRUCKING.ACCOUNTS) || [];
         
         // Pastikan accounts ada
         // Ensure accounts is always an array
@@ -436,7 +452,7 @@ const Accounting = () => {
             { code: '6100', name: 'Administrative Expenses', type: 'Expense', balance: 0 },
             { code: '6200', name: 'Financial Expenses', type: 'Expense', balance: 0 },
           ];
-          await storageService.set('trucking_accounts', defaultAccounts);
+          await storageService.set(StorageKeys.TRUCKING.ACCOUNTS, defaultAccounts);
         }
         
         const entryDate = newInvoice.created ? new Date(newInvoice.created).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
@@ -544,7 +560,7 @@ const Accounting = () => {
               id: `${Date.now()}-${idx + 1}`,
               no: baseLength + idx + 1,
             }));
-            await storageService.set('trucking_journalEntries', [...journalEntriesArray, ...entriesWithNo]);
+            await storageService.set(StorageKeys.TRUCKING.JOURNAL_ENTRIES, [...journalEntriesArray, ...entriesWithNo]);
           }
         }
 
@@ -555,7 +571,7 @@ const Accounting = () => {
           
           if (cogsAmount > 0) {
             // Reload journalEntries lagi untuk COGS check (prevent duplicate)
-            const journalEntriesForCOGS = await storageService.get<any[]>('trucking_journalEntries') || [];
+            const journalEntriesForCOGS = await storageService.get<any[]>(StorageKeys.TRUCKING.JOURNAL_ENTRIES) || [];
             const activeJournalEntriesForCOGS = filterActiveItems(Array.isArray(journalEntriesForCOGS) ? journalEntriesForCOGS : []);
             
             // accountsArray already declared above
@@ -590,7 +606,7 @@ const Accounting = () => {
                 },
               ];
 
-              const currentEntriesRaw = await storageService.get<any[]>('trucking_journalEntries') || [];
+              const currentEntriesRaw = await storageService.get<any[]>(StorageKeys.TRUCKING.JOURNAL_ENTRIES) || [];
               const currentEntries = filterActiveItems(Array.isArray(currentEntriesRaw) ? currentEntriesRaw : []);
               const baseLength = currentEntries.length;
               const cogsEntriesWithNo = cogsEntries.map((entry, idx) => ({
@@ -599,7 +615,7 @@ const Accounting = () => {
                 no: baseLength + idx + 1,
               }));
 
-              await storageService.set('trucking_journalEntries', [...currentEntries, ...cogsEntriesWithNo]);
+              await storageService.set(StorageKeys.TRUCKING.JOURNAL_ENTRIES, [...currentEntries, ...cogsEntriesWithNo]);
               console.log(`✅ COGS journal entries created for Invoice ${invoiceNo}: COGS +${cogsAmount}, Inventory -${cogsAmount}`);
             }
           }
@@ -615,7 +631,7 @@ const Accounting = () => {
       // Hapus notification setelah invoice dibuat
       if (notif) {
         const updatedNotifs = invoiceNotificationsArray.filter((n: any) => n.id !== notif.id);
-        await storageService.set('trucking_invoiceNotifications', updatedNotifs);
+        await storageService.set(StorageKeys.TRUCKING.INVOICE_NOTIFICATIONS, updatedNotifs);
         setInvoiceNotifications(updatedNotifs.filter((n: any) => n.status === 'PENDING'));
         console.log(`✅ [Invoices] Removed notification for SJ ${item.sjNo} after creating invoice`);
       }
@@ -679,7 +695,7 @@ const Accounting = () => {
       // Cari SJ yang terkait dengan DO jika ada
       let sjNo = '';
       if (doNos && doNos.length > 0) {
-        const sjData = await storageService.get<any[]>('trucking_suratJalan') || [];
+        const sjData = await storageService.get<any[]>(StorageKeys.TRUCKING.SURAT_JALAN) || [];
         const relatedSJ = sjData.find((sj: any) => doNos.includes(sj.doNo));
         if (relatedSJ) {
           sjNo = relatedSJ.sjNo;
@@ -722,7 +738,7 @@ const Accounting = () => {
       };
 
       const updated = [...invoicesArray, newInvoice];
-      await storageService.set('trucking_invoices', updated);
+      await storageService.set(StorageKeys.TRUCKING.INVOICES, updated);
       
       // Filter out deleted items setelah update
       const activeUpdated = filterActiveItems(updated);
@@ -731,9 +747,9 @@ const Accounting = () => {
       // Auto-create journal entries untuk General Ledger
       try {
         // Reload journalEntries dari storage untuk prevent duplicate (filter out deleted items)
-        const journalEntriesRaw = await storageService.get<any[]>('trucking_journalEntries') || [];
+        const journalEntriesRaw = await storageService.get<any[]>(StorageKeys.TRUCKING.JOURNAL_ENTRIES) || [];
         const journalEntries = filterActiveItems(Array.isArray(journalEntriesRaw) ? journalEntriesRaw : []);
-        const accountsRaw = await storageService.get<any[]>('trucking_accounts') || [];
+        const accountsRaw = await storageService.get<any[]>(StorageKeys.TRUCKING.ACCOUNTS) || [];
         const accountsArray = filterActiveItems(Array.isArray(accountsRaw) ? accountsRaw : []);
         
         if (accountsArray.length === 0) {
@@ -753,7 +769,7 @@ const Accounting = () => {
             { code: '6100', name: 'Administrative Expenses', type: 'Expense', balance: 0 },
             { code: '6200', name: 'Financial Expenses', type: 'Expense', balance: 0 },
           ];
-          await storageService.set('trucking_accounts', defaultAccounts);
+          await storageService.set(StorageKeys.TRUCKING.ACCOUNTS, defaultAccounts);
         }
         
         const entryDate = newInvoice.created ? new Date(newInvoice.created).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
@@ -857,13 +873,13 @@ const Accounting = () => {
               id: `${Date.now()}-manual-${idx + 1}`,
               no: baseLength + idx + 1,
             }));
-            await storageService.set('trucking_journalEntries', [...journalEntriesArray, ...entriesWithNo]);
+            await storageService.set(StorageKeys.TRUCKING.JOURNAL_ENTRIES, [...journalEntriesArray, ...entriesWithNo]);
           }
         }
 
         // Auto-create tax record untuk Tax Management
         if (tax > 0) {
-          const taxRecords = await storageService.get<any[]>('trucking_taxRecords') || [];
+          const taxRecords = await storageService.get<any[]>(StorageKeys.TRUCKING.TAX_RECORDS) || [];
           const existingTaxRecord = taxRecords.find((r: any) => 
             r.reference === invoiceNo && r.referenceType === 'Invoice'
           );
@@ -888,7 +904,7 @@ const Accounting = () => {
               created: newInvoice.created,
             };
             
-            await storageService.set('trucking_taxRecords', [...taxRecords, newTaxRecord]);
+            await storageService.set(StorageKeys.TRUCKING.TAX_RECORDS, [...taxRecords, newTaxRecord]);
           }
         }
       } catch (error: any) {
@@ -898,7 +914,7 @@ const Accounting = () => {
       
       // Hapus notifikasi jika invoice dibuat dari DO
       if (doNos && doNos.length > 0) {
-        const allNotifs = await storageService.get<any[]>('trucking_invoiceNotifications') || [];
+        const allNotifs = await storageService.get<any[]>(StorageKeys.TRUCKING.INVOICE_NOTIFICATIONS) || [];
         // Hapus notifikasi yang terkait dengan DO yang sudah dibuat invoice
         const updatedNotifs = allNotifs.filter((n: any) => {
           // Cek apakah notifikasi terkait dengan DO yang sudah dibuat invoice
@@ -911,7 +927,7 @@ const Accounting = () => {
           }
           return true;
         });
-        await storageService.set('trucking_invoiceNotifications', updatedNotifs);
+        await storageService.set(StorageKeys.TRUCKING.INVOICE_NOTIFICATIONS, updatedNotifs);
         console.log(`✅ [Invoices] Removed ${allNotifs.length - updatedNotifs.length} notifications for DOs ${doNos.join(', ')} after creating invoice`);
       }
       
@@ -1032,51 +1048,39 @@ const Accounting = () => {
     const productMap: Record<string, string> = {};
     
     // Load inventory untuk mencari product juga
-    const inventory = await storageService.get<any[]>('trucking_inventory') || [];
+    const inventory = await storageService.get<any[]>(StorageKeys.TRUCKING.EXPENSES) || [];
     // Ensure inventory is always an array
     const inventoryArray = Array.isArray(inventory) ? inventory : [];
     // Ensure products is always an array
     const productsArray = Array.isArray(products) ? products : [];
     
-    const itemLinesArray = Array.isArray(item.lines) ? item.lines : [];
+    const itemLinesArray = Array.isArray(item.items) ? item.items : (Array.isArray(item.lines) ? item.lines : []);
     const productCodeMap: Record<string, string> = {}; // Map untuk kode item
     itemLinesArray.forEach((line: any) => {
-      // Cari di products dulu
-      let product = productsArray.find((p: any) => 
-        p.sku === line.itemSku || 
-        p.kode === line.itemSku || 
-        p.id === line.itemSku ||
-        p.product_id === line.itemSku ||
-        (p.codeItem && p.codeItem === line.itemSku)
-      );
+      const lookupKey = line.itemSku || line.product || '';
       
-      // Kalau tidak ketemu di products, cari di inventory
-      if (!product) {
-        // inventoryArray already declared above
-        const invItem = inventoryArray.find((inv: any) => 
-          inv.codeItem === line.itemSku ||
-          inv.sku === line.itemSku ||
-          inv.kode === line.itemSku ||
-          inv.id === line.itemSku
+      // Untuk trucking: gunakan product field langsung (JASA ANGKUTAN)
+      let productName = line.product || '';
+      let productCode = line.itemSku || '';
+      
+      // Jika product name kosong, coba cari di master
+      if (!productName && line.itemSku) {
+        const product = productsArray.find((p: any) => 
+          p.sku === line.itemSku || 
+          p.kode === line.itemSku || 
+          p.id === line.itemSku ||
+          p.product_id === line.itemSku ||
+          (p.codeItem && p.codeItem === line.itemSku)
         );
-        if (invItem) {
-          product = {
-            nama: invItem.description || invItem.name || line.itemSku,
-            kode: invItem.codeItem || invItem.sku || invItem.kode || '',
-            sku: invItem.codeItem || invItem.sku || invItem.kode || ''
-          };
+        if (product) {
+          productName = product.nama || product.description || product.name || line.itemSku;
+          productCode = product.kode || product.sku || product.codeItem || line.itemSku;
         }
       }
       
-      // Simpan kode item (jika ada)
-      if (product) {
-        const productCode = product.kode || product.sku || product.codeItem || '';
-        productCodeMap[line.itemSku] = productCode; // Kosongkan jika tidak ada kode
-        productMap[line.itemSku] = product.nama || product.description || product.name || line.itemSku;
-      } else {
-        // Fallback: gunakan itemSku sebagai nama jika tidak ditemukan
-        productCodeMap[line.itemSku] = ''; // Tidak ada kode
-        productMap[line.itemSku] = line.itemSku;
+      if (lookupKey) {
+        productMap[lookupKey] = productName || line.itemSku || lookupKey;
+        productCodeMap[lookupKey] = productCode;
       }
     });
 
@@ -1107,9 +1111,12 @@ const Accounting = () => {
       // itemLinesArray already declared above
       lines: itemLinesArray.map((line: any) => ({
         itemSku: line.itemSku || '',
+        itemName: line.itemName || '', // ✅ Add itemName
         qty: line.qty || 0,
-        price: line.price || 0,
         unit: line.unit || 'PCS', // Include unit
+        price: line.price || 0,
+        total: line.total || 0, // ✅ Add total
+        discount: line.discount || 0, // ✅ Add discount
         pot: line.pot || 0, // Include POT (khusus trucking)
       })),
       bom: item.bom || {},
@@ -1218,7 +1225,7 @@ const Accounting = () => {
   const handleViewSuratJalan = async (item: any) => {
     try {
       // Load Surat Jalan berdasarkan sjNo
-      const suratJalanList = await storageService.get<any[]>('trucking_suratJalan') || [];
+      const suratJalanList = await storageService.get<any[]>(StorageKeys.TRUCKING.SURAT_JALAN) || [];
       // Ensure suratJalanList is always an array
       const suratJalanArray = Array.isArray(suratJalanList) ? suratJalanList : [];
       const sj = suratJalanArray.find((s: any) => s.sjNo === item.sjNo);
@@ -1363,8 +1370,8 @@ const Accounting = () => {
       };
       
       // Simpan audit log menggunakan storageService
-      const auditLogs = await storageService.get<any[]>('trucking_auditLogs') || [];
-      await storageService.set('trucking_auditLogs', [...auditLogs, auditLog]);
+      const auditLogs = await storageService.get<any[]>(StorageKeys.TRUCKING.AUDIT_LOGS) || [];
+      await storageService.set(StorageKeys.TRUCKING.AUDIT_LOGS, [...auditLogs, auditLog]);
       return true;
     } catch (error) {
       console.error('Error saving tombstone to audit log:', error);
@@ -1393,7 +1400,7 @@ const Accounting = () => {
         async () => {
           try {
             // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
-            const deleteResult = await deleteTruckingItem('trucking_invoices', item.id, 'id');
+            const deleteResult = await deleteTruckingItem(StorageKeys.TRUCKING.INVOICES, item.id, 'id');
             
             if (deleteResult.success) {
               // Reload data
@@ -1444,11 +1451,11 @@ const Accounting = () => {
         async () => {
           try {
             // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
-            const deleteResult = await deleteTruckingItem('trucking_expenses', item.id, 'id');
+            const deleteResult = await deleteTruckingItem(StorageKeys.TRUCKING.EXPENSES, item.id, 'id');
             
             if (deleteResult.success) {
               // Reload data dengan helper (handle race condition)
-              const activeExpenses = await reloadTruckingData('trucking_expenses', setExpenses);
+              const activeExpenses = await reloadTruckingData(StorageKeys.TRUCKING.EXPENSES, setExpenses);
               setExpenses(activeExpenses);
               await loadData();
               showAlert(`✅ Expense "${item.expenseNo}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
@@ -1490,7 +1497,7 @@ const Accounting = () => {
         return true;
       });
       
-      await storageService.set('trucking_invoiceNotifications', updatedNotifs);
+      await storageService.set(StorageKeys.TRUCKING.INVOICE_NOTIFICATIONS, updatedNotifs);
       setInvoiceNotifications(updatedNotifs.filter((n: any) => n.status === 'PENDING'));
       showToast('Notification dismissed', 'success');
     } catch (error: any) {
@@ -1643,17 +1650,36 @@ const Accounting = () => {
   const filteredInvoices = useMemo(() => {
     // Ensure sortedInvoices is always an array
     const sortedInvoicesArray = Array.isArray(sortedInvoices) ? sortedInvoices : [];
-    if (!searchQuery) return sortedInvoicesArray;
-    const query = searchQuery.toLowerCase();
-    return sortedInvoicesArray.filter((i: any) =>
-      (i.invoiceNo || '').toLowerCase().includes(query) ||
-      (i.customer || '').toLowerCase().includes(query) ||
-      (i.soNo || '').toLowerCase().includes(query) ||
-      (i.status || '').toLowerCase().includes(query) ||
-      (i.paymentTerms || '').toLowerCase().includes(query) ||
-      (i.sjNo || '').toLowerCase().includes(query)
-    );
-  }, [sortedInvoices, searchQuery]);
+    let filtered = sortedInvoicesArray;
+    
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((i: any) =>
+        (i.invoiceNo || '').toLowerCase().includes(query) ||
+        (i.customer || '').toLowerCase().includes(query) ||
+        (i.soNo || '').toLowerCase().includes(query) ||
+        (i.status || '').toLowerCase().includes(query) ||
+        (i.paymentTerms || '').toLowerCase().includes(query) ||
+        (i.sjNo || '').toLowerCase().includes(query)
+      );
+    }
+    
+    // Date filter
+    if (dateFrom) {
+      filtered = filtered.filter((i: any) => {
+        const invoiceDate = i.created || i.updated || '';
+        return invoiceDate >= dateFrom;
+      });
+    }
+    if (dateTo) {
+      filtered = filtered.filter((i: any) => {
+        const invoiceDate = i.created || i.updated || '';
+        return invoiceDate <= dateTo;
+      });
+    }
+    
+    return filtered;
+  }, [sortedInvoices, searchQuery, dateFrom, dateTo]);
 
   // Filter expenses berdasarkan search query
   const filteredExpenses = useMemo(() => {
@@ -1758,8 +1784,8 @@ const Accounting = () => {
           {activeTab === 'invoices' && (
             <div>
               {/* Header dengan tombol Create Invoice */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <div style={{ flex: 1, marginRight: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 280px', minWidth: '240px' }}>
                   <Input
                     label="Search & Filter"
                     value={searchQuery}
@@ -1767,10 +1793,19 @@ const Accounting = () => {
                     placeholder="Search by Invoice No, Customer, SO No, Status, Payment Terms, SJ No..."
                   />
                 </div>
+                <div style={{ flex: '1 1 400px', minWidth: '350px' }}>
+                  <DateRangeFilter
+                    onDateChange={(from, to) => {
+                      setDateFrom(from);
+                      setDateTo(to);
+                    }}
+                    defaultFrom={dateFrom}
+                    defaultTo={dateTo}
+                  />
+                </div>
                 <Button 
                   variant="primary" 
                   onClick={() => setShowCreateInvoiceDialog(true)}
-                  style={{ marginTop: '24px' }}
                 >
                   + Create Invoice
                 </Button>
@@ -2139,11 +2174,11 @@ const Accounting = () => {
           onClose={() => setEditingInvoice(null)}
           onSave={async (updatedData) => {
             // Load semua data dari storage untuk update
-            const allInvoices = await storageService.get<any[]>('trucking_invoices') || [];
+            const allInvoices = await storageService.get<any[]>(StorageKeys.TRUCKING.INVOICES) || [];
             const updated = allInvoices.map(inv =>
               inv.id === editingInvoice.id ? { ...inv, ...updatedData } : inv
             );
-            await storageService.set('trucking_invoices', updated);
+            await storageService.set(StorageKeys.TRUCKING.INVOICES, updated);
             // Reload data dengan filter active items menggunakan helper function
             await loadData();
             setEditingInvoice(null);
@@ -2170,14 +2205,14 @@ const Accounting = () => {
                   }
                 : inv
             );
-            await storageService.set('trucking_invoices', updated);
+            await storageService.set(StorageKeys.TRUCKING.INVOICES, updated);
             // Reload data dengan filter active items menggunakan helper function
             await loadData();
             
             // Create payment record untuk AR tracking
             try {
               const invoiceTotal = updatingInvoice.bom?.total || 0;
-              const existingPayments = await storageService.get<any[]>('trucking_payments') || [];
+              const existingPayments = await storageService.get<any[]>(StorageKeys.TRUCKING.PAYMENTS) || [];
               
               // Cek apakah payment record sudah ada
               const existingPayment = existingPayments.find((p: any) => 
@@ -2202,7 +2237,7 @@ const Accounting = () => {
                   created: new Date().toISOString(),
                 };
                 
-                await storageService.set('trucking_payments', [...existingPayments, newPayment]);
+                await storageService.set(StorageKeys.TRUCKING.PAYMENTS, [...existingPayments, newPayment]);
               }
             } catch (error: any) {
               console.error('Error creating payment record:', error);
@@ -2211,11 +2246,11 @@ const Accounting = () => {
             // Auto-create journal entries untuk payment (Cash + AR)
             try {
               // Reload journalEntries dari storage untuk prevent duplicate (filter out deleted items)
-              const journalEntriesRaw = await storageService.get<any[]>('trucking_journalEntries') || [];
+              const journalEntriesRaw = await storageService.get<any[]>(StorageKeys.TRUCKING.JOURNAL_ENTRIES) || [];
               const journalEntries = (Array.isArray(journalEntriesRaw) ? journalEntriesRaw : []).filter((e: any) => {
                 return !(e?.deleted === true || e?.deleted === 'true' || e?.deletedAt);
               });
-              const accountsRaw = await storageService.get<any[]>('trucking_accounts') || [];
+              const accountsRaw = await storageService.get<any[]>(StorageKeys.TRUCKING.ACCOUNTS) || [];
               const accounts = filterActiveItems(accountsRaw || []);
               const invoiceTotal = updatingInvoice.bom?.total || 0;
               const entryDate = new Date().toISOString().split('T')[0];
@@ -2261,7 +2296,7 @@ const Accounting = () => {
                   id: `${Date.now()}-payment-${idx + 1}`,
                   no: baseLength + idx + 1,
                 }));
-                await storageService.set('trucking_journalEntries', [...journalEntries, ...entriesWithNo]);
+                await storageService.set(StorageKeys.TRUCKING.JOURNAL_ENTRIES, [...journalEntries, ...entriesWithNo]);
               }
             } catch (error: any) {
               console.error('Error creating journal entries for payment:', error);
@@ -2269,13 +2304,13 @@ const Accounting = () => {
             
             // Auto-close SO saat invoice dibayar (GT tidak ada SPK)
             if (updatingInvoice.soNo) {
-              const salesOrders = await storageService.get<any[]>('trucking_salesOrders') || [];
+              const salesOrders = await storageService.get<any[]>(StorageKeys.TRUCKING.SALES_ORDERS) || [];
               const updatedSOs = salesOrders.map(so =>
                 so.soNo === updatingInvoice.soNo && so.status === 'OPEN'
                   ? { ...so, status: 'CLOSE' as const }
                   : so
               );
-              await storageService.set('trucking_salesOrders', updatedSOs);
+              await storageService.set(StorageKeys.TRUCKING.SALES_ORDERS, updatedSOs);
               
               setUpdatingInvoice(null);
               showAlert(`✅ Bukti transfer uploaded\n\n✅ Invoice ${updatingInvoice.invoiceNo} status updated to CLOSE\n✅ SO ${updatingInvoice.soNo} automatically closed`, 'Success');
@@ -2355,7 +2390,7 @@ const CreateInvoiceDialog = ({
     discount: 0,
     discountPercent: 0,
     tax: 0,
-    taxPercent: 0,
+    taxPercent: 11, // Default PPN rate
     biayaLain: 0,
     total: 0,
     tanggalJt: '',
@@ -2379,8 +2414,8 @@ const CreateInvoiceDialog = ({
     const loadData = async () => {
       try {
         const [doData, sjData] = await Promise.all([
-          storageService.get<any[]>('trucking_delivery_orders') || [],
-          storageService.get<any[]>('trucking_suratJalan') || [],
+          storageService.get<any[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS) || [],
+          storageService.get<any[]>(StorageKeys.TRUCKING.SURAT_JALAN) || [],
         ]);
         
         // Filter: hanya yang belum di-delete menggunakan helper function
@@ -2421,7 +2456,7 @@ const CreateInvoiceDialog = ({
     if (selectedDOs.length > 0 && mode === 'do') {
       const loadDOData = async () => {
         // Load menggunakan storageService untuk membaca dari file storage juga
-        const doDataRaw = await storageService.get<any[]>('trucking_delivery_orders');
+        const doDataRaw = await storageService.get<any[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS);
         const doData = doDataRaw || [];
         const selectedDOItems = doData.filter((doItem: any) => selectedDOs.includes(doItem.doNo));
         
@@ -2544,19 +2579,28 @@ const CreateInvoiceDialog = ({
     // Recalculate totals
     const subtotal = updated.subtotal || 0;
     const discount = updated.discount || 0;
-    const tax = updated.tax || 0;
+    let tax = updated.tax || 0;
+    let taxPercent = updated.taxPercent || 0;
     const biayaLain = updated.biayaLain || 0;
+    
+    // Auto-calculate tax if subtotal changed and tax is 0 (default 11% PPN)
+    if (field === 'subtotal' && tax === 0 && subtotal > 0) {
+      taxPercent = 11; // Default PPN rate
+      tax = (subtotal * taxPercent) / 100;
+    }
+    
     const total = subtotal - discount + tax + biayaLain;
     
     // Recalculate percentages
     const discountPercent = subtotal > 0 ? (discount / subtotal) * 100 : 0;
-    const taxPercent = subtotal > 0 ? (tax / subtotal) * 100 : 0;
+    const finalTaxPercent = subtotal > 0 ? (tax / subtotal) * 100 : 0;
     
     setCalculation({
       ...updated,
+      tax,
       total,
       discountPercent,
-      taxPercent,
+      taxPercent: finalTaxPercent,
     });
   };
   

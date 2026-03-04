@@ -3,8 +3,10 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService } from '../../../services/storage';
+import DateRangeFilter from '../../../components/DateRangeFilter';
+import { storageService, StorageKeys } from '../../../services/storage';
 import { deleteTruckingItem, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { setupRealTimeSync, TRUCKING_SYNC_KEYS } from '../../../utils/real-time-sync-helper';
 import { useDialog } from '../../../hooks/useDialog';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../../utils/excel-helper';
@@ -42,12 +44,15 @@ interface DeliveryOrder {
   routeName?: string;
   status: 'Open' | 'Close';
   scheduledDate?: string;
+  scheduledTime?: string; // Time for scheduled delivery
   actualDeliveryDate?: string;
   notes?: string;
   totalWeight?: number;
   totalVolume?: number;
-  totalDeal?: number; // Total deal/harga kesepakatan delivery
-  discountPercent?: number; // Discount percentage
+  customerDirectDeal?: number; // Customer-Direct-Deal (harga deal langsung dengan customer)
+  customerVendorDeal?: number; // Customer-Vendor-Deal (harga deal dengan vendor/supplier)
+  totalDeal?: number; // Total Deal (total keseluruhan)
+  discountPercent?: number; // Discount percentage (optional, for calculation)
   confirmed?: boolean; // Flag apakah sudah di-confirm
   confirmedAt?: string; // Timestamp kapan di-confirm
   created?: string; // Timestamp when created
@@ -79,6 +84,8 @@ const DeliveryOrders = () => {
 
   const [editingItem, setEditingItem] = useState<DeliveryOrder | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [formData, setFormData] = useState<Partial<DeliveryOrder>>({
     doNo: '',
     orderDate: new Date().toISOString().split('T')[0],
@@ -92,27 +99,38 @@ const DeliveryOrders = () => {
     status: 'Open',
     scheduledDate: '',
     notes: '',
+    customerDirectDeal: 0,
+    customerVendorDeal: 0,
     totalDeal: 0,
     discountPercent: 0,
   });
   const [newItem, setNewItem] = useState({ product: '', qty: 0, unit: 'PCS', description: '', customUnit: '' });
   const [showCustomUnit, setShowCustomUnit] = useState(false);
   const [qtyInputValue, setQtyInputValue] = useState<string>(''); // State untuk manage qty input display
-  const [totalDealInputValue, setTotalDealInputValue] = useState<string>(''); // State untuk total deal input
+  const [customerDirectDealInputValue, setCustomerDirectDealInputValue] = useState<string>(''); // State untuk customer direct deal input
+  const [customerVendorDealInputValue, setCustomerVendorDealInputValue] = useState<string>(''); // State untuk customer vendor deal input
   const [discountInputValue, setDiscountInputValue] = useState<string>(''); // State untuk discount input
 
   useEffect(() => {
     loadData();
+    
+    // Real-time listener untuk server updates
+    const cleanup = setupRealTimeSync({
+      keys: [TRUCKING_SYNC_KEYS.DELIVERY_ORDERS, TRUCKING_SYNC_KEYS.CUSTOMERS, TRUCKING_SYNC_KEYS.VEHICLES, TRUCKING_SYNC_KEYS.DRIVERS, TRUCKING_SYNC_KEYS.ROUTES],
+      onUpdate: loadData,
+    });
+    
+    return cleanup;
   }, []);
 
   const loadData = async () => {
     // Load semua data menggunakan storageService untuk membaca dari file storage juga
     const [ordersDataRaw, customersData, vehiclesData, driversData, routesData] = await Promise.all([
-      storageService.get<DeliveryOrder[]>('trucking_delivery_orders'),
-      storageService.get<any[]>('trucking_customers'),
-      storageService.get<any[]>('trucking_vehicles'),
-      storageService.get<any[]>('trucking_drivers'),
-      storageService.get<any[]>('trucking_routes'),
+      storageService.get<DeliveryOrder[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS),
+      storageService.get<any[]>(StorageKeys.TRUCKING.CUSTOMERS),
+      storageService.get<any[]>(StorageKeys.TRUCKING.VEHICLES),
+      storageService.get<any[]>(StorageKeys.TRUCKING.DRIVERS),
+      storageService.get<any[]>(StorageKeys.TRUCKING.ROUTES),
     ]);
     
     // Ensure arrays (handle null/undefined)
@@ -248,7 +266,7 @@ const DeliveryOrders = () => {
       const route = routes.find(r => r.id === formData.routeId);
 
       // Load semua data menggunakan storageService untuk membaca dari file storage juga
-      const allOrdersRaw = await storageService.get<DeliveryOrder[]>('trucking_delivery_orders');
+      const allOrdersRaw = await storageService.get<DeliveryOrder[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS);
       const allOrders = allOrdersRaw || orders; // Fallback ke orders state jika kosong
       
       if (editingItem) {
@@ -275,7 +293,7 @@ const DeliveryOrders = () => {
         );
         
         // Simpan menggunakan storageService untuk menyimpan ke file storage juga
-        await storageService.set('trucking_delivery_orders', updated);
+        await storageService.set(StorageKeys.TRUCKING.DELIVERY_ORDERS, updated);
         
         // Filter out deleted items untuk display menggunakan helper function
         const activeOrders = filterActiveItems(updated);
@@ -307,7 +325,7 @@ const DeliveryOrders = () => {
         const updated = [...allOrders, newOrder];
         
         // Simpan menggunakan storageService untuk menyimpan ke file storage juga
-        await storageService.set('trucking_delivery_orders', updated);
+        await storageService.set(StorageKeys.TRUCKING.DELIVERY_ORDERS, updated);
         
         // Filter out deleted items untuk display menggunakan helper function
         const activeOrders = filterActiveItems(updated);
@@ -335,13 +353,16 @@ const DeliveryOrders = () => {
         status: 'Open',
         scheduledDate: '',
         notes: '',
+        customerDirectDeal: 0,
+        customerVendorDeal: 0,
         totalDeal: 0,
         discountPercent: 0,
       });
       setNewItem({ product: '', qty: 0, unit: 'PCS', description: '', customUnit: '' });
       setShowCustomUnit(false);
       setQtyInputValue('');
-      setTotalDealInputValue('');
+      setCustomerDirectDealInputValue('');
+      setCustomerVendorDealInputValue('');
       setDiscountInputValue('');
     } catch (error: any) {
       showAlert(`Error saving delivery order: ${error.message}`, 'Error');
@@ -354,7 +375,8 @@ const DeliveryOrders = () => {
     setNewItem({ product: '', qty: 0, unit: 'PCS', description: '', customUnit: '' });
     setShowCustomUnit(false);
     setQtyInputValue(''); // Reset qty input
-    setTotalDealInputValue(item.totalDeal && item.totalDeal > 0 ? String(item.totalDeal) : '');
+    setCustomerDirectDealInputValue(item.customerDirectDeal && item.customerDirectDeal > 0 ? String(item.customerDirectDeal) : '');
+    setCustomerVendorDealInputValue(item.customerVendorDeal && item.customerVendorDeal > 0 ? String(item.customerVendorDeal) : '');
     setDiscountInputValue(item.discountPercent && item.discountPercent > 0 ? String(item.discountPercent) : '');
     setShowForm(true);
   };
@@ -380,11 +402,11 @@ const DeliveryOrders = () => {
         async () => {
           try {
             // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
-            const deleteResult = await deleteTruckingItem('trucking_delivery_orders', item.id, 'id');
+            const deleteResult = await deleteTruckingItem(StorageKeys.TRUCKING.DELIVERY_ORDERS, item.id, 'id');
             
             if (deleteResult.success) {
               // Reload data dengan helper (handle race condition)
-              const activeOrders = await reloadTruckingData('trucking_delivery_orders', setOrders);
+              const activeOrders = await reloadTruckingData(StorageKeys.TRUCKING.DELIVERY_ORDERS, setOrders);
               // Sort by orderDate descending (newest first)
               const sortedUpdated = [...activeOrders].sort((a, b) => {
                 const dateA = a.orderDate ? new Date(a.orderDate).getTime() : (a.created ? new Date(a.created).getTime() : 0);
@@ -414,7 +436,7 @@ const DeliveryOrders = () => {
   const handleConfirmDO = async (item: DeliveryOrder) => {
     try {
       // Load semua data menggunakan storageService
-      const allOrdersRaw = await storageService.get<DeliveryOrder[]>('trucking_delivery_orders');
+      const allOrdersRaw = await storageService.get<DeliveryOrder[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS);
       const allOrders = allOrdersRaw || orders;
       
       // Update DO dengan confirmed flag
@@ -429,57 +451,59 @@ const DeliveryOrders = () => {
       );
       
       // Simpan menggunakan storageService
-      await storageService.set('trucking_delivery_orders', updated);
+      await storageService.set(StorageKeys.TRUCKING.DELIVERY_ORDERS, updated);
       
       // Filter out deleted items untuk display menggunakan helper function
       const activeOrders = filterActiveItems(updated);
       
       setOrders(activeOrders.map((o, idx) => ({ ...o, no: idx + 1 })));
 
-      // 🚀 AUTO-CREATE DELIVERY NOTE langsung saat DO di-confirm
-      const allDN = await storageService.get<any[]>('trucking_deliveryNote') || [];
-      const existingDN = allDN.find((dn: any) => dn.doNo === item.doNo && !dn.deleted);
+      // 🚀 AUTO-CREATE PETTY CASH REQUEST langsung saat DO di-confirm
+      // Petty Cash harus dibuat dan di-distribusi dulu sebelum bisa create Surat Jalan
+      let pettyCashCreated = false;
+      let pettyCashNo = '';
       
-      if (!existingDN) {
-        // Load drivers, vehicles, routes untuk mendapatkan data lengkap
-        const [driversData, vehiclesData, routesData] = await Promise.all([
-          storageService.get<any[]>('trucking_drivers') || [],
-          storageService.get<any[]>('trucking_vehicles') || [],
-          storageService.get<any[]>('trucking_routes') || [],
-        ]);
+      // ✅ ALWAYS create Petty Cash when DO is confirmed (even without driver)
+      const allPettyCashRaw = await storageService.get<any[]>(StorageKeys.TRUCKING.PETTY_CASH_REQUESTS);
+      const allPettyCash = Array.isArray(allPettyCashRaw) ? allPettyCashRaw : 
+                          (allPettyCashRaw && typeof allPettyCashRaw === 'object' && 'value' in allPettyCashRaw && Array.isArray((allPettyCashRaw as any).value) ? (allPettyCashRaw as any).value : []);
+      
+      const existingPettyCash = allPettyCash.find((pc: any) => 
+        pc.doNo === item.doNo && !pc.deleted
+      );
+      
+      if (!existingPettyCash) {
+        // Load drivers data jika ada driver assigned
+        let driver = null;
+        if (item.driverId) {
+          const driversDataRaw = await storageService.get<any[]>(StorageKeys.TRUCKING.DRIVERS);
+          const driversData = driversDataRaw || drivers;
+          driver = driversData.find((d: any) => d.id === item.driverId);
+        }
         
-        const driver = driversData.find((d: any) => d.id === item.driverId);
-        const vehicle = vehiclesData.find((v: any) => v.id === item.vehicleId);
-        const route = routesData.find((r: any) => r.id === item.routeId);
-        
-        // Generate DN No
+        // Generate requestNo (format sama seperti di PettyCash.tsx)
         const date = new Date();
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const day = String(date.getDate()).padStart(2, '0');
         const random = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
-        const dnNo = `DN-${year}${month}${day}-${random}`;
+        const requestNo = `PC-${year}${month}${day}-${random}`;
+        pettyCashNo = requestNo;
         
         const now = new Date();
-        const items = Array.isArray(item.items) ? item.items : [];
-        const newDN = {
+        const newPettyCash = {
           id: Date.now().toString(),
-          no: allDN.length + 1,
-          dnNo: dnNo,
-          doNo: item.doNo || '',
-          customerName: item.customerName || '',
-          customerAddress: item.customerAddress || '',
-          driverId: item.driverId || '',
-          driverName: driver?.name || item.driverName || '',
+          no: allPettyCash.length + 1,
+          requestNo: requestNo,
+          driverId: driver?.id || item.driverId || '',
+          driverName: driver?.name || item.driverName || 'Belum',
           driverCode: driver?.driverCode || '',
-          vehicleId: item.vehicleId || '',
-          vehicleNo: vehicle?.vehicleNo || item.vehicleNo || '',
-          routeId: item.routeId || '',
-          routeName: route?.routeName || item.routeName || '',
-          items: items,
-          scheduledDate: item.scheduledDate || new Date().toISOString().split('T')[0],
-          scheduledTime: item.scheduledTime || '08:00',
-          status: 'Open',
+          amount: item.totalDeal || 0, // Auto-fill dari DO totalDeal
+          purpose: `Uang jalan untuk DO ${item.doNo}`,
+          description: `Petty cash untuk delivery order ${item.doNo} - ${item.customerName || ''}`,
+          requestDate: now.toISOString().split('T')[0],
+          status: 'Open', // Status awal Open (bukan Pending)
+          doNo: item.doNo, // Reference ke DO
           notes: item.notes || '',
           created: now.toISOString(),
           lastUpdate: now.toISOString(),
@@ -487,66 +511,68 @@ const DeliveryOrders = () => {
           _timestamp: now.getTime(),
         };
         
-        await storageService.set('trucking_deliveryNote', [...allDN, newDN]);
-        console.log(`✅ [DeliveryOrder] Auto-created Delivery Note ${dnNo} for DO ${item.doNo}`);
-      }
-      
-      // 🚀 AUTO-CREATE PETTY CASH REQUEST langsung saat DO di-confirm
-      if (item.driverId) {
-        const allPettyCash = await storageService.get<any[]>('trucking_pettycash_requests') || [];
-        const existingPettyCash = allPettyCash.find((pc: any) => 
-          pc.doNo === item.doNo && !pc.deleted
-        );
+        const updatedPettyCash = [...allPettyCash, newPettyCash];
+        await storageService.set(StorageKeys.TRUCKING.PETTY_CASH_REQUESTS, updatedPettyCash);
         
-        if (!existingPettyCash) {
-          const driver = drivers.find((d: any) => d.id === item.driverId);
+        // 🚀 SEND NOTIFICATION to Petty Cash module
+        try {
+          const allNotificationsRaw = await storageService.get<any[]>(StorageKeys.TRUCKING.PETTY_CASH_NOTIFICATIONS);
+          const allNotifications = Array.isArray(allNotificationsRaw) ? allNotificationsRaw : 
+                                  (allNotificationsRaw && typeof allNotificationsRaw === 'object' && 'value' in allNotificationsRaw && Array.isArray((allNotificationsRaw as any).value) ? (allNotificationsRaw as any).value : []);
           
-          if (driver) {
-            // Generate requestNo (format sama seperti di PettyCash.tsx)
-            const date = new Date();
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const random = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
-            const requestNo = `PC-${year}${month}${day}-${random}`;
-            
-            const newPettyCash = {
-              id: Date.now().toString(),
-              no: allPettyCash.length + 1,
-              requestNo: requestNo,
-              driverId: driver.id,
-              driverName: driver.name,
-              driverCode: driver.driverCode,
-              amount: 0, // Default amount, bisa di-edit nanti
-              purpose: `Uang jalan untuk DO ${item.doNo}`,
-              description: `Petty cash untuk delivery order ${item.doNo} - ${item.customerName || ''}`,
-              requestDate: new Date().toISOString().split('T')[0],
-              status: 'Open',
-              doNo: item.doNo, // Reference ke DO
-              notes: item.notes || '',
-            };
-            
-            await storageService.set('trucking_pettycash_requests', [...allPettyCash, newPettyCash]);
-            console.log(`✅ [DeliveryOrder] Auto-created Petty Cash Request ${requestNo} for DO ${item.doNo}`);
-          }
+          const newNotification = {
+            id: Date.now().toString(),
+            type: 'PETTY_CASH_REQUESTED',
+            status: 'Open',
+            pettyCashNo: requestNo,
+            doNo: item.doNo,
+            driverId: driver?.id || item.driverId || '',
+            driverName: driver?.name || item.driverName || 'Belum',
+            customerName: item.customerName || '',
+            amount: item.totalDeal || 0, // Auto-fill dari DO totalDeal
+            created: new Date().toISOString(),
+            timestamp: Date.now(),
+          };
+          
+          const updatedNotifications = [...allNotifications, newNotification];
+          await storageService.set(StorageKeys.TRUCKING.PETTY_CASH_NOTIFICATIONS, updatedNotifications);
+          console.log(`📢 [DeliveryOrder] Sent notification to Petty Cash for ${requestNo}`);
+        } catch (notifError) {
+          console.warn(`⚠️ [DeliveryOrder] Failed to send Petty Cash notification:`, notifError);
+          // Don't fail the whole operation if notification fails
         }
+        
+        // Small delay untuk memastikan background sync selesai
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        pettyCashCreated = true;
+        console.log(`✅ [DeliveryOrder] Auto-created Petty Cash Request ${requestNo} for DO ${item.doNo}${driver ? ` (Driver: ${driver.name})` : ' (No driver assigned yet)'}`);
+      } else {
+        pettyCashNo = existingPettyCash.requestNo;
+        console.log(`ℹ️ [DeliveryOrder] Petty Cash already exists for DO ${item.doNo}: ${existingPettyCash.requestNo}`);
       }
       
       showAlert(
         `✅ Delivery Order ${item.doNo} confirmed!\n\n` +
-        `📄 Delivery Note: Auto-created\n` +
-        `💰 Petty Cash Request: Auto-created`,
-        'Success'
+        (pettyCashCreated 
+          ? `📋 Petty Cash Request ${pettyCashNo} telah dibuat otomatis.\n` +
+            `💰 Silakan isi amount${!item.driverId ? ', assign driver,' : ','} approve, dan distribusi Petty Cash di menu Finance > Petty Cash.\n` +
+            `📄 Surat Jalan akan otomatis dibuat saat Petty Cash di-distribusi.`
+          : `📋 Petty Cash Request ${pettyCashNo} sudah ada.\n` +
+            `💰 Silakan cek di menu Finance > Petty Cash.`
+        ),
+        'DO Confirmed'
       );
     } catch (error: any) {
-      showAlert(`Error confirming delivery order: ${error.message}`, 'Error');
+      console.error('Error confirming DO:', error);
+      showAlert(`Error confirming DO: ${error.message}`, 'Error');
     }
   };
 
   const handleStatusChange = async (item: DeliveryOrder, newStatus: DeliveryOrder['status']) => {
     try {
       // Load semua data menggunakan storageService
-      const allOrdersRaw = await storageService.get<DeliveryOrder[]>('trucking_delivery_orders');
+      const allOrdersRaw = await storageService.get<DeliveryOrder[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS);
       const allOrders = allOrdersRaw || orders;
       
       const updated = allOrders.map((o: any) =>
@@ -560,7 +586,7 @@ const DeliveryOrders = () => {
       );
       
       // Simpan menggunakan storageService
-      await storageService.set('trucking_delivery_orders', updated);
+      await storageService.set(StorageKeys.TRUCKING.DELIVERY_ORDERS, updated);
       
       // Filter out deleted items untuk display menggunakan helper function
       const activeOrders = filterActiveItems(updated);
@@ -578,7 +604,7 @@ const DeliveryOrders = () => {
   };
 
   const filteredOrders = useMemo(() => {
-    const filtered = (orders || []).filter(order => {
+    let filtered = (orders || []).filter(order => {
       if (!order) return false;
       if (!searchQuery) return true;
       const query = searchQuery.toLowerCase();
@@ -590,19 +616,312 @@ const DeliveryOrders = () => {
         (order.status || '').toLowerCase().includes(query)
       );
     });
+    
+    // Date filter
+    if (dateFrom) {
+      filtered = filtered.filter(order => {
+        const orderDate = order.orderDate || order.created || '';
+        return orderDate >= dateFrom;
+      });
+    }
+    if (dateTo) {
+      filtered = filtered.filter(order => {
+        const orderDate = order.orderDate || order.created || '';
+        return orderDate <= dateTo;
+      });
+    }
+    
     // Sort by orderDate (newest first)
     return filtered.sort((a, b) => {
       const dateA = a.orderDate ? new Date(a.orderDate).getTime() : (a.created ? new Date(a.created).getTime() : 0);
       const dateB = b.orderDate ? new Date(b.orderDate).getTime() : (b.created ? new Date(b.created).getTime() : 0);
       return dateB - dateA; // Newest first
     });
-  }, [orders, searchQuery]);
+  }, [orders, searchQuery, dateFrom, dateTo]);
+
+  const handleImportExcel = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xlsx, .xls';
+    input.onchange = async (e: any) => {
+      try {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data);
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
+
+        if (jsonData.length === 0) {
+          showAlert('File Excel kosong atau format tidak sesuai', 'Error');
+          return;
+        }
+
+        // Parse data dari Excel
+        const importedOrders: DeliveryOrder[] = [];
+        let successCount = 0;
+        let errorCount = 0;
+        const errors: string[] = [];
+
+        for (let i = 0; i < jsonData.length; i++) {
+          const row = jsonData[i];
+          try {
+            // Parse tanggal dari berbagai format
+            const parseDate = (dateValue: any): string => {
+              if (!dateValue) return new Date().toISOString().split('T')[0];
+              
+              // Jika sudah format YYYY-MM-DD
+              if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+                return dateValue;
+              }
+              
+              // Jika format DD Month YYYY (contoh: "02 Januari 2026")
+              if (typeof dateValue === 'string') {
+                const monthMap: Record<string, string> = {
+                  'januari': '01', 'februari': '02', 'maret': '03', 'april': '04',
+                  'mei': '05', 'juni': '06', 'juli': '07', 'agustus': '08',
+                  'september': '09', 'oktober': '10', 'november': '11', 'desember': '12'
+                };
+                
+                const parts = dateValue.toLowerCase().split(' ');
+                if (parts.length === 3) {
+                  const day = parts[0].padStart(2, '0');
+                  const month = monthMap[parts[1]];
+                  const year = parts[2];
+                  if (month) {
+                    return `${year}-${month}-${day}`;
+                  }
+                }
+              }
+              
+              // Jika Excel serial number
+              if (typeof dateValue === 'number') {
+                const date = new Date((dateValue - 25569) * 86400 * 1000);
+                return date.toISOString().split('T')[0];
+              }
+              
+              // Fallback: coba parse as Date
+              const date = new Date(dateValue);
+              if (!isNaN(date.getTime())) {
+                return date.toISOString().split('T')[0];
+              }
+              
+              return new Date().toISOString().split('T')[0];
+            };
+
+            // Parse price (hapus "Rp", spasi, koma, titik)
+            const parsePrice = (priceValue: any): number => {
+              if (!priceValue) return 0;
+              if (typeof priceValue === 'number') return priceValue;
+              
+              const cleaned = String(priceValue)
+                .replace(/Rp/gi, '')
+                .replace(/\s/g, '')
+                .replace(/\./g, '')
+                .replace(/,/g, '');
+              
+              return parseFloat(cleaned) || 0;
+            };
+
+            const doNo = row['DO NO'] || row['doNo'] || generateDONo();
+            const orderDate = parseDate(row['ORDER DATE'] || row['orderDate']);
+            const customerName = row['CUSTOMER'] || row['customer'] || row['customerName'] || '';
+            const vehicleNo = row['VEHICLE'] || row['vehicle'] || row['vehicleNo'] || '';
+            const driverName = row['DRIVER'] || row['driver'] || row['driverName'] || '';
+            const origin = row['ORI'] || row['Ori'] || row['origin'] || '';
+            const routeName = row['ROUTE'] || row['route'] || row['routeName'] || '';
+            const status = (row['STATUS'] || row['status'] || 'Open').toUpperCase() === 'OPEN' ? 'Open' : 'Close';
+            const customerDirectDeal = parsePrice(row['Customer-direct-deal'] || row['CUSTOMER-DIRECT-DEAL'] || row['customerDirectDeal'] || 0);
+            const customerVendorDeal = parsePrice(row['Customer-vendor-deal'] || row['CUSTOMER-VENDOR-DEAL'] || row['customerVendorDeal'] || 0);
+
+            // Validasi minimal
+            if (!customerName) {
+              errors.push(`Baris ${i + 2}: Customer name kosong`);
+              errorCount++;
+              continue;
+            }
+
+            // Cari customer berdasarkan nama (case insensitive)
+            const customer = customers.find(c => 
+              c.nama?.toLowerCase().includes(customerName.toLowerCase()) ||
+              customerName.toLowerCase().includes(c.nama?.toLowerCase())
+            );
+
+            // Cari vehicle berdasarkan vehicleNo (case insensitive, flexible matching)
+            const vehicle = vehicles.find(v => {
+              if (!v.vehicleNo || !vehicleNo) return false;
+              const vNoClean = v.vehicleNo.toLowerCase().replace(/[\s-]/g, '');
+              const searchClean = vehicleNo.toLowerCase().replace(/[\s-]/g, '');
+              return vNoClean === searchClean || 
+                     vNoClean.includes(searchClean) || 
+                     searchClean.includes(vNoClean);
+            });
+
+            // Cari driver berdasarkan nama (case insensitive, flexible matching)
+            const driver = drivers.find(d => {
+              if (!d.name || !driverName) return false;
+              const dNameClean = d.name.toLowerCase().trim();
+              const searchClean = driverName.toLowerCase().trim();
+              return dNameClean === searchClean ||
+                     dNameClean.includes(searchClean) ||
+                     searchClean.includes(dNameClean);
+            });
+
+            // Cari route berdasarkan routeName atau origin-destination
+            const route = routes.find(r => 
+              r.routeName?.toLowerCase().includes(routeName.toLowerCase()) ||
+              routeName.toLowerCase().includes(r.routeName?.toLowerCase()) ||
+              (origin && r.origin?.toLowerCase().includes(origin.toLowerCase()))
+            );
+
+            // Log untuk debugging jika tidak ketemu
+            if (vehicleNo && !vehicle) {
+              console.warn(`[Import] Vehicle not found: "${vehicleNo}"`);
+            }
+            if (driverName && !driver) {
+              console.warn(`[Import] Driver not found: "${driverName}"`);
+            }
+
+            // Hitung discount percent jika ada perbedaan antara direct deal dan vendor deal
+            let discountPercent = 0;
+            if (customerDirectDeal > 0 && customerVendorDeal > 0 && customerVendorDeal < customerDirectDeal) {
+              discountPercent = ((customerDirectDeal - customerVendorDeal) / customerDirectDeal) * 100;
+            }
+
+            const newOrder: DeliveryOrder = {
+              id: Date.now().toString() + '-' + i,
+              no: orders.length + importedOrders.length + 1,
+              doNo: doNo,
+              orderDate: orderDate,
+              customerCode: customer?.kode || '',
+              customerName: customerName,
+              customerAddress: customer?.alamat || customer?.deliveryAddress || '',
+              items: [], // Items bisa di-edit manual setelah import
+              vehicleId: vehicle?.id || '',
+              vehicleNo: vehicleNo,
+              driverId: driver?.id || '',
+              driverName: driverName,
+              routeId: route?.id || '',
+              routeName: routeName || (route ? `${route.routeName} (${route.origin} - ${route.destination})` : ''),
+              status: status as 'Open' | 'Close',
+              scheduledDate: orderDate,
+              notes: origin ? `Origin: ${origin}` : '',
+              customerDirectDeal: customerDirectDeal, // Customer-Direct-Deal
+              customerVendorDeal: customerVendorDeal, // Customer-Vendor-Deal
+              totalDeal: (customerDirectDeal || 0) + (customerVendorDeal || 0), // Total Deal = sum of both
+              discountPercent: discountPercent,
+              confirmed: false,
+              created: new Date().toISOString(),
+            };
+
+            importedOrders.push(newOrder);
+            successCount++;
+          } catch (error: any) {
+            errors.push(`Baris ${i + 2}: ${error.message}`);
+            errorCount++;
+          }
+        }
+
+        if (importedOrders.length === 0) {
+          showAlert('Tidak ada data yang berhasil diimport.\n\n' + errors.join('\n'), 'Error');
+          return;
+        }
+
+        // Simpan ke storage
+        const allOrdersRaw = await storageService.get<DeliveryOrder[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS);
+        const allOrders = allOrdersRaw || orders;
+        const updated = [...allOrders, ...importedOrders];
+        
+        await storageService.set(StorageKeys.TRUCKING.DELIVERY_ORDERS, updated);
+        
+        // Filter dan sort
+        const activeOrders = filterActiveItems(updated);
+        const sortedUpdated = activeOrders.sort((a, b) => {
+          const dateA = a.orderDate ? new Date(a.orderDate).getTime() : (a.created ? new Date(a.created).getTime() : 0);
+          const dateB = b.orderDate ? new Date(b.orderDate).getTime() : (b.created ? new Date(b.created).getTime() : 0);
+          return dateB - dateA;
+        });
+        setOrders(sortedUpdated.map((o, idx) => ({ ...o, no: idx + 1 })));
+
+        // Count linked items
+        const linkedCustomers = importedOrders.filter(o => o.customerCode).length;
+        const linkedVehicles = importedOrders.filter(o => o.vehicleId).length;
+        const linkedDrivers = importedOrders.filter(o => o.driverId).length;
+        const linkedRoutes = importedOrders.filter(o => o.routeId).length;
+
+        let message = `✅ Import berhasil!\n\n`;
+        message += `📊 Total: ${jsonData.length} baris\n`;
+        message += `✅ Berhasil: ${successCount}\n`;
+        message += `\n🔗 Auto-Linked:\n`;
+        message += `  • Customers: ${linkedCustomers}/${successCount}\n`;
+        message += `  • Vehicles: ${linkedVehicles}/${successCount}\n`;
+        message += `  • Drivers: ${linkedDrivers}/${successCount}\n`;
+        message += `  • Routes: ${linkedRoutes}/${successCount}\n`;
+        
+        if (errorCount > 0) {
+          message += `\n❌ Gagal: ${errorCount}\n`;
+          message += `Error:\n${errors.slice(0, 5).join('\n')}`;
+          if (errors.length > 5) {
+            message += `\n... dan ${errors.length - 5} error lainnya`;
+          }
+        }
+        
+        // Warning jika ada yang tidak ter-link
+        const notLinkedVehicles = successCount - linkedVehicles;
+        const notLinkedDrivers = successCount - linkedDrivers;
+        if (notLinkedVehicles > 0 || notLinkedDrivers > 0) {
+          message += `\n\n⚠️ Warning:\n`;
+          if (notLinkedVehicles > 0) {
+            message += `  • ${notLinkedVehicles} vehicle(s) tidak ditemukan di master data\n`;
+          }
+          if (notLinkedDrivers > 0) {
+            message += `  • ${notLinkedDrivers} driver(s) tidak ditemukan di master data\n`;
+          }
+          message += `\nSilakan cek console untuk detail atau tambahkan ke master data.`;
+        }
+
+        showAlert(message, 'Import Result');
+      } catch (error: any) {
+        showAlert(`Error importing Excel: ${error.message}`, 'Error');
+      }
+    };
+    input.click();
+  };
 
   const columns = [
     { key: 'no', header: 'No' },
     { key: 'doNo', header: 'DO No' },
     { key: 'orderDate', header: 'Order Date' },
     { key: 'customerName', header: 'Customer' },
+    { 
+      key: 'customerDirectDeal', 
+      header: 'Customer-Direct-deal',
+      render: (item: DeliveryOrder) => (
+        <span>
+          {item.customerDirectDeal && item.customerDirectDeal > 0 ? `Rp ${item.customerDirectDeal.toLocaleString('id-ID')}` : '-'}
+        </span>
+      ),
+    },
+    { 
+      key: 'customerVendorDeal', 
+      header: 'Customer-Vendor-deal',
+      render: (item: DeliveryOrder) => (
+        <span>
+          {item.customerVendorDeal && item.customerVendorDeal > 0 ? `Rp ${item.customerVendorDeal.toLocaleString('id-ID')}` : '-'}
+        </span>
+      ),
+    },
+    { 
+      key: 'totalDeal', 
+      header: 'Total Deal',
+      render: (item: DeliveryOrder) => (
+        <span style={{ fontWeight: 600, color: 'var(--accent-color)' }}>
+          {item.totalDeal && item.totalDeal > 0 ? `Rp ${item.totalDeal.toLocaleString('id-ID')}` : '-'}
+        </span>
+      ),
+    },
     { key: 'vehicleNo', header: 'Vehicle' },
     { key: 'driverName', header: 'Driver' },
     { key: 'routeName', header: 'Route' },
@@ -838,6 +1157,7 @@ const DeliveryOrders = () => {
       <div className="page-header">
         <h1>Delivery Orders</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
+          <Button variant="secondary" onClick={handleImportExcel}>📤 Import Excel</Button>
           <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
           <Button 
             variant="secondary" 
@@ -990,10 +1310,10 @@ const DeliveryOrders = () => {
                 ];
 
                 // Save to storage (hanya master data)
-                await storageService.set('trucking_customers', dummyCustomers);
-                await storageService.set('trucking_vehicles', dummyVehicles);
-                await storageService.set('trucking_drivers', dummyDrivers);
-                await storageService.set('trucking_routes', dummyRoutes);
+                await storageService.set(StorageKeys.TRUCKING.CUSTOMERS, dummyCustomers);
+                await storageService.set(StorageKeys.TRUCKING.VEHICLES, dummyVehicles);
+                await storageService.set(StorageKeys.TRUCKING.DRIVERS, dummyDrivers);
+                await storageService.set(StorageKeys.TRUCKING.ROUTES, dummyRoutes);
                 
                 showAlert('✅ Master data dummy berhasil dibuat! (3 Customers, 2 Vehicles, 2 Drivers, 2 Routes)', 'Success');
                 loadData();
@@ -1019,7 +1339,7 @@ const DeliveryOrders = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by DO No, Customer, Vehicle, Driver, Status..."
             style={{
-              flex: 1,
+              flex: '1 1 260px',
               padding: '8px 12px',
               background: 'var(--bg-tertiary)',
               border: '1px solid var(--border-color)',
@@ -1029,6 +1349,16 @@ const DeliveryOrders = () => {
               fontFamily: 'inherit',
             }}
           />
+          <div style={{ flex: '1 1 400px', minWidth: '350px' }}>
+            <DateRangeFilter
+              onDateChange={(from, to) => {
+                setDateFrom(from);
+                setDateTo(to);
+              }}
+              defaultFrom={dateFrom}
+              defaultTo={dateTo}
+            />
+          </div>
           <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-secondary)', padding: '4px', borderRadius: '6px' }}>
             <button
               onClick={() => setViewMode('card')}
@@ -1100,6 +1430,9 @@ const DeliveryOrders = () => {
                       );
                     })()}
                     <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                      {item.status === 'Open' && !item.confirmed && (
+                        <Button variant="primary" onClick={() => handleConfirmDO(item)} style={{ fontSize: '10px', padding: '3px 6px', minHeight: '24px' }}>Confirm DO</Button>
+                      )}
                       {item.status === 'Open' && (
                         <Button variant="success" onClick={() => handleStatusChange(item, 'Close')} style={{ fontSize: '10px', padding: '3px 6px', minHeight: '24px' }}>
                           Close
@@ -1111,9 +1444,6 @@ const DeliveryOrders = () => {
                         </Button>
                       )}
                       <Button variant="secondary" onClick={() => handleEdit(item)} style={{ fontSize: '10px', padding: '3px 6px', minHeight: '24px' }}>Edit</Button>
-                      {item.status === 'Open' && !item.confirmed && (
-                        <Button variant="primary" onClick={() => handleConfirmDO(item)} style={{ fontSize: '10px', padding: '3px 6px', minHeight: '24px' }}>Confirm DO</Button>
-                      )}
                       {item.status === 'Open' && (
                         <Button variant="danger" onClick={() => handleDelete(item)} style={{ fontSize: '10px', padding: '3px 6px', minHeight: '24px' }}>Delete</Button>
                       )}
@@ -1202,7 +1532,7 @@ const DeliveryOrders = () => {
               onChange={(v) => setFormData({ ...formData, orderDate: v })}
             />
           </div>
-          <div style={{ marginBottom: '16px' }}>
+          <div style={{ marginBottom: '16px' }}>zzs
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
               Customer *
             </label>
@@ -1461,15 +1791,7 @@ const DeliveryOrders = () => {
                       ...formData, 
                       routeId: matchedRoute?.id || '',
                       routeName: matchedRoute ? `${matchedRoute.routeName} (${matchedRoute.origin} - ${matchedRoute.destination})` : value, // Bisa input manual
-                      // Auto-fill totalDeal dari _price route jika ada
-                      totalDeal: matchedRoute?._price ? (matchedRoute._price + (matchedRoute.tollCost || 0) + (matchedRoute.fuelCost || 0)) : formData.totalDeal || 0,
                     });
-                    
-                    // Update totalDealInputValue jika route match
-                    if (matchedRoute?._price) {
-                      const total = matchedRoute._price + (matchedRoute.tollCost || 0) + (matchedRoute.fuelCost || 0);
-                      setTotalDealInputValue(total > 0 ? String(total) : '');
-                    }
                   }}
                   onBlur={(e) => {
                     const value = e.target.value;
@@ -1484,18 +1806,11 @@ const DeliveryOrders = () => {
                     });
                     
                     if (matchedRoute) {
-                      const totalDeal = matchedRoute._price ? (matchedRoute._price + (matchedRoute.tollCost || 0) + (matchedRoute.fuelCost || 0)) : formData.totalDeal || 0;
                       setFormData({ 
                         ...formData, 
                         routeId: matchedRoute.id,
                         routeName: `${matchedRoute.routeName} (${matchedRoute.origin} - ${matchedRoute.destination})`,
-                        // Auto-fill totalDeal dari _price route jika ada
-                        totalDeal: totalDeal,
                       });
-                      // Update totalDealInputValue
-                      if (matchedRoute._price) {
-                        setTotalDealInputValue(totalDeal > 0 ? String(totalDeal) : '');
-                      }
                     }
                   }}
                   placeholder="Ketik route atau klik Select untuk pilih"
@@ -1555,20 +1870,20 @@ const DeliveryOrders = () => {
             value={formData.scheduledDate || ''}
             onChange={(v) => setFormData({ ...formData, scheduledDate: v })}
           />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
             <div style={{ marginBottom: '12px' }}>
               <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-primary)', fontWeight: '500', fontSize: '13px' }}>
-                Total Deal (Rp)
+                Customer-Direct-Deal (Rp)
               </label>
               <input
                 type="text"
                 inputMode="decimal"
-                value={totalDealInputValue !== '' ? totalDealInputValue : (formData.totalDeal && formData.totalDeal > 0 ? String(formData.totalDeal) : '')}
+                value={customerDirectDealInputValue !== '' ? customerDirectDealInputValue : (formData.customerDirectDeal && formData.customerDirectDeal > 0 ? String(formData.customerDirectDeal) : '')}
                 onFocus={(e) => {
                   const input = e.target as HTMLInputElement;
-                  const currentVal = formData.totalDeal || 0;
+                  const currentVal = formData.customerDirectDeal || 0;
                   if (currentVal === 0 || currentVal === null || currentVal === undefined || String(currentVal) === '0') {
-                    setTotalDealInputValue('');
+                    setCustomerDirectDealInputValue('');
                     input.value = '';
                   } else {
                     input.select();
@@ -1576,9 +1891,9 @@ const DeliveryOrders = () => {
                 }}
                 onMouseDown={(e) => {
                   const input = e.target as HTMLInputElement;
-                  const currentVal = formData.totalDeal || 0;
+                  const currentVal = formData.customerDirectDeal || 0;
                   if (currentVal === 0 || currentVal === null || currentVal === undefined || String(currentVal) === '0') {
-                    setTotalDealInputValue('');
+                    setCustomerDirectDealInputValue('');
                     input.value = '';
                   }
                 }}
@@ -1586,17 +1901,23 @@ const DeliveryOrders = () => {
                   let val = e.target.value;
                   val = val.replace(/[^\d.,]/g, '');
                   const cleaned = removeLeadingZero(val);
-                  setTotalDealInputValue(cleaned);
-                  setFormData({ ...formData, totalDeal: cleaned === '' ? 0 : Number(cleaned) || 0 });
+                  setCustomerDirectDealInputValue(cleaned);
+                  const directDeal = cleaned === '' ? 0 : Number(cleaned) || 0;
+                  const vendorDeal = formData.customerVendorDeal || 0;
+                  setFormData({ 
+                    ...formData, 
+                    customerDirectDeal: directDeal,
+                    totalDeal: directDeal + vendorDeal // Auto-calculate total
+                  });
                 }}
                 onBlur={(e) => {
                   const val = e.target.value;
                   if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
-                    setFormData({ ...formData, totalDeal: 0 });
-                    setTotalDealInputValue('');
+                    setFormData({ ...formData, customerDirectDeal: 0 });
+                    setCustomerDirectDealInputValue('');
                   } else {
-                    setFormData({ ...formData, totalDeal: Number(val) });
-                    setTotalDealInputValue('');
+                    setFormData({ ...formData, customerDirectDeal: Number(val) });
+                    setCustomerDirectDealInputValue('');
                   }
                 }}
                 onKeyDown={(e) => {
@@ -1605,9 +1926,15 @@ const DeliveryOrders = () => {
                   if ((currentVal === '' || currentVal === '0') && /^[1-9]$/.test(e.key)) {
                     e.preventDefault();
                     const newVal = e.key;
-                    setTotalDealInputValue(newVal);
+                    setCustomerDirectDealInputValue(newVal);
                     input.value = newVal;
-                    setFormData({ ...formData, totalDeal: Number(newVal) });
+                    const directDeal = Number(newVal);
+                    const vendorDeal = formData.customerVendorDeal || 0;
+                    setFormData({ 
+                      ...formData, 
+                      customerDirectDeal: directDeal,
+                      totalDeal: directDeal + vendorDeal
+                    });
                   }
                 }}
                 placeholder="0"
@@ -1624,12 +1951,115 @@ const DeliveryOrders = () => {
             </div>
             <div style={{ marginBottom: '12px' }}>
               <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-primary)', fontWeight: '500', fontSize: '13px' }}>
-                Discount (%)
+                Customer-Vendor-Deal (Rp)
               </label>
               <input
                 type="text"
                 inputMode="decimal"
-                value={discountInputValue !== '' ? discountInputValue : (formData.discountPercent && formData.discountPercent > 0 ? String(formData.discountPercent) : '')}
+                value={customerVendorDealInputValue !== '' ? customerVendorDealInputValue : (formData.customerVendorDeal && formData.customerVendorDeal > 0 ? String(formData.customerVendorDeal) : '')}
+                onFocus={(e) => {
+                  const input = e.target as HTMLInputElement;
+                  const currentVal = formData.customerVendorDeal || 0;
+                  if (currentVal === 0 || currentVal === null || currentVal === undefined || String(currentVal) === '0') {
+                    setCustomerVendorDealInputValue('');
+                    input.value = '';
+                  } else {
+                    input.select();
+                  }
+                }}
+                onMouseDown={(e) => {
+                  const input = e.target as HTMLInputElement;
+                  const currentVal = formData.customerVendorDeal || 0;
+                  if (currentVal === 0 || currentVal === null || currentVal === undefined || String(currentVal) === '0') {
+                    setCustomerVendorDealInputValue('');
+                    input.value = '';
+                  }
+                }}
+                onChange={(e) => {
+                  let val = e.target.value;
+                  val = val.replace(/[^\d.,]/g, '');
+                  const cleaned = removeLeadingZero(val);
+                  setCustomerVendorDealInputValue(cleaned);
+                  const vendorDeal = cleaned === '' ? 0 : Number(cleaned) || 0;
+                  const directDeal = formData.customerDirectDeal || 0;
+                  setFormData({ 
+                    ...formData, 
+                    customerVendorDeal: vendorDeal,
+                    totalDeal: directDeal + vendorDeal // Auto-calculate total
+                  });
+                }}
+                onBlur={(e) => {
+                  const val = e.target.value;
+                  if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
+                    setFormData({ ...formData, customerVendorDeal: 0 });
+                    setCustomerVendorDealInputValue('');
+                  } else {
+                    setFormData({ ...formData, customerVendorDeal: Number(val) });
+                    setCustomerVendorDealInputValue('');
+                  }
+                }}
+                onKeyDown={(e) => {
+                  const input = e.target as HTMLInputElement;
+                  const currentVal = input.value;
+                  if ((currentVal === '' || currentVal === '0') && /^[1-9]$/.test(e.key)) {
+                    e.preventDefault();
+                    const newVal = e.key;
+                    setCustomerVendorDealInputValue(newVal);
+                    input.value = newVal;
+                    const vendorDeal = Number(newVal);
+                    const directDeal = formData.customerDirectDeal || 0;
+                    setFormData({ 
+                      ...formData, 
+                      customerVendorDeal: vendorDeal,
+                      totalDeal: directDeal + vendorDeal
+                    });
+                  }
+                }}
+                placeholder="0"
+                style={{
+                  width: '100%',
+                  padding: '6px 10px',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '13px',
+                }}
+              />
+            </div>
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-primary)', fontWeight: '500', fontSize: '13px' }}>
+                Total Deal (Rp) - Auto
+              </label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={formData.totalDeal && formData.totalDeal > 0 ? formData.totalDeal.toLocaleString('id-ID') : '0'}
+                disabled
+                readOnly
+                style={{
+                  width: '100%',
+                  padding: '6px 10px',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  backgroundColor: 'var(--bg-secondary)',
+                  color: 'var(--accent-color)',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'not-allowed',
+                }}
+              />
+            </div>
+          </div>
+          
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-primary)', fontWeight: '500', fontSize: '13px' }}>
+              Discount (%) - Optional
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={discountInputValue !== '' ? discountInputValue : (formData.discountPercent && formData.discountPercent > 0 ? String(formData.discountPercent) : '')}
                 onFocus={(e) => {
                   const input = e.target as HTMLInputElement;
                   const currentVal = formData.discountPercent || 0;
@@ -1696,7 +2126,7 @@ const DeliveryOrders = () => {
                 }}
               />
             </div>
-          </div>
+          
           <Input
             label="Notes"
             value={formData.notes || ''}
@@ -1798,6 +2228,7 @@ const DeliveryOrders = () => {
                           <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Route Name</th>
                           <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Origin</th>
                           <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>Destination</th>
+                          <th style={{ padding: '12px', textAlign: 'right', borderBottom: '2px solid var(--border)' }}>Price (Rp)</th>
                           <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid var(--border)' }}>Action</th>
                         </tr>
                       </thead>
@@ -1809,15 +2240,8 @@ const DeliveryOrders = () => {
                               ...formData, 
                               routeId: r.id,
                               routeName: routeDisplay,
-                              // Auto-fill totalDeal dari _price route jika ada
-                              totalDeal: r._price ? (r._price + (r.tollCost || 0) + (r.fuelCost || 0)) : formData.totalDeal || 0,
+                              customerDirectDeal: r._price || 0, // 🚀 Populate price from route master
                             });
-                            
-                            // Update totalDealInputValue jika route match
-                            if (r._price) {
-                              const total = r._price + (r.tollCost || 0) + (r.fuelCost || 0);
-                              setTotalDealInputValue(total > 0 ? String(total) : '');
-                            }
                             
                             setShowRouteDialog(false);
                             setRouteDialogSearch('');
@@ -1836,6 +2260,9 @@ const DeliveryOrders = () => {
                               <td style={{ padding: '12px' }}>{r.routeName || '-'}</td>
                               <td style={{ padding: '12px' }}>{r.origin || '-'}</td>
                               <td style={{ padding: '12px' }}>{r.destination || '-'}</td>
+                              <td style={{ padding: '12px', textAlign: 'right', fontWeight: '500' }}>
+                                {r._price ? `Rp ${r._price.toLocaleString('id-ID')}` : '-'}
+                              </td>
                               <td style={{ padding: '12px', textAlign: 'center' }}>
                                 <Button
                                   variant="primary"

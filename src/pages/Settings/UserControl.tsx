@@ -3,7 +3,7 @@ import Card from '../../components/Card';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import Table from '../../components/Table';
-import { storageService, BusinessType } from '../../services/storage';
+import { storageService, BusinessType, StorageKeys } from '../../services/storage';
 import { filterActiveItems, safeDeleteMultipleItems } from '../../utils/data-persistence-helper';
 import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import { getCurrentUser, isDefaultAdmin } from '../../utils/access-control-helper';
@@ -63,6 +63,7 @@ const BUSINESS_MENU_CONFIG: BusinessMenuConfig[] = [
           { id: '/packaging/qa-qc', label: 'QA/QC', path: '/packaging/qa-qc' },
           { id: '/packaging/delivery-note', label: 'WH & Delivery', path: '/packaging/delivery-note' },
           { id: '/packaging/return', label: 'Return', path: '/packaging/return' },
+          { id: '/packaging/bar', label: 'Business Activity Report', path: '/packaging/bar' },
         ],
       },
       {
@@ -76,8 +77,10 @@ const BUSINESS_MENU_CONFIG: BusinessMenuConfig[] = [
           { id: '/packaging/finance/ar', label: 'Accounts Receivable', path: '/packaging/finance/ar' },
           { id: '/packaging/finance/ap', label: 'Accounts Payable', path: '/packaging/finance/ap' },
           { id: '/packaging/finance/payments', label: 'Payments', path: '/packaging/finance/payments' },
+          { id: '/packaging/finance/operational-expenses', label: 'Operational Expenses', path: '/packaging/finance/operational-expenses' },
           { id: '/packaging/finance/tax-management', label: 'Tax Management', path: '/packaging/finance/tax-management' },
           { id: '/packaging/finance/cost-analysis', label: 'Cost Analysis', path: '/packaging/finance/cost-analysis' },
+          { id: '/packaging/finance/all-reports', label: 'All Reports', path: '/packaging/finance/all-reports' },
           { id: '/packaging/finance/all-business-reports', label: 'All Business Reports', path: '/packaging/finance/all-business-reports' },
           { id: '/packaging/finance/coa', label: 'Chart of Accounts', path: '/packaging/finance/coa' },
         ],

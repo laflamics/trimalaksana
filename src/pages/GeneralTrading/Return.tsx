@@ -3,12 +3,14 @@ import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
-import { storageService, extractStorageValue } from '../../services/storage';
+import DateRangeFilter from '../../components/DateRangeFilter';
+import { storageService, extractStorageValue, StorageKeys } from '../../services/storage';
 import { deleteGTItem, reloadGTData, filterActiveItems } from '../../utils/gt-delete-helper';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
 import { generateBacHtml } from '../../pdf/bac-pdf-template';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import { useDialog } from '../../hooks/useDialog';
+import { useLanguage } from '../../hooks/useLanguage';
 import '../../styles/common.css';
 import '../../styles/compact.css';
 
@@ -60,6 +62,8 @@ const Return = () => {
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [viewPdfData, setViewPdfData] = useState<{ html: string; returnNo: string } | null>(null);
   const [toast, setToast] = useState<{ message: string; variant: 'success' | 'error' | 'info' } | null>(null);
   
@@ -99,9 +103,9 @@ const Return = () => {
     try {
       setLoading(true);
       const [returnsDataRaw, soDataRaw, poDataRaw] = await Promise.all([
-        storageService.get<ReturnItem[]>('gt_returns'),
-        storageService.get<SalesOrder[]>('gt_salesOrders'),
-        storageService.get<PurchaseOrder[]>('gt_purchaseOrders'),
+        storageService.get<ReturnItem[]>(StorageKeys.GENERAL_TRADING.RETURNS),
+        storageService.get<SalesOrder[]>(StorageKeys.GENERAL_TRADING.SALES_ORDERS),
+        storageService.get<PurchaseOrder[]>(StorageKeys.GENERAL_TRADING.PURCHASE_ORDERS),
       ]);
 
       const returnsData = extractStorageValue(returnsDataRaw) || [];
@@ -270,12 +274,12 @@ const Return = () => {
       };
 
       // Save return
-      const currentReturns = extractStorageValue(await storageService.get<ReturnItem[]>('gt_returns')) || [];
-      await storageService.set('gt_returns', [...currentReturns, newReturn]);
+      const currentReturns = extractStorageValue(await storageService.get<ReturnItem[]>(StorageKeys.GENERAL_TRADING.RETURNS)) || [];
+      await storageService.set(StorageKeys.GENERAL_TRADING.RETURNS, [...currentReturns, newReturn]);
 
       // Update inventory - tambah receipt (return)
-      const inventory = extractStorageValue(await storageService.get<any[]>('gt_inventory')) || [];
-      const products = extractStorageValue(await storageService.get<any[]>('gt_products')) || [];
+      const inventory = extractStorageValue(await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.INVENTORY)) || [];
+      const products = extractStorageValue(await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PRODUCTS)) || [];
       const productCode = formData.productKode || formData.productId || '';
       
       // Cek apakah product adalah turunan, jika ya gunakan parent product ID untuk inventory
@@ -317,7 +321,7 @@ const Return = () => {
           }
           return inv;
         });
-        await storageService.set('gt_inventory', updatedInventory);
+        await storageService.set(StorageKeys.GENERAL_TRADING.INVENTORY, updatedInventory);
       } else {
         // Jika tidak ada di inventory, buat baru
         const stockPremonth = 0;
@@ -341,16 +345,16 @@ const Return = () => {
           nextStock: nextStock,
           lastUpdate: new Date().toISOString(),
         };
-        await storageService.set('gt_inventory', [...inventory, newInventoryItem]);
+        await storageService.set(StorageKeys.GENERAL_TRADING.INVENTORY, [...inventory, newInventoryItem]);
       }
 
       // Trigger storage change event
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('app-storage-changed', {
-          detail: { key: 'gt_returns' }
+          detail: { key: StorageKeys.GENERAL_TRADING.RETURNS }
         }));
         window.dispatchEvent(new CustomEvent('app-storage-changed', {
-          detail: { key: 'gt_inventory' }
+          detail: { key: StorageKeys.GENERAL_TRADING.INVENTORY }
         }));
       }
 
@@ -380,15 +384,28 @@ const Return = () => {
   };
 
   const filteredReturns = useMemo(() => {
-    if (!searchQuery) return returns;
-    const query = searchQuery.toLowerCase();
-    return returns.filter(r =>
-      r.returnNo.toLowerCase().includes(query) ||
-      r.sourceNo.toLowerCase().includes(query) ||
-      r.productName.toLowerCase().includes(query) ||
-      r.productKode.toLowerCase().includes(query)
-    );
-  }, [returns, searchQuery]);
+    let filtered = returns;
+    
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(r =>
+        r.returnNo.toLowerCase().includes(query) ||
+        r.sourceNo.toLowerCase().includes(query) ||
+        r.productName.toLowerCase().includes(query) ||
+        r.productKode.toLowerCase().includes(query)
+      );
+    }
+    
+    // Date filter
+    if (dateFrom) {
+      filtered = filtered.filter(r => r.created >= dateFrom);
+    }
+    if (dateTo) {
+      filtered = filtered.filter(r => r.created <= dateTo);
+    }
+    
+    return filtered;
+  }, [returns, searchQuery, dateFrom, dateTo]);
 
   const columns = [
     { key: 'returnNo', header: 'Return No' },
@@ -464,11 +481,11 @@ const Return = () => {
         async () => {
           try {
             // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
-            const deleteResult = await deleteGTItem('gt_returns', item.id, 'id');
+            const deleteResult = await deleteGTItem(StorageKeys.GENERAL_TRADING.RETURNS, item.id, 'id');
             
             if (deleteResult.success) {
               // Reload data dengan helper (handle race condition)
-              const activeReturns = await reloadGTData('gt_returns', setReturns);
+              const activeReturns = await reloadGTData(StorageKeys.GENERAL_TRADING.RETURNS, setReturns);
               setReturns(activeReturns);
               
               showAlert(`✅ Return ${item.returnNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
@@ -589,14 +606,26 @@ const Return = () => {
         </Button>
       </div>
 
-      {/* Search */}
-      <Card className="mb-4">
-        <Input
-          label="Search"
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder="Search by Return No, Source No, Product Name..."
-        />
+      {/* Search & Date Filter */}
+      <Card className="mb-4" style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 280px', minWidth: '240px' }}>
+          <Input
+            label="Search"
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search by Return No, Source No, Product Name..."
+          />
+        </div>
+        <div style={{ flex: '1 1 400px', minWidth: '350px' }}>
+          <DateRangeFilter
+            onDateChange={(from, to) => {
+              setDateFrom(from);
+              setDateTo(to);
+            }}
+            defaultFrom={dateFrom}
+            defaultTo={dateTo}
+          />
+        </div>
       </Card>
 
       {/* Form Dialog */}

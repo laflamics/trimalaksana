@@ -1,18 +1,24 @@
 {
   "name": "trima-laksana-erp",
-  "version": "1.0.6-build.93",
+  "version": "1.0.6-build.164",
   "description": "PT.Trima Laksana Jaya Pratama - Enterprise Resource Planning System",
   "main": "dist/main.js",
   "scripts": {
     "dev": "npm run build:main && concurrently -k -n \"VITE,TS,WATCH\" -c \"cyan,yellow,green\" \"npm run dev:react\" \"npm run watch:main\" \"npm run dev:electron\"",
     "dev:react": "vite",
-    "dev:electron": "wait-on http://localhost:3000 && electron .",
+    "dev:electron": "wait-on http://localhost:3000 && electron . --no-sandbox",
+    "dev:web": "vite --config vite.config.web.ts",
     "build": "npm run build:all",
     "build:all": "npm run build:main && npm run build:renderer",
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "vite build",
-    "build:app": "node scripts/update-build-version.js && node scripts/pre-build-cleanup.js && node scripts/ensure-previous-version.js && npm run build:all && CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_NOTARIZATION=true electron-builder --win --x64 && node scripts/generate-latest-yml.js && node scripts/upload-updates-to-server.js",
-    "build:app:fast": "node scripts/update-build-version.js && npm run build:all && CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_NOTARIZATION=true electron-builder --win --x64 && node scripts/generate-latest-yml.js",
+    "build:web": "vite build --config vite.config.web.ts",
+    "build:app": "node scripts/pre-build-generate-app-update.js && node scripts/update-build-version.js && node scripts/pre-build-cleanup.js && node scripts/ensure-previous-version.js && npm run build:all && CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_NOTARIZATION=true electron-builder --win --x64 && node scripts/generate-latest-yml.js",
+    "build:app:fast": "node scripts/pre-build-generate-app-update.js && node scripts/update-build-version.js && npm run build:all && CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_NOTARIZATION=true electron-builder --win --x64 && node scripts/generate-latest-yml.js",
+    "build:app:mac": "node scripts/pre-build-generate-app-update.js && node scripts/update-build-version.js && node scripts/pre-build-cleanup.js && node scripts/ensure-previous-version.js && npm run build:all && CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_NOTARIZATION=true electron-builder --mac --x64 --arm64 && node scripts/generate-latest-mac-yml.js",
+    "build:app:mac:fast": "node scripts/update-build-version.js && npm run build:all && CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_NOTARIZATION=true electron-builder --mac --x64 --arm64 && node scripts/generate-latest-mac-yml.js",
+    "build:app:mac:zip": "node scripts/update-build-version.js && npm run build:all && CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_NOTARIZATION=true electron-builder --mac --x64 --arm64 -c.artifactName='${productName}-${version}.${ext}'",
+    "build:app:mac:all": "npm run build:app:mac && npm run build:app:mac:zip",
     "build:app:linux": "node scripts/update-build-version.js && node scripts/pre-build-cleanup.js && node scripts/ensure-previous-version.js && npm run build:all && CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_NOTARIZATION=true electron-builder --linux --x64 && node scripts/generate-latest-linux-yml.js && node scripts/upload-updates-to-server.js",
     "uninstall": "node scripts/find-uninstaller.js",
     "watch:main": "tsc -p tsconfig.main.json --watch",
@@ -54,9 +60,11 @@
   "devDependencies": {
     "@capacitor/cli": "^6.2.1",
     "@capacitor/ios": "^6.2.1",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
+    "@vercel/node": "^5.6.9",
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
@@ -74,14 +82,18 @@
     "@capacitor/core": "^6.2.1",
     "@capacitor/filesystem": "^6.0.4",
     "@capacitor/share": "^6.0.4",
+    "@vercel/blob": "^2.3.0",
     "axios": "^1.6.2",
+    "csv-parser": "^3.2.0",
     "electron-updater": "^6.6.2",
+    "exceljs": "^4.4.0",
     "html2pdf.js": "^0.12.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-is": "^19.2.3",
     "react-router-dom": "^6.21.1",
     "recharts": "^3.4.1",
+    "ws": "^8.19.0",
     "xlsx": "^0.18.5",
     "zustand": "^4.4.7"
   },
@@ -95,7 +107,7 @@
     "files": [
       "dist/**/*",
       "package.json",
-      "public/noxtiz.ico",
+      "public/tljp.ico",
       "public/noxtiz.png",
       "!**/*.map",
       "!**/*.d.ts",
@@ -139,8 +151,12 @@
         ]
       },
       {
-        "from": "public/noxtiz.ico",
-        "to": "public/noxtiz.ico"
+        "from": "public/tljp.ico",
+        "to": "public/tljp.ico"
+      },
+      {
+        "from": "build/app-update.yml",
+        "to": "app-update.yml"
       }
     ],
     "win": {

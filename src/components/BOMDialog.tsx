@@ -52,20 +52,6 @@ const BOMDialog = ({ productId, productName, productKode, onClose, onSave }: BOM
     });
   };
 
-  const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'confirm',
-      title,
-      message,
-      onConfirm,
-      onCancel,
-    });
-  };
-
   const closeDialog = () => {
     if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
       (window as any).setDialogOpen(false);
@@ -102,6 +88,7 @@ const BOMDialog = ({ productId, productName, productKode, onClose, onSave }: BOM
   const loadData = useCallback(async () => {
     // Prevent multiple simultaneous loads
     if (isLoadingRef.current) {
+      console.log('[BOMDialog] Already loading, skipping');
       return;
     }
     
@@ -110,8 +97,11 @@ const BOMDialog = ({ productId, productName, productKode, onClose, onSave }: BOM
     const currentKey = `${currentProductId}-${currentProductKode}`;
     const lastKey = `${lastProductIdRef.current}-${lastProductKodeRef.current}`;
     
+    console.log('[BOMDialog] loadData called', { currentKey, lastKey, currentProductId, currentProductKode });
+    
     // Skip if same product
     if (currentKey === lastKey && currentKey !== '') {
+      console.log('[BOMDialog] Same product, skipping load');
       return;
     }
     
@@ -121,17 +111,24 @@ const BOMDialog = ({ productId, productName, productKode, onClose, onSave }: BOM
     
     try {
       setLoading(true);
+      console.log('[BOMDialog] Starting load for product:', currentKey);
+      
       // Load materials
       const materialsData = await storageService.get<any[]>('materials') || [];
+      console.log('[BOMDialog] Loaded materials:', materialsData.length);
       setMaterials(materialsData);
 
       // Load existing BOM for this product
       const bomData = await storageService.get<any[]>('bom') || [];
+      console.log('[BOMDialog] Loaded BOM data:', bomData.length);
+      
       const targetId = (productKodeRef.current || productIdRef.current || '').toString().trim().toLowerCase();
       
       if (!targetId) {
         console.warn('[BOMDialog] No targetId provided, cannot load BOM');
         setBomItems([]);
+        setLoading(false);
+        isLoadingRef.current = false;
         return;
       }
       
@@ -248,11 +245,16 @@ const BOMDialog = ({ productId, productName, productKode, onClose, onSave }: BOM
       setLoading(false);
       isLoadingRef.current = false;
     }
-  }, [productId, productKode]);
+  }, []); // Empty dependency array - use refs for product data
 
+  // Trigger load when props change
   useEffect(() => {
+    console.log('[BOMDialog] Props changed, triggering load', { productId, productKode });
+    // Reset the last product refs to force a reload
+    lastProductIdRef.current = '';
+    lastProductKodeRef.current = '';
     loadData();
-  }, [loadData]);
+  }, [productId, productKode, loadData]);
 
   const getMaterialInputDisplayValue = () => {
     if (materialInputValue !== undefined && materialInputValue !== '') {

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
-import { storageService } from '../../../services/storage';
+import { storageService, StorageKeys } from '../../../services/storage';
 import axios from 'axios';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
@@ -298,6 +298,10 @@ const DBActivity = () => {
         const journal = data.gt_journalEntries;
         return Array.isArray(journal) ? journal : [];
       }
+      case 'operational-expenses': {
+        const expenses = data.gt_operationalExpenses;
+        return Array.isArray(expenses) ? expenses : [];
+      }
       case 'notifications': {
         // Combine all notification types
         const allNotifs = [
@@ -388,6 +392,7 @@ const DBActivity = () => {
     { key: 'gt_payments', label: 'Payments', category: 'Finance' },
     { key: 'gt_journalEntries', label: 'Journal Entries', category: 'Finance' },
     { key: 'gt_accounts', label: 'Accounts', category: 'Finance' },
+    { key: 'gt_operationalExpenses', label: 'Operational Expenses', category: 'Finance' },
     { key: 'gt_financeNotifications', label: 'Finance Notifications', category: 'Finance' },
     { key: 'gt_invoiceNotifications', label: 'Invoice Notifications', category: 'Finance' },
     { key: 'gt_taxRecords', label: 'Tax Records', category: 'Finance' },
@@ -442,7 +447,7 @@ const DBActivity = () => {
         'gt_inventory', 'gt_delivery', 'gt_deliveryNotifications',
         // Finance
         'gt_invoices', 'gt_payments', 'gt_journalEntries', 'gt_accounts',
-        'gt_financeNotifications', 'gt_invoiceNotifications', 'gt_taxRecords',
+        'gt_financeNotifications', 'gt_invoiceNotifications', 'gt_taxRecords', 'gt_operationalExpenses',
         // System
         'expenses', 'gt_expenses', 'audit', 'outbox',
         // Additional notifications
@@ -650,7 +655,7 @@ const DBActivity = () => {
             const products = await productsResponse.json();
             // Ensure products is an array
             if (Array.isArray(products)) {
-              await storageService.set('gt_products', products);
+              await storageService.set(StorageKeys.GENERAL_TRADING.PRODUCTS, products);
               imported++;
               console.log(`✓ Imported ${products.length} products from ${productsPath}`);
             } else {
@@ -692,7 +697,7 @@ const DBActivity = () => {
           if (customers && Array.isArray(customers) && customers.length > 0) {
             // REPLACE all data - use JSON as source of truth (don't merge)
             console.log('[GT Seed] Replacing customers with data from JSON:', customers.length);
-            await storageService.set('gt_customers', customers as any[]);
+            await storageService.set(StorageKeys.GENERAL_TRADING.CUSTOMERS, customers as any[]);
             
             // Verify save
             const verifyCustomers = await storageService.get<any[]>('gt_customers') || [];
@@ -733,7 +738,7 @@ const DBActivity = () => {
           if (suppliers && Array.isArray(suppliers) && suppliers.length > 0) {
             // REPLACE all data - use JSON as source of truth (don't merge)
             console.log('[GT Seed] Replacing suppliers with data from JSON:', suppliers.length);
-            await storageService.set('gt_suppliers', suppliers as any[]);
+            await storageService.set(StorageKeys.GENERAL_TRADING.SUPPLIERS, suppliers as any[]);
             
             // Verify save
             const verifySuppliers = await storageService.get<any[]>('gt_suppliers') || [];
@@ -791,32 +796,6 @@ const DBActivity = () => {
     setSeedLoading(true);
     setSeedMessage('');
 
-    try {
-      const result = await storageService.importFromJsonFiles();
-      
-      if (result.imported > 0) {
-        const details = result.errors.length > 0 
-          ? ` (${result.errors.length} errors occurred)` 
-          : '';
-        setSeedMessage(`✓ Imported ${result.imported} data files from data/ folder${details}`);
-        setTimeout(() => {
-          loadData();
-        }, 500);
-      } else if (result.errors.length > 0) {
-        const errorMsg = result.errors.length === 1 
-          ? result.errors[0] 
-          : `${result.errors[0]} (and ${result.errors.length - 1} more errors)`;
-        setSeedMessage(`✗ ${errorMsg}`);
-      } else {
-        setSeedMessage(`✗ No data files found in data/ folder`);
-      }
-    } catch (error: any) {
-      console.error('Import from files error:', error);
-      setSeedMessage(`✗ Error: ${error.message || 'Failed to import data'}`);
-    } finally {
-      setSeedLoading(false);
-      setTimeout(() => setSeedMessage(''), 10000);
-    }
   };
 
   const handleSeed = async () => {
@@ -829,16 +808,37 @@ const DBActivity = () => {
     setExportMessage('');
 
     try {
-      const result = await storageService.exportAllData();
+      // Check if method is implemented
+      if (typeof storageService.exportAllData !== 'function') {
+        setExportMessage('✗ Export is not available');
+        return;
+      }
       
-      if (result.success && result.data) {
+      let result: any;
+      try {
+        result = await storageService.exportAllData();
+      } catch (methodError: any) {
+        // Method throws error if not implemented
+        setExportMessage('✗ Export is not available');
+        return;
+      }
+      
+      // Check if result is valid
+      if (!result || typeof result !== 'object') {
+        setExportMessage('✗ Export failed: No data returned');
+        return;
+      }
+      
+      const typedResult = result as { success?: boolean; data?: any; error?: string };
+      
+      if (typedResult.success && typedResult.data) {
         // If Electron, it's already saved via IPC
         const electronAPI = (window as any).electronAPI;
         if (electronAPI && electronAPI.exportLocalStorage) {
-          setExportMessage(`✓ Exported ${Object.keys(result.data).length} data files to data/localStorage/`);
+          setExportMessage(`✓ Exported ${Object.keys(typedResult.data).length} data files to data/localStorage/`);
         } else {
           // Browser: download as JSON
-          const jsonStr = JSON.stringify(result.data, null, 2);
+          const jsonStr = JSON.stringify(typedResult.data, null, 2);
           const blob = new Blob([jsonStr], { type: 'application/json' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
@@ -848,10 +848,10 @@ const DBActivity = () => {
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
-          setExportMessage(`✓ Exported ${Object.keys(result.data).length} data files (downloaded)`);
+          setExportMessage(`✓ Exported ${Object.keys(typedResult.data).length} data files (downloaded)`);
         }
       } else {
-        setExportMessage(`✗ Export failed: ${result.error || 'Unknown error'}`);
+        setExportMessage(`✗ Export failed: ${typedResult.error || 'Unknown error'}`);
       }
     } catch (error: any) {
       console.error('Export error:', error);

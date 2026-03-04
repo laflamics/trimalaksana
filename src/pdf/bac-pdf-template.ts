@@ -1,3 +1,4 @@
+import { ensureLogoIsBase64 } from '../utils/hardcoded-logo';
 import { loadLogoAsBase64 } from '../utils/logo-loader';
 
 export function generateBacHtml({
@@ -28,6 +29,9 @@ export function generateBacHtml({
     supplier?: string;
   };
 }): string {
+  // Ensure logo is base64 string, fallback ke hardcoded logo
+  const logoSrc = ensureLogoIsBase64(logo);
+
   const returnDate = new Date(returnData.created);
   const formattedDate = returnDate.toLocaleDateString('id-ID', {
     year: 'numeric',
@@ -180,9 +184,9 @@ export function generateBacHtml({
 
   <!-- HEADER -->
   <div class="header">
-    ${logo ? `<img src="${logo}" alt="Logo" class="logo" />` : ''}
+    ${logoSrc ? `<img src="${logoSrc}" alt="Logo" class="logo" />` : ''}
     <div class="company-name">${company.companyName || 'PT TRIMA LAKSANA JAYA PRATAMA'}</div>
-    <div class="company-address">${company.address || 'Jl. Raya Bekasi Km. 28, Cikarang, Bekasi 17530'}</div>
+    <div class="company-address">${company.address || 'Jl. Raya Cikarang Cibarusah Kp. Kukun RT 11/06 Desa Ciantra Kecamatan Cikarang Selatan Kabupaten Bekasi'}</div>
   </div>
 
   <!-- TITLE -->

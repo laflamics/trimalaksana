@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import Card from '../../components/Card';
-import { storageService } from '../../services/storage';
+import { storageService, StorageKeys } from '../../services/storage';
+import { setupRealTimeSync, TRUCKING_SYNC_KEYS } from '../../utils/real-time-sync-helper';
 import '../../styles/common.css';
 
 interface StatCardProps {
@@ -47,17 +48,27 @@ const TruckingDashboard = () => {
 
   useEffect(() => {
     loadData();
+    
+    // Real-time listener untuk server updates
+    const cleanup = setupRealTimeSync({
+      keys: [TRUCKING_SYNC_KEYS.VEHICLES, TRUCKING_SYNC_KEYS.DRIVERS, TRUCKING_SYNC_KEYS.DELIVERY_ORDERS, TRUCKING_SYNC_KEYS.BILLS, TRUCKING_SYNC_KEYS.PAYMENTS],
+      onUpdate: loadData,
+    });
+    
     const interval = setInterval(loadData, 30000); // Refresh setiap 30 detik
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      cleanup();
+    };
   }, []);
 
   const loadData = async () => {
     const [vehiclesDataRaw, driversDataRaw, ordersDataRaw, billsDataRaw, paymentsDataRaw] = await Promise.all([
-      storageService.get<any[]>('trucking_vehicles') || [],
-      storageService.get<any[]>('trucking_drivers') || [],
-      storageService.get<any[]>('trucking_delivery_orders') || [],
-      storageService.get<any[]>('trucking_bills') || [],
-      storageService.get<any[]>('trucking_payments') || [],
+      storageService.get<any[]>(StorageKeys.TRUCKING.VEHICLES) || [],
+      storageService.get<any[]>(StorageKeys.TRUCKING.DRIVERS) || [],
+      storageService.get<any[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS) || [],
+      storageService.get<any[]>(StorageKeys.TRUCKING.EXPENSES) || [],
+      storageService.get<any[]>(StorageKeys.TRUCKING.PAYMENTS) || [],
     ]);
     
     // CRITICAL: Extract array from storage wrapper if needed

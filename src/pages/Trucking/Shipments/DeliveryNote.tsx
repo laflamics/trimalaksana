@@ -3,13 +3,15 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
+import DateRangeFilter from '../../../components/DateRangeFilter';
 import NotificationBell from '../../../components/NotificationBell';
-import { storageService } from '../../../services/storage';
+import { storageService, StorageKeys } from '../../../services/storage';
 import { deleteTruckingItem, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
 import { useDialog } from '../../../hooks/useDialog';
 import { generateSuratJalanHtml } from '../../../pdf/suratjalan-pdf-template';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../../utils/actions';
 import { loadLogoAsBase64 } from '../../../utils/logo-loader';
+import BlobService from '../../../services/blob-service';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -240,13 +242,14 @@ interface DeliveryNote {
   distributedDate?: string;
   scheduledDate: string;
   scheduledTime: string;
-  // NEW: Array untuk multiple signed documents
-  signedDocuments?: SignedDocument[];
-  // OLD: Single document (backward compatibility)
-  signedDocument?: string; // Base64 untuk image, atau file:// path untuk PDF
-  signedDocumentPath?: string; // Path ke file PDF di file system
+  // MinIO: Signed document stored on MinIO
+  signedDocumentId?: string; // FileId stored on MinIO
   signedDocumentName?: string;
-  signedDocumentType?: 'pdf' | 'image'; // Tipe file: pdf atau image
+  // Backward compatibility - will be migrated to MinIO
+  signedDocuments?: SignedDocument[];
+  signedDocument?: string; // Deprecated - use signedDocumentId
+  signedDocumentPath?: string; // Deprecated
+  signedDocumentType?: 'pdf' | 'image'; // Deprecated
   departureDate?: string;
   departureTime?: string;
   arrivalDate?: string;
@@ -289,7 +292,6 @@ const DeliveryNote = () => {
   const [deliveryNote, setDeliveryNote] = useState<DeliveryNote[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [deliveryOrders, setDeliveryOrders] = useState<any[]>([]);
-  const [schedules, setSchedules] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [routes, setRoutes] = useState<any[]>([]);
@@ -301,8 +303,6 @@ const DeliveryNote = () => {
   const [viewingDocuments, setViewingDocuments] = useState<SignedDocument[]>([]);
   const [viewingDocumentsItem, setViewingDocumentsItem] = useState<DeliveryNote | null>(null);
   const [selectedDocumentIndex, setSelectedDocumentIndex] = useState(0);
-  const [showRouteDialog, setShowRouteDialog] = useState(false);
-  const [routeDialogSearch, setRouteDialogSearch] = useState('');
   const [notificationDialog, setNotificationDialog] = useState<{
     show: boolean;
     notif: any | null;
@@ -311,7 +311,11 @@ const DeliveryNote = () => {
     notif: null,
   });
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [viewMode, setViewMode] = useState<'card' | 'table'>('table');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
   const [formData, setFormData] = useState<Partial<DeliveryNote>>({
     dnNo: '',
     doNo: '',
@@ -343,43 +347,73 @@ const DeliveryNote = () => {
 
   useEffect(() => {
     loadData();
+    
+    // Real-time listener untuk server updates
+    const handleStorageChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ key?: string; action?: string }>).detail;
+      const key = detail?.key;
+      
+      // Reload data jika ada update untuk Surat Jalan atau notifications
+      if (key === StorageKeys.TRUCKING.SURAT_JALAN || key === StorageKeys.TRUCKING.SURAT_JALAN_NOTIFICATIONS || 
+          key === StorageKeys.TRUCKING.DELIVERY_ORDERS || key === StorageKeys.TRUCKING.UNIT_SCHEDULES) {
+        console.log(`[DeliveryNote] 🔄 Real-time update received for ${key}, reloading...`);
+        loadData();
+      }
+    };
+    
+    window.addEventListener('app-storage-changed', handleStorageChange as EventListener);
+    
     // Optimasi: Auto-refresh setiap 30 detik untuk mengurangi bandwidth (sebelumnya 5 detik)
     // Gunakan event-based updates untuk real-time changes
     const interval = setInterval(loadData, 30000); // 30 detik - cukup untuk delivery updates
-    return () => clearInterval(interval);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('app-storage-changed', handleStorageChange as EventListener);
+    };
   }, []);
 
   const loadData = async () => {
     try {
       // Load semua data menggunakan storageService
-      const [dnDataRaw, notifDataRaw, doDataRaw, schedulesDataRaw, driversData, vehiclesData, routesData] = await Promise.all([
-        storageService.get<DeliveryNote[]>('trucking_deliveryNote'),
-        storageService.get<any[]>('trucking_deliveryNoteNotifications'),
-        storageService.get<any[]>('trucking_delivery_orders'),
-        storageService.get<any[]>('trucking_unitSchedules'),
-        storageService.get<any[]>('trucking_drivers'),
-        storageService.get<any[]>('trucking_vehicles'),
-        storageService.get<any[]>('trucking_routes'),
+      const [dnDataRaw, notifDataRaw, doDataRaw, , driversData, vehiclesData, routesData] = await Promise.all([
+        storageService.get<DeliveryNote[]>(StorageKeys.TRUCKING.SURAT_JALAN),
+        storageService.get<any[]>(StorageKeys.TRUCKING.SURAT_JALAN_NOTIFICATIONS),
+        storageService.get<any[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS),
+        storageService.get<any[]>(StorageKeys.TRUCKING.UNIT_SCHEDULES),
+        storageService.get<any[]>(StorageKeys.TRUCKING.DRIVERS),
+        storageService.get<any[]>(StorageKeys.TRUCKING.VEHICLES),
+        storageService.get<any[]>(StorageKeys.TRUCKING.ROUTES),
       ]);
       
       // Initialize empty arrays jika belum ada
       if (!dnDataRaw) {
-        await storageService.set('trucking_deliveryNote', []);
+        await storageService.set(StorageKeys.TRUCKING.SURAT_JALAN, []);
       }
       if (!notifDataRaw) {
-        await storageService.set('trucking_deliveryNoteNotifications', []);
+        await storageService.set(StorageKeys.TRUCKING.SURAT_JALAN_NOTIFICATIONS, []);
       }
 
-      // Ensure arrays (handle null/undefined)
-      const dnData = dnDataRaw || [];
-      const notifData = notifDataRaw || [];
-      const doData = doDataRaw || [];
+      // CRITICAL: Extract arrays from storage wrapper if needed
+      const extractArray = <T,>(data: any): T[] => {
+        if (!data) return [];
+        if (Array.isArray(data)) return data;
+        if (data && typeof data === 'object' && 'value' in data && Array.isArray(data.value)) {
+          return data.value;
+        }
+        return [];
+      };
+
+      // Ensure arrays (handle null/undefined and storage wrappers)
+      const dnData = extractArray(dnDataRaw);
+      const notifData = extractArray(notifDataRaw);
+      const doData = extractArray(doDataRaw);
 
       console.log(`📊 [DeliveryNote] Loaded data: ${dnData.length} DN, ${notifData.length} notifications, ${doData.length} DOs`);
 
       // Filter out deleted items menggunakan helper function
-      const activeDN = filterActiveItems(dnData);
-      const activeDOs = filterActiveItems(doData);
+      const activeDN = filterActiveItems(dnData as Record<string, any>[]);
+      const activeDOs = filterActiveItems(doData as Record<string, any>[]);
       
       // Sort by created date (newest first), fallback to scheduledDate if created not available
       const sortedDN = activeDN.sort((a, b) => {
@@ -387,7 +421,7 @@ const DeliveryNote = () => {
         const dateB = b.created ? new Date(b.created).getTime() : (b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0);
         return dateB - dateA; // Newest first
       });
-      setDeliveryNote(sortedDN.map((dn, idx) => ({ ...dn, no: idx + 1 })));
+      setDeliveryNote(sortedDN.map((dn, idx) => ({ ...dn, no: idx + 1 } as DeliveryNote)));
       
       // Filter notifications: hanya yang belum dibuat DN-nya dan DO-nya masih ada
       // Hapus notification jika:
@@ -398,10 +432,10 @@ const DeliveryNote = () => {
       console.log(`📊 [DeliveryNote] Processing ${originalNotifsCount} notifications, ${activeDOs.length} active DOs, ${activeDN.length} active DNs`);
       
       // CRITICAL: Filter deleted items FIRST menggunakan filterActiveItems
-      const activeNotifData = filterActiveItems(notifData);
+      const activeNotifData = filterActiveItems(notifData as Record<string, any>[]) || [];
       console.log(`📊 [DeliveryNote] After filtering deleted items: ${activeNotifData.length} active notifications (from ${originalNotifsCount} total)`);
       
-      const allNotifs = activeNotifData.filter((n: any) => {
+      const allNotifs = (activeNotifData || []).filter((n: any) => {
         // Keep notification jika belum dibuat DN-nya
         if (n.type === 'DO_CONFIRMED' && (n.status || 'Open') === 'Open') {
           // CRITICAL FIX: Jika DO data kosong (belum ada file), jangan filter notification
@@ -447,7 +481,7 @@ const DeliveryNote = () => {
       // Update storage setiap kali ada perubahan atau jika ada notification yang perlu dihapus
       // Note: Keep deleted items (tombstones) in storage for sync, but don't include them in allNotifs
       // Merge allNotifs dengan deleted items dari original notifData untuk preserve tombstones
-      const deletedNotifs = notifData.filter((n: any) => n.deleted === true || n.deletedAt);
+      const deletedNotifs = (notifData || []).filter((n: any) => n.deleted === true || n.deletedAt);
       const allNotifsWithTombstones = [...allNotifs, ...deletedNotifs];
       
       const shouldUpdate = allNotifs.length !== activeNotifData.length || 
@@ -467,7 +501,7 @@ const DeliveryNote = () => {
       
       if (shouldUpdate) {
         // Save dengan tombstones untuk sync
-        await storageService.set('trucking_deliveryNoteNotifications', allNotifsWithTombstones);
+        await storageService.set(StorageKeys.TRUCKING.SURAT_JALAN_NOTIFICATIONS, allNotifsWithTombstones);
         console.log(`🧹 [DeliveryNote] Cleaned up ${activeNotifData.length - allNotifs.length} obsolete notifications (from ${activeNotifData.length} active to ${allNotifs.length} relevant)`);
       }
       
@@ -508,11 +542,10 @@ const DeliveryNote = () => {
       
       console.log(`📊 [DeliveryNote] Notifications: ${originalNotifsCount} original, ${allNotifs.length} after filter, ${activeNotifs.length} for display`);
       setNotifications(activeNotifs);
-      setDeliveryOrders(doData || []);
-      setSchedules(schedulesDataRaw || []);
-      setDrivers(driversData || []);
-      setVehicles(vehiclesData || []);
-      setRoutes(routesData || []);
+      setDeliveryOrders(doData);
+      setDrivers(extractArray(driversData));
+      setVehicles(extractArray(vehiclesData));
+      setRoutes(extractArray(routesData));
     } catch (error: any) {
       console.error('[DeliveryNote] Error loading data:', error);
     }
@@ -556,12 +589,14 @@ const DeliveryNote = () => {
       }
       
       // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
-      const deleteResult = await deleteTruckingItem('trucking_dnNotifications', notif.id, 'id');
+      const deleteResult = await deleteTruckingItem(StorageKeys.TRUCKING.SURAT_JALAN_NOTIFICATIONS, notif.id, 'id');
       
       if (deleteResult.success) {
         // Reload data dengan filter active items
-        const allNotifications = await storageService.get<any[]>('trucking_dnNotifications') || [];
-        const activeNotifs = filterActiveItems(allNotifications).filter((n: any) => {
+        const allNotificationsRaw = await storageService.get<any[]>(StorageKeys.TRUCKING.SURAT_JALAN_NOTIFICATIONS);
+        const allNotifications = (Array.isArray(allNotificationsRaw) ? allNotificationsRaw : 
+                                (allNotificationsRaw && typeof allNotificationsRaw === 'object' && 'value' in allNotificationsRaw && Array.isArray((allNotificationsRaw as any).value) ? (allNotificationsRaw as any).value : [])) as any[];
+        const activeNotifs = filterActiveItems(allNotifications as Record<string, any>[]).filter((n: any) => {
           if (n.type !== 'DO_CONFIRMED' || (n.status || 'Open') !== 'Open') {
             return false;
           }
@@ -710,7 +745,7 @@ const DeliveryNote = () => {
               } as DeliveryNote
             : dn
         );
-        await storageService.set('trucking_deliveryNote', updated);
+        await storageService.set(StorageKeys.TRUCKING.SURAT_JALAN, updated);
         // Sort by created date (newest first)
         const sortedUpdated = updated.sort((a, b) => {
           const dateA = a.created ? new Date(a.created).getTime() : (a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0);
@@ -749,17 +784,19 @@ const DeliveryNote = () => {
           _timestamp: now.getTime(),
         };
         // Simpan ke storage
-        const allDN = await storageService.get<DeliveryNote[]>('trucking_deliveryNote') || [];
+        const allDN = await storageService.get<DeliveryNote[]>(StorageKeys.TRUCKING.SURAT_JALAN) || [];
         const updated = [...allDN, newDN];
-        await storageService.set('trucking_deliveryNote', updated);
+        await storageService.set(StorageKeys.TRUCKING.SURAT_JALAN, updated);
 
         // Hapus notification setelah dibuat (berdasarkan doNo, bukan hanya dari dialog)
         const doNoToCheck = formData.doNo || notificationDialog.notif?.doNo;
         if (doNoToCheck) {
-          const allNotifications = await storageService.get<any[]>('trucking_dnNotifications') || [];
+          const allNotificationsRaw = await storageService.get<any[]>(StorageKeys.TRUCKING.SURAT_JALAN_NOTIFICATIONS);
+          const allNotifications = (Array.isArray(allNotificationsRaw) ? allNotificationsRaw : 
+                                  (allNotificationsRaw && typeof allNotificationsRaw === 'object' && 'value' in allNotificationsRaw && Array.isArray((allNotificationsRaw as any).value) ? (allNotificationsRaw as any).value : [])) as any[];
           // Hapus notification yang memiliki doNo yang sama
           const updatedNotifications = allNotifications.filter((n: any) => n.doNo !== doNoToCheck);
-          await storageService.set('trucking_dnNotifications', updatedNotifications);
+          await storageService.set(StorageKeys.TRUCKING.SURAT_JALAN_NOTIFICATIONS, updatedNotifications);
           console.log(`✅ [DeliveryNote] Removed notification for DO ${doNoToCheck}`);
         }
         
@@ -820,8 +857,8 @@ const DeliveryNote = () => {
       };
       
       // Simpan audit log menggunakan storageService
-      const auditLogs = await storageService.get<any[]>('trucking_auditLogs') || [];
-      await storageService.set('trucking_auditLogs', [...auditLogs, auditLog]);
+      const auditLogs = await storageService.get<any[]>(StorageKeys.TRUCKING.AUDIT_LOGS) || [];
+      await storageService.set(StorageKeys.TRUCKING.AUDIT_LOGS, [...auditLogs, auditLog]);
       return true;
     } catch (error) {
       console.error('Error saving tombstone to audit log:', error);
@@ -835,14 +872,14 @@ const DeliveryNote = () => {
       async () => {
         try {
           // Simpan tombstone ke audit log sebelum menghapus
-          await saveTombstoneToAuditLog(item, 'trucking_deliveryNote');
+          await saveTombstoneToAuditLog(item, StorageKeys.TRUCKING.SURAT_JALAN);
           
           // Pakai helper function untuk safe delete (tombstone pattern)
-          const deleteResult = await deleteTruckingItem('trucking_deliveryNote', item.id, 'id');
+          const deleteResult = await deleteTruckingItem(StorageKeys.TRUCKING.SURAT_JALAN, item.id, 'id');
           
           if (deleteResult.success) {
             // Reload data dengan helper function
-            const activeDN = await reloadTruckingData('trucking_deliveryNote', setDeliveryNote);
+            const activeDN = await reloadTruckingData(StorageKeys.TRUCKING.SURAT_JALAN, setDeliveryNote);
             
             // Sort by created date (newest first)
             const sortedUpdated = activeDN.sort((a, b) => {
@@ -882,7 +919,7 @@ const DeliveryNote = () => {
             }
           : sj
       );
-      await storageService.set('trucking_deliveryNote', updated);
+      await storageService.set(StorageKeys.TRUCKING.SURAT_JALAN, updated);
       setDeliveryNote(updated.map((sj, idx) => ({ ...sj, no: idx + 1 })));
     } catch (error: any) {
       showAlert(`Error updating status: ${error.message}`, 'Error');
@@ -999,29 +1036,6 @@ const DeliveryNote = () => {
     }
   };
 
-  // Helper function untuk convert old format ke new format
-  const normalizeSignedDocuments = (dn: DeliveryNote): SignedDocument[] => {
-    const docs: SignedDocument[] = [];
-    
-    // Convert old format ke new format jika ada
-    if (dn.signedDocument || dn.signedDocumentPath) {
-      docs.push({
-        document: dn.signedDocument || `file://${dn.signedDocumentPath}`,
-        path: dn.signedDocumentPath,
-        name: dn.signedDocumentName || 'Signed Document',
-        type: dn.signedDocumentType || 'image',
-        uploadedAt: dn.receivedDate || dn.created,
-      });
-    }
-    
-    // Add new format documents jika ada
-    if (dn.signedDocuments && dn.signedDocuments.length > 0) {
-      docs.push(...dn.signedDocuments);
-    }
-    
-    return docs;
-  };
-
   const handleUploadSignedDocument = async (item: DeliveryNote) => {
     // Show dialog untuk input tanggal receipt dulu
     setPendingUploadItem(item);
@@ -1040,7 +1054,7 @@ const DeliveryNote = () => {
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = 'image/*,.pdf';
-    fileInput.multiple = true; // Support multiple files
+    fileInput.multiple = true; // Allow multiple file selection
     fileInput.onchange = async (e: any) => {
       const files = Array.from(e.target.files || []) as File[];
       if (!files || files.length === 0) {
@@ -1049,253 +1063,153 @@ const DeliveryNote = () => {
       }
 
       try {
-        // Process semua files
-        const existingDocs = normalizeSignedDocuments(item);
-        const newDocs: SignedDocument[] = [];
+        // Upload all files to MinIO using BlobService
+        const uploadPromises = files.map(file => BlobService.uploadFile(file, 'trucking'));
+        const uploadResults = await Promise.all(uploadPromises);
         
-        // Process files sequentially
-        for (const file of files) {
-          await new Promise<void>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-              try {
-                const base64 = e.target?.result as string;
-                
-                // Deteksi tipe file
-                const isPDF = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
-                const fileType: 'pdf' | 'image' = isPDF ? 'pdf' : 'image';
-                
-                let document: string;
-                let path: string | undefined;
-                
-                if (isPDF) {
-                  // PDF: Simpan sebagai file di file system
-                  const electronAPI = (window as any).electronAPI;
-                  
-                  if (!electronAPI) {
-                    throw new Error('⚠️ Electron API tidak tersedia.\n\nPastikan aplikasi berjalan di Electron app, bukan di browser.');
-                  }
-                  
-                  if (typeof electronAPI.saveUploadedFile !== 'function') {
-                    throw new Error('⚠️ Fungsi saveUploadedFile tidak tersedia.\n\nSilakan restart aplikasi Electron.');
-                  }
-                  
-                  try {
-                    const result = await electronAPI.saveUploadedFile(base64, file.name, 'pdf');
-                    if (result && result.success) {
-                      path = result.path;
-                      document = `file://${result.path}`;
-                    } else {
-                      throw new Error(result?.error || 'Failed to save PDF file');
-                    }
-                  } catch (fileError: any) {
-                    const errorMessage = fileError.message || String(fileError);
-                    if (errorMessage.includes('No handler registered') || 
-                        errorMessage.includes('handler registered') ||
-                        errorMessage.includes('Error invoking remote method')) {
-                      throw new Error('⚠️ Handler Electron belum terdaftar.\n\nSilakan restart aplikasi Electron.');
-                    }
-                    throw new Error(`❌ Gagal menyimpan PDF: ${errorMessage}`);
-                  }
-                } else {
-                  // Image: Simpan sebagai base64
-                  document = base64;
-                  path = undefined;
-                }
-                
-                newDocs.push({
-                  document: path ? `file://${path}` : document,
-                  path: path,
-                  name: file.name,
-                  type: fileType,
-                  uploadedAt: new Date().toISOString(),
-                });
-                
-                resolve();
-              } catch (error: any) {
-                reject(error);
-              }
-            };
-            reader.onerror = () => reject(new Error('Failed to read file'));
-            reader.readAsDataURL(file);
-          });
-        }
+        // Create array of uploaded documents with metadata
+        const uploadedDocuments = uploadResults.map((result, index) => ({
+          fileId: result.fileId,
+          fileName: files[index].name,
+          uploadedAt: new Date().toISOString(),
+        }));
         
-        // Combine existing dan new documents
-        const allDocs = [...existingDocs, ...newDocs];
-        
+        // Update delivery dengan signed document fileIds dan status Close
         const updated = deliveryNote.map(dn =>
           dn.id === item.id
             ? {
                 ...dn,
-                // Simpan sebagai array baru
-                signedDocuments: allDocs,
-                // Clear old format untuk konsistensi
-                signedDocument: undefined,
-                signedDocumentPath: undefined,
-                signedDocumentName: undefined,
-                signedDocumentType: undefined,
+                signedDocumentId: uploadedDocuments[0].fileId, // Primary document (first upload)
+                signedDocumentName: uploadedDocuments[0].fileName,
+                // Store all uploaded documents as JSON string for backward compatibility
+                signedDocuments: uploadedDocuments.map(doc => ({
+                  document: doc.fileId, // Store fileId instead of base64
+                  name: doc.fileName,
+                  type: (doc.fileName.toLowerCase().endsWith('.pdf') ? 'pdf' : 'image') as 'pdf' | 'image',
+                  uploadedAt: doc.uploadedAt,
+                })),
                 receivedDate: receiptDate,
                 status: 'Close' as const, // Otomatis close setelah upload signed document
               }
             : dn
         );
           
-          // Save ke local storage
-          try {
-            await storageService.set('trucking_deliveryNote', updated);
-          } catch (storageError: any) {
-            // Jika save ke storage gagal karena quota, tampilkan error
-            if (storageError.message?.includes('quota') || storageError.message?.includes('exceeded')) {
-              throw new Error('Storage quota exceeded. Silakan hapus beberapa data lama atau hubungi administrator.');
-            }
-            throw storageError; // Re-throw error lainnya
-          }
-          // Sort by created date (newest first)
-          const sortedUpdated = updated.sort((a, b) => {
-            const dateA = a.created ? new Date(a.created).getTime() : (a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0);
-            const dateB = b.created ? new Date(b.created).getTime() : (b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0);
-            return dateB - dateA; // Newest first
-          });
-          setDeliveryNote(sortedUpdated.map((dn, idx) => ({ ...dn, no: idx + 1 })));
-          
-          // Close DO yang terkait setelah upload signed document
-          try {
-            const storageKey = 'trucking/trucking_delivery_orders';
-            const doList = await storageService.get<any[]>(storageKey) || [];
-            const relatedDO = doList.find((doItem: any) => doItem.doNo === item.doNo);
-            if (relatedDO && relatedDO.status === 'Open') {
-              const updatedDOs = doList.map((doItem: any) =>
-                doItem.doNo === item.doNo
-                  ? { ...doItem, status: 'Close' as const }
-                  : doItem
-              );
-              await storageService.set(storageKey, updatedDOs);
-              console.log(`✅ [DeliveryNote] Closed DO ${item.doNo} after signed document upload`);
-            }
-          } catch (error: any) {
-            console.error('Error closing DO:', error);
-          }
-          
-          // Kirim notifikasi ke Invoice setelah upload signed document
-          try {
-            const invoiceNotifications = await storageService.get<any[]>('trucking_invoiceNotifications') || [];
-            const existingNotif = invoiceNotifications.find((n: any) => 
-              n.dnNo === item.dnNo && n.type === 'CUSTOMER_INVOICE'
+        // Save ke storage
+        await storageService.set(StorageKeys.TRUCKING.SURAT_JALAN, updated);
+        
+        // Sort by created date (newest first)
+        const sortedUpdated = updated.sort((a, b) => {
+          const dateA = a.created ? new Date(a.created).getTime() : (a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0);
+          const dateB = b.created ? new Date(b.created).getTime() : (b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0);
+          return dateB - dateA; // Newest first
+        });
+        setDeliveryNote(sortedUpdated.map((dn, idx) => ({ ...dn, no: idx + 1 })));
+        
+        // Close DO yang terkait setelah upload signed document
+        try {
+          const doListRaw = await storageService.get<any[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS);
+          const doList = (Array.isArray(doListRaw) ? doListRaw : 
+                        (doListRaw && typeof doListRaw === 'object' && 'value' in doListRaw && Array.isArray((doListRaw as any).value) ? (doListRaw as any).value : [])) as any[];
+          const relatedDO = doList.find((doItem: any) => doItem.doNo === item.doNo);
+          if (relatedDO && relatedDO.status === 'Open') {
+            const updatedDOs = doList.map((doItem: any) =>
+              doItem.doNo === item.doNo
+                ? { ...doItem, status: 'Close' as const }
+                : doItem
             );
-            
-            if (!existingNotif) {
-              const now = new Date();
-              const newInvoiceNotification = {
-                id: `invoice-${Date.now()}-${item.dnNo}`,
-                type: 'CUSTOMER_INVOICE',
-                dnNo: item.dnNo,
-                doNo: item.doNo,
-                customer: item.customerName,
-                customerAddress: item.customerAddress,
-                items: item.items || [],
-                totalQty: (item.items || []).reduce((sum: number, itm: any) => sum + (itm.qty || 0), 0),
-                status: 'PENDING',
-                created: now.toISOString(),
-                lastUpdate: now.toISOString(),
-                timestamp: now.getTime(),
-                _timestamp: now.getTime(),
-              };
-              await storageService.set('trucking_invoiceNotifications', [...invoiceNotifications, newInvoiceNotification]);
-              console.log(`✅ [DeliveryNote] Created invoice notification for DN ${item.dnNo}`);
-              showAlert(`✅ Signed document uploaded successfully for ${item.dnNo}\n\n✅ Status updated to CLOSE\n✅ DO ${item.doNo} closed\n📧 Notification sent to Invoice module`, 'Success');
-            } else {
-              showAlert(`✅ Signed document uploaded successfully for ${item.dnNo}\n\n✅ Status updated to CLOSE\n✅ DO ${item.doNo} closed`, 'Success');
-            }
-          } catch (error: any) {
-            console.error('Error creating invoice notification:', error);
-            showAlert(`✅ Signed document uploaded successfully for ${item.dnNo}\n\n✅ Status updated to CLOSE\n✅ DO ${item.doNo} closed`, 'Success');
+            await storageService.set(StorageKeys.TRUCKING.DELIVERY_ORDERS, updatedDOs);
           }
-          setPendingUploadItem(null);
-        } catch (error: any) {
-          showAlert(`Error uploading files: ${error.message}`, 'Error');
-          setPendingUploadItem(null);
+        } catch (doError) {
+          console.warn('[DeliveryNote] Warning: Could not close related DO', doError);
         }
-      };
-      fileInput.click();
+
+        // Kirim notifikasi ke Invoice setelah upload signed document
+        try {
+          const invoiceNotificationsRaw = await storageService.get<any[]>(StorageKeys.TRUCKING.INVOICE_NOTIFICATIONS);
+          const invoiceNotifications = (Array.isArray(invoiceNotificationsRaw) ? invoiceNotificationsRaw : 
+                                      (invoiceNotificationsRaw && typeof invoiceNotificationsRaw === 'object' && 'value' in invoiceNotificationsRaw && Array.isArray((invoiceNotificationsRaw as any).value) ? (invoiceNotificationsRaw as any).value : [])) as any[];
+
+          const existingNotif = invoiceNotifications.find((n: any) => 
+            n.dnNo === item.dnNo && n.type === 'CUSTOMER_INVOICE'
+          );
+
+          if (!existingNotif) {
+            const newNotif = {
+              id: Date.now().toString(),
+              type: 'CUSTOMER_INVOICE',
+              dnNo: item.dnNo,
+              doNo: item.doNo,
+              status: 'PENDING',
+              createdAt: new Date().toISOString(),
+            };
+            await storageService.set(StorageKeys.TRUCKING.INVOICE_NOTIFICATIONS, [...invoiceNotifications, newNotif]);
+          }
+        } catch (notifError) {
+          console.warn('[DeliveryNote] Warning: Could not create invoice notification', notifError);
+        }
+
+        showAlert('✅ Signed document uploaded successfully', 'Success');
+        setPendingUploadItem(null);
+      } catch (error: any) {
+        console.error('[DeliveryNote] Upload error details:', error);
+        let errorMessage = error.message || 'Unknown error';
+        
+        // Provide better error messages for common issues
+        if (error.message?.includes('Failed to fetch') || error.message?.includes('ERR_CONNECTION')) {
+          errorMessage = 'Server tidak dapat diakses. Pastikan server PC Utama sedang berjalan dan terhubung ke Tailscale.';
+        } else if (error.message?.includes('timeout')) {
+          errorMessage = 'Upload timeout - server tidak merespons. Coba lagi atau periksa koneksi server.';
+        }
+        
+        showAlert(`❌ Error uploading document: ${errorMessage}`, 'Error');
+        setPendingUploadItem(null);
+      }
     };
+    fileInput.click();
+  };
 
   const handleViewSignedDocument = async (item: DeliveryNote) => {
-    const docs = normalizeSignedDocuments(item);
-    
-    if (docs.length === 0) {
+    if (!item.signedDocumentId && (!item.signedDocuments || item.signedDocuments.length === 0)) {
       showAlert('No signed document available for this Delivery Note', 'Information');
       return;
     }
-    
-    // Jika hanya 1 file, langsung view
-    if (docs.length === 1) {
-      await handleViewSingleDocument(item, docs[0]);
-      return;
-    }
-    
-    // Jika multiple files, buka gallery dialog
-    setViewingDocuments(docs);
-    setViewingDocumentsItem(item);
-  };
 
-  const handleViewSingleDocument = async (item: DeliveryNote, doc: SignedDocument) => {
     try {
-      let documentData = doc.document;
-      
-      // Jika file disimpan sebagai path (PDF yang besar), load dari file system
-      if (doc.path) {
-        const electronAPI = (window as any).electronAPI;
-        if (electronAPI && typeof electronAPI.loadUploadedFile === 'function') {
-          try {
-            const result = await electronAPI.loadUploadedFile(doc.path);
-            if (result && result.success) {
-              documentData = result.data || '';
-            } else {
-              throw new Error(result?.error || 'Failed to load file from file system');
-            }
-          } catch (loadError: any) {
-            showAlert('Error', `Gagal memuat file: ${loadError.message}`);
-            return;
-          }
-        } else if (isMobile() || isCapacitor()) {
-          showAlert('Error', 'File disimpan sebagai file system path, tetapi tidak bisa diakses di mobile.\n\nFile ini mungkin dibuat di aplikasi desktop. Silakan buka di aplikasi desktop untuk view file.');
-          return;
-        } else {
-          showAlert('Error', 'File disimpan sebagai file system, tetapi Electron API tidak tersedia.');
-          return;
-        }
+      // Get all documents - prioritize signedDocuments array, fallback to single signedDocumentId
+      const documents: SignedDocument[] = item.signedDocuments && item.signedDocuments.length > 0 
+        ? item.signedDocuments 
+        : [{
+            document: item.signedDocumentId || '',
+            name: item.signedDocumentName || `DN-${item.dnNo}-signed`,
+            type: (item.signedDocumentName || '').toLowerCase().endsWith('.pdf') ? 'pdf' : 'image',
+            uploadedAt: item.created,
+          }];
+
+      // If multiple documents, show a gallery/list view
+      if (documents.length > 1) {
+        setViewingDocuments(documents);
+        setViewingDocumentsItem(item);
+        setSelectedDocumentIndex(0);
+        // You can open a modal here to display the gallery
+        // For now, just view the first document
       }
+
+      // View the first document (or selected one)
+      const doc = documents[0];
+      const fileName = doc.name || `DN-${item.dnNo}-signed`;
+      const isPDF = doc.type === 'pdf' || fileName.toLowerCase().endsWith('.pdf');
       
-      if (!documentData) {
-        showAlert('Error', 'No document data available');
-        return;
-      }
+      // Get download URL from BlobService
+      const url = BlobService.getDownloadUrl(doc.document, 'trucking');
       
-      // Deteksi tipe file
-      const isPDF = doc.type === 'pdf' || 
-                    doc.name.toLowerCase().endsWith('.pdf') ||
-                    documentData.startsWith('data:application/pdf') ||
-                    (documentData.length > 100 && documentData.substring(0, 100).includes('JVBERi0'));
-      
-      // Normalize data URI format
-      if (!documentData.startsWith('data:')) {
-        if (isPDF) {
-          documentData = `data:application/pdf;base64,${documentData}`;
-        } else {
-          documentData = `data:image/jpeg;base64,${documentData}`;
-        }
-      }
-      
-      // Untuk PDF, langsung download saja
+      // Untuk PDF, langsung download saja (lebih reliable)
       if (isPDF) {
         const link = document.createElement('a');
-        link.href = documentData;
-        link.download = doc.name || `DN-${item.dnNo}-signed.pdf`;
+        link.href = url;
+        link.download = fileName;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        return;
       } else {
         // Untuk image, buka di new window
         const newWindow = window.open();
@@ -1303,10 +1217,21 @@ const DeliveryNote = () => {
           showAlert('Error', 'Popup blocked. Please allow popups to view document.');
           return;
         }
+        
+        // Build HTML for image gallery if multiple documents
+        let imageHtml = '';
+        if (documents.length > 1) {
+          imageHtml = `
+            <div style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: white; padding: 8px 12px; border-radius: 4px; font-size: 12px;">
+              Document 1 of ${documents.length}
+            </div>
+          `;
+        }
+        
         newWindow.document.write(`
           <html>
             <head>
-              <title>${doc.name || 'Signed Document'}</title>
+              <title>${fileName}</title>
               <style>
                 body { 
                   margin: 0; 
@@ -1325,8 +1250,9 @@ const DeliveryNote = () => {
               </style>
             </head>
             <body>
-            <img src="${documentData}" alt="${doc.name || 'Signed Document'}" 
-                 onerror="this.parentElement.innerHTML='<div style=\\'padding:20px;text-align:center;\\'><p>Error loading image</p></div>';" />
+              ${imageHtml}
+              <img src="${url}" alt="${fileName}" 
+                   onerror="this.parentElement.innerHTML='<div style=\\'padding:20px;text-align:center;\\'><p>Error loading image</p></div>';" />
             </body>
           </html>
         `);
@@ -1336,94 +1262,26 @@ const DeliveryNote = () => {
       showAlert('Error', `Error viewing document: ${error.message}`);
     }
   };
-  
-  const handleDownloadSignedDocument = async (item: DeliveryNote, doc?: SignedDocument) => {
-    const docs = doc ? [doc] : normalizeSignedDocuments(item);
-    
-    if (docs.length === 0) {
+
+
+  const handleDownloadSignedDocument = async (item: DeliveryNote) => {
+    if (!item.signedDocumentId) {
       showAlert('Error', 'No signed document available');
       return;
     }
-    
-    // Download semua files
-    for (const docItem of docs) {
-      try {
-        let documentData = docItem.document;
-        
-        if (docItem.path) {
-          const electronAPI = (window as any).electronAPI;
-          if (electronAPI && typeof electronAPI.loadUploadedFile === 'function') {
-            try {
-              const result = await electronAPI.loadUploadedFile(docItem.path);
-              if (result && result.success) {
-                documentData = result.data || '';
-              } else {
-                throw new Error(result?.error || 'Failed to load file from file system');
-              }
-            } catch (loadError: any) {
-              showAlert('Error', `Gagal memuat file ${docItem.name}: ${loadError.message}`);
-              continue;
-            }
-          } else {
-            showAlert('Error', `File ${docItem.name} disimpan sebagai file system, tetapi Electron API tidak tersedia.`);
-            continue;
-          }
-        }
-        
-        if (!documentData) {
-          continue;
-        }
-        
-        const isPDF = docItem.type === 'pdf' || docItem.name.toLowerCase().endsWith('.pdf');
-        
-        // Extract base64 data
-        let base64Data = documentData;
-        let mimeType = isPDF ? 'application/pdf' : 'image/png';
-        
-        if (base64Data && base64Data.includes(',')) {
-          const parts = base64Data.split(',');
-          base64Data = parts[1] || '';
-          const mimeMatch = parts[0].match(/data:([^;]+)/);
-          if (mimeMatch) {
-            mimeType = mimeMatch[1];
-          }
-        }
-        
-        if (!base64Data) {
-          continue;
-        }
-        
-        // Convert base64 to blob
-        const byteCharacters = atob(base64Data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: mimeType });
-        
-        // Create download link
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = docItem.name || `DN-${item.dnNo}-signed.${isPDF ? 'pdf' : 'png'}`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        
-        // Delay sedikit antara downloads
-        if (docs.length > 1) {
-          await new Promise(resolve => setTimeout(resolve, 300));
-        }
-      } catch (error: any) {
-        showAlert('Error', `Error downloading ${docItem.name}: ${error.message}`);
-      }
+
+    try {
+      const fileName = item.signedDocumentName || `DN-${item.dnNo}-signed`;
+      
+      // Use BlobService to download the file
+      await BlobService.downloadFile(item.signedDocumentId, fileName, 'trucking');
+    } catch (error: any) {
+      showAlert('Error', `Error downloading document: ${error.message}`);
     }
   };
 
   const filteredDeliveryNote = useMemo(() => {
-    const filtered = (deliveryNote || []).filter(sj => {
+    let filtered = (deliveryNote || []).filter(sj => {
       if (!sj) return false;
       if (!searchQuery) return true;
       const query = searchQuery.toLowerCase();
@@ -1436,13 +1294,42 @@ const DeliveryNote = () => {
         (sj.status || '').toLowerCase().includes(query)
       );
     });
+    
+    // Date filter
+    if (dateFrom) {
+      filtered = filtered.filter(sj => {
+        const sjDate = sj.created || sj.scheduledDate || '';
+        return sjDate >= dateFrom;
+      });
+    }
+    if (dateTo) {
+      filtered = filtered.filter(sj => {
+        const sjDate = sj.created || sj.scheduledDate || '';
+        return sjDate <= dateTo;
+      });
+    }
+    
     // Sort by created date (newest first)
     return filtered.sort((a, b) => {
       const dateA = a.created ? new Date(a.created).getTime() : (a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0);
       const dateB = b.created ? new Date(b.created).getTime() : (b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0);
       return dateB - dateA; // Newest first
     });
-  }, [deliveryNote, searchQuery]);
+  }, [deliveryNote, searchQuery, dateFrom, dateTo]);
+
+  // Pagination
+  const paginatedDeliveryNote = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredDeliveryNote.slice(startIndex, endIndex);
+  }, [filteredDeliveryNote, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredDeliveryNote.length / itemsPerPage);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, dateFrom, dateTo]);
 
   const columns = [
     { key: 'no', header: 'No' },
@@ -1468,13 +1355,12 @@ const DeliveryNote = () => {
       key: 'signedDocument',
       header: 'Signed Document',
       render: (item: DeliveryNote) => {
-        const docs = normalizeSignedDocuments(item);
-        if (docs.length === 0) {
+        if (!item.signedDocumentId) {
           return <span style={{ color: '#999', fontSize: '12px' }}>-</span>;
         }
         return (
           <span style={{ color: '#4CAF50', fontSize: '12px' }}>
-            ✓ {docs.length} file{docs.length > 1 ? 's' : ''}
+            ✓ {item.signedDocumentName || 'Signed'}
           </span>
         );
       },
@@ -1509,8 +1395,8 @@ const DeliveryNote = () => {
           onReopen={item.status === 'Close' ? () => handleStatusChange(item, 'Open') : undefined}
           onEdit={() => handleEdit(item)}
           onViewPDF={() => handleViewPDF(item)}
-          onUploadSigned={normalizeSignedDocuments(item).length === 0 ? () => handleUploadSignedDocument(item) : undefined}
-          onViewSigned={normalizeSignedDocuments(item).length > 0 ? () => handleViewSignedDocument(item) : undefined}
+          onUploadSigned={!item.signedDocumentId ? () => handleUploadSignedDocument(item) : undefined}
+          onViewSigned={item.signedDocumentId ? () => handleViewSignedDocument(item) : undefined}
           onDelete={item.status === 'Open' ? () => handleDelete(item) : undefined}
         />
       ),
@@ -1903,7 +1789,7 @@ const DeliveryNote = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by DN No, DO No, Customer, Driver, Vehicle, Status..."
               style={{
-                flex: 1,
+                flex: '1 1 260px',
                 padding: '8px 12px',
                 background: 'var(--bg-tertiary)',
                 border: '1px solid var(--border-color)',
@@ -1913,6 +1799,16 @@ const DeliveryNote = () => {
                 fontFamily: 'inherit',
               }}
             />
+            <div style={{ flex: '1 1 400px', minWidth: '350px' }}>
+              <DateRangeFilter
+                onDateChange={(from, to) => {
+                  setDateFrom(from);
+                  setDateTo(to);
+                }}
+                defaultFrom={dateFrom}
+                defaultTo={dateTo}
+              />
+            </div>
             <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-secondary)', padding: '4px', borderRadius: '6px' }}>
               <button
                 onClick={() => setViewMode('card')}
@@ -1950,9 +1846,9 @@ const DeliveryNote = () => {
           {/* Card View */}
           {viewMode === 'card' && (
             <>
-              {filteredDeliveryNote.length > 0 ? (
+              {paginatedDeliveryNote.length > 0 ? (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '16px' }}>
-                  {filteredDeliveryNote.map((item) => (
+                  {paginatedDeliveryNote.map((item) => (
                     <Card key={item.id} style={{ padding: '16px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                         <div>
@@ -1969,9 +1865,9 @@ const DeliveryNote = () => {
                         <div>🚛 Vehicle: {item.vehicleNo || '-'}</div>
                         <div>🚚 Route: {item.routeName || '-'}</div>
                         <div>📅 Scheduled: {item.scheduledDate || '-'} {item.scheduledTime || ''}</div>
-                        {normalizeSignedDocuments(item).length > 0 && (
+                        {item.signedDocumentId && (
                           <div style={{ color: '#4CAF50', fontWeight: 600 }}>
-                            ✓ {normalizeSignedDocuments(item).length} Signed Document{normalizeSignedDocuments(item).length > 1 ? 's' : ''} Uploaded
+                            ✓ Signed Document Uploaded
                           </div>
                         )}
                       </div>
@@ -1992,13 +1888,13 @@ const DeliveryNote = () => {
                         )}
                         <Button variant="secondary" onClick={() => handleEdit(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>Edit</Button>
                         <Button variant="primary" onClick={() => handleViewPDF(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>View PDF</Button>
-                        {normalizeSignedDocuments(item).length === 0 ? (
+                        {!item.signedDocumentId ? (
                           <Button variant="success" onClick={() => handleUploadSignedDocument(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>
                             📤 Upload Signed SJ
                           </Button>
                         ) : (
                           <Button variant="secondary" onClick={() => handleViewSignedDocument(item)} style={{ fontSize: '11px', padding: '4px 8px' }}>
-                            👁️ View Signed SJ ({normalizeSignedDocuments(item).length})
+                            👁️ View Signed SJ
                           </Button>
                         )}
                         {item.status === 'Open' && (
@@ -2013,12 +1909,45 @@ const DeliveryNote = () => {
                   {searchQuery ? "No surat jalan found matching your search" : "No surat jalan data"}
                 </div>
               )}
+              
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: '12px',
+                  marginTop: '20px',
+                  padding: '12px',
+                  borderTop: '1px solid var(--border)',
+                }}>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    style={{ fontSize: '12px', padding: '6px 12px' }}
+                  >
+                    ← Previous
+                  </Button>
+                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    Page {currentPage} of {totalPages} ({filteredDeliveryNote.length} items)
+                  </span>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    style={{ fontSize: '12px', padding: '6px 12px' }}
+                  >
+                    Next →
+                  </Button>
+                </div>
+              )}
             </>
           )}
 
           {/* Table View */}
           {viewMode === 'table' && (
-            <Table columns={columns} data={filteredDeliveryNote} emptyMessage={searchQuery ? "No surat jalan found matching your search" : "No surat jalan data"} />
+            <Table columns={columns} data={paginatedDeliveryNote} emptyMessage={searchQuery ? "No surat jalan found matching your search" : "No surat jalan data"} />
           )}
         </Card>
 
@@ -2087,7 +2016,7 @@ const DeliveryNote = () => {
                   srcDoc={viewPdfData.html}
                   style={{
                     width: '100%',
-                    height: '80vh',
+                    height: '100%',
                     border: 'none',
                     minHeight: '600px'
                   }}
@@ -2148,8 +2077,8 @@ const DeliveryNote = () => {
                 total={viewingDocuments.length}
                 onPrevious={() => setSelectedDocumentIndex(Math.max(0, selectedDocumentIndex - 1))}
                 onNext={() => setSelectedDocumentIndex(Math.min(viewingDocuments.length - 1, selectedDocumentIndex + 1))}
-                onDownload={() => handleDownloadSignedDocument(viewingDocumentsItem, viewingDocuments[selectedDocumentIndex])}
-                onDownloadAll={() => handleDownloadSignedDocument(viewingDocumentsItem)}
+                onDownload={() => handleDownloadSignedDocument(viewingDocumentsItem!)}
+                onDownloadAll={() => handleDownloadSignedDocument(viewingDocumentsItem!)}
               />
             </Card>
           </div>
@@ -2184,6 +2113,23 @@ const DocumentViewer = ({ item, doc, index, total, onPrevious, onNext, onDownloa
     try {
       let data = doc.document;
       
+      // If doc.document is a fileId (UUID), fetch from MinIO using BlobService
+      if (data && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data)) {
+        // This is a fileId, get the download URL from MinIO
+        try {
+          const url = BlobService.getDownloadUrl(data, 'trucking');
+          // For both images and PDFs, use the URL directly
+          // Browser will handle rendering appropriately
+          setDocumentData(url);
+          setLoading(false);
+          return;
+        } catch (fetchError: any) {
+          setError(`Error getting file URL: ${fetchError.message}`);
+          setLoading(false);
+          return;
+        }
+      }
+      
       if (doc.path) {
         const electronAPI = (window as any).electronAPI;
         if (electronAPI && typeof electronAPI.loadUploadedFile === 'function') {
@@ -2217,7 +2163,7 @@ const DocumentViewer = ({ item, doc, index, total, onPrevious, onNext, onDownloa
       }
       
       // Normalize data URI
-      if (!data.startsWith('data:')) {
+      if (!data.startsWith('data:') && !data.startsWith('http')) {
         const isPDF = doc.type === 'pdf';
         data = isPDF ? `data:application/pdf;base64,${data}` : `data:image/jpeg;base64,${data}`;
       }
@@ -2274,9 +2220,11 @@ const DocumentViewer = ({ item, doc, index, total, onPrevious, onNext, onDownloa
             src={documentData}
             style={{
               width: '100%',
-              height: '100%',
+              height: 'auto',
               minHeight: '500px',
               border: 'none',
+              transform: 'scale(0.95)',
+              transformOrigin: 'top center',
             }}
             title={doc.name}
           />

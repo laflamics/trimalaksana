@@ -5,8 +5,6 @@ import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import { storageService } from '../../../services/storage';
-import { loadGTDataFromLocalStorage } from '../../../utils/gtStorageHelper';
-import { filterActiveItems } from '../../../utils/data-persistence-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -20,10 +18,10 @@ interface Product {
   harga?: number;
 }
 
-interface product {
+interface Material {
   id: string;
   kode: string;
-  product_id?: string;
+  material_id?: string;
   nama: string;
   supplier: string;
   priceMtr?: number;
@@ -33,6 +31,7 @@ interface product {
 interface BOMItem {
   id: string;
   product_id: string;
+  material_id: string;
   ratio: number;
 }
 
@@ -42,11 +41,11 @@ interface ProductCostAnalysis {
   productName: string;
   customer: string;
   sellingPrice: number;
-  productCosts: {
-    productId: string;
-    productName: string;
+  materialCosts: {
+    materialId: string;
+    materialName: string;
     supplier: string;
-    productPrice: number;
+    materialPrice: number;
     ratio: number;
     costPerUnit: number;
   }[];
@@ -58,6 +57,8 @@ interface ProductCostAnalysis {
 
 const CostAnalysis = () => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [bomData, setBomData] = useState<BOMItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCustomer, setFilterCustomer] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(true);
@@ -111,15 +112,14 @@ const CostAnalysis = () => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [prodsRaw] = await Promise.all([
-        loadGTDataFromLocalStorage<Product>(
-          'gt_products',
-          async () => await storageService.get<Product[]>('gt_products') || []
-        ),
+      const [prods, mats, bom] = await Promise.all([
+        storageService.get<Product[]>('gt_products') || [],
+        storageService.get<Material[]>('gt_materials') || [],
+        storageService.get<BOMItem[]>('gt_bom') || [],
       ]);
-      // Filter out deleted items menggunakan helper function
-      const activeProducts = filterActiveItems(prodsRaw || []);
-      setProducts(activeProducts);
+      setProducts(prods || []);
+      setMaterials(mats || []);
+      setBomData(bom || [] as BOMItem[]);
     } finally {
       setIsLoading(false);
     }
@@ -131,22 +131,34 @@ const CostAnalysis = () => {
       return [];
     }
 
-    // Create product index: productId -> product
-    const productIndex = new Map<string, Product>();
-    // Ensure products is always an array
-    const productsArray = Array.isArray(products) ? products : [];
-    productsArray.forEach(m => {
-      const mId = (m.product_id || m.kode || '').toString().trim();
-      if (mId) productIndex.set(mId, m);
+    // Create material index: materialId -> Material
+    const materialIndex = new Map<string, Material>();
+    // Ensure materials is always an array
+    const materialsArray = Array.isArray(materials) ? materials : [];
+    materialsArray.forEach(m => {
+      const mId = (m.material_id || m.kode || '').toString().trim();
+      if (mId) materialIndex.set(mId, m);
     });
 
     // Create BOM index: productId -> BOMItem[]
     const bomIndex = new Map<string, BOMItem[]>();
+    // Ensure bomData is always an array
+    const bomDataArray = Array.isArray(bomData) ? bomData : [];
+    bomDataArray.forEach(b => {
+      const bomProductId = (b.product_id || '').toString().trim();
+      if (bomProductId) {
+        if (!bomIndex.has(bomProductId)) {
+          bomIndex.set(bomProductId, []);
+        }
+        bomIndex.get(bomProductId)!.push(b);
+      }
+    });
 
     // Calculate analysis using indexes
     const analysis: ProductCostAnalysis[] = [];
 
-    // productsArray already declared above
+    // Ensure products is always an array
+    const productsArray = Array.isArray(products) ? products : [];
     productsArray.forEach(product => {
       const productId = (product.product_id || product.kode || '').toString().trim();
       const sellingPrice = product.hargaFg || product.harga || 0;
@@ -163,7 +175,7 @@ const CostAnalysis = () => {
           productName: product.nama,
           customer: customer,
           sellingPrice: sellingPrice,
-          productCosts: [],
+          materialCosts: [],
           totalCost: 0,
           profit: sellingPrice,
           profitMargin: sellingPrice > 0 ? 100 : 0,
@@ -172,26 +184,26 @@ const CostAnalysis = () => {
         return;
       }
 
-      // Calculate product costs using index (O(1) lookup per product)
-      const productCosts = productBOM.map(bom => {
-        const productId = (bom.product_id || '').toString().trim();
-        const product = productIndex.get(productId);
+      // Calculate material costs using index (O(1) lookup per material)
+      const materialCosts = productBOM.map(bom => {
+        const materialId = (bom.material_id || '').toString().trim();
+        const material = materialIndex.get(materialId);
 
-        const productPrice = product?.harga || 0;
+        const materialPrice = material?.priceMtr || material?.harga || 0;
         const ratio = bom.ratio || 1;
-        const costPerUnit = productPrice * ratio;
+        const costPerUnit = materialPrice * ratio;
 
         return {
-          productId: productId,
-          productName: product?.nama || productId,
-          supplier: product?.customer || '',
-          productPrice: productPrice,
+          materialId: materialId,
+          materialName: material?.nama || materialId,
+          supplier: material?.supplier || '',
+          materialPrice: materialPrice,
           ratio: ratio,
           costPerUnit: costPerUnit,
         };
       });
 
-      const totalCost = productCosts.reduce((sum, mc) => sum + mc.costPerUnit, 0);
+      const totalCost = materialCosts.reduce((sum, mc) => sum + mc.costPerUnit, 0);
       const profit = sellingPrice - totalCost;
       const profitMargin = sellingPrice > 0 ? (profit / sellingPrice) * 100 : 0;
 
@@ -201,7 +213,7 @@ const CostAnalysis = () => {
         productName: product.nama,
         customer: customer,
         sellingPrice: sellingPrice,
-        productCosts: productCosts,
+        materialCosts: materialCosts,
         totalCost: totalCost,
         profit: profit,
         profitMargin: profitMargin,
@@ -210,7 +222,7 @@ const CostAnalysis = () => {
     });
 
     return analysis;
-  }, [products]);
+  }, [products, materials, bomData]);
 
   const filteredAnalysis = useMemo(() => {
     // Ensure costAnalysis is always an array
@@ -286,7 +298,7 @@ const CostAnalysis = () => {
         'Profit': item.profit,
         'Profit Margin %': item.profitMargin.toFixed(2),
         'Has BOM': item.hasBOM ? 'Yes' : 'No',
-        'product Count': item.productCosts.length,
+        'Material Count': item.materialCosts.length,
       }));
 
       const ws = XLSX.utils.json_to_sheet(dataToExport);
@@ -298,15 +310,15 @@ const CostAnalysis = () => {
       // Ensure filteredAnalysis is always an array
       const filteredAnalysisArray = Array.isArray(filteredAnalysis) ? filteredAnalysis : [];
       filteredAnalysisArray.forEach(item => {
-        if (item.productCosts.length > 0) {
-          item.productCosts.forEach(mc => {
+        if (item.materialCosts.length > 0) {
+          item.materialCosts.forEach(mc => {
             bomDetail.push({
               'Product Code': item.productKode,
               'Product Name': item.productName,
-              'product Code': mc.productId,
-              'product Name': mc.productName,
+              'Material Code': mc.materialId,
+              'Material Name': mc.materialName,
               'Supplier': mc.supplier,
-              'product Price (BOS)': mc.productPrice,
+              'Material Price (BOS)': mc.materialPrice,
               'Ratio': mc.ratio,
               'Cost Per Unit': mc.costPerUnit,
             });
@@ -364,8 +376,8 @@ const CostAnalysis = () => {
       }
     },
     { 
-      key: 'productCount', 
-      header: 'product Count', 
+      key: 'materialCount', 
+      header: 'Material Count', 
       render: (item: ProductCostAnalysis) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div
@@ -378,7 +390,7 @@ const CostAnalysis = () => {
             }}
             title={item.hasBOM ? 'Memiliki BOM' : 'Tidak memiliki BOM'}
           />
-          <span>{item.productCosts.length}</span>
+          <span>{item.materialCosts.length}</span>
         </div>
       )
     },
@@ -389,12 +401,12 @@ const CostAnalysis = () => {
         <Button 
           variant="secondary" 
           onClick={() => {
-            if (item.productCosts.length === 0) {
+            if (item.materialCosts.length === 0) {
               showAlert(`Product ${item.productName} tidak memiliki BOM.\n\nSilakan tambahkan BOM di Master Products.`, 'Warning');
               return;
             }
-            const detail = item.productCosts.map((mc, idx) => 
-              `${idx + 1}. ${mc.productName} (${mc.productId})\n   Supplier: ${mc.supplier}\n   Harga BOS (Beli): Rp ${mc.productPrice.toLocaleString('id-ID')}\n   Ratio: ${mc.ratio}\n   Cost per Unit: Rp ${mc.costPerUnit.toLocaleString('id-ID')}`
+            const detail = item.materialCosts.map((mc, idx) => 
+              `${idx + 1}. ${mc.materialName} (${mc.materialId})\n   Supplier: ${mc.supplier}\n   Harga BOS (Beli): Rp ${mc.materialPrice.toLocaleString('id-ID')}\n   Ratio: ${mc.ratio}\n   Cost per Unit: Rp ${mc.costPerUnit.toLocaleString('id-ID')}`
             ).join('\n\n');
             const summary = `\n\n═══════════════════════════════════\nHarga Jual: Rp ${item.sellingPrice.toLocaleString('id-ID')}\nTotal Cost (BOM): Rp ${item.totalCost.toLocaleString('id-ID')}\nProfit: Rp ${item.profit.toLocaleString('id-ID')}\nProfit Margin: ${item.profitMargin.toFixed(2)}%`;
             showAlert(`📊 Cost Breakdown - ${item.productName}\n\n${detail}${summary}`, 'Cost Breakdown');
@@ -429,7 +441,7 @@ const CostAnalysis = () => {
           <div>
             <h2>Product Cost Analysis</h2>
             <p style={{ margin: '5px 0 0 0', fontSize: '14px', color: 'var(--text-secondary)' }}>
-              Analisis biaya produk berdasarkan BOM dan harga product (BOS)
+              Analisis biaya produk berdasarkan BOM dan harga material (BOS)
             </p>
           </div>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>

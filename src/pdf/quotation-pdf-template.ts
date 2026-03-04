@@ -1,3 +1,4 @@
+import { ensureLogoIsBase64 } from '../utils/hardcoded-logo';
 /**
  * Template Struktur PDF Quotation
  * Diambil dari: desktop/src/general-trading/sales-orders.tsx - fungsi generateQuotationHtmlFromData()
@@ -64,9 +65,9 @@ export function generateQuotationHtml({
   const quoteNo = qData.quoteNo || `QUO-${so?.soNo || Date.now()}`;
   
   const companyName = company.companyName || 'PT. TRIMA LAKSANA JAYA PRATAMA';
-  const companyAddress = company.address || 'Jl. Raya Cikarang Cibarusah Km. 10';
-  const companyAddress2 = 'RT. 11/06, Desa Ciantra Kec. Cikarang Selatan';
-  const companyAddress3 = 'Bekasi';
+  const companyAddress = company.address || 'Jl. Raya Cikarang Cibarusah Kp. Kukun RT 11/06 Desa Ciantra Kecamatan Cikarang Selatan Kabupaten Bekasi';
+  const companyAddress2 = '';
+  const companyAddress3 = '';
   const companyPhone = company.phone || '021 8982 3556';
   const directorName = company.picPurchasingName || 'M. ALAUDDIN';
   
@@ -87,11 +88,11 @@ export function generateQuotationHtml({
 <html>
 <head>
   <meta charset='utf-8'>
-  <title>Quotation ${quoteNo}</title>
+  <title>Detail Sales Order ${quoteNo}</title>
   <style>
     @page { 
       size: A4 portrait; 
-      margin: 15mm 25mm; 
+      margin: 1mm 1mm; 
     }
     * { 
       box-sizing: border-box; 

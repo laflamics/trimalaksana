@@ -4,8 +4,10 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService } from '../../../services/storage';
+import DateRangeFilter from '../../../components/DateRangeFilter';
+import { storageService, StorageKeys } from '../../../services/storage';
 import { deletePackagingItem, reloadPackagingData } from '../../../utils/packaging-delete-helper';
+import { useLanguage } from '../../../hooks/useLanguage';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -29,6 +31,7 @@ interface Account {
 }
 
 const GeneralLedger = () => {
+  const { t } = useLanguage();
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -107,7 +110,7 @@ const GeneralLedger = () => {
   }, []);
 
   const loadEntries = async () => {
-    let data = await storageService.get<JournalEntry[]>('journalEntries') || [];
+    let data = await storageService.get<JournalEntry[]>(StorageKeys.PACKAGING.JOURNAL_ENTRIES) || [];
     
     // 🚀 FIX: Filter deleted items langsung saat load
     const dataArray = Array.isArray(data) ? data : [];
@@ -117,7 +120,7 @@ const GeneralLedger = () => {
     if (activeDataArray.length === 0) {
       await generateJournalEntriesFromTransactions();
       // Reload setelah generate
-      data = await storageService.get<JournalEntry[]>('journalEntries') || [];
+      data = await storageService.get<JournalEntry[]>(StorageKeys.PACKAGING.JOURNAL_ENTRIES) || [];
       // Filter lagi setelah generate
       const reloadedDataArray = Array.isArray(data) ? data : [];
       const reloadedActiveData = filterActiveItems(reloadedDataArray);
@@ -131,10 +134,10 @@ const GeneralLedger = () => {
   const generateJournalEntriesFromTransactions = async () => {
     try {
       const [invoices, payments, purchaseOrders, existingEntries] = await Promise.all([
-        storageService.get<any[]>('invoices') || [],
-        storageService.get<any[]>('payments') || [],
-        storageService.get<any[]>('purchaseOrders') || [],
-        storageService.get<any[]>('journalEntries') || [],
+        storageService.get<any[]>(StorageKeys.PACKAGING.INVOICES) || [],
+        storageService.get<any[]>(StorageKeys.PACKAGING.PAYMENTS) || [],
+        storageService.get<any[]>(StorageKeys.PACKAGING.PURCHASE_ORDERS) || [],
+        storageService.get<any[]>(StorageKeys.PACKAGING.JOURNAL_ENTRIES) || [],
       ]);
 
       // 🚀 FIX: Filter deleted items dari transaksi
@@ -323,7 +326,7 @@ const GeneralLedger = () => {
       });
 
       if (newEntries.length > 0) {
-        await storageService.set('journalEntries', newEntries);
+        await storageService.set(StorageKeys.PACKAGING.JOURNAL_ENTRIES, newEntries);
         // Alert user
         showAlert(`✅ Generated ${newEntries.length} journal entries from existing transactions!\n\n- ${invoicesData.length} Invoices\n- ${paymentsData.length} Payments\n- ${purchaseOrdersData.length} Purchase Orders`, 'Success');
       } else {
@@ -335,7 +338,7 @@ const GeneralLedger = () => {
   };
 
   const loadAccounts = async () => {
-    const data = await storageService.get<Account[]>('accounts') || [];
+    const data = await storageService.get<Account[]>(StorageKeys.PACKAGING.ACCOUNTS) || [];
     if (!data || data.length === 0) {
       const defaultAccounts: Account[] = [
         { code: '1000', name: 'Cash', type: 'Asset', balance: 0 },
@@ -353,7 +356,7 @@ const GeneralLedger = () => {
         { code: '6100', name: 'Administrative Expenses', type: 'Expense', balance: 0 },
         { code: '6200', name: 'Financial Expenses', type: 'Expense', balance: 0 },
       ];
-      await storageService.set('accounts', defaultAccounts);
+      await storageService.set(StorageKeys.PACKAGING.ACCOUNTS, defaultAccounts);
       setAccounts(defaultAccounts);
     } else {
       setAccounts(data);
@@ -387,7 +390,7 @@ const GeneralLedger = () => {
               } as JournalEntry
             : e
         );
-        await storageService.set('journalEntries', updated);
+        await storageService.set(StorageKeys.PACKAGING.JOURNAL_ENTRIES, updated);
         setEntries(updated.map((e, idx) => ({ ...e, no: idx + 1 })));
       } else {
         const newEntry: JournalEntry = {
@@ -400,7 +403,7 @@ const GeneralLedger = () => {
           ...formData,
         } as JournalEntry;
         const updated = [...entries, newEntry];
-        await storageService.set('journalEntries', updated);
+        await storageService.set(StorageKeys.PACKAGING.JOURNAL_ENTRIES, updated);
         setEntries(updated.map((e, idx) => ({ ...e, no: idx + 1 })));
       }
       
@@ -610,7 +613,7 @@ const GeneralLedger = () => {
 
             if (newEntries.length > 0) {
               const updated = [...entries, ...newEntries];
-              await storageService.set('journalEntries', updated);
+              await storageService.set(StorageKeys.PACKAGING.JOURNAL_ENTRIES, updated);
               setEntries(updated.map((e, idx) => ({ ...e, no: idx + 1 })));
               showAlert(`✅ Imported ${newEntries.length} entries${errors.length > 0 ? `\n⚠️ ${errors.length} errors` : ''}`, 'Success');
             } else {
@@ -648,7 +651,7 @@ const GeneralLedger = () => {
               const deleteResult = await deletePackagingItem('journalEntries', item.id, 'id');
               if (deleteResult.success) {
                 // Reload data dengan helper (handle race condition)
-                const dataRaw = await storageService.get<any[]>('journalEntries') || [];
+                const dataRaw = await storageService.get<any[]>(StorageKeys.PACKAGING.JOURNAL_ENTRIES) || [];
                 const data = dataRaw.filter((e: any) => !e.deleted && !e.deletedAt);
                 setEntries(data.map((e, idx) => ({ ...e, no: idx + 1 })));
                 closeDialog();
@@ -671,25 +674,24 @@ const GeneralLedger = () => {
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h2>General Ledger</h2>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
             <Input
               type="text"
               placeholder="Search entries..."
               value={searchQuery}
               onChange={(value) => setSearchQuery(value)}
+              style={{ flex: '1 1 200px', minWidth: '150px' }}
             />
-            <Input
-              type="date"
-              placeholder="From Date"
-              value={dateFrom}
-              onChange={(value) => setDateFrom(value)}
-            />
-            <Input
-              type="date"
-              placeholder="To Date"
-              value={dateTo}
-              onChange={(value) => setDateTo(value)}
-            />
+            <div style={{ flex: '1 1 400px', minWidth: '300px' }}>
+              <DateRangeFilter
+                onDateChange={(from, to) => {
+                  setDateFrom(from);
+                  setDateTo(to);
+                }}
+                defaultFrom={dateFrom}
+                defaultTo={dateTo}
+              />
+            </div>
             <select
               value={accountFilter}
               onChange={(e) => setAccountFilter(e.target.value)}

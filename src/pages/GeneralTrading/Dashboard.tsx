@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import Card from '../../components/Card';
-import { storageService } from '../../services/storage';
+import { storageService, StorageKeys } from '../../services/storage';
 import '../../styles/common.css';
 
 const GeneralTradingDashboard = () => {
@@ -19,14 +19,14 @@ const GeneralTradingDashboard = () => {
 
   const loadData = async () => {
     const [soRaw, poRaw, invRaw, payRaw, prodRaw, quotRaw, custRaw, suppRaw] = await Promise.all([
-      storageService.get<any[]>('gt_salesOrders') || [],
-      storageService.get<any[]>('gt_purchaseOrders') || [],
-      storageService.get<any[]>('gt_invoices') || [],
-      storageService.get<any[]>('gt_payments') || [],
-      storageService.get<any[]>('gt_products') || [],
-      storageService.get<any[]>('gt_quotations') || [],
-      storageService.get<any[]>('gt_customers') || [],
-      storageService.get<any[]>('gt_suppliers') || [],
+      storageService.get<any[]>(StorageKeys.GENERAL_TRADING.SALES_ORDERS) || [],
+      storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PURCHASE_ORDERS) || [],
+      storageService.get<any[]>(StorageKeys.GENERAL_TRADING.INVOICES) || [],
+      storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PAYMENTS) || [],
+      storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PRODUCTS) || [],
+      storageService.get<any[]>(StorageKeys.GENERAL_TRADING.QUOTATIONS) || [],
+      storageService.get<any[]>(StorageKeys.GENERAL_TRADING.CUSTOMERS) || [],
+      storageService.get<any[]>(StorageKeys.GENERAL_TRADING.SUPPLIERS) || [],
     ]);
     
     // CRITICAL: Extract array from storage wrapper if needed

@@ -5,10 +5,12 @@ import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import BOMDialog from '../../components/BOMDialog';
-import { storageService, extractStorageValue } from '../../services/storage';
+import { storageService, extractStorageValue, StorageKeys } from '../../services/storage';
 import { filterActiveItems } from '../../utils/data-persistence-helper';
 import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import { useDialog } from '../../hooks/useDialog';
+import { useLanguage } from '../../hooks/useLanguage';
+import BlobService from '../../services/blob-service';
 import * as XLSX from 'xlsx';
 import '../../styles/common.css';
 import './Master.css';
@@ -30,9 +32,11 @@ interface Product {
   ipAddress?: string;
   harga?: number;
   hargaFg?: number;
+  hargaBeli?: number; // Harga Beli (Purchase Price)
   bom?: any[];
   padCode?: string; // PAD Code untuk product
   kodeIpos?: string; // Kode Ipos untuk product (khusus packaging)
+  productImageId?: string; // MinIO fileId (not base64)
 }
 
 interface Customer {
@@ -43,6 +47,7 @@ interface Customer {
 
 const Products = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [products, setProducts] = useState<Product[]>([]);
   const [bomData, setBomData] = useState<any[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -59,6 +64,10 @@ const Products = () => {
   const [stockAmanInputValue, setStockAmanInputValue] = useState('');
   const [stockMinimumInputValue, setStockMinimumInputValue] = useState('');
   const [priceInputValue, setPriceInputValue] = useState('');
+  const [purchasePriceInputValue, setPurchasePriceInputValue] = useState('');
+  const [previewImageId, setPreviewImageId] = useState<string | null>(null);
+  const [productImage, setProductImage] = useState<string | null>(null);
+  const [previewPdfId, setPreviewPdfId] = useState<string | null>(null);
 
   // Custom Dialog - menggunakan hook terpusat
   const { showAlert, showConfirm, closeDialog, DialogComponent } = useDialog();
@@ -93,6 +102,7 @@ const Products = () => {
     kategori: '',
     customer: '',
     hargaFg: 0,
+    hargaBeli: 0,
   });
 
   const loadProducts = useCallback(async () => {
@@ -177,6 +187,68 @@ const Products = () => {
       window.removeEventListener('bomUpdated', handleBOMUpdate as EventListener);
     };
   }, [loadProducts]);
+
+  // Auto-fill padCode dari customer kode untuk semua products yang padCode-nya kosong
+  useEffect(() => {
+    if (!products || products.length === 0 || !customers || customers.length === 0) {
+      return;
+    }
+
+    console.log('[Products] 🔄 Auto-filling padCode from customer kode...');
+    
+    // Check apakah ada product yang perlu di-fill
+    const productsNeedingFill = products.filter(p => {
+      const hasCustomer = !!(p.customer || p.supplier);
+      const padCodeEmpty = !p.padCode || p.padCode.trim() === '';
+      return hasCustomer && padCodeEmpty;
+    });
+
+    if (productsNeedingFill.length === 0) {
+      console.log('[Products] ✅ No products need padCode auto-fill');
+      return;
+    }
+
+    console.log(`[Products] 📝 Found ${productsNeedingFill.length} products needing padCode auto-fill`);
+
+    // Auto-fill padCode untuk products yang kosong
+    const updatedProducts = products.map(p => {
+      const hasCustomer = !!(p.customer || p.supplier);
+      const padCodeEmpty = !p.padCode || p.padCode.trim() === '';
+
+      if (!hasCustomer || !padCodeEmpty) {
+        return p; // Skip - tidak perlu di-fill
+      }
+
+      // Cari customer berdasarkan nama
+      const customerName = (p.customer || p.supplier || '').trim();
+      const customer = customers.find(c => 
+        c.nama && c.nama.toLowerCase() === customerName.toLowerCase()
+      );
+
+      if (!customer || !customer.kode) {
+        return p; // Customer tidak ditemukan atau tidak punya kode
+      }
+
+      // Return product dengan padCode yang sudah di-fill
+      console.log(`[Products] ✅ Auto-filled padCode for "${p.nama}": ${customer.kode}`);
+      return {
+        ...p,
+        padCode: customer.kode.trim(),
+      };
+    });
+
+    // Check apakah ada perubahan
+    const hasChanges = updatedProducts.some((p, idx) => p.padCode !== products[idx].padCode);
+
+    if (hasChanges) {
+      console.log('[Products] 💾 Saving auto-filled padCode to storage...');
+      setProducts(updatedProducts);
+      // Save to storage
+      storageService.set(StorageKeys.PACKAGING.PRODUCTS, updatedProducts, true).catch(err => {
+        console.error('[Products] Error saving auto-filled padCode:', err);
+      });
+    }
+  }, [products, customers]);
 
   // Helper function untuk remove leading zero dari input angka
   const removeLeadingZero = (value: string): string => {
@@ -525,21 +597,71 @@ const Products = () => {
     setCurrentPage(1);
   }, [searchQuery]);
 
+  // Handle product image upload
+  const handleImageUpload = async (file: File) => {
+    try {
+      // Validate file - allow images and PDFs
+      const validation = BlobService.validateFile(file, 50, ['image/*', 'application/pdf']);
+      if (!validation.valid) {
+        showAlert(validation.error || 'Invalid file', 'Error');
+        return;
+      }
+
+      // Upload to MinIO
+      const result = await BlobService.uploadFile(file, 'packaging');
+      
+      // Store only fileId (not base64)
+      setProductImage(result.fileId);
+      setFormData({ ...formData, productImageId: result.fileId });
+      showAlert('File uploaded successfully', 'Success');
+    } catch (error: any) {
+      showAlert(`Error uploading file: ${error.message}`, 'Error');
+    }
+  };
+
+  const handleImageRemove = async () => {
+    // Optimistic delete - remove UI immediately
+    const fileIdToDelete = productImage;
+    setProductImage(null);
+    setFormData({ ...formData, productImageId: undefined });
+    
+    // Delete from server in background (don't wait)
+    if (fileIdToDelete) {
+      BlobService.deleteFile(fileIdToDelete, 'packaging').catch(error => {
+        console.warn('Background delete failed (ignored):', error.message);
+      });
+    }
+  };
+
   const handleSave = async () => {
     try {
       // Extract padCode and kodeIpos explicitly to ensure it's not lost
-      const padCodeValue = (formData.padCode || '').trim();
+      let padCodeValue = (formData.padCode || '').trim();
       const kodeIposValue = (formData.kodeIpos || '').trim();
       
       if (editingItem) {
         const updated = products.map(p => {
           if (p.id === editingItem.id) {
-            // Auto-generate product_id jika kosong
-            let productId = p.product_id;
+            // Sync product_id dengan kode yang diedit
+            const newKode = formData.kode !== undefined && formData.kode !== null ? String(formData.kode).trim() : (p.kode || '');
+            let productId = newKode; // product_id selalu sync dengan kode
+            
+            // Fallback: Auto-generate product_id jika kode kosong
             if (!productId || productId.trim() === '') {
               const customerName = (formData.customer || p.customer || '').trim();
               if (customerName) {
                 productId = generateProductId(customerName);
+              } else {
+                productId = p.product_id || ''; // Keep old product_id if no customer
+              }
+            }
+            
+            // Auto-fill padCode dari customer kode jika padCode kosong
+            const customerName = (formData.customer || p.customer || '').trim();
+            if (!padCodeValue && customerName) {
+              const customer = customers.find(c => c.nama && c.nama.toLowerCase() === customerName.toLowerCase());
+              if (customer && customer.kode) {
+                padCodeValue = customer.kode.trim();
               }
             }
             
@@ -547,9 +669,9 @@ const Products = () => {
             const updatedProduct: Product = {
               id: editingItem.id,
               no: editingItem.no,
-              kode: productId || (p.kode || ''),
+              kode: newKode,
               nama: formData.nama !== undefined && formData.nama !== null ? String(formData.nama).trim() : (p.nama || ''),
-              padCode: padCodeValue, // Always set padCode explicitly
+              padCode: padCodeValue, // Always set padCode explicitly (auto-filled if empty)
               kodeIpos: kodeIposValue, // Always set kodeIpos explicitly
               satuan: formData.satuan !== undefined && formData.satuan !== null ? String(formData.satuan).trim() : (p.satuan || ''),
               stockAman: formData.stockAman !== undefined ? Number(formData.stockAman) : (p.stockAman || 0),
@@ -558,8 +680,10 @@ const Products = () => {
               customer: formData.customer !== undefined && formData.customer !== null ? String(formData.customer).trim() : (p.customer || ''),
               supplier: formData.supplier !== undefined && formData.supplier !== null ? String(formData.supplier).trim() : (p.supplier || ''),
               hargaFg: formData.hargaFg !== undefined ? Number(formData.hargaFg) : (p.hargaFg || 0),
+              hargaBeli: formData.hargaBeli !== undefined ? Number(formData.hargaBeli) : (p.hargaBeli || 0),
               harga: formData.harga !== undefined ? Number(formData.harga) : (p.harga || 0),
               bom: formData.bom !== undefined ? formData.bom : (p.bom || []),
+              productImageId: formData.productImageId || p.productImageId,
               product_id: productId,
               lastUpdate: new Date().toISOString(), 
               userUpdate: 'System', 
@@ -570,7 +694,7 @@ const Products = () => {
           return p;
         });
         
-        await storageService.set('products', updated);
+        await storageService.set(StorageKeys.PACKAGING.PRODUCTS, updated, true); // immediateSync = true
         setProducts(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
       } else {
         // Auto-generate product_id untuk product baru jika kosong
@@ -580,12 +704,21 @@ const Products = () => {
           productId = generateProductId(customerName);
         }
         
+        // Auto-fill padCode dari customer kode jika padCode kosong
+        let finalPadCode = padCodeValue;
+        if (!finalPadCode && customerName) {
+          const customer = customers.find(c => c.nama && c.nama.toLowerCase() === customerName.toLowerCase());
+          if (customer && customer.kode) {
+            finalPadCode = customer.kode.trim();
+          }
+        }
+        
         const newProduct: Product = {
           id: Date.now().toString(),
           no: products.length + 1,
           kode: productId || '',
           nama: formData.nama || '',
-          padCode: padCodeValue, // Explicitly set padCode
+          padCode: finalPadCode, // Auto-filled padCode from customer kode
           kodeIpos: kodeIposValue, // Explicitly set kodeIpos
           satuan: formData.satuan || '',
           stockAman: formData.stockAman || 0,
@@ -594,15 +727,17 @@ const Products = () => {
           customer: formData.customer || '',
           supplier: formData.supplier,
           hargaFg: formData.hargaFg || 0,
+          hargaBeli: formData.hargaBeli || 0,
           harga: formData.harga,
           bom: formData.bom,
+          productImageId: formData.productImageId,
           product_id: productId || undefined,
           lastUpdate: new Date().toISOString(),
           userUpdate: 'System',
           ipAddress: '127.0.0.1',
         } as Product;
         const updated = [...products, newProduct];
-        await storageService.set('products', updated);
+        await storageService.set(StorageKeys.PACKAGING.PRODUCTS, updated, true); // immediateSync = true
         setProducts(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
       }
       setShowForm(false);
@@ -611,7 +746,8 @@ const Products = () => {
       setStockAmanInputValue('');
       setStockMinimumInputValue('');
       setPriceInputValue('');
-      setFormData({ kode: '', nama: '', padCode: '', kodeIpos: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0 });
+      setPurchasePriceInputValue('');
+      setFormData({ kode: '', nama: '', padCode: '', kodeIpos: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0, hargaBeli: 0 });
     } catch (error: any) {
       showAlert(`Error saving product: ${error.message}`, 'Error');
     }
@@ -629,10 +765,13 @@ const Products = () => {
     setStockAmanInputValue('');
     setStockMinimumInputValue('');
     setPriceInputValue('');
+    setPurchasePriceInputValue('');
+    setProductImage(item.productImageId || null);
     setFormData({
       ...item,
       customer: item.customer || item.supplier || '', // Use customer if available, fallback to supplier
       padCode: item.padCode || '', // Ensure padCode is included
+      productImageId: item.productImageId,
     });
     setShowForm(true);
   };
@@ -967,7 +1106,7 @@ Lanjutkan?`,
             const renumbered = deduplicated.map((p, idx) => ({ ...p, no: idx + 1 }));
 
             // Save to storage
-            await storageService.set('products', renumbered);
+            await storageService.set(StorageKeys.PACKAGING.PRODUCTS, renumbered);
             setProducts(renumbered);
 
             const duplicateList = duplicatesFound.slice(0, 10).join('\n');
@@ -1068,7 +1207,7 @@ Klik "Download Template" untuk mendapatkan file Excel template, atau "Lanjutkan"
           closeDialog();
           const input = document.createElement('input');
           input.type = 'file';
-          input.accept = '.xlsx,.xls,.csv';
+          input.accept = '.xlsx,.xls,.ods,.csv';
           input.onchange = async (e: any) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -1632,18 +1771,65 @@ Pastikan:
           // Re-number products
           const renumbered = deduplicated.map((p, idx) => ({ ...p, no: idx + 1 }));
 
+          // Extract BOM data dari products dan merge dengan existing BOM
+          const existingBOM = extractStorageValue(await storageService.get<any[]>('bom')) || [];
+          const bomMap = new Map<string, any>();
+          
+          // Build map dari existing BOM untuk deduplication
+          existingBOM.forEach(bom => {
+            const key = `${(bom.product_id || '').toLowerCase()}:${(bom.material_id || '').toLowerCase()}`;
+            bomMap.set(key, bom);
+          });
+          
+          // Extract BOM dari imported products
+          const newBOMItems: any[] = [];
+          renumbered.forEach(product => {
+            if (product.bom && Array.isArray(product.bom) && product.bom.length > 0) {
+              const productId = (product.kode || product.product_id || '').toString().trim();
+              product.bom.forEach((bomItem: any) => {
+                const materialId = (bomItem.material_id || bomItem.materialId || '').toString().trim();
+                if (materialId && productId) {
+                  const key = `${productId.toLowerCase()}:${materialId.toLowerCase()}`;
+                  
+                  // Hanya add jika belum ada di map (deduplication)
+                  if (!bomMap.has(key)) {
+                    const newBOM = {
+                      id: `bom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                      product_id: productId,
+                      material_id: materialId,
+                      material_name: bomItem.material_name || '',
+                      ratio: bomItem.ratio || 1,
+                      lastUpdate: new Date().toISOString(),
+                    };
+                    newBOMItems.push(newBOM);
+                    bomMap.set(key, newBOM);
+                  }
+                }
+              });
+            }
+          });
+          
+          // Merge BOM: existing + new
+          const mergedBOM = Array.from(bomMap.values());
+          
           // Save dengan async untuk non-blocking
-          await storageService.set('products', renumbered);
+          await storageService.set(StorageKeys.PACKAGING.PRODUCTS, renumbered);
+          
+          // Save BOM jika ada yang baru
+          if (newBOMItems.length > 0) {
+            await storageService.set(StorageKeys.PACKAGING.BOM, mergedBOM);
+          }
           
           // Update state di next tick untuk avoid blocking
           setTimeout(() => {
             setProducts(renumbered);
+            setBomData(mergedBOM);
           }, 0);
 
           // Sync ke server di background (non-blocking)
           const syncToServer = async () => {
             try {
-              const storageConfig = JSON.parse(localStorage.getItem('storage_config') || '{"type":"local"}');
+              const storageConfig = JSON.parse(localStorage.getItem(StorageKeys.SHARED.STORAGE_CONFIG) || '{"type":"local"}');
               if (storageConfig.type === 'server' && storageConfig.serverUrl) {
                 await storageService.syncToServer();
               }
@@ -1797,7 +1983,7 @@ ${errors.slice(0, 5).join('\\n')}
               ? { ...p, product_id: productId }
               : p
           );
-          await storageService.set('products', updatedProducts);
+          await storageService.set(StorageKeys.PACKAGING.PRODUCTS, updatedProducts);
           setProducts(updatedProducts.map((p, idx) => ({ ...p, no: idx + 1 })));
         } else {
           showAlert('Product ID tidak ditemukan dan customer tidak ada. Tidak bisa menyimpan BOM.', 'Error');
@@ -1882,7 +2068,7 @@ ${errors.slice(0, 5).join('\\n')}
       // IMPORTANT: BOM harus selalu di-sync dengan timestamp baru
       // storageService.set() akan handle timestamp, tapi kita pastikan data benar-benar berubah
       const updatedBOM = [...filteredBOM, ...newBOMItems];
-      await storageService.set('bom', updatedBOM);
+      await storageService.set(StorageKeys.PACKAGING.BOM, updatedBOM);
       // storageService.set() akan trigger 'app-storage-changed' event
       // Event listener akan skip reload karena isSavingBOMRef.current = true
 
@@ -1914,7 +2100,7 @@ ${errors.slice(0, 5).join('\\n')}
     }
   }, [showAlert, loadProducts, products, generateProductId]);
 
-  const columns = [
+  const columns = useMemo(() => [
     { 
       key: 'bomIndicator', 
       header: 'BOM',
@@ -1949,39 +2135,33 @@ ${errors.slice(0, 5).join('\\n')}
     },
     { 
       key: 'no', 
-      header: 'No',
+      header: t('common.number') || 'No.',
       render: (item: Product) => {
         const index = paginatedProducts.findIndex(p => p.id === item.id);
         return index >= 0 ? startIndex + index + 1 : '';
       },
     },
-    { key: 'product_id', header: 'Kode (SKU/ID)' },
-    { key: 'nama', header: 'Nama' },
+    { key: 'product_id', header: t('master.productCode') || 'Kode (SKU/ID)' },
+    { key: 'nama', header: t('master.productName') || 'Nama' },
     { key: 'padCode', header: 'Pad Code' },
-    // Hidden: Kode Ipos column
-    // { 
-    //   key: 'kodeIpos', 
-    //   header: 'Kode Ipos',
-    //   render: (item: Product) => item.kodeIpos || '-',
-    // },
-    { key: 'satuan', header: 'Satuan (Unit)' },
-    { key: 'kategori', header: 'Kategori' },
+    { key: 'satuan', header: t('master.unit') || 'Satuan (Unit)' },
+    { key: 'kategori', header: t('master.category') || 'Kategori' },
     { 
       key: 'customer', 
-      header: 'Customer',
+      header: t('master.customerName') || 'Customer',
       render: (item: Product) => {
         return item.customer || item.supplier || '-';
       },
     },
     { 
       key: 'lastUpdate', 
-      header: 'Last Update',
+      header: t('common.updatedAt') || 'Last Update',
       render: (item: Product) => formatDateTime(item.lastUpdate)
     },
-    { key: 'userUpdate', header: 'User Update' },
+    { key: 'userUpdate', header: t('common.updatedBy') || 'User Update' },
     { 
       key: 'hargaFg', 
-      header: 'Price Satuan',
+      header: t('master.price') || 'Harga Satuan',
       render: (item: Product) => {
         const harga = item.hargaFg || item.harga || 0;
         return harga > 0 ? new Intl.NumberFormat('id-ID', { 
@@ -1991,12 +2171,46 @@ ${errors.slice(0, 5).join('\\n')}
         }).format(harga) : '-';
       },
     },
+    { 
+      key: 'hargaBeli', 
+      header: 'Harga Beli',
+      render: (item: Product) => {
+        const hargaBeli = item.hargaBeli || 0;
+        return hargaBeli > 0 ? new Intl.NumberFormat('id-ID', { 
+          style: 'currency', 
+          currency: 'IDR',
+          minimumFractionDigits: 0 
+        }).format(hargaBeli) : '-';
+      },
+    },
     {
       key: 'actions',
-      header: 'Actions',
+      header: t('common.actions') || 'Actions',
       render: (item: Product) => (
         <div style={{ display: 'flex', gap: '8px' }}>
-          <Button variant="secondary" onClick={() => handleEdit(item)}>Edit</Button>
+          {item.productImageId && (
+            <Button 
+              variant="secondary" 
+              onClick={async () => {
+                // Try to get metadata to determine file type
+                try {
+                  const metadata = await BlobService.getMetadata(item.productImageId!);
+                  if (metadata.mime_type === 'application/pdf') {
+                    setPreviewPdfId(item.productImageId!);
+                  } else {
+                    setPreviewImageId(item.productImageId!);
+                  }
+                } catch (error) {
+                  // Fallback: assume it's an image
+                  setPreviewImageId(item.productImageId!);
+                }
+              }}
+              style={{ fontSize: '12px', padding: '4px 8px' }}
+            >
+              📷 View
+            </Button>
+          )}
+          <Button variant="secondary" onClick={() => handleEdit(item)}>{t('common.edit') || 'Edit'}</Button>
           <Button variant="primary" onClick={() => handleEditBOM(item)}>Edit BOM</Button>
           <Button 
             variant="secondary" 
@@ -2007,18 +2221,18 @@ ${errors.slice(0, 5).join('\\n')}
           >
             📊 Inventory
           </Button>
-          <Button variant="danger" onClick={() => handleDelete(item)}>Delete</Button>
+          <Button variant="danger" onClick={() => handleDelete(item)}>{t('common.delete') || 'Delete'}</Button>
         </div>
       ),
     },
-  ];
+  ], [t, paginatedProducts, startIndex, hasBOM, formatDateTime]);
 
   return (
     <div className="master-compact">
       <div className="page-header">
-        <h1>Master Products</h1>
+        <h1>{t('master.products') || 'Master Produk'}</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <Button variant="secondary" onClick={handleCleanupDuplicates}>🧹 Cleanup Duplicates</Button>
+          <Button variant="secondary" onClick={handleCleanupDuplicates}>🧹 Bersihkan Duplikat</Button>
           <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
           <Button variant="secondary" onClick={handleDownloadTemplate}>📋 Download Template</Button>
           <Button variant="primary" onClick={handleImportExcel}>📤 Import Excel</Button>
@@ -2031,16 +2245,16 @@ ${errors.slice(0, 5).join('\\n')}
               setEditingItem(null);
             setShowForm(true);
           }}>
-            + Add Product
+            + Tambah Produk
           </Button>
         </div>
       </div>
 
 
       {showForm && (
-        <div className="dialog-overlay" onClick={() => { setShowForm(false); setEditingItem(null); setCustomerInputValue(''); setStockAmanInputValue(''); setStockMinimumInputValue(''); setPriceInputValue(''); setFormData({ kode: '', nama: '', padCode: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0 }); }} style={{ zIndex: 10000 }}>
+        <div className="dialog-overlay" onClick={() => { setShowForm(false); setEditingItem(null); setCustomerInputValue(''); setStockAmanInputValue(''); setStockMinimumInputValue(''); setPriceInputValue(''); setPurchasePriceInputValue(''); setProductImage(null); setFormData({ kode: '', nama: '', padCode: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0, hargaBeli: 0 }); }} style={{ zIndex: 10000 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', width: '90%', maxHeight: '90vh', overflowY: 'auto', zIndex: 10001 }}>
-            <Card title={editingItem ? "Edit Product" : "Add New Product"} className="dialog-card">
+            <Card title={editingItem ? "Edit Produk" : "Tambah Produk Baru"} className="dialog-card">
           <Input
             label="Kode (SKU/ID)"
             value={formData.kode || ''}
@@ -2251,7 +2465,12 @@ ${errors.slice(0, 5).join('\\n')}
                       const label = `${c.kode || ''}${c.kode ? ' - ' : ''}${c.nama || ''}`;
                       setCustomerInputValue(label);
                       setCustomerSearch('');
-                      setFormData({ ...formData, customer: c.nama });
+                      // Auto-link padCode from customer kode
+                      setFormData({ 
+                        ...formData, 
+                        customer: c.nama,
+                        padCode: c.kode // Auto-set padCode from customer kode
+                      });
                       setShowCustomerDropdown(false);
                     }}
                     style={{
@@ -2275,7 +2494,7 @@ ${errors.slice(0, 5).join('\\n')}
           </div>
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Price Satuan
+              Harga Satuan
             </label>
             <input
               type="text"
@@ -2339,12 +2558,117 @@ ${errors.slice(0, 5).join('\\n')}
               }}
             />
           </div>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+              Harga Beli
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={purchasePriceInputValue !== undefined && purchasePriceInputValue !== '' ? purchasePriceInputValue : (formData.hargaBeli ? String(formData.hargaBeli || 0) : '')}
+              onFocus={(e) => {
+                const input = e.target as HTMLInputElement;
+                const currentVal = formData.hargaBeli || 0;
+                if (currentVal === 0 || currentVal === null || currentVal === undefined || String(currentVal) === '0') {
+                  setPurchasePriceInputValue('');
+                  input.value = '';
+                } else {
+                  input.select();
+                }
+              }}
+              onMouseDown={(e) => {
+                const input = e.target as HTMLInputElement;
+                const currentVal = formData.hargaBeli || 0;
+                if (currentVal === 0 || currentVal === null || currentVal === undefined || String(currentVal) === '0') {
+                  setPurchasePriceInputValue('');
+                  input.value = '';
+                }
+              }}
+              onChange={(e) => {
+                let val = e.target.value;
+                val = val.replace(/[^\d.,]/g, '');
+                const cleaned = removeLeadingZero(val);
+                setPurchasePriceInputValue(cleaned);
+                setFormData({ ...formData, hargaBeli: cleaned === '' ? 0 : Number(cleaned) || 0 });
+              }}
+              onBlur={(e) => {
+                const val = e.target.value;
+                if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
+                  setFormData({ ...formData, hargaBeli: 0 });
+                  setPurchasePriceInputValue('');
+                } else {
+                  setFormData({ ...formData, hargaBeli: Number(val) });
+                  setPurchasePriceInputValue('');
+                }
+              }}
+              onKeyDown={(e) => {
+                const input = e.target as HTMLInputElement;
+                const currentVal = input.value;
+                if ((currentVal === '' || currentVal === '0') && /^[1-9]$/.test(e.key)) {
+                  e.preventDefault();
+                  const newVal = e.key;
+                  setPurchasePriceInputValue(newVal);
+                  input.value = newVal;
+                  setFormData({ ...formData, hargaBeli: Number(newVal) });
+                }
+              }}
+              placeholder="0"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            />
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+              📷 Product Photo
+            </label>
+            {productImage && (
+              <div style={{ marginBottom: '8px', position: 'relative', display: 'inline-block' }}>
+                <img src={BlobService.getDownloadUrl(productImage, 'packaging')} alt="Product" style={{ maxWidth: '150px', maxHeight: '150px', borderRadius: '4px', border: '1px solid var(--border)' }} />
+                <Button
+                  variant="danger"
+                  onClick={handleImageRemove}
+                  style={{ position: 'absolute', top: '4px', right: '4px', padding: '4px 8px', fontSize: '11px' }}
+                >
+                  ✕
+                </Button>
+              </div>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  handleImageUpload(file);
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--bg-primary)',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+              }}
+            />
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              Max 5MB. Supported: JPG, PNG, GIF
+            </div>
+          </div>
           <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
-            <Button onClick={() => { setShowForm(false); setEditingItem(null); setCustomerInputValue(''); setStockAmanInputValue(''); setStockMinimumInputValue(''); setPriceInputValue(''); setFormData({ kode: '', nama: '', padCode: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0 }); }} variant="secondary">
-              Cancel
+            <Button onClick={() => { setShowForm(false); setEditingItem(null); setCustomerInputValue(''); setStockAmanInputValue(''); setStockMinimumInputValue(''); setPriceInputValue(''); setPurchasePriceInputValue(''); setProductImage(null); setFormData({ kode: '', nama: '', padCode: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0, hargaBeli: 0 }); }} variant="secondary">
+              Batal
             </Button>
             <Button onClick={handleSave} variant="primary">
-              {editingItem ? 'Update Product' : 'Save Product'}
+              {editingItem ? 'Update Produk' : 'Simpan Produk'}
             </Button>
           </div>
         </Card>
@@ -2371,7 +2695,7 @@ ${errors.slice(0, 5).join('\\n')}
             }}
           />
         </div>
-        <Table columns={columns} data={paginatedProducts} emptyMessage={searchQuery ? "No products found matching your search" : "No products data"} />
+        <Table columns={columns} data={paginatedProducts} showPagination={false} emptyMessage={searchQuery ? "Tidak ada produk yang cocok dengan pencarian" : "Tidak ada data produk"} />
         
         {/* Pagination Controls */}
         {(totalPages > 1 || filteredProducts.length > 0) && (
@@ -2468,6 +2792,53 @@ ${errors.slice(0, 5).join('\\n')}
           onClose={() => setEditingBOM(null)}
           onSave={handleSaveBOM}
         />
+      )}
+
+      {/* Image Preview Modal */}
+      {previewImageId && (
+        <div className="dialog-overlay" onClick={() => setPreviewImageId(null)} style={{ zIndex: 10000 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', width: '90%', maxHeight: '90vh', zIndex: 10001 }}>
+            <Card title="Product Image Preview" className="dialog-card">
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+                <img 
+                  src={BlobService.getDownloadUrl(previewImageId, 'packaging')} 
+                  alt="Product preview"
+                  style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: '4px' }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
+                <Button onClick={() => setPreviewImageId(null)} variant="secondary">
+                  Close
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* PDF Preview Modal */}
+      {previewPdfId && (
+        <div className="dialog-overlay" onClick={() => setPreviewPdfId(null)} style={{ zIndex: 10000 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%', zIndex: 10001 }}>
+            <Card title="PDF File" className="dialog-card">
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ fontSize: '64px' }}>📄</div>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ fontSize: '16px', fontWeight: 'bold' }}>PDF Ready to Download</p>
+                  <p style={{ fontSize: '12px', color: '#666' }}>Click the button below to download and view</p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
+                <Button onClick={() => BlobService.downloadFile(previewPdfId, 'document.pdf', 'packaging')} variant="primary">
+                  📥 Download PDF
+                </Button>
+                <Button onClick={() => setPreviewPdfId(null)} variant="secondary">
+                  Close
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </div>
       )}
 
       {/* Custom Dialog - menggunakan hook terpusat */}

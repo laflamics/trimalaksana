@@ -12,6 +12,7 @@ import {
   getUserAccessData
 } from '../../utils/access-control-helper';
 import { filterActiveItems } from '../../utils/data-persistence-helper';
+import { useLanguage } from '../../hooks/useLanguage';
 import '../../components/Layout.css';
 
 interface LayoutProps {
@@ -32,6 +33,7 @@ const TruckingLayout = ({ children }: LayoutProps) => {
   const [userMenuAccess, setUserMenuAccess] = useState<Record<string, string[]> | null>(null);
   const [iconSrc, setIconSrc] = useState<string>('/noxtiz.ico');
   const [iconError, setIconError] = useState(false);
+  const { t } = useLanguage();
 
   useEffect(() => {
     // Sync theme dengan localStorage
@@ -39,12 +41,12 @@ const TruckingLayout = ({ children }: LayoutProps) => {
     setTheme(currentTheme);
     
     // Subscribe to sync status changes from truckingSync
-    const unsubscribe = truckingSync.onStatusChange((status) => {
+    const unsubscribe = truckingSync.onSyncStatusChange((status) => {
       setSyncStatus(status);
     });
     
     // Set initial sync status
-    setSyncStatus(truckingSync.getStatus());
+    setSyncStatus(truckingSync.getSyncStatus());
     
     return () => {
       unsubscribe();
@@ -144,52 +146,56 @@ const TruckingLayout = ({ children }: LayoutProps) => {
     return () => window.removeEventListener('app-storage-changed', handleStorageChange as EventListener);
   }, []);
 
-  const menuItems = [
+  const menuItems = useMemo(() => [
     {
-      title: 'MASTER',
+      title: t('master.title') || 'MASTER',
       type: 'section',
       items: [
-        { title: 'Vehicles', path: '/trucking/master/vehicles', icon: '🚛' },
-        { title: 'Drivers', path: '/trucking/master/drivers', icon: '👨‍✈️' },
-        { title: 'Routes', path: '/trucking/master/routes', icon: '🗺️' },
-        { title: 'Customers', path: '/trucking/master/customers', icon: '👥' },
+        { title: t('trucking.vehicles') || 'Vehicles', path: '/trucking/master/vehicles', icon: '🚛' },
+        { title: t('trucking.drivers') || 'Drivers', path: '/trucking/master/drivers', icon: '👨‍✈️' },
+        { title: t('trucking.routes') || 'Routes', path: '/trucking/master/routes', icon: '🗺️' },
+        { title: t('master.customers') || 'Customers', path: '/trucking/master/customers', icon: '👥' },
       ],
     },
     {
-      title: 'OPERATIONS',
+      title: t('trucking.operations') || 'OPERATIONS',
       type: 'section',
       items: [
-        { title: 'Delivery Orders', path: '/trucking/shipments/delivery-orders', icon: '📦' },
-        { title: 'Petty Cash', path: '/trucking/finance/pettycash', icon: '💵' },
-        { title: 'Delivery Note', path: '/trucking/shipments/delivery-note', icon: '📋' },
+        { title: t('trucking.deliveryOrders') || 'Delivery Orders', path: '/trucking/shipments/delivery-orders', icon: '📦' },
+        { title: t('trucking.pettyCash') || 'Petty Cash', path: '/trucking/finance/pettycash', icon: '💵' },
+        { title: t('delivery.title') || 'Delivery Note', path: '/trucking/shipments/delivery-note', icon: '📋' },
       ],
     },
     {
-      title: 'FINANCE',
+      title: t('finance.title') || 'FINANCE',
       type: 'section',
       items: [
-        { title: 'Invoices', path: '/trucking/finance/invoices', icon: '🧾' },
-        { title: 'Payments', path: '/trucking/finance/payments', icon: '💳' },
-        { title: 'Accounting', path: '/trucking/finance/accounting', icon: '💰' },
-        { title: 'General Ledger', path: '/trucking/finance/ledger', icon: '📚' },
-        { title: 'Financial Reports', path: '/trucking/finance/reports', icon: '📊' },
-        { title: 'Accounts Receivable', path: '/trucking/finance/ar', icon: '📈' },
-        { title: 'Accounts Payable', path: '/trucking/finance/ap', icon: '📉' },
-        { title: 'Tax Management', path: '/trucking/finance/tax-management', icon: '🧾' },
-        { title: 'Cost Analysis', path: '/trucking/finance/cost-analysis', icon: '💵' },
-        { title: 'COA', path: '/trucking/finance/coa', icon: '📋' },
+        { title: t('finance.invoices') || 'Invoices', path: '/trucking/finance/invoices', icon: '🧾' },
+        { title: t('finance.payments') || 'Payments', path: '/trucking/finance/payments', icon: '💳' },
+        { title: t('trucking.accounting') || 'Accounting', path: '/trucking/finance/accounting', icon: '💰' },
+        { title: t('trucking.generalLedger') || 'General Ledger', path: '/trucking/finance/ledger', icon: '📚' },
+        { title: t('finance.reports') || 'Financial Reports', path: '/trucking/finance/reports', icon: '📊' },
+        { title: t('finance.accountsReceivable') || 'Accounts Receivable', path: '/trucking/finance/ar', icon: '📈' },
+        { title: t('finance.accountsPayable') || 'Accounts Payable', path: '/trucking/finance/ap', icon: '📉' },
+        { title: t('finance.taxManagement') || 'Tax Management', path: '/trucking/finance/tax-management', icon: '🧾' },
+        { title: t('trucking.costAnalysis') || 'Cost Analysis', path: '/trucking/finance/cost-analysis', icon: '💵' },
+        { title: t('trucking.operationalExpenses') || 'Operational Expenses', path: '/trucking/finance/operational-expenses', icon: '💸' },
+        { title: t('trucking.coa') || 'COA', path: '/trucking/finance/coa', icon: '📋' },
       ],
     },
     {
-      title: 'SETTINGS',
+      title: t('settings.title') || 'SETTINGS',
       type: 'section',
       items: [
-        { title: 'Settings', path: '/trucking/settings', icon: '⚙️' },
+        { title: t('settings.title') || 'Settings', path: '/trucking/settings', icon: '⚙️' },
+        { title: 'Report', path: '/trucking/settings/report', icon: '📄' },
+        { title: 'Full Reports', path: '/trucking/settings/full-reports', icon: '📊' },
+        { title: 'Server Data', path: '/trucking/settings/server-data', icon: '🗄️' },
         { title: 'DB Activity', path: '/trucking/settings/db-activity', icon: '📝' },
         { title: 'User Control', path: '/trucking/settings/user-control', icon: '👤' },
       ],
     },
-  ];
+  ], [t]);
 
   // Normalize path for comparison (handle trailing slash and hash router)
   const isActive = (path: string) => {

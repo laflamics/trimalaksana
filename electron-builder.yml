@@ -4,13 +4,16 @@ directories:
   output: release
   buildResources: build
 extraResources:
-  - from: public/noxtiz.ico
-    to: public/noxtiz.ico
+  - from: public/tljp.ico
+    to: public/tljp.ico
+  - from: build/app-update.yml
+    to: app-update.yml
 files:
   - dist/**/*
   - package.json
-  - public/noxtiz.ico
+  - public/tljp.ico
   - public/noxtiz.png
+  - build/app-update.yml
   - "!node_modules/**/*"
   - "!node_modules/@capacitor/**/*"
   - "!android/**/*"
@@ -24,11 +27,24 @@ files:
   - "!data/**/*"
 win:
   target: nsis
-  icon: icon.ico  # Icon di buildResources (build folder) - path relatif dari buildResources
+  icon: build/icon.ico  # Icon untuk installer dan shortcuts
+  certificateFile: null
+  certificatePassword: null
+  signingHashAlgorithms:
+    - sha256
   artifactName: "${productName} Setup ${version}.${ext}"
 mac:
-  target: dmg
-  icon: public/noxtiz.ico  # Will be converted to .icns by electron-builder
+  target:
+    - dmg
+    - zip
+  icon: public/tljp.ico
+  category: public.app-category.business
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  signingIdentity: null
+  identity: null
+  notarize: false
+  artifactName: "${productName}-${version}.${ext}"
 linux:
   target: AppImage
   icon: public/noxtiz.png
@@ -39,9 +55,8 @@ nsis:
   runAfterFinish: false
 publish:
   provider: generic
-  url: "https://vercel-proxy-blond-nine.vercel.app"  # Vercel Proxy untuk update check (lebih cepat)
+  url: "https://www.noxtiz.com/api/updates/"  # noxtiz.com untuk update check
   # Note: This URL is used when publishing updates
-  # The app will check for updates at: {url}/api/updates/latest
-  # Vercel proxy akan forward ke server Tailscale di backend
+  # The app will check for updates at: {url}latest.yml
   # Set to null to generate latest.yml without actually publishing
   # url: null

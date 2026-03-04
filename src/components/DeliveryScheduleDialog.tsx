@@ -40,7 +40,6 @@ interface DeliveryScheduleDialogProps {
 const DeliveryScheduleDialog = ({ item, onClose, onSave, inline = false }: DeliveryScheduleDialogProps) => {
   const [spkDeliveries, setSpkDeliveries] = useState<SPKDelivery[]>([]);
   const [selectedSPKs, setSelectedSPKs] = useState<string[]>([]); // Multiple selection
-  const [selectionMode, setSelectionMode] = useState<'single' | 'multiple'>('single'); // Default: single
   const [showBatchForm, setShowBatchForm] = useState(false);
   const [editingBatch, setEditingBatch] = useState<DeliveryBatch | null>(null);
   const [batchForm, setBatchForm] = useState({
@@ -262,14 +261,10 @@ const DeliveryScheduleDialog = ({ item, onClose, onSave, inline = false }: Deliv
   };
 
   const handleToggleSPK = (spkNo: string) => {
-    if (selectionMode === 'single') {
-      setSelectedSPKs([spkNo]);
+    if (selectedSPKs.includes(spkNo)) {
+      setSelectedSPKs(selectedSPKs.filter(s => s !== spkNo));
     } else {
-      if (selectedSPKs.includes(spkNo)) {
-        setSelectedSPKs(selectedSPKs.filter(s => s !== spkNo));
-      } else {
-        setSelectedSPKs([...selectedSPKs, spkNo]);
-      }
+      setSelectedSPKs([...selectedSPKs, spkNo]);
     }
   };
 
@@ -282,7 +277,7 @@ const DeliveryScheduleDialog = ({ item, onClose, onSave, inline = false }: Deliv
   const remainingQtyAll = totalQtyAll - totalBatchQtyAll;
 
   // For single mode, use first selected SPK
-  const currentSPK = selectionMode === 'single' && selectedSPKs.length > 0 
+  const currentSPK = selectedSPKs.length > 0 
     ? spkDeliveries.find(spk => spk.spkNo === selectedSPKs[0])
     : null;
   const currentDeliveryBatches = currentSPK?.deliveryBatches || [];
@@ -295,7 +290,7 @@ const DeliveryScheduleDialog = ({ item, onClose, onSave, inline = false }: Deliv
       return;
     }
     
-    if (selectionMode === 'multiple' && selectedSPKs.length > 1) {
+    if (selectedSPKs.length > 1) {
       // Multiple selection - initialize forms untuk setiap product
       const forms: { [spkNo: string]: { qty: number; deliveryDate: string } } = {};
       selectedSPKs.forEach(spkNo => {
@@ -305,7 +300,7 @@ const DeliveryScheduleDialog = ({ item, onClose, onSave, inline = false }: Deliv
           const spkRemaining = spk.qty - spkBatchQty;
           forms[spkNo] = {
             qty: spkRemaining > 0 ? spkRemaining : 0,
-            deliveryDate: useSameDateForAll ? commonDeliveryDate : '', // Jika mode sama, gunakan commonDeliveryDate
+            deliveryDate: '', // Default empty, user akan isi
           };
         }
       });
@@ -325,11 +320,57 @@ const DeliveryScheduleDialog = ({ item, onClose, onSave, inline = false }: Deliv
     }
   };
 
+  // Helper function untuk validasi tanggal
+  const isValidDate = (dateString: string): boolean => {
+    if (!dateString) return false;
+    
+    // Parse tanggal - bisa format YYYY-MM-DD atau DD/MM/YYYY
+    let date: Date;
+    
+    if (dateString.includes('-')) {
+      // Format YYYY-MM-DD (dari input type="date")
+      date = new Date(dateString + 'T00:00:00');
+    } else if (dateString.includes('/')) {
+      // Format DD/MM/YYYY (dari manual input)
+      const parts = dateString.split('/');
+      if (parts.length !== 3) return false;
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10);
+      const year = parseInt(parts[2], 10);
+      date = new Date(year, month - 1, day);
+    } else {
+      return false;
+    }
+    
+    // Check apakah date valid (bukan Invalid Date)
+    if (isNaN(date.getTime())) return false;
+    
+    // Check apakah tanggal yang di-parse sama dengan input (untuk catch invalid dates seperti 02/30)
+    if (dateString.includes('/')) {
+      const parts = dateString.split('/');
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10);
+      const year = parseInt(parts[2], 10);
+      
+      // Jika day/month/year tidak match dengan date yang di-parse, berarti invalid
+      if (date.getDate() !== day || date.getMonth() + 1 !== month || date.getFullYear() !== year) {
+        return false;
+      }
+    }
+    
+    return true;
+  };
+
   const handleSaveMultipleBatches = () => {
     // Jika mode sama untuk semua, validasi commonDeliveryDate
     if (useSameDateForAll) {
       if (!commonDeliveryDate) {
         showAlert('Delivery date wajib diisi', 'Warning');
+        return;
+      }
+      // Validasi tanggal valid (catch invalid dates seperti 02/30)
+      if (!isValidDate(commonDeliveryDate)) {
+        showAlert('Delivery date tidak valid. Pastikan tanggal benar (contoh: 02/28/2026 untuk Februari)', 'Warning');
         return;
       }
       // Set deliveryDate untuk semua forms dari commonDeliveryDate
@@ -370,6 +411,12 @@ const DeliveryScheduleDialog = ({ item, onClose, onSave, inline = false }: Deliv
         showAlert(`Delivery date untuk ${spk?.product || spkNo} wajib diisi`, 'Warning');
         return;
       }
+      // Validasi tanggal valid
+      if (!isValidDate(deliveryDate)) {
+        const spk = spkDeliveries.find(s => s.spkNo === spkNo);
+        showAlert(`Delivery date untuk ${spk?.product || spkNo} tidak valid. Pastikan tanggal benar.`, 'Warning');
+        return;
+      }
       if (!form.qty || form.qty <= 0) {
         const spk = spkDeliveries.find(s => s.spkNo === spkNo);
         showAlert(`Qty untuk ${spk?.product || spkNo} harus lebih dari 0`, 'Warning');
@@ -397,7 +444,10 @@ const DeliveryScheduleDialog = ({ item, onClose, onSave, inline = false }: Deliv
         // Gunakan deliveryDate sesuai mode
         const deliveryDate = useSameDateForAll ? commonDeliveryDate : form.deliveryDate;
         
-        const batchNo = String.fromCharCode(65 + (Array.isArray(spk.deliveryBatches) ? spk.deliveryBatches.length : 0));
+        // Jika ini single batch (qty = SPK qty) dan belum ada batch lain, jangan pakai batch letter
+        const isSingleBatch = form.qty === spk.qty && spk.deliveryBatches.length === 0;
+        const batchNo = isSingleBatch ? '' : String.fromCharCode(65 + (Array.isArray(spk.deliveryBatches) ? spk.deliveryBatches.length : 0));
+        
         const newBatch: DeliveryBatch = {
           id: Date.now().toString() + Math.random().toString(36).substr(2, 9) + spk.spkNo,
           batchNo: batchNo,
@@ -426,7 +476,6 @@ const DeliveryScheduleDialog = ({ item, onClose, onSave, inline = false }: Deliv
     const spk = spkDeliveries.find(s => s.spkNo === spkNo);
     if (!spk) return;
     
-    setSelectionMode('single');
     setSelectedSPKs([spkNo]);
     setEditingBatch(batch);
     setBatchForm({
@@ -469,6 +518,11 @@ const DeliveryScheduleDialog = ({ item, onClose, onSave, inline = false }: Deliv
       showAlert('Delivery date wajib diisi', 'Warning');
       return;
     }
+    // Validasi tanggal valid (catch invalid dates seperti 02/30)
+    if (!isValidDate(batchForm.deliveryDate)) {
+      showAlert('Delivery date tidak valid. Pastikan tanggal benar (contoh: 02/28/2026 untuk Februari)', 'Warning');
+      return;
+    }
 
     const totalQty = currentDeliveryBatches.reduce((sum, b) => 
       b.id === editingBatch?.id ? sum : sum + b.qty, 0
@@ -498,7 +552,10 @@ const DeliveryScheduleDialog = ({ item, onClose, onSave, inline = false }: Deliv
             ),
           };
         } else {
-          const batchNo = String.fromCharCode(65 + spk.deliveryBatches.length);
+          // Jika ini single batch (qty = SPK qty) dan belum ada batch lain, jangan pakai batch letter
+          const isSingleBatch = batchForm.qty === spk.qty && spk.deliveryBatches.length === 0;
+          const batchNo = isSingleBatch ? '' : String.fromCharCode(65 + spk.deliveryBatches.length);
+          
           const newBatch: DeliveryBatch = {
             id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
             batchNo: batchNo,
@@ -536,10 +593,14 @@ const DeliveryScheduleDialog = ({ item, onClose, onSave, inline = false }: Deliv
   };
 
   const handleSave = () => {
-    const spkDeliveriesData = spkDeliveries.map(spk => ({
-      spkNo: spk.spkNo,
-      deliveryBatches: spk.deliveryBatches,
-    }));
+    // IMPORTANT: Hanya pass selected SPKs (yang di-checklist), bukan semua SPKs
+    // Ini memastikan hanya item yang dipilih yang dibuat schedule-nya
+    const spkDeliveriesData = spkDeliveries
+      .filter(spk => selectedSPKs.includes(spk.spkNo)) // Filter hanya yang di-checklist
+      .map(spk => ({
+        spkNo: spk.spkNo,
+        deliveryBatches: spk.deliveryBatches,
+      }));
     
     onSave({
       spkDeliveries: spkDeliveriesData,
@@ -583,22 +644,13 @@ const DeliveryScheduleDialog = ({ item, onClose, onSave, inline = false }: Deliv
                 <label style={{ fontSize: '13px', fontWeight: 500 }}>
                   Pilih Product ({selectedSPKs.length} dipilih):
                 </label>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <Button
-                    variant="secondary"
-                    onClick={() => setSelectionMode(selectionMode === 'single' ? 'multiple' : 'single')}
-                    style={{ fontSize: '11px', padding: '4px 8px' }}
-                  >
-                    {selectionMode === 'single' ? '🔘 Single' : '☑️ Multiple'}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={handleSelectAll}
-                    style={{ fontSize: '11px', padding: '4px 8px' }}
-                  >
-                    {selectedSPKs.length === spkDeliveries.length ? '❌ Deselect All' : '✅ Select All'}
-                  </Button>
-                </div>
+                <Button
+                  variant="secondary"
+                  onClick={handleSelectAll}
+                  style={{ fontSize: '11px', padding: '4px 8px' }}
+                >
+                  {selectedSPKs.length === spkDeliveries.length ? '❌ Deselect All' : '✅ Select All'}
+                </Button>
               </div>
               <div style={{ 
                 maxHeight: '200px', 
@@ -651,9 +703,9 @@ const DeliveryScheduleDialog = ({ item, onClose, onSave, inline = false }: Deliv
                   );
                 })}
               </div>
-              {selectionMode === 'multiple' && selectedSPKs.length > 1 && (
+              {selectedSPKs.length > 1 && (
                 <div style={{ marginTop: '12px', padding: '10px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '4px', fontSize: '12px', color: 'var(--text-primary)' }}>
-                  <strong style={{ color: 'var(--text-primary)' }}>Multiple Selection Mode:</strong> {selectedSPKs.length} products dipilih
+                  <strong style={{ color: 'var(--text-primary)' }}>{selectedSPKs.length} products dipilih</strong>
                   <br />
                   Total Qty: <strong style={{ color: 'var(--text-primary)' }}>{totalQtyAll}</strong> | 
                   Batch Qty: <strong style={{ color: 'var(--text-primary)' }}>{totalBatchQtyAll}</strong> | 
@@ -669,9 +721,9 @@ const DeliveryScheduleDialog = ({ item, onClose, onSave, inline = false }: Deliv
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <h4 style={{ margin: 0, color: 'var(--text-primary)' }}>
                       Delivery Batch Management
-                      {selectionMode === 'multiple' && selectedSPKs.length > 1 && ` (${selectedSPKs.length} products)`}
+                      {selectedSPKs.length > 1 && ` (${selectedSPKs.length} products)`}
                     </h4>
-                    {selectionMode === 'single' && currentSPK && (
+                    {selectedSPKs.length === 1 && currentSPK && (
                       <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
                         Total Qty: <strong style={{ color: 'var(--text-primary)' }}>{currentSPK.qty}</strong> | 
                         Batch Qty: <strong style={{ color: totalBatchQty === currentSPK.qty ? '#2e7d32' : '#d32f2f' }}>
@@ -885,7 +937,7 @@ const DeliveryScheduleDialog = ({ item, onClose, onSave, inline = false }: Deliv
                     );
                   })}
 
-                  {showBatchForm && selectionMode === 'single' && currentSPK && (
+                  {showBatchForm && selectedSPKs.length === 1 && currentSPK && (
                     <div style={{ padding: '16px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '6px', marginBottom: '16px' }}>
                       <h5 style={{ marginTop: 0, marginBottom: '12px', color: 'var(--text-primary)' }}>
                         {editingBatch ? `Edit Delivery Batch ${editingBatch.batchNo}` : 'Tambah Delivery Batch Baru'}
@@ -948,7 +1000,7 @@ const DeliveryScheduleDialog = ({ item, onClose, onSave, inline = false }: Deliv
                     </div>
                   )}
 
-                  {showBatchForm && selectionMode === 'multiple' && selectedSPKs.length > 1 && (
+                  {showBatchForm && selectedSPKs.length > 1 && (
                     <div style={{ padding: '16px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '6px', marginBottom: '16px' }}>
                       <h5 style={{ marginTop: 0, marginBottom: '12px', color: 'var(--text-primary)' }}>
                         Tambah Delivery Batch untuk {selectedSPKs.length} Products
@@ -1128,7 +1180,7 @@ const DeliveryScheduleDialog = ({ item, onClose, onSave, inline = false }: Deliv
 
                   {!showBatchForm && (
                     <Button variant="primary" onClick={handleAddBatch} style={{ fontSize: '12px', padding: '6px 12px' }}>
-                      {selectionMode === 'multiple' && selectedSPKs.length > 1 
+                      {selectedSPKs.length > 1 
                         ? `+ Tambah Batch untuk ${selectedSPKs.length} Products` 
                         : '+ Tambah Delivery Batch'}
                     </Button>

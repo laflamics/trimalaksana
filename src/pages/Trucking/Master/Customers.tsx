@@ -3,9 +3,10 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService } from '../../../services/storage';
+import { storageService, StorageKeys } from '../../../services/storage';
 import { useDialog } from '../../../hooks/useDialog';
 import { deleteTruckingItem, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { setupRealTimeSync, TRUCKING_SYNC_KEYS } from '../../../utils/real-time-sync-helper';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -56,11 +57,51 @@ const Customers = () => {
 
   useEffect(() => {
     loadCustomers();
+    
+    // Real-time listener untuk server updates
+    const cleanup = setupRealTimeSync({
+      keys: [TRUCKING_SYNC_KEYS.CUSTOMERS],
+      onUpdate: loadCustomers,
+    });
+    
+    return cleanup;
   }, []);
 
   const loadCustomers = async () => {
     console.log('[Trucking Customers] Loading customers...');
-    const dataRaw = await storageService.get<Customer[]>('trucking_customers') || [];
+    let dataRaw = await storageService.get<Customer[]>(StorageKeys.TRUCKING.CUSTOMERS);
+    console.log('[Trucking Customers] Raw data from storage:', dataRaw);
+    
+    // If undefined or empty, try force fetch from server
+    if (!dataRaw || (Array.isArray(dataRaw) && dataRaw.length === 0)) {
+      console.log('[Trucking Customers] No data in storage, trying force fetch from server...');
+      try {
+        const config = storageService.getConfig();
+        if (config.type === 'server' && config.serverUrl) {
+          const response = await fetch(`${config.serverUrl}/api/storage/${encodeURIComponent(StorageKeys.TRUCKING.CUSTOMERS)}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            const serverData = result.data?.value || result.value || [];
+            if (Array.isArray(serverData) && serverData.length > 0) {
+              console.log(`[Trucking Customers] Force fetch successful: ${serverData.length} customers from server`);
+              dataRaw = serverData;
+              await storageService.set(StorageKeys.TRUCKING.CUSTOMERS, serverData);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[Trucking Customers] Force fetch failed:', error);
+      }
+    }
+    
+    if (!Array.isArray(dataRaw)) {
+      dataRaw = [];
+    }
+    
     console.log('[Trucking Customers] Raw data length:', dataRaw.length);
     
     // Filter out deleted items menggunakan helper function
@@ -93,7 +134,9 @@ const Customers = () => {
     // Save cleaned data back to storage if duplicates were removed
     if (uniqueData.length < data.length) {
       console.log('[Trucking Customers] Saving cleaned data to storage...');
-      await storageService.set('trucking_customers', numberedData);
+      await storageService.set(StorageKeys.TRUCKING.CUSTOMERS, numberedData);
+      // 🔄 Wait for background sync to complete
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
   };
 
@@ -110,7 +153,9 @@ const Customers = () => {
             ? { ...formData, id: editingItem.id, no: editingItem.no } as Customer
             : c
         );
-        await storageService.set('trucking_customers', updated);
+        await storageService.set(StorageKeys.TRUCKING.CUSTOMERS, updated);
+        // 🔄 Wait for background sync to complete before showing success
+        await new Promise(resolve => setTimeout(resolve, 500));
         setCustomers(updated.map((c, idx) => ({ ...c, no: idx + 1 })));
       } else {
         const newCustomer: Customer = {
@@ -119,7 +164,9 @@ const Customers = () => {
           ...formData,
         } as Customer;
         const updated = [...customers, newCustomer];
-        await storageService.set('trucking_customers', updated);
+        await storageService.set(StorageKeys.TRUCKING.CUSTOMERS, updated);
+        // 🔄 Wait for background sync to complete before showing success
+        await new Promise(resolve => setTimeout(resolve, 500));
         setCustomers(updated.map((c, idx) => ({ ...c, no: idx + 1 })));
       }
       setShowForm(false);
@@ -168,11 +215,11 @@ const Customers = () => {
         async () => {
           try {
             // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
-            const deleteResult = await deleteTruckingItem('trucking_customers', item.id, 'id');
+            const deleteResult = await deleteTruckingItem(StorageKeys.TRUCKING.CUSTOMERS, item.id, 'id');
             
             if (deleteResult.success) {
               // Reload data dengan helper (handle race condition)
-              const activeCustomers = await reloadTruckingData('trucking_customers', setCustomers);
+              const activeCustomers = await reloadTruckingData(StorageKeys.TRUCKING.CUSTOMERS, setCustomers);
               setCustomers(activeCustomers.map((c, idx) => ({ ...c, no: idx + 1 })));
               showAlert(`✅ Customer "${item.nama}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
             } else {

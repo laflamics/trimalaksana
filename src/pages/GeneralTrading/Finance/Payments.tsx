@@ -4,10 +4,10 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
+import DateRangeFilter from '../../../components/DateRangeFilter';
 import NotificationBell from '../../../components/NotificationBell';
-import { storageService } from '../../../services/storage';
-import { loadGTDataFromLocalStorage } from '../../../utils/gtStorageHelper';
-import { filterActiveItems } from '../../../utils/data-persistence-helper';
+import { storageService, StorageKeys } from '../../../services/storage';
+import { useLanguage } from '../../../hooks/useLanguage';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
 
@@ -25,42 +25,65 @@ interface Payment {
   customerName?: string;
   supplierName?: string;
   amount: number;
+  tax?: number;
+  taxPercent?: number;
   paymentMethod: 'Cash' | 'Bank Transfer' | 'Check' | 'Credit Card';
   reference?: string;
   notes?: string;
+  grnNo?: string;
+  materialItem?: string;
+  soNo?: string;
+  spkNo?: string;
+  created?: string;
+  customer?: string;
+  supplier?: string;
+  total?: number;
+}
+
+interface Account {
+  code: string;
+  name: string;
+  type: 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
+  balance: number;
+}
+
+interface JournalEntry {
+  id: string;
+  no: number;
+  entryDate: string;
+  reference: string;
+  account: string;
+  debit: number;
+  credit: number;
+  description: string;
 }
 
 const Payments = () => {
+  const { t } = useLanguage();
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [invoices, setInvoices] = useState<any[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
   const [pendingFinanceNotifications, setPendingFinanceNotifications] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
-  
-  // Format notifications untuk NotificationBell
-  const financeNotifications = useMemo(() => {
-    return pendingFinanceNotifications.map((notif: any) => ({
-      id: notif.id,
-      title: `PO ${notif.poNo || 'N/A'}`,
-      message: `Supplier: ${notif.supplier || 'N/A'} | Product: ${notif.productItem || 'N/A'} | Qty: ${notif.qty || 0} PCS | Amount: Rp ${(notif.total || 0).toLocaleString('id-ID')}`,
-      timestamp: notif.receivedDate || notif.created || notif.timestamp,
-      notif: notif, // Keep original data
-    }));
-  }, [pendingFinanceNotifications]);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [amountInputValue, setAmountInputValue] = useState('');
+  const [taxPercentInputValue, setTaxPercentInputValue] = useState('');
   const [debitAccountInputValue, setDebitAccountInputValue] = useState('');
   const [creditAccountInputValue, setCreditAccountInputValue] = useState('');
   const [formData, setFormData] = useState<Partial<Payment & { debitAccount?: string; creditAccount?: string }>>({
     paymentDate: new Date().toISOString().split('T')[0],
     amount: 0,
+    tax: 0,
+    taxPercent: 11,
     paymentMethod: 'Bank Transfer',
     debitAccount: '',
     creditAccount: '',
   });
+  const [showNotifications, setShowNotifications] = useState(true);
   const [localAlert, setLocalAlert] = useState<{ show: boolean; message: string }>({
     show: false,
     message: '',
@@ -122,32 +145,20 @@ const Payments = () => {
 
   useEffect(() => {
     loadPayments();
-    loadInvoices();
     loadPurchaseOrders();
     loadAccounts();
-    // Refresh notifications setiap 2 detik
-    const interval = setInterval(() => {
-      loadPurchaseOrders();
-    }, 2000);
-    return () => clearInterval(interval);
   }, []);
 
 
   const loadAccounts = async () => {
-    // Load langsung dari localStorage untuk memastikan data terbaru
-    const dataRaw = await loadGTDataFromLocalStorage<any>(
-      'gt_accounts',
-      async () => await storageService.get<any[]>('gt_accounts') || []
-    );
-    // Filter out deleted items menggunakan helper function
-    const data = filterActiveItems(dataRaw || []);
+    const data = await storageService.get<Account[]>(StorageKeys.GENERAL_TRADING.ACCOUNTS) || [];
     if (!data || data.length === 0) {
       const defaultAccounts: any[] = [
         { code: '1000', name: 'Cash', type: 'Asset', balance: 0 },
         { code: '1100', name: 'Accounts Receivable', type: 'Asset', balance: 0 },
         { code: '2000', name: 'Accounts Payable', type: 'Liability', balance: 0 },
       ];
-      await storageService.set('gt_accounts', defaultAccounts);
+      await storageService.set(StorageKeys.GENERAL_TRADING.ACCOUNTS, defaultAccounts);
       setAccounts(defaultAccounts);
     } else {
       setAccounts(data);
@@ -188,6 +199,10 @@ const Payments = () => {
     return value;
   };
 
+  // Helper function untuk calculate tax amount
+  const calculateTaxAmount = (amount: number, taxPercent: number): number => {
+    return amount * (taxPercent / 100);
+  };
 
   const getDebitAccountInputDisplayValue = () => {
     if (debitAccountInputValue !== undefined && debitAccountInputValue !== '') {
@@ -253,214 +268,135 @@ const Payments = () => {
 
 
   const loadPayments = async () => {
-    // Load from both 'gt_payments' (existing) and create unified list
-    // Load langsung dari localStorage untuk memastikan data terbaru
-    const existingPaymentsRaw = await loadGTDataFromLocalStorage<any>(
-      'gt_payments',
-      async () => await storageService.get<any[]>('gt_payments') || []
-    );
-    // Filter out deleted items menggunakan helper function
-    const existingPaymentsArray = filterActiveItems(Array.isArray(existingPaymentsRaw) ? existingPaymentsRaw : []);
-    const allPayments = existingPaymentsArray.map((p, idx) => ({
-      id: p.id || Date.now().toString() + idx,
-      no: idx + 1,
-      paymentNo: p.paymentNo || `PAY-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(idx + 1).padStart(4, '0')}`,
-      paymentDate: p.paymentDate || p.created || new Date().toISOString().split('T')[0],
-      type: p.type || (p.invoiceNo ? 'Receipt' : 'Payment'),
-      invoiceNo: p.invoiceNo,
-      poNo: p.poNo,
-      purchaseOrderNo: p.poNo || p.purchaseOrderNo,
-      customerName: p.customer || p.customerName,
-      supplierName: p.supplier || p.supplierName,
-      amount: p.amount || p.total || 0,
-      paymentMethod: p.paymentMethod || 'Bank Transfer',
-      reference: p.reference,
-      notes: p.notes,
-    }));
-    setPayments(allPayments);
-  };
-
-  const loadInvoices = async () => {
-    // Load langsung dari localStorage untuk memastikan data terbaru
-    const dataRaw = await loadGTDataFromLocalStorage<any>(
-      'gt_invoices',
-      async () => await storageService.get<any[]>('gt_invoices') || []
-    );
-    const paymentsDataRaw = await loadGTDataFromLocalStorage<any>(
-      'gt_payments',
-      async () => await storageService.get<any[]>('gt_payments') || []
-    );
-    // Filter out deleted items menggunakan helper function
-    const dataArray = filterActiveItems(Array.isArray(dataRaw) ? dataRaw : []);
-    const paymentsDataArray = filterActiveItems(Array.isArray(paymentsDataRaw) ? paymentsDataRaw : []);
-    // Calculate balance for each invoice
-    const invoicesWithBalance = dataArray.map(inv => {
-      const invoicePayments = paymentsDataArray.filter((p: any) => p.invoiceNo === inv.invoiceNo);
-      const paidAmount = invoicePayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
-      const balance = (inv.total || 0) - paidAmount;
-      return { ...inv, paidAmount, balance };
-    });
-    setInvoices(invoicesWithBalance.filter(inv => inv.balance > 0));
-  };
-
-  const loadPurchaseOrders = async () => {
-    let [poDataRaw, financeNotifDataRaw, grnDataRaw] = await Promise.all([
-      storageService.get<any[]>('gt_purchaseOrders') || [],
-      storageService.get<any[]>('gt_financeNotifications') || [],
-      storageService.get<any[]>('gt_grn') || [],
-    ]);
+    // Load from both 'payments' (existing) and create unified list
+    const existingPayments = await storageService.get<Payment[]>(StorageKeys.GENERAL_TRADING.PAYMENTS) || [];
+    // Ensure existingPayments is always an array
+    const existingPaymentsArray = Array.isArray(existingPayments) ? existingPayments : [];
     
-    // Force reload finance notifications if undefined or very few detected
-    if (!financeNotifDataRaw || !Array.isArray(financeNotifDataRaw) || financeNotifDataRaw.length <= 1) {
-      const fileData = await storageService.forceReloadFromFile<any[]>('gt_financeNotifications');
-      if (fileData && Array.isArray(fileData)) {
-        financeNotifDataRaw = fileData;
-      } else {
-        // Fallback: try direct file read
-        try {
-          const directRead = await storageService.get<any[]>('gt_financeNotifications');
-          if (directRead && Array.isArray(directRead)) {
-            financeNotifDataRaw = directRead;
-          } else {
-            financeNotifDataRaw = [];
-          }
-        } catch (error) {
-          financeNotifDataRaw = [];
+    // Auto-fill invoice and customer data from invoices storage
+    const invoices = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.INVOICES) || [];
+    const invoicesArray = Array.isArray(invoices) ? invoices : [];
+    
+    const normalize = (str: string) => (str || '').toString().trim().toLowerCase();
+    
+    const allPayments = existingPaymentsArray.map((p, idx) => {
+      let payment = {
+        id: p.id || Date.now().toString() + idx,
+        no: idx + 1,
+        paymentNo: p.paymentNo || `PAY-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(idx + 1).padStart(4, '0')}`,
+        paymentDate: p.paymentDate || p.created || new Date().toISOString().split('T')[0],
+        type: p.type || (p.invoiceNo ? 'Receipt' : 'Payment'),
+        invoiceNo: p.invoiceNo,
+        poNo: p.poNo,
+        purchaseOrderNo: p.poNo || p.purchaseOrderNo,
+        customerName: p.customerName || p.customer,
+        supplierName: p.supplier || p.supplierName,
+        amount: p.amount || p.total || 0,
+        paymentMethod: p.paymentMethod || 'Bank Transfer',
+        reference: p.reference,
+        notes: p.notes,
+        grnNo: p.grnNo,
+        materialItem: p.materialItem,
+        soNo: p.soNo,
+        spkNo: p.spkNo,
+      };
+      
+      // Auto-fill invoice and customer if soNo exists but invoiceNo is empty
+      if (payment.soNo && !payment.invoiceNo) {
+        const soNo = normalize(payment.soNo);
+        const relatedInvoice = invoicesArray.find((inv: any) => {
+          const invSoNo = normalize(inv.soNo || '');
+          return invSoNo === soNo;
+        });
+        
+        if (relatedInvoice) {
+          payment.invoiceNo = relatedInvoice.invoiceNo || '';
+          payment.customerName = relatedInvoice.customer || '';
         }
       }
-    }
+      
+      return payment;
+    });
     
-    // Force reload PO data if very few detected
-    if (Array.isArray(poDataRaw) && poDataRaw.length <= 1) {
-      const fileData = await storageService.forceReloadFromFile<any[]>('gt_purchaseOrders');
-      if (fileData && Array.isArray(fileData) && fileData.length > poDataRaw.length) {
-        poDataRaw = fileData;
+    // Update payments in storage if any were auto-filled
+    const needsUpdate = existingPaymentsArray.some((p) => {
+      const soNo = normalize(p.soNo || '');
+      if (soNo && !p.invoiceNo) {
+        const relatedInvoice = invoicesArray.find((inv: any) => {
+          const invSoNo = normalize(inv.soNo || '');
+          return invSoNo === soNo;
+        });
+        return !!relatedInvoice;
       }
-    }
+      return false;
+    });
     
-    // Force reload GRN data if very few detected
-    if (Array.isArray(grnDataRaw) && grnDataRaw.length <= 1) {
-      const fileData = await storageService.forceReloadFromFile<any[]>('gt_grn');
-      if (fileData && Array.isArray(fileData) && fileData.length > grnDataRaw.length) {
-        grnDataRaw = fileData;
-      }
-    }
-    
-    // Filter out deleted items menggunakan helper function
-    const poData = filterActiveItems(poDataRaw || []);
-    const financeNotifData = filterActiveItems(financeNotifDataRaw || []);
-    const grnData = filterActiveItems(grnDataRaw || []);
-    
-    // Auto-fix: Recalculate total untuk notification yang masih pakai total PO (fix untuk notification lama)
-    // Ensure all data is always an array
-    const financeNotifDataArray = Array.isArray(financeNotifData) ? financeNotifData : [];
-    const poDataForFix = Array.isArray(poData) ? poData : [];
-    const grnDataForFix = Array.isArray(grnData) ? grnData : [];
-    const fixedNotifs = financeNotifDataArray.map((notif: any) => {
-      // Jika notification punya grnNo tapi total-nya sama dengan total PO, berarti perlu di-recalculate
-      if (notif.grnNo && notif.type === 'SUPPLIER_PAYMENT' && notif.status === 'PENDING') {
-        // Cari PO dan GRN untuk recalculate
-        const po = poDataForFix.find((p: any) => p.poNo === notif.poNo);
-        const grn = grnDataForFix.find((g: any) => g.grnNo === notif.grnNo);
-        
-        if (po && grn && grn.qtyReceived) {
-          // Recalculate total per GRN
-          const unitPrice = po.price || 0;
-          const subtotal = Math.ceil(grn.qtyReceived * unitPrice);
-          const discountPercent = po.discountPercent || 0;
-          const discountAmount = subtotal * discountPercent / 100;
-          const grnTotal = Math.ceil(subtotal - discountAmount);
+    if (needsUpdate) {
+      const updatedPayments = existingPaymentsArray.map((p) => {
+        if (p.soNo && !p.invoiceNo) {
+          const soNo = normalize(p.soNo);
+          const relatedInvoice = invoicesArray.find((inv: any) => {
+            const invSoNo = normalize(inv.soNo || '');
+            return invSoNo === soNo;
+          });
           
-          // Jika total berbeda dengan yang ada, berarti perlu di-update
-          if (notif.total !== grnTotal) {
+          if (relatedInvoice) {
             return {
-              ...notif,
-              total: grnTotal,
-              qty: grn.qtyReceived,
-              unitPrice: unitPrice,
-              discountPercent: discountPercent,
+              ...p,
+              invoiceNo: relatedInvoice.invoiceNo || p.invoiceNo,
+              customerName: relatedInvoice.customer || p.customerName,
             };
           }
         }
-      }
-      return notif;
-    });
-    
-    // Update jika ada perubahan
-    if (JSON.stringify(fixedNotifs) !== JSON.stringify(financeNotifDataArray)) {
-      await storageService.set('gt_financeNotifications', fixedNotifs);
+        return p;
+      });
+      
+      await storageService.set(StorageKeys.GENERAL_TRADING.PAYMENTS, updatedPayments);
     }
     
-    // Auto-cleanup: Hapus notifications yang sudah CLOSE
-    const cleanedNotifs = fixedNotifs.filter((notif: any) => {
+    setPayments(allPayments);
+  };
+
+  const loadPurchaseOrders = async () => {
+    const [poData, financeNotifData, paymentsData] = await Promise.all([
+      storageService.get<any[]>(StorageKeys.GENERAL_TRADING.PURCHASE_ORDERS) || [],
+      storageService.get<any[]>(StorageKeys.GENERAL_TRADING.FINANCE_NOTIFICATIONS) || [],
+      storageService.get<Payment[]>(StorageKeys.GENERAL_TRADING.PAYMENTS) || [],
+    ]);
+    
+    // Auto-cleanup: Hapus notifications yang sudah CLOSE atau PO sudah dibayar
+    // Ensure financeNotifData and paymentsData are always arrays
+    const financeNotifDataArray = Array.isArray(financeNotifData) ? financeNotifData : [];
+    const paymentsDataArray = Array.isArray(paymentsData) ? paymentsData : [];
+    const cleanedNotifs = financeNotifDataArray.filter((notif: any) => {
       // Hapus jika status sudah CLOSE
       if ((notif.status || 'PENDING').toUpperCase() === 'CLOSE') {
         return false;
       }
       
-      // Keep notification jika masih PENDING (payment per GRN, jadi bisa ada multiple notifications per PO)
-      return true;
+      // Hapus jika PO sudah dibayar (cek dari payments)
+      const hasPayment = paymentsDataArray.some((p: any) => 
+        (p.poNo === notif.poNo || p.purchaseOrderNo === notif.poNo) && 
+        p.type === 'Payment'
+      );
+      
+      return !hasPayment;
     });
     
     // Update notifications di storage (cleanup yang sudah tidak relevan)
     if (financeNotifDataArray.length > 0 && JSON.stringify(cleanedNotifs) !== JSON.stringify(financeNotifDataArray)) {
-      await storageService.set('gt_financeNotifications', cleanedNotifs);
+      await storageService.set(StorageKeys.GENERAL_TRADING.FINANCE_NOTIFICATIONS, cleanedNotifs);
     }
     
     const pending = cleanedNotifs.filter((notif: any) =>
       notif.type === 'SUPPLIER_PAYMENT' && (notif.status || 'PENDING').toUpperCase() !== 'CLOSE'
     );
-    
     setPendingFinanceNotifications(pending);
-    // Helper function untuk mendapatkan product name dari berbagai sumber
-    const getProductNameFromNotification = async (notif: any, po: any): Promise<string> => {
-      // Prioritas 1: dari GRN
-      if (notif.grnNo) {
-        const grnList = await storageService.get<any[]>('gt_grn') || [];
-        const grn = grnList.find((g: any) => g.grnNo === notif.grnNo);
-        // Format baru: productItem, format lama: materialItem (backward compatibility)
-        if (grn && (grn.productItem || grn.materialItem)) {
-          return grn.productItem || grn.materialItem;
-        }
-      }
-      
-      // Prioritas 2: dari PO
-      // Format baru: productItem, format lama: materialItem (backward compatibility)
-      if (po && (po.productItem || po.materialItem)) {
-        return po.productItem || po.materialItem;
-      }
-      
-      // Prioritas 3: dari notification
-      // Format baru: productItem, format lama: materialItem (backward compatibility)
-      if (notif.productItem || notif.materialItem) {
-        return notif.productItem || notif.materialItem;
-      }
-      
-      // Prioritas 4: dari productId (cari di master products)
-      // Format baru: productId, format lama: materialId (backward compatibility)
-      const productId = notif.productId || notif.materialId || po?.productId || po?.materialId;
-      if (productId) {
-        const products = await storageService.get<any[]>('gt_products') || [];
-        // Ensure products is always an array
-        const productsArray = Array.isArray(products) ? products : [];
-        const product = productsArray.find((p: any) => 
-          (p.product_id || p.kode || '').toString().trim().toLowerCase() === 
-          (productId || '').toString().trim().toLowerCase()
-        );
-        if (product) {
-          return product.nama || product.productName || product.itemName || '';
-        }
-      }
-      
-      return '-';
-    };
     
     // Ensure poData is always an array
     const poDataArray = Array.isArray(poData) ? poData : [];
-    const openFinancePOs = await Promise.all(pending.map(async (notif: any) => {
+    const openFinancePOs = pending.map((notif: any) => {
       const po = poDataArray.find((p: any) => p.poNo === notif.poNo);
-      const productName = await getProductNameFromNotification(notif, po);
-      
       return {
         id: po?.id || notif.id,
         poNo: notif.poNo || po?.poNo || '-',
@@ -468,18 +404,15 @@ const Payments = () => {
         soNo: po?.soNo || notif.soNo || '-',
         total: po?.total || notif.total || 0,
         status: po?.status || 'OPEN',
-        productItem: productName, // Product name dari berbagai sumber
+        materialItem: po?.materialItem || notif.materialItem || '-',
         qty: po?.qty || notif.qty || 0,
         receiptDate: po?.receiptDate || notif.receivedDate || '-',
         suratJalan: notif.suratJalan,
         suratJalanName: notif.suratJalanName,
-        invoiceNo: notif.invoiceNo || '',
-        invoiceFile: notif.invoiceFile || '',
-        invoiceFileName: notif.invoiceFileName || '',
         grnNo: notif.grnNo,
         purchaseReason: po?.purchaseReason || notif.purchaseReason || '',
       };
-    }));
+    });
     setPurchaseOrders(openFinancePOs);
   };
 
@@ -493,68 +426,171 @@ const Payments = () => {
     return `PAY-${year}${month}-${String(count).padStart(4, '0')}`;
   };
 
-  const handleLoadFromInvoice = (invNo: string) => {
-    // Ensure invoices is always an array
-    const invoicesArray = Array.isArray(invoices) ? invoices : [];
-    const inv = invoicesArray.find(i => i.invoiceNo === invNo);
-    if (inv) {
-      setAmountInputValue('');
-      setFormData({
-        ...formData,
-        type: 'Receipt',
-        invoiceNo: inv.invoiceNo,
-        customerName: inv.customer,
-        amount: inv.balance || inv.total,
-      });
+  const handleViewNotificationSJ = (notif: any) => {
+    if (!notif?.suratJalan) {
+      showAlert('Tidak ada file surat jalan yang diupload.', 'Error');
+      return;
     }
+    const win = window.open('', '_blank');
+    if (!win) {
+      showAlert('Popup diblokir browser. Tolong izinkan popup untuk melihat surat jalan.', 'Warning');
+      return;
+    }
+    const src = notif.suratJalan.startsWith('data:')
+      ? notif.suratJalan
+      : `data:application/pdf;base64,${notif.suratJalan}`;
+    win.document.write(`<iframe src="${src}" style="width:100%;height:100%;border:none;"></iframe>`);
   };
 
-  const handleLoadFromPO = (poNo: string) => {
-    // Ensure purchaseOrders is always an array
-    const purchaseOrdersArray = Array.isArray(purchaseOrders) ? purchaseOrders : [];
-    const po = purchaseOrdersArray.find(p => p.poNo === poNo);
-    if (po) {
-      setAmountInputValue('');
-      setFormData({
-        ...formData,
-        poNo: po.poNo,
-        purchaseOrderNo: po.poNo,
-        supplierName: po.supplier,
-        amount: po.total,
-      });
-    } else {
-      showAlert('Tidak ada PO dengan status open payment. Semua PO sudah CLOSE atau belum punya GRN.', 'Information');
+  const handleViewNotificationInvoice = (notif: any) => {
+    if (!notif?.invoiceFile) {
+      showAlert('Tidak ada file invoice yang diupload.', 'Error');
+      return;
     }
+    const win = window.open('', '_blank');
+    if (!win) {
+      showAlert('Popup diblokir browser. Tolong izinkan popup untuk melihat invoice.', 'Warning');
+      return;
+    }
+    const src = notif.invoiceFile.startsWith('data:')
+      ? notif.invoiceFile
+      : `data:application/pdf;base64,${notif.invoiceFile}`;
+    win.document.write(`<iframe src="${src}" style="width:100%;height:100%;border:none;"></iframe>`);
   };
 
-  // handleViewNotificationSJ removed - functionality moved to NotificationBell dropdown menu (if needed)
-
-  const handleLoadNotificationToForm = (notif: any) => {
-    setShowForm(true);
-    setEditingPayment(null);
-    setAmountInputValue('');
-    const defaultDate = new Date().toISOString().split('T')[0];
-    // Amount per GRN (untuk partial receipt support)
-    const paymentAmount = notif.total || 0;
-    setFormData({
-      paymentDate: defaultDate,
-      poNo: notif.poNo || '',
-      purchaseOrderNo: notif.poNo || '',
-      supplierName: notif.supplier || '',
-      amount: paymentAmount, // Amount per GRN, bukan total PO
-      paymentMethod: 'Bank Transfer',
-      reference: notif.grnNo ? `GRN ${notif.grnNo}` : '',
-      notes: notif.grnNo 
-        ? `Payment for PO ${notif.poNo || ''} - GRN ${notif.grnNo} (${notif.qty || 0} PCS)${notif.invoiceNo ? ` - Invoice: ${notif.invoiceNo}` : ''}`
-        : `Payment for PO ${notif.poNo || ''}${notif.invoiceNo ? ` - Invoice: ${notif.invoiceNo}` : ''}`,
-      invoiceNo: notif.invoiceNo || '',
-      debitAccount: '',
-      creditAccount: '',
-      // Store GRN info untuk tracking
-      grnNo: notif.grnNo || '',
-    } as any);
-    setDebitAccountInputValue('');
-    setCreditAccountInputValue('');
+  const handleLoadNotificationToForm = async (notif: any) => {
+    try {
+      console.log('[Payment] handleLoadNotificationToForm called with notification:', { poNo: notif.poNo, soNo: notif.soNo, spkNo: notif.spkNo, grnNo: notif.grnNo });
+      setEditingPayment(null);
+      setAmountInputValue('');
+      const defaultDate = new Date().toISOString().split('T')[0];
+      
+      // Trace invoice dari SPK/SO
+      let invoiceNo = '';
+      let customerName = '';
+      try {
+        const invoices = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.INVOICES) || [];
+        const invoicesArray = Array.isArray(invoices) ? invoices : [];
+        const spks = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.SPK) || [];
+        const spksArray = Array.isArray(spks) ? spks : [];
+        const salesOrders = await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.SALES_ORDERS) || [];
+        const salesOrdersArray = Array.isArray(salesOrders) ? salesOrders : [];
+        
+        // Helper function untuk normalize string untuk comparison
+        const normalize = (str: string) => (str || '').toString().trim().toLowerCase();
+        
+        // First, try to find invoice directly by SO or SPK from notification
+        let relatedInvoice = invoicesArray.find((inv: any) => {
+          const invSoNo = normalize(inv.soNo || '');
+          const invSpkNo = normalize(inv.spkNo || '');
+          const notifSoNo = normalize(notif.soNo || '');
+          const notifSpkNo = normalize(notif.spkNo || '');
+          
+          return (invSoNo && notifSoNo && invSoNo === notifSoNo) || 
+                 (invSpkNo && notifSpkNo && invSpkNo === notifSpkNo);
+        });
+        
+        // If not found, try to trace through PO → SPK → Invoice
+        if (!relatedInvoice && notif.poNo) {
+          const poNo = normalize(notif.poNo);
+          
+          // Find SPK that references this PO
+          const relatedSpk = spksArray.find((spk: any) => {
+            const spkPoNo = normalize(spk.poNo || spk.purchaseOrderNo || '');
+            return spkPoNo === poNo;
+          });
+          
+          if (relatedSpk) {
+            // Find invoice by SPK
+            relatedInvoice = invoicesArray.find((inv: any) => {
+              const invSpkNo = normalize(inv.spkNo || '');
+              const spkNo = normalize(relatedSpk.spkNo || '');
+              return invSpkNo === spkNo;
+            });
+            
+            // If still not found, try by SO
+            if (!relatedInvoice && relatedSpk.soNo) {
+              relatedInvoice = invoicesArray.find((inv: any) => {
+                const invSoNo = normalize(inv.soNo || '');
+                const soNo = normalize(relatedSpk.soNo || '');
+                return invSoNo === soNo;
+              });
+            }
+          }
+        }
+        
+        // If still not found, try by SO from notification directly
+        if (!relatedInvoice && notif.soNo) {
+          const notifSoNo = normalize(notif.soNo);
+          relatedInvoice = invoicesArray.find((inv: any) => {
+            const invSoNo = normalize(inv.soNo || '');
+            return invSoNo === notifSoNo;
+          });
+        }
+        
+        // If still not found, try to find by customer from SO
+        if (!relatedInvoice && notif.soNo) {
+          const notifSoNo = normalize(notif.soNo);
+          const relatedSO = salesOrdersArray.find((so: any) => {
+            const soNo = normalize(so.soNo || so.no || '');
+            return soNo === notifSoNo;
+          });
+          
+          if (relatedSO) {
+            // Find invoice by customer
+            relatedInvoice = invoicesArray.find((inv: any) => {
+              const invCustomer = normalize(inv.customer || '');
+              const soCustomer = normalize(relatedSO.customer || relatedSO.customerName || '');
+              return invCustomer === soCustomer && invCustomer !== '';
+            });
+          }
+        }
+        
+        if (relatedInvoice) {
+          invoiceNo = relatedInvoice.invoiceNo || '';
+          customerName = relatedInvoice.customer || '';
+          console.log('[Payment] ✅ Invoice found:', { invoiceNo, customerName, soNo: relatedInvoice.soNo });
+        } else {
+          console.log('[Payment] ⚠️ Invoice NOT found for notification:', { notifSoNo: notif.soNo, notifSpkNo: notif.spkNo, notifPoNo: notif.poNo });
+        }
+      } catch (error) {
+        console.error('Error tracing invoice:', error);
+      }
+      
+      const paymentData = {
+        paymentDate: defaultDate,
+        type: 'Payment' as const,
+        poNo: notif.poNo || '',
+        purchaseOrderNo: notif.poNo || '',
+        supplierName: notif.supplier || '',
+        amount: notif.total || 0,
+        paymentMethod: 'Bank Transfer' as const,
+        reference: notif.grnNo ? `GRN ${notif.grnNo}` : '',
+        notes: `Payment for PO ${notif.poNo || ''}${notif.materialItem ? ` - ${notif.materialItem}` : ''}${invoiceNo ? ` | Invoice: ${invoiceNo}` : ''}`,
+        invoiceNo: invoiceNo,
+        grnNo: notif.grnNo || '',
+        materialItem: notif.materialItem || '',
+        soNo: notif.soNo || '',
+        spkNo: notif.spkNo || '',
+        debitAccount: '2000', // Default: Accounts Payable
+        creditAccount: '1000', // Default: Cash
+        customerName: customerName, // Track customer
+      };
+      
+      // Show form with pre-filled data so user can review/edit before final save
+      setFormData(paymentData);
+      setAmountInputValue(String(paymentData.amount || 0));
+      setShowForm(true);
+      
+      loadPayments();
+      loadPurchaseOrders();
+      const amount = paymentData.amount || 0;
+      const invoiceDisplay = paymentData.invoiceNo ? `Invoice: ${paymentData.invoiceNo}` : 'Not found - please enter manually';
+      const customerDisplay = paymentData.customerName ? `Customer: ${paymentData.customerName}` : 'Not found - please enter manually';
+      showAlert(`✅ Payment form loaded\n\nPayment No: ${generatePaymentNo()}\nAmount: Rp ${amount.toLocaleString('id-ID')}\n${invoiceDisplay}\n${customerDisplay}\n\nReview and save, or edit the fields manually.`, 'Info');
+    } catch (error: any) {
+      showAlert(`Error creating payment: ${error.message}`, 'Error');
+    }
   };
 
   const handleSave = async () => {
@@ -569,55 +605,85 @@ const Payments = () => {
       if (editingPayment) {
         const updated = paymentsArray.map(p =>
           p.id === editingPayment.id
-            ? { ...formData, id: editingPayment.id, no: editingPayment.no, paymentNo: editingPayment.paymentNo } as Payment
+            ? { 
+                ...formData, 
+                id: editingPayment.id, 
+                no: editingPayment.no, 
+                paymentNo: editingPayment.paymentNo,
+                lastUpdate: new Date().toISOString(),
+                timestamp: Date.now(),
+                _timestamp: Date.now()
+              } as Payment
             : p
         );
-        await storageService.set('gt_payments', updated);
+        await storageService.set(StorageKeys.GENERAL_TRADING.PAYMENTS, updated);
         setPayments(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
       } else {
         const newPayment: Payment = {
           id: Date.now().toString(),
           no: paymentsArray.length + 1,
           paymentNo: generatePaymentNo(),
+          lastUpdate: new Date().toISOString(),
+          timestamp: Date.now(),
+          _timestamp: Date.now(),
           ...formData,
         } as Payment;
         const updated = [...paymentsArray, newPayment];
-        await storageService.set('gt_payments', updated);
+        await storageService.set(StorageKeys.GENERAL_TRADING.PAYMENTS, updated);
         setPayments(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
         
         // Auto-create journal entries untuk General Ledger
         try {
-          const journalEntries = await storageService.get<any[]>('gt_journalEntries') || [];
-          const accounts = await storageService.get<any[]>('gt_accounts') || [];
+          const journalEntries = await storageService.get<JournalEntry[]>(StorageKeys.GENERAL_TRADING.JOURNAL_ENTRIES) || [];
+          const accounts = await storageService.get<Account[]>(StorageKeys.GENERAL_TRADING.ACCOUNTS) || [];
           const entryDate = formData.paymentDate || new Date().toISOString().split('T')[0];
+          const amount = formData.amount || 0;
           
-          // Create journal entries using selected COA
-          if (formData.debitAccount && formData.creditAccount) {
-            // Ensure accounts is always an array
-            const accountsArray = Array.isArray(accounts) ? accounts : [];
-            const debitAccount = accountsArray.find((a: any) => a.code === formData.debitAccount);
-            const creditAccount = accountsArray.find((a: any) => a.code === formData.creditAccount);
-            const amount = formData.amount || 0;
-            
-            if (debitAccount && creditAccount) {
+          // Ensure accounts is always an array
+          const accountsArray = Array.isArray(accounts) ? accounts : [];
+          
+          // Determine debit and credit accounts
+          let debitAccountCode = formData.debitAccount || '';
+          let creditAccountCode = formData.creditAccount || '';
+          
+          // Jika debitAccount atau creditAccount kosong, gunakan default berdasarkan type
+          if (!debitAccountCode || !creditAccountCode) {
+            if (formData.type === 'Receipt') {
+              // Receipt: Debit Cash (1000), Credit Accounts Receivable (1100)
+              debitAccountCode = debitAccountCode || '1000';
+              creditAccountCode = creditAccountCode || '1100';
+            } else {
+              // Payment: Debit Accounts Payable (2000), Credit Cash (1000)
+              debitAccountCode = debitAccountCode || '2000';
+              creditAccountCode = creditAccountCode || '1000';
+            }
+          }
+          
+          const debitAccount = accountsArray.find((a: any) => a.code === debitAccountCode);
+          const creditAccount = accountsArray.find((a: any) => a.code === creditAccountCode);
+          
+          if (debitAccount && creditAccount && amount > 0) {
+            // Cek apakah sudah ada journal entries untuk payment ini
+            const existingEntries = journalEntries.filter((e: any) => e.reference === newPayment.paymentNo);
+            if (existingEntries.length === 0) {
               const entriesToAdd = [
                 {
                   entryDate: entryDate,
                   reference: newPayment.paymentNo,
-                  account: formData.debitAccount,
+                  account: debitAccountCode,
                   accountName: debitAccount.name,
                   debit: amount,
                   credit: 0,
-                  description: `Payment ${newPayment.paymentNo} - ${formData.customerName || formData.supplierName || 'Payment'}`,
+                  description: `${formData.type || 'Payment'} ${newPayment.paymentNo} - ${formData.customerName || formData.supplierName || 'Payment'}`,
                 },
                 {
                   entryDate: entryDate,
                   reference: newPayment.paymentNo,
-                  account: formData.creditAccount,
+                  account: creditAccountCode,
                   accountName: creditAccount.name,
                   debit: 0,
                   credit: amount,
-                  description: `Payment ${newPayment.paymentNo} - ${formData.customerName || formData.supplierName || 'Payment'}`,
+                  description: `${formData.type || 'Payment'} ${newPayment.paymentNo} - ${formData.customerName || formData.supplierName || 'Payment'}`,
                 },
               ];
 
@@ -626,85 +692,17 @@ const Payments = () => {
               const baseLength = journalEntriesArray.length;
               const entriesWithNo = entriesToAdd.map((entry, idx) => ({
                 ...entry,
-                id: `${Date.now()}-${idx + 1}`,
+                id: `pay-${Date.now()}-${idx + 1}`,
                 no: baseLength + idx + 1,
               }));
-              await storageService.set('gt_journalEntries', [...journalEntriesArray, ...entriesWithNo]);
+              await storageService.set(StorageKeys.GENERAL_TRADING.JOURNAL_ENTRIES, [...journalEntriesArray, ...entriesWithNo]);
             }
           }
         } catch (error: any) {
-          console.error('Error creating journal entries:', error);
         }
 
-        if (formData.poNo) {
-          try {
-            const financeNotifications = await storageService.get<any[]>('gt_financeNotifications') || [];
-            // Ensure financeNotifications is always an array
-            const financeNotificationsArray = Array.isArray(financeNotifications) ? financeNotifications : [];
-            
-            // IMPORTANT: Hanya close notification untuk GRN yang dibayar (partial receipt support)
-            // Jika ada grnNo di formData, hanya close notification untuk GRN tersebut
-            // Jika tidak ada grnNo, close semua notification untuk PO (backward compatibility)
-            const grnNo = (formData as any).grnNo;
-            const updatedNotifications = financeNotificationsArray.map((n: any) => {
-              if (n.poNo === formData.poNo && n.type === 'SUPPLIER_PAYMENT') {
-                // Jika ada grnNo, hanya close notification untuk GRN tersebut
-                if (grnNo && n.grnNo === grnNo) {
-                  return { ...n, status: 'CLOSE', paidAt: new Date().toISOString() };
-                }
-                // Jika tidak ada grnNo, close semua (backward compatibility)
-                if (!grnNo) {
-                  return { ...n, status: 'CLOSE', paidAt: new Date().toISOString() };
-                }
-              }
-              return n;
-            });
-            // CRITICAL: Force immediate sync ke server untuk memastikan notifikasi di-close di device lain
-            await storageService.set('gt_financeNotifications', updatedNotifications, true);
-            
-            // CRITICAL: Reload notifications setelah update untuk refresh UI
-            // loadPurchaseOrders akan auto-cleanup notifications yang sudah CLOSE
-            await loadPurchaseOrders();
-
-            // Cek apakah semua GRN untuk PO ini sudah dibayar
-            const purchaseOrders = await storageService.get<any[]>('gt_purchaseOrders') || [];
-            const purchaseOrdersArray = Array.isArray(purchaseOrders) ? purchaseOrders : [];
-            const po = purchaseOrdersArray.find((p: any) => p.poNo === formData.poNo);
-            
-            if (po) {
-              // Load semua GRN untuk PO ini
-              const grnList = await storageService.get<any[]>('gt_grn') || [];
-              const grnsForPO = grnList.filter((g: any) => 
-                (g.poNo || '').toString().trim() === (formData.poNo || '').toString().trim()
-              );
-              
-              // Cek apakah semua notification untuk GRN-GRN ini sudah CLOSE
-              const allGRNsPaid = grnsForPO.every((grn: any) => {
-                const notif = updatedNotifications.find((n: any) => 
-                  n.poNo === formData.poNo && n.grnNo === grn.grnNo && n.type === 'SUPPLIER_PAYMENT'
-                );
-                return notif && (notif.status || 'PENDING').toUpperCase() === 'CLOSE';
-              });
-              
-              // Hanya close PO jika semua GRN sudah dibayar
-              if (allGRNsPaid) {
-                const updatedPOs = purchaseOrdersArray.map((p: any) =>
-                  p.poNo === formData.poNo ? { ...p, status: 'CLOSE' as const } : p
-                );
-                await storageService.set('gt_purchaseOrders', updatedPOs);
-              }
-            }
-          } catch (error) {
-            console.error('Error updating finance notifications after payment:', error);
-          }
-        }
-        
-        // Update invoice paid amount if invoice exists
-        if (formData.invoiceNo) {
-          // Note: invoices don't have paidAmount field, so we track via payments
-          // This is just for display purposes
-          // Payment record already created above, which will be used by AR module
-        }
+        // NOTE: CLOSE status is now triggered in AP module when payment proof is uploaded
+        // Do NOT set CLOSE status here
       }
       
       setShowForm(false);
@@ -712,11 +710,10 @@ const Payments = () => {
       setAmountInputValue('');
       setDebitAccountInputValue('');
       setCreditAccountInputValue('');
-      setFormData({ paymentDate: new Date().toISOString().split('T')[0], type: 'Receipt', amount: 0, paymentMethod: 'Bank Transfer', debitAccount: '', creditAccount: '' });
-      // CRITICAL: Reload semua data termasuk notifications untuk refresh UI dan hapus notifikasi yang sudah CLOSE
+      setTaxPercentInputValue('');
+      setFormData({ paymentDate: new Date().toISOString().split('T')[0], type: 'Receipt', amount: 0, tax: 0, taxPercent: 11, paymentMethod: 'Bank Transfer', debitAccount: '', creditAccount: '' });
       loadPayments();
-      loadInvoices();
-      await loadPurchaseOrders(); // CRITICAL: Await untuk memastikan notifications di-reload dan di-cleanup
+      loadPurchaseOrders();
     } catch (error: any) {
       showAlert(`Error saving payment: ${error.message}`, 'Error');
     }
@@ -731,9 +728,17 @@ const Payments = () => {
         (payment.invoiceNo || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (payment.poNo || payment.purchaseOrderNo || '').toLowerCase().includes(searchQuery.toLowerCase());
       const matchesType = typeFilter === 'all' || payment.type === typeFilter;
+      
+      // Date filter
+      if (dateFrom || dateTo) {
+        const paymentDate = payment.paymentDate || '';
+        if (dateFrom && paymentDate < dateFrom) return false;
+        if (dateTo && paymentDate > dateTo) return false;
+      }
+      
       return matchesSearch && matchesType;
     });
-  }, [payments, searchQuery, typeFilter]);
+  }, [payments, searchQuery, typeFilter, dateFrom, dateTo]);
 
   // Export to Excel
   const handleExportExcel = () => {
@@ -852,9 +857,11 @@ const Payments = () => {
             }
 
             const paymentNo = row['Payment No'] || row['payment no'] || generatePaymentNo();
+            // Ensure payments is always an array
+            const paymentsArray = Array.isArray(payments) ? payments : [];
             newPayments.push({
               id: `import-${Date.now()}-${index}`,
-              no: payments.length + newPayments.length + 1,
+              no: paymentsArray.length + newPayments.length + 1,
               paymentNo: paymentNo,
               paymentDate: paymentDate,
               type: (type === 'Receipt' || type === 'Payment') ? type : 'Receipt',
@@ -875,12 +882,9 @@ const Payments = () => {
 
             if (newPayments.length > 0) {
               const updated = [...payments, ...newPayments];
-              await storageService.set('gt_payments', updated);
+              await storageService.set(StorageKeys.GENERAL_TRADING.PAYMENTS, updated);
               setPayments(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
               showAlert(`✅ Imported ${newPayments.length} payments${errors.length > 0 ? `\n⚠️ ${errors.length} errors` : ''}`, 'Success');
-              if (errors.length > 0) {
-                console.error('Import errors:', errors);
-              }
             } else {
               showAlert('⚠️ No valid payments to import', 'Warning');
             }
@@ -897,71 +901,138 @@ const Payments = () => {
   };
 
   const columns = [
-    { key: 'no', header: 'No' },
-    { key: 'paymentNo', header: 'Payment No' },
-    { key: 'paymentDate', header: 'Date' },
-    { key: 'type', header: 'Type' },
-    { key: 'invoiceNo', header: 'Invoice No' },
-    { key: 'poNo', header: 'PO No' },
-    { key: 'customerName', header: 'Customer' },
-    { key: 'supplierName', header: 'Supplier' },
-    { key: 'amount', header: 'Amount', render: (item: Payment) => `Rp ${item.amount.toLocaleString('id-ID')}` },
-    { key: 'paymentMethod', header: 'Method' },
-    { key: 'actions', header: 'Actions', render: (item: Payment) => (
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <Button onClick={() => { 
-          setEditingPayment(item); 
-          setAmountInputValue('');
-          setFormData(item); 
-          const debitAccount = (item as any).debitAccount || '';
-          const creditAccount = (item as any).creditAccount || '';
-          // Ensure accounts is always an array
-          const accountsArray = Array.isArray(accounts) ? accounts : [];
-          if (debitAccount) {
-            const account = accountsArray.find(a => a.code === debitAccount);
-            setDebitAccountInputValue(account ? `${account.code} - ${account.name}` : debitAccount);
-          } else {
-            setDebitAccountInputValue('');
-          }
-          if (creditAccount) {
-            const account = accountsArray.find(a => a.code === creditAccount);
-            setCreditAccountInputValue(account ? `${account.code} - ${account.name}` : creditAccount);
-          } else {
-            setCreditAccountInputValue('');
-          }
-          setShowForm(true); 
-        }} style={{ fontSize: '12px', padding: '4px 8px' }}>Edit</Button>
-        <Button variant="danger" onClick={() => {
-          showConfirm(
-            'Delete this payment?',
-            async () => {
-              // Ensure payments is always an array
-              const paymentsArray = Array.isArray(payments) ? payments : [];
-              const updated = paymentsArray.filter(p => p.id !== item.id);
-              await storageService.set('gt_payments', updated);
-              setPayments(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
-              closeDialog();
-            },
-            () => closeDialog(),
-            'Delete Confirmation'
-          );
-        }} style={{ fontSize: '12px', padding: '4px 8px' }}>Delete</Button>
-      </div>
-    ) },
+    { 
+      key: 'no', 
+      header: '#',
+      render: (item: Payment) => <div style={{ minWidth: '25px', textAlign: 'center', fontSize: '11px' }}>{item.no}</div>
+    },
+    { 
+      key: 'paymentNo', 
+      header: 'Payment No',
+      render: (item: Payment) => <div style={{ minWidth: '90px', fontSize: '11px' }} title={item.paymentNo}>{item.paymentNo.length > 12 ? item.paymentNo.substring(0, 12) + '...' : item.paymentNo}</div>
+    },
+    { 
+      key: 'paymentDate', 
+      header: 'Date',
+      render: (item: Payment) => <div style={{ minWidth: '70px', fontSize: '11px' }}>{item.paymentDate}</div>
+    },
+    { 
+      key: 'type', 
+      header: 'Type',
+      render: (item: Payment) => <div style={{ minWidth: '50px', fontSize: '11px' }}>{item.type}</div>
+    },
+    { 
+      key: 'invoiceNo', 
+      header: 'Invoice',
+      render: (item: Payment) => <div style={{ minWidth: '90px', fontSize: '11px', fontWeight: '500', color: item.invoiceNo ? '#1976d2' : 'var(--text-secondary)' }} title={item.invoiceNo || '-'}>{item.invoiceNo || '-'}</div>
+    },
+    { 
+      key: 'poNo', 
+      header: 'PO',
+      render: (item: Payment) => <div style={{ minWidth: '70px', fontSize: '11px', fontWeight: '500' }} title={item.poNo || '-'}>{item.poNo || '-'}</div>
+    },
+    { 
+      key: 'customerName', 
+      header: 'Customer',
+      render: (item: Payment) => <div style={{ minWidth: '120px', fontSize: '11px', color: item.customerName ? '#2e7d32' : 'var(--text-secondary)' }} title={item.customerName || '-'}>{item.customerName ? (item.customerName.length > 15 ? item.customerName.substring(0, 15) + '...' : item.customerName) : '-'}</div>
+    },
+    { 
+      key: 'supplierName', 
+      header: 'Supplier',
+      render: (item: Payment) => <div style={{ minWidth: '100px', fontSize: '11px' }} title={item.supplierName || '-'}>{item.supplierName ? (item.supplierName.length > 12 ? item.supplierName.substring(0, 12) + '...' : item.supplierName) : '-'}</div>
+    },
+    { 
+      key: 'amount', 
+      header: 'Amount', 
+      render: (item: Payment) => <div style={{ minWidth: '90px', fontSize: '11px', textAlign: 'right' }}>Rp {item.amount.toLocaleString('id-ID')}</div>
+    },
+    { 
+      key: 'paymentMethod', 
+      header: 'Method',
+      render: (item: Payment) => <div style={{ minWidth: '60px', fontSize: '11px' }}>{item.paymentMethod}</div>
+    },
+    { 
+      key: 'actions', 
+      header: 'Actions', 
+      render: (item: Payment) => (
+        <div style={{ display: 'flex', gap: '4px', minWidth: '90px' }}>
+          <Button onClick={() => { 
+            setEditingPayment(item); 
+            setAmountInputValue('');
+            setFormData(item); 
+            const debitAccount = (item as any).debitAccount || '';
+            const creditAccount = (item as any).creditAccount || '';
+            // Ensure accounts is always an array
+            const accountsArray = Array.isArray(accounts) ? accounts : [];
+            if (debitAccount) {
+              const account = accountsArray.find(a => a.code === debitAccount);
+              setDebitAccountInputValue(account ? `${account.code} - ${account.name}` : debitAccount);
+            } else {
+              setDebitAccountInputValue('');
+            }
+            if (creditAccount) {
+              const account = accountsArray.find(a => a.code === creditAccount);
+              setCreditAccountInputValue(account ? `${account.code} - ${account.name}` : creditAccount);
+            } else {
+              setCreditAccountInputValue('');
+            }
+            setShowForm(true); 
+          }} variant="secondary" style={{ fontSize: '10px', padding: '3px 6px', minWidth: 'auto' }}>
+            Edit
+          </Button>
+          <Button variant="danger" onClick={() => {
+            showConfirm(
+              'Delete this payment?',
+              async () => {
+                try {
+                  // Hard delete - langsung hapus dari array
+                  const paymentsArray = Array.isArray(payments) ? payments : [];
+                  const updated = paymentsArray.filter(p => p.id !== item.id);
+                  await storageService.set(StorageKeys.GENERAL_TRADING.PAYMENTS, updated);
+                  setPayments(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
+                  closeDialog();
+                  showAlert('Payment deleted successfully', 'Success');
+                } catch (error: any) {
+                  closeDialog();
+                  showAlert(`Error deleting payment: ${error.message}`, 'Error');
+                }
+              },
+              () => closeDialog(),
+              'Delete Confirmation'
+            );
+          }} style={{ fontSize: '10px', padding: '3px 6px', minWidth: 'auto' }}>
+            Del
+          </Button>
+        </div>
+      )
+    },
   ];
 
   return (
-    <div className="module-compact">
-      <Card>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '12px', flexWrap: 'wrap' }}>
-          <h2>Payments</h2>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <Input
-              type="text"
-              placeholder="Search payments..."
-              value={searchQuery}
-              onChange={(value) => setSearchQuery(value)}
-            />
+    <div className="module-compact" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', minHeight: '600px', overflow: 'hidden' }}>
+      <Card style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: '16px', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', gap: '12px', flexWrap: 'wrap', flexShrink: 0 }}>
+            <h2 style={{ margin: 0 }}>Payments</h2>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ marginBottom: 0, display: 'flex', alignItems: 'center', flex: '1 1 200px', minWidth: '150px' }}>
+                <Input
+                  type="text"
+                  placeholder="Search payments..."
+                  value={searchQuery}
+                  onChange={(value) => setSearchQuery(value)}
+                />
+              </div>
+              <div style={{ flex: '1 1 400px', minWidth: '300px' }}>
+                <DateRangeFilter
+                  onDateChange={(from, to) => {
+                    setDateFrom(from);
+                    setDateTo(to);
+                  }}
+                  defaultFrom={dateFrom}
+                  defaultTo={dateTo}
+                />
+              </div>
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
@@ -970,29 +1041,37 @@ const Payments = () => {
               <option value="all">All Types</option>
               <option value="Receipt">Receipt</option>
               <option value="Payment">Payment</option>
+              <option value="General">General</option>
+              <option value="PettyCash">Petty Cash</option>
             </select>
-            <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
-            <Button variant="secondary" onClick={handleDownloadTemplate}>📋 Download Template</Button>
-            <Button variant="secondary" onClick={handleImportExcel}>📤 Import Excel</Button>
             {pendingFinanceNotifications.length > 0 && (
               <NotificationBell
-                notifications={financeNotifications}
+                notifications={pendingFinanceNotifications.map((notif: any) => ({
+                  id: notif.id,
+                  title: `PO ${notif.poNo || '-'}`,
+                  message: `Supplier: ${notif.supplier || '-'} | Total: Rp ${(notif.total || 0).toLocaleString('id-ID')}`,
+                  notif: notif,
+                }))}
                 onNotificationClick={(notification) => {
                   if (notification.notif) {
                     handleLoadNotificationToForm(notification.notif);
                   }
                 }}
-                icon="💰"
-                emptyMessage="Tidak ada pending supplier payments"
+                icon="🔔"
+                emptyMessage="Tidak ada notifikasi payment"
               />
             )}
+            <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
+            <Button variant="secondary" onClick={handleDownloadTemplate}>📋 Download Template</Button>
+            <Button variant="secondary" onClick={handleImportExcel}>📤 Import Excel</Button>
             <Button onClick={() => { 
               setShowForm(true); 
               setEditingPayment(null); 
-              setAmountInputValue('');
-              setDebitAccountInputValue('');
-              setCreditAccountInputValue('');
-              setFormData({ paymentDate: new Date().toISOString().split('T')[0], amount: 0, paymentMethod: 'Bank Transfer', debitAccount: '', creditAccount: '' }); 
+              setAmountInputValue(''); 
+              setDebitAccountInputValue(''); 
+              setCreditAccountInputValue(''); 
+              setTaxPercentInputValue('');
+              setFormData({ paymentDate: new Date().toISOString().split('T')[0], amount: 0, tax: 0, taxPercent: 11, paymentMethod: 'Bank Transfer', debitAccount: '', creditAccount: '' }); 
             }}>
               + New Payment
             </Button>
@@ -1000,9 +1079,94 @@ const Payments = () => {
         </div>
 
         {/* Notifications - HIDDEN, menggunakan NotificationBell di header */}
+        {false && pendingFinanceNotifications.length > 0 && (
+          <div style={{ 
+            marginBottom: '16px', 
+            padding: '10px 12px', 
+            backgroundColor: document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(0, 170, 85, 0.1)' : 'rgba(76, 175, 80, 0.15)',
+            border: `1px solid ${document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(0, 170, 85, 0.3)' : 'rgba(76, 175, 80, 0.35)'}`,
+            borderRadius: '6px',
+            color: document.documentElement.getAttribute('data-theme') === 'light' ? 'var(--text-primary)' : '#d7f2d9',
+            fontSize: '12px',
+            lineHeight: 1.3
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span role="img" aria-label="bell">🔔</span>
+                <span style={{ fontWeight: 600, color: document.documentElement.getAttribute('data-theme') === 'light' ? 'var(--text-primary)' : '#c8e6c9', fontSize: '13px' }}>
+                  Pending Supplier Payments ({pendingFinanceNotifications.length})
+                </span>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={() => setShowNotifications(false)}
+                style={{ 
+                  padding: '4px 8px', 
+                  fontSize: '11px', 
+                  backgroundColor: document.documentElement.getAttribute('data-theme') === 'light' ? '#ffffff' : '#ffffff', 
+                  color: document.documentElement.getAttribute('data-theme') === 'light' ? '#1a1a1a' : '#1b1b1b', 
+                  border: 'none' 
+                }}
+              >
+                Hide
+              </Button>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {pendingFinanceNotifications.map((notif: any) => (
+                <div 
+                  key={notif.id} 
+                  style={{ 
+                    flex: '0 1 220px',
+                    minWidth: '180px',
+                    maxWidth: '240px',
+                    backgroundColor: document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.08)',
+                    border: `1px solid ${document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.12)'}`,
+                    borderRadius: '5px',
+                    padding: '8px',
+                    fontSize: '11px',
+                    color: document.documentElement.getAttribute('data-theme') === 'light' ? 'var(--text-primary)' : '#e8f5e9',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.15)'
+                  }}
+                >
+                  <div style={{ fontWeight: 600, marginBottom: '2px', fontSize: '12px' }}>
+                    PO {notif.poNo || '-'}
+                  </div>
+                  <div>Supplier: {notif.supplier || '-'}</div>
+                  <div>Material: {notif.materialItem || '-'}</div>
+                  <div>Qty: {notif.qty || 0}</div>
+                  <div>Total: Rp {(notif.total || 0).toLocaleString('id-ID')}</div>
+                  <div>Receipt: {notif.receivedDate || '-'}</div>
+                  {notif.purchaseReason && (
+                    <div style={{ fontStyle: 'italic', color: document.documentElement.getAttribute('data-theme') === 'light' ? 'var(--text-secondary)' : '#cde6ce' }}>Reason: {notif.purchaseReason}</div>
+                  )}
+                  {notif.grnNo && <div>GRN: {notif.grnNo}</div>}
+                  {notif.invoiceNo && <div style={{ fontWeight: 600, color: '#4caf50' }}>Invoice: {notif.invoiceNo}</div>}
+                  {notif.invoiceFileName && <div style={{ fontSize: '10px', color: '#81c784' }}>📄 {notif.invoiceFileName}</div>}
+                  {notif.suratJalanName && <div>SJ: {notif.suratJalanName}</div>}
+                  <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                    {notif.invoiceFile && (
+                      <Button variant="secondary" onClick={() => handleViewNotificationInvoice(notif)} style={{ fontSize: '10px', padding: '3px 6px', backgroundColor: '#4caf50', color: 'white' }}>
+                        📄 View Invoice
+                      </Button>
+                    )}
+                    {notif.suratJalan && (
+                      <Button variant="secondary" onClick={() => handleViewNotificationSJ(notif)} style={{ fontSize: '10px', padding: '3px 6px' }}>
+                        View SJ
+                      </Button>
+                    )}
+                    <Button variant="primary" onClick={() => handleLoadNotificationToForm(notif)} style={{ fontSize: '10px', padding: '3px 6px' }}>
+                      Load Form
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          )}
 
-        <div style={{ minHeight: '400px' }}>
-          <Table columns={columns} data={filteredPayments} />
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                <Table columns={columns} data={filteredPayments} />
+          </div>
         </div>
       </Card>
 
@@ -1112,34 +1276,8 @@ const Payments = () => {
                   ))}
                 </datalist>
               </div>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-                  Load from Invoice (Optional)
-                </label>
-                <select
-                  onChange={(e) => handleLoadFromInvoice(e.target.value)}
-                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid var(--border)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
-                >
-                  <option value="">Select Invoice (Optional)...</option>
-                  {invoices.map(inv => (
-                    <option key={inv.id} value={inv.invoiceNo}>{inv.invoiceNo} - {inv.customer} (Balance: Rp {inv.balance.toLocaleString('id-ID')})</option>
-                  ))}
-                </select>
-              </div>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-                  Load from Purchase Order (Optional)
-                </label>
-                <select
-                  onChange={(e) => handleLoadFromPO(e.target.value)}
-                  style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid var(--border)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
-                >
-                  <option value="">Select Purchase Order (Optional)...</option>
-                  {purchaseOrders.map(po => (
-                    <option key={po.id} value={po.poNo}>{po.poNo} - {po.supplier}</option>
-                  ))}
-                </select>
-              </div>
+
+
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
                   Amount
@@ -1171,7 +1309,10 @@ const Payments = () => {
                     val = val.replace(/[^\d.,]/g, '');
                     const cleaned = removeLeadingZero(val);
                     setAmountInputValue(cleaned);
-                    setFormData({ ...formData, amount: cleaned === '' ? 0 : Number(cleaned) || 0 });
+                    const amount = cleaned === '' ? 0 : Number(cleaned) || 0;
+                    const taxPercent = formData.taxPercent || 11;
+                    const taxAmount = calculateTaxAmount(amount, taxPercent);
+                    setFormData({ ...formData, amount: amount, tax: taxAmount });
                   }}
                   onBlur={(e) => {
                     const val = e.target.value;
@@ -1206,6 +1347,61 @@ const Payments = () => {
                   }}
                 />
               </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  Tax % (Default 11%)
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={taxPercentInputValue !== undefined && taxPercentInputValue !== '' ? taxPercentInputValue : (formData.taxPercent !== undefined && formData.taxPercent !== null && formData.taxPercent !== 0 ? String(formData.taxPercent) : '11')}
+                  onChange={(e) => {
+                    let val = e.target.value;
+                    val = val.replace(/[^\d.,]/g, '');
+                    setTaxPercentInputValue(val);
+                    const percent = val === '' ? 11 : Number(val) || 11;
+                    const amount = formData.amount || 0;
+                    const taxAmount = calculateTaxAmount(amount, percent);
+                    setFormData({ ...formData, taxPercent: percent, tax: taxAmount });
+                  }}
+                  onBlur={(e) => {
+                    const val = e.target.value;
+                    const percent = val === '' || isNaN(Number(val)) || Number(val) < 0 ? 11 : Number(val);
+                    const amount = formData.amount || 0;
+                    const taxAmount = calculateTaxAmount(amount, percent);
+                    setFormData({ ...formData, taxPercent: percent, tax: taxAmount });
+                    setTaxPercentInputValue('');
+                  }}
+                  placeholder="11"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  Tax Amount (Auto-calculated)
+                </label>
+                <div style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  backgroundColor: 'var(--bg-secondary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '14px',
+                }}>
+                  Rp {(formData.tax || 0).toLocaleString('id-ID')}
+                </div>
+              </div>
               <div>
                 <label>Payment Method</label>
                 <select
@@ -1219,6 +1415,18 @@ const Payments = () => {
                   <option value="Credit Card">Credit Card</option>
                 </select>
               </div>
+              <Input
+                label="Invoice No"
+                value={formData.invoiceNo || ''}
+                onChange={(value) => setFormData({ ...formData, invoiceNo: value })}
+                placeholder="Auto-filled from invoice lookup"
+              />
+              <Input
+                label="Customer Name"
+                value={formData.customerName || ''}
+                onChange={(value) => setFormData({ ...formData, customerName: value })}
+                placeholder="Auto-filled from invoice lookup"
+              />
               <Input
                 label="Reference"
                 value={formData.reference || ''}
@@ -1237,7 +1445,8 @@ const Payments = () => {
                   setAmountInputValue('');
                   setDebitAccountInputValue('');
                   setCreditAccountInputValue('');
-                  setFormData({ paymentDate: new Date().toISOString().split('T')[0], amount: 0, paymentMethod: 'Bank Transfer', debitAccount: '', creditAccount: '' });
+                  setTaxPercentInputValue('');
+                  setFormData({ paymentDate: new Date().toISOString().split('T')[0], amount: 0, tax: 0, taxPercent: 11, paymentMethod: 'Bank Transfer', debitAccount: '', creditAccount: '' });
                 }}>
                   Cancel
                 </Button>

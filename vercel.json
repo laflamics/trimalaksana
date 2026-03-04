@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/blob/download/:business/:fileId",
+      "destination": "/api/blob/download?business=:business&fileId=:fileId"
+    }
+  ]
+}

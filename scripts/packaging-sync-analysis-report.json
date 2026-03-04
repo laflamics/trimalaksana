@@ -1,0 +1,77 @@
+{
+  "timestamp": "2026-02-07T22:09:49.817Z",
+  "summary": {
+    "totalFiles": 12,
+    "missingFiles": 1,
+    "emptyFiles": 4,
+    "timestampIssues": 5,
+    "dataIntegrityIssues": 0
+  },
+  "issues": [
+    {
+      "type": "MISSING_FILE",
+      "module": "deliveryNotes",
+      "severity": "HIGH",
+      "description": "File data/localStorage/Packaging/deliveryNotes.json does not exist"
+    },
+    {
+      "type": "EMPTY_FILE",
+      "module": "grn",
+      "severity": "MEDIUM",
+      "description": "File data/localStorage/Packaging/grn.json has no data"
+    },
+    {
+      "type": "EMPTY_FILE",
+      "module": "production",
+      "severity": "MEDIUM",
+      "description": "File data/localStorage/Packaging/production.json has no data"
+    },
+    {
+      "type": "EMPTY_FILE",
+      "module": "qc",
+      "severity": "MEDIUM",
+      "description": "File data/localStorage/Packaging/qc.json has no data"
+    },
+    {
+      "type": "EMPTY_FILE",
+      "module": "spk",
+      "severity": "MEDIUM",
+      "description": "File data/localStorage/Packaging/spk.json has no data"
+    },
+    {
+      "type": "TIMESTAMP_ISSUE",
+      "module": "invoices",
+      "severity": "MEDIUM",
+      "count": 245,
+      "description": "Timestamp inconsistencies found"
+    },
+    {
+      "type": "TIMESTAMP_ISSUE",
+      "module": "customers",
+      "severity": "MEDIUM",
+      "count": 496,
+      "description": "Timestamp inconsistencies found"
+    },
+    {
+      "type": "TIMESTAMP_ISSUE",
+      "module": "products",
+      "severity": "MEDIUM",
+      "count": 11060,
+      "description": "Timestamp inconsistencies found"
+    },
+    {
+      "type": "TIMESTAMP_ISSUE",
+      "module": "payments",
+      "severity": "MEDIUM",
+      "count": 44,
+      "description": "Timestamp inconsistencies found"
+    },
+    {
+      "type": "TIMESTAMP_ISSUE",
+      "module": "inventory",
+      "severity": "MEDIUM",
+      "count": 700,
+      "description": "Timestamp inconsistencies found"
+    }
+  ]
+}

@@ -3,8 +3,9 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService, extractStorageValue } from '../../../services/storage';
+import { storageService, extractStorageValue, StorageKeys } from '../../../services/storage';
 import { deleteTruckingItem, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { setupRealTimeSync, TRUCKING_SYNC_KEYS } from '../../../utils/real-time-sync-helper';
 import { useDialog } from '../../../hooks/useDialog';
 import '../../../styles/common.css';
 import '../../../styles/compact.css';
@@ -67,17 +68,94 @@ const Vehicles = () => {
   useEffect(() => {
     loadVehicles();
     loadDrivers();
+    
+    // Real-time listener untuk server updates
+    const cleanup = setupRealTimeSync({
+      keys: [TRUCKING_SYNC_KEYS.VEHICLES, TRUCKING_SYNC_KEYS.DRIVERS],
+      onUpdate: () => {
+        loadVehicles();
+        loadDrivers();
+      },
+    });
+    
+    return cleanup;
   }, []);
 
   const loadVehicles = async () => {
-    const data = await storageService.get<Vehicle[]>('trucking_vehicles') || [];
-    const activeVehicles = filterActiveItems(data);
+    console.log('[Trucking Vehicles] Loading vehicles...');
+    let dataRaw = await storageService.get<Vehicle[]>(StorageKeys.TRUCKING.VEHICLES);
+    console.log('[Trucking Vehicles] Raw data from storage:', dataRaw);
+    
+    // If undefined or empty, try force fetch from server
+    if (!dataRaw || (Array.isArray(dataRaw) && dataRaw.length === 0)) {
+      console.log('[Trucking Vehicles] No data in storage, trying force fetch from server...');
+      try {
+        const config = storageService.getConfig();
+        if (config.type === 'server' && config.serverUrl) {
+          const response = await fetch(`${config.serverUrl}/api/storage/${encodeURIComponent(StorageKeys.TRUCKING.VEHICLES)}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            const serverData = result.data?.value || result.value || [];
+            if (Array.isArray(serverData) && serverData.length > 0) {
+              console.log(`[Trucking Vehicles] Force fetch successful: ${serverData.length} vehicles from server`);
+              dataRaw = serverData;
+              await storageService.set(StorageKeys.TRUCKING.VEHICLES, serverData);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[Trucking Vehicles] Force fetch failed:', error);
+      }
+    }
+    
+    if (!Array.isArray(dataRaw)) {
+      dataRaw = [];
+    }
+    
+    const activeVehicles = filterActiveItems(dataRaw);
     setVehicles(activeVehicles.map((v, idx) => ({ ...v, no: idx + 1 })));
   };
 
   const loadDrivers = async () => {
-    const data = await storageService.get<any[]>('trucking_drivers') || [];
-    setDrivers(data);
+    console.log('[Trucking Drivers] Loading drivers...');
+    let dataRaw = await storageService.get<any[]>(StorageKeys.TRUCKING.DRIVERS);
+    console.log('[Trucking Drivers] Raw data from storage:', dataRaw);
+    
+    // If undefined or empty, try force fetch from server
+    if (!dataRaw || (Array.isArray(dataRaw) && dataRaw.length === 0)) {
+      console.log('[Trucking Drivers] No data in storage, trying force fetch from server...');
+      try {
+        const config = storageService.getConfig();
+        if (config.type === 'server' && config.serverUrl) {
+          const response = await fetch(`${config.serverUrl}/api/storage/${encodeURIComponent(StorageKeys.TRUCKING.DRIVERS)}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            const serverData = result.data?.value || result.value || [];
+            if (Array.isArray(serverData) && serverData.length > 0) {
+              console.log(`[Trucking Drivers] Force fetch successful: ${serverData.length} drivers from server`);
+              dataRaw = serverData;
+              await storageService.set(StorageKeys.TRUCKING.DRIVERS, serverData);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[Trucking Drivers] Force fetch failed:', error);
+      }
+    }
+    
+    if (!Array.isArray(dataRaw)) {
+      dataRaw = [];
+    }
+    
+    setDrivers(dataRaw);
   };
 
   const handleSave = async () => {
@@ -93,7 +171,9 @@ const Vehicles = () => {
             ? { ...formData, id: editingItem.id, no: editingItem.no } as Vehicle
             : v
         );
-        await storageService.set('trucking_vehicles', updated);
+        await storageService.set(StorageKeys.TRUCKING.VEHICLES, updated);
+        // Wait untuk memastikan sync ke server selesai
+        await new Promise(resolve => setTimeout(resolve, 500));
         setVehicles(updated.map((v, idx) => ({ ...v, no: idx + 1 })));
       } else {
         const newVehicle: Vehicle = {
@@ -102,7 +182,9 @@ const Vehicles = () => {
           ...formData,
         } as Vehicle;
         const updated = [...vehicles, newVehicle];
-        await storageService.set('trucking_vehicles', updated);
+        await storageService.set(StorageKeys.TRUCKING.VEHICLES, updated);
+        // Wait untuk memastikan sync ke server selesai
+        await new Promise(resolve => setTimeout(resolve, 500));
         setVehicles(updated.map((v, idx) => ({ ...v, no: idx + 1 })));
       }
       setShowForm(false);
@@ -155,11 +237,11 @@ const Vehicles = () => {
         async () => {
           try {
             // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
-            const deleteResult = await deleteTruckingItem('trucking_vehicles', item.id, 'id');
+            const deleteResult = await deleteTruckingItem(StorageKeys.TRUCKING.VEHICLES, item.id, 'id');
             
             if (deleteResult.success) {
               // Reload data dengan helper (handle race condition)
-              const activeVehicles = await reloadTruckingData('trucking_vehicles', setVehicles);
+              const activeVehicles = await reloadTruckingData(StorageKeys.TRUCKING.VEHICLES, setVehicles);
               setVehicles(activeVehicles.map((v, idx) => ({ ...v, no: idx + 1 })));
               showAlert(`✅ Vehicle "${item.vehicleNo}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
             } else {

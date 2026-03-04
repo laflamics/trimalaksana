@@ -1,0 +1,105 @@
+services:
+  # ============================================
+  # EXISTING NODE.JS SERVER (Keep running)
+  # ============================================
+  storage-server:
+    build: .
+    container_name: docker-storage-server-1
+    ports:
+      - "0.0.0.0:9999:8888"
+    volumes:
+      - ../data:/app/data
+      - ../updates:/app/updates
+    environment:
+      - PORT=8888
+      - NODE_ENV=production
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=trimalaksana
+      - DB_PASSWORD=trimalaksana123
+      - DB_NAME=trimalaksana_db
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin123
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_started
+      minio:
+        condition: service_started
+    networks:
+      - trimalaksana-network
+
+  # ============================================
+  # NEW: PostgreSQL Database
+  # ============================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: trimalaksana-postgres
+    environment:
+      POSTGRES_USER: trimalaksana
+      POSTGRES_PASSWORD: trimalaksana123
+      POSTGRES_DB: trimalaksana_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trimalaksana"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: no
+    networks:
+      - trimalaksana-network
+
+  # ============================================
+  # NEW: MinIO (S3-compatible blob storage)
+  # ============================================
+  minio:
+    image: minio/minio:latest
+    container_name: trimalaksana-minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/minio_data
+    command: server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: no
+    networks:
+      - trimalaksana-network
+
+  # ============================================
+  # NEW: pgAdmin (PostgreSQL Management UI)
+  # ============================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: trimalaksana-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@trimalaksana.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5051:80"
+    depends_on:
+      postgres:
+        condition: service_started
+    restart: no
+    networks:
+      - trimalaksana-network
+
+volumes:
+  postgres_data:
+  minio_data:
+
+networks:
+  trimalaksana-network:
+    driver: bridge

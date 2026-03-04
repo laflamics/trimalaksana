@@ -3,9 +3,10 @@ import Card from '../../../components/Card';
 import Table from '../../../components/Table';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
-import { storageService } from '../../../services/storage';
+import { storageService, StorageKeys } from '../../../services/storage';
 import { deleteGTItem, reloadGTData, filterActiveItems } from '../../../utils/gt-delete-helper';
 import { useDialog } from '../../../hooks/useDialog';
+import { useLanguage } from '../../../hooks/useLanguage';
 import * as XLSX from 'xlsx';
 import '../../../styles/common.css';
 
@@ -23,6 +24,7 @@ interface Supplier {
 }
 
 const Suppliers = () => {
+  const { t } = useLanguage();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [showForm, setShowForm] = useState(false);
   // Custom Dialog - menggunakan hook terpusat
@@ -49,7 +51,49 @@ const Suppliers = () => {
 
   const loadSuppliers = async () => {
     console.log('[GT Suppliers] Loading suppliers...');
-    const dataRaw = await storageService.get<Supplier[]>('gt_suppliers') || [];
+    let dataRaw = await storageService.get<Supplier[]>(StorageKeys.GENERAL_TRADING.SUPPLIERS);
+    console.log('[GT Suppliers] Raw data from storage:', dataRaw);
+    
+    // If undefined or empty, try force fetch from server
+    if (!dataRaw || (Array.isArray(dataRaw) && dataRaw.length === 0)) {
+      console.log('[GT Suppliers] No data in storage, trying force fetch from server...');
+      try {
+        const config = storageService.getConfig();
+        console.log('[GT Suppliers] Storage config:', config);
+        
+        if (config.type === 'server' && config.serverUrl) {
+          console.log('[GT Suppliers] Fetching from server:', config.serverUrl);
+          const response = await fetch(`${config.serverUrl}/api/storage/${encodeURIComponent(StorageKeys.GENERAL_TRADING.SUPPLIERS)}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            console.log('[GT Suppliers] Server response:', result);
+            const serverData = result.data?.value || result.value || [];
+            if (Array.isArray(serverData) && serverData.length > 0) {
+              console.log(`[GT Suppliers] Force fetch successful: ${serverData.length} suppliers from server`);
+              dataRaw = serverData;
+              // Save to storage for next time
+              await storageService.set(StorageKeys.GENERAL_TRADING.SUPPLIERS, serverData);
+            }
+          } else {
+            console.error('[GT Suppliers] Server response not ok:', response.status);
+          }
+        } else {
+          console.log('[GT Suppliers] Not in server mode or no serverUrl configured');
+        }
+      } catch (error) {
+        console.error('[GT Suppliers] Force fetch failed:', error);
+      }
+    }
+    
+    // Ensure dataRaw is array
+    if (!Array.isArray(dataRaw)) {
+      dataRaw = [];
+    }
+    
     console.log('[GT Suppliers] Raw data length:', dataRaw.length);
     
     // Filter out deleted items menggunakan helper function
@@ -82,7 +126,7 @@ const Suppliers = () => {
     // Save cleaned data back to storage if duplicates were removed
     if (uniqueData.length < data.length) {
       console.log('[GT Suppliers] Saving cleaned data to storage...');
-      await storageService.set('gt_suppliers', numberedData);
+      await storageService.set(StorageKeys.GENERAL_TRADING.SUPPLIERS, numberedData);
     }
   };
 
@@ -117,7 +161,7 @@ const Suppliers = () => {
               } as Supplier
             : s
         );
-        await storageService.set('gt_suppliers', updated);
+        await storageService.set(StorageKeys.GENERAL_TRADING.SUPPLIERS, updated);
         setSuppliers(updated.map((s, idx) => ({ ...s, no: idx + 1 })));
       } else {
         // Manual add: selalu auto generate kode (ignore kode yang diisi manual)
@@ -133,7 +177,7 @@ const Suppliers = () => {
           kode: autoKode,
         } as Supplier;
         const updated = [...suppliers, newSupplier];
-        await storageService.set('gt_suppliers', updated);
+        await storageService.set(StorageKeys.GENERAL_TRADING.SUPPLIERS, updated);
         setSuppliers(updated.map((s, idx) => ({ ...s, no: idx + 1 })));
       }
       setShowForm(false);
@@ -171,11 +215,11 @@ const Suppliers = () => {
         async () => {
           try {
             // 🚀 FIX: Pakai GT delete helper untuk konsistensi dan sync yang benar
-            const deleteResult = await deleteGTItem('gt_suppliers', item.id, 'id');
+            const deleteResult = await deleteGTItem(StorageKeys.GENERAL_TRADING.SUPPLIERS, item.id, 'id');
             
             if (deleteResult.success) {
               // Reload data dengan helper (handle race condition)
-              const activeSuppliers = await reloadGTData('gt_suppliers', setSuppliers);
+              const activeSuppliers = await reloadGTData(StorageKeys.GENERAL_TRADING.SUPPLIERS, setSuppliers);
               // Re-number suppliers
               setSuppliers(activeSuppliers.map((s, idx) => ({ ...s, no: idx + 1 })));
               showAlert(`✅ Supplier "${item.nama}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
@@ -331,7 +375,7 @@ const Suppliers = () => {
             });
 
             const renumbered = updatedSuppliers.map((s, idx) => ({ ...s, no: idx + 1 }));
-            await storageService.set('gt_suppliers', renumbered);
+            await storageService.set(StorageKeys.GENERAL_TRADING.SUPPLIERS, renumbered);
             setSuppliers(renumbered);
 
             if (errors.length > 0) {
@@ -410,13 +454,33 @@ const Suppliers = () => {
       );
     });
     
-    // Sort berdasarkan kode ID secara natural (SPL-0001, SPL-0002, CTM-068, dst)
+    // Sort by completeness (paling lengkap di atas), then by kode
     const sorted = filtered.sort((a, b) => {
+      // Count filled fields untuk setiap supplier
+      const countFields = (supplier: Supplier): number => {
+        let count = 0;
+        const fields = ['kode', 'nama', 'kontak', 'npwp', 'email', 'telepon', 'alamat', 'kategori'];
+        fields.forEach(field => {
+          const value = supplier[field as keyof Supplier];
+          if (value && value !== '-' && String(value).trim() !== '') {
+            count++;
+          }
+        });
+        return count;
+      };
+      
+      const completenessA = countFields(a);
+      const completenessB = countFields(b);
+      
+      // Sort by completeness descending (paling lengkap di atas)
+      if (completenessA !== completenessB) {
+        return completenessB - completenessA;
+      }
+      
+      // If same completeness, sort by kode naturally
       const kodeA = a.kode || '';
       const kodeB = b.kode || '';
       
-      // Natural sort untuk kode dengan format PREFIX-NUMBER
-      // Contoh: SPL-0001, SPL-0002, CTM-068, dll
       const parseKode = (kode: string) => {
         const match = kode.match(/^([A-Z]+)-?(\d+)$/i);
         if (match) {
@@ -431,7 +495,6 @@ const Suppliers = () => {
       const parsedA = parseKode(kodeA);
       const parsedB = parseKode(kodeB);
       
-      // Sort by prefix first, then by number
       if (parsedA.prefix !== parsedB.prefix) {
         return parsedA.prefix.localeCompare(parsedB.prefix);
       }

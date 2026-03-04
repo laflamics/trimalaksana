@@ -18,13 +18,6 @@ import GTInventory from './pages/GeneralTrading/Master/Inventory';
 
 // General Trading - Orders & Sales
 import GTSalesOrders from './pages/GeneralTrading/SalesOrders';
-// import GTPurchaseOrders from './pages/GeneralTrading/Orders/PurchaseOrders';
-// import GTQuotations from './pages/GeneralTrading/Sales/Quotations';
-// import GTInvoices from './pages/GeneralTrading/Sales/Invoices';
-// import GTStockManagement from './pages/GeneralTrading/Warehouse/StockManagement';
-// import GTReceiving from './pages/GeneralTrading/Warehouse/Receiving';
-// import GTShipping from './pages/GeneralTrading/Warehouse/Shipping';
-// import GTPurchaseRequisition from './pages/GeneralTrading/Purchasing/PurchaseRequisition';
 
 // General Trading - Purchasing
 import GTPurchasing from './pages/GeneralTrading/Purchasing';
@@ -34,22 +27,21 @@ import GTWorkflow from './pages/GeneralTrading/Workflow';
 import GTReturn from './pages/GeneralTrading/Return';
 
 // General Trading - Finance
-import GTGeneralLedger from './pages/GeneralTrading/Finance/GeneralLedger';
 import GTFinancialReports from './pages/GeneralTrading/Finance/FinancialReports';
-import GTAccounting from './pages/GeneralTrading/Finance/Accounting';
 import GTAccountsReceivable from './pages/GeneralTrading/Finance/AccountsReceivable';
 import GTAccountsPayable from './pages/GeneralTrading/Finance/AccountsPayable';
 import GTPayments from './pages/GeneralTrading/Finance/Payments';
 import GTTaxManagement from './pages/GeneralTrading/Finance/TaxManagement';
 import GTCostAnalysis from './pages/GeneralTrading/Finance/CostAnalysis';
 import GTCoa from './pages/GeneralTrading/Finance/COA';
-import GTInvoices from './pages/GeneralTrading/Finance/invoices';
-// Note: COA belum dibuat
-// import GTCOA from './pages/GeneralTrading/Finance/COA';
+import GTOperationalExpenses from './pages/GeneralTrading/Finance/OperationalExpenses';
+import GTAllReportsFinance from './pages/GeneralTrading/Finance/AllReportsFinance';
+import GTinvoices from './pages/GeneralTrading/Finance/Invoices';
 
 // General Trading - Settings
 import GTSettings from './pages/GeneralTrading/Settings/Settings';
 import GTReport from './pages/GeneralTrading/Settings/Report';
+import GTServerData from './pages/GeneralTrading/Settings/ServerData';
 
 // Packaging - Enhanced System
 import GTDBActivity from './pages/GeneralTrading/Settings/DBActivity';
@@ -73,6 +65,8 @@ import Production from './pages/Packaging/Production';
 import QAQC from './pages/Packaging/QAQC';
 import DeliveryNote from './pages/Packaging/DeliveryNote';
 import PackagingReturn from './pages/Packaging/Return';
+import BusinessActivityReport from './pages/Packaging/BusinessActivityReport';
+import ImportBARTestData from './pages/Packaging/ImportBARTestData';
 
 // Finance (Packaging)
 import Finance from './pages/Finance/Finance';
@@ -83,8 +77,10 @@ import PackagingInvoices from './pages/Finance/Accounting'; // Invoice Managemen
 import PackagingAccountsReceivable from './pages/Packaging/Finance/AccountsReceivable';
 import PackagingAccountsPayable from './pages/Packaging/Finance/AccountsPayable';
 import PackagingPayments from './pages/Packaging/Finance/Payments';
+import PackagingOperationalExpenses from './pages/Packaging/Finance/OperationalExpenses';
 import PackagingCostAnalysis from './pages/Packaging/Finance/CostAnalysis';
 import PackagingTaxManagement from './pages/Packaging/Finance/TaxManagement';
+import PackagingAllReportsFinance from './pages/Packaging/Finance/AllReportsFinance';
 import AllBusinessFinancialReports from './pages/Finance/AllBusinessFinancialReports';
 import COA from './pages/Finance/COA';
 
@@ -94,7 +90,10 @@ import HRD from './pages/HR/HRD';
 // Settings
 import Settings from './pages/Settings/Settings';
 import Report from './pages/Settings/Report';
+import FullReports from './pages/Settings/FullReports';
+import FullReportsGT from './pages/GeneralTrading/FullReportsGT';
 import DBActivity from './pages/Settings/DBActivity';
+import ServerData from './pages/Settings/ServerData';
 import TestAutomation from './pages/Settings/TestAutomation';
 import UserControl from './pages/Settings/UserControl';
 
@@ -109,9 +108,7 @@ import TruckingDeliveryOrders from './pages/Trucking/Shipments/DeliveryOrders';
 import TruckingDeliveryNote from './pages/Trucking/Shipments/DeliveryNote';
 
 // Trucking - Finance
-import TruckingGeneralLedger from './pages/Trucking/Finance/GeneralLedger';
 import TruckingFinancialReports from './pages/Trucking/Finance/FinancialReports';
-import TruckingAccounting from './pages/Trucking/Finance/Accounting';
 import TruckingInvoices from './pages/Trucking/Finance/invoices';
 import TruckingAccountsReceivable from './pages/Trucking/Finance/AccountsReceivable';
 import TruckingAccountsPayable from './pages/Trucking/Finance/AccountsPayable';
@@ -120,12 +117,14 @@ import TruckingTaxManagement from './pages/Trucking/Finance/TaxManagement';
 import TruckingCostAnalysis from './pages/Trucking/Finance/CostAnalysis';
 import TruckingCOA from './pages/Trucking/Finance/COA';
 import TruckingPettyCash from './pages/Trucking/Finance/PettyCash';
+import TruckingOperationalExpenses from './pages/Trucking/Finance/OperationalExpenses';
 
-// Trucking - Settings
 // Trucking - Settings
 import TruckingSettings from './pages/Trucking/Settings/Settings';
 import TruckingDBActivity from './pages/Trucking/Settings/DBActivity';
 import TruckingUserControl from './pages/Trucking/Settings/UserControl';
+import ServerDataTrucking from './pages/Trucking/Settings/ServerDataTrucking';
+import FullReportsTrucking from './pages/Trucking/FullReportsTrucking';
 
 function App() {
   console.log('📱 App component rendering...');
@@ -179,6 +178,8 @@ function App() {
                   <Route path="qa-qc" element={<QAQC />} />
                   <Route path="delivery-note" element={<DeliveryNote />} />
                   <Route path="return" element={<PackagingReturn />} />
+                  <Route path="bar" element={<BusinessActivityReport />} />
+                  <Route path="bar/import-test-data" element={<ImportBARTestData />} />
 
                   {/* Finance */}
                   <Route path="finance" element={<Finance />} />
@@ -189,8 +190,10 @@ function App() {
                   <Route path="finance/ar" element={<PackagingAccountsReceivable />} />
                   <Route path="finance/ap" element={<PackagingAccountsPayable />} />
                   <Route path="finance/payments" element={<PackagingPayments />} />
+                  <Route path="finance/operational-expenses" element={<PackagingOperationalExpenses />} />
                   <Route path="finance/tax-management" element={<PackagingTaxManagement />} />
                   <Route path="finance/cost-analysis" element={<PackagingCostAnalysis />} />
+                  <Route path="finance/all-reports" element={<PackagingAllReportsFinance />} />
                   <Route path="finance/all-business-reports" element={<AllBusinessFinancialReports />} />
                   <Route path="finance/coa" element={<COA />} />
 
@@ -200,9 +203,9 @@ function App() {
                   {/* Settings */}
                   <Route path="settings" element={<Settings />} />
                   <Route path="settings/report" element={<Report />} />
-                  <Route path="settings/db-activity" element={<DBActivity />} />
+                  <Route path="settings/full-reports" element={<FullReports />} />
+                  <Route path="settings/server-data" element={<ServerData />} />
                   <Route path="settings/user-control" element={<UserControl />} />
-                  <Route path="settings/test-automation" element={<TestAutomation />} />
 
                   {/* Default redirect untuk packaging - check access first */}
                   <Route path="" element={<DefaultRouteRedirect businessUnit="packaging" defaultRoute="finance/reports" />} />
@@ -243,22 +246,24 @@ function App() {
                   <Route path="workflow" element={<GTWorkflow />} />
 
                   {/* Finance */}
-                  <Route path="finance/ledger" element={<GTGeneralLedger />} />
                   <Route path="finance/reports" element={<GTFinancialReports />} />
-                  <Route path="finance/accounting" element={<GTAccounting />} />
+                  <Route path="finance/invoices" element={<GTinvoices />} />
                   <Route path="finance/ar" element={<GTAccountsReceivable />} />
                   <Route path="finance/ap" element={<GTAccountsPayable />} />
                   <Route path="finance/payments" element={<GTPayments />} />
                   <Route path="finance/tax-management" element={<GTTaxManagement />} />
                   <Route path="finance/cost-analysis" element={<GTCostAnalysis />} />
+                  <Route path="finance/operational-expenses" element={<GTOperationalExpenses />} />
+                  <Route path="finance/all-reports" element={<GTAllReportsFinance />} />
                   <Route path="finance/coa" element={<GTCoa />} />
-                  <Route path="finance/invoices" element={<GTInvoices />} />
 
                   {/* Settings */}
                   <Route path="settings" element={<GTSettings />} />
                   <Route path="settings/report" element={<GTReport />} />
+                  <Route path="settings/full-reports" element={<FullReportsGT />} />
                   <Route path="settings/db-activity" element={<GTDBActivity />} />
                   <Route path="settings/user-control" element={<GTUserControl />} />
+                  <Route path="settings/server-data" element={<GTServerData />} />
                   <Route path="settings/flow-test" element={<GTFlowTest />} />
                   <Route path="settings/complete-flow-test" element={<CompleteFlowTest />} />
 
@@ -291,9 +296,7 @@ function App() {
                   <Route path="shipments/delivery-note" element={<TruckingDeliveryNote />} />
 
                   {/* Finance */}
-                  <Route path="finance/ledger" element={<TruckingGeneralLedger />} />
                   <Route path="finance/reports" element={<TruckingFinancialReports />} />
-                  <Route path="finance/accounting" element={<TruckingAccounting />} />
                   <Route path="finance/invoices" element={<TruckingInvoices />} />
                   <Route path="finance/ar" element={<TruckingAccountsReceivable />} />
                   <Route path="finance/ap" element={<TruckingAccountsPayable />} />
@@ -302,9 +305,13 @@ function App() {
                   <Route path="finance/cost-analysis" element={<TruckingCostAnalysis />} />
                   <Route path="finance/coa" element={<TruckingCOA />} />
                   <Route path="finance/pettycash" element={<TruckingPettyCash />} />
+                  <Route path="finance/operational-expenses" element={<TruckingOperationalExpenses />} />
 
                   {/* Settings */}
                   <Route path="settings" element={<TruckingSettings />} />
+                  <Route path="settings/report" element={<Report />} />
+                  <Route path="settings/full-reports" element={<FullReportsTrucking />} />
+                  <Route path="settings/server-data" element={<ServerDataTrucking />} />
                   <Route path="settings/db-activity" element={<TruckingDBActivity />} />
                   <Route path="settings/user-control" element={<TruckingUserControl />} />
 

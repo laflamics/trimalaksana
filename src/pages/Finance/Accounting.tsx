@@ -3,20 +3,25 @@ import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
+import DateRangeFilter from '../../components/DateRangeFilter';
 import NotificationBell from '../../components/NotificationBell';
-import { storageService } from '../../services/storage';
+import { storageService, StorageKeys } from '../../services/storage';
+import { apiClient } from '../../services/api-client'; // 🚀 FIX: Import API client for server calls
 import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import { generateInvoiceHtml } from '../../pdf/invoice-pdf-template';
+import { generateInvoiceHtmlTestTemplate } from '../../pdf/invoice-pdf-template-test';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
 import { useDialog } from '../../hooks/useDialog';
 import { PageSizeDialog, PageSize } from '../../components/PageSizeDialog';
+import BlobService from '../../services/blob-service';
 import '../../styles/common.css';
 
 // Invoice Action Menu Component (similar to DeliveryActionMenu)
 const InvoiceActionMenu: React.FC<{
   item: any;
   onViewDetail?: () => void;
+  onViewTestTemplate?: () => void;
   onEdit?: () => void;
   onPrint?: () => void;
   onUploadPaymentProof?: () => void;
@@ -26,6 +31,7 @@ const InvoiceActionMenu: React.FC<{
 }> = ({
   item,
   onViewDetail,
+  onViewTestTemplate,
   onEdit,
   onPrint,
   onUploadPaymentProof,
@@ -112,6 +118,26 @@ const InvoiceActionMenu: React.FC<{
               👁️ View
             </button>
           )}
+          {onViewTestTemplate && (
+            <button
+              onClick={() => { onViewTestTemplate(); setShowMenu(false); }}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                fontSize: '11px',
+                borderRadius: '4px',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              🧪 Test View
+            </button>
+          )}
           {onEdit && (
             <button
               onClick={() => { onEdit(); setShowMenu(false); }}
@@ -152,7 +178,7 @@ const InvoiceActionMenu: React.FC<{
               📎 Upload Bukti TF
             </button>
           )}
-          {item.status === 'CLOSE' && item.paymentProof && onViewPaymentProof && (
+          {item.status === 'CLOSE' && item.paymentProofId && onViewPaymentProof && (
             <button
               onClick={() => { onViewPaymentProof(); setShowMenu(false); }}
               style={{
@@ -244,6 +270,7 @@ const Accounting = () => {
   const [expenses, setExpenses] = useState<any[]>([]);
   const [invoiceNotifications, setInvoiceNotifications] = useState<any[]>([]);
   const [viewPdfData, setViewPdfData] = useState<{ html: string; invoiceNo: string } | null>(null);
+  const [viewTestPdfData, setViewTestPdfData] = useState<{ html: string; invoiceNo: string } | null>(null);
   const [showPageSizeDialog, setShowPageSizeDialog] = useState(false);
   const [toast, setToast] = useState<{ message: string; variant: 'success' | 'error' | 'info' } | null>(null);
   const [viewSJData, setViewSJData] = useState<{ signedDocument: string; signedDocumentName: string; sjNo: string } | null>(null);
@@ -259,6 +286,8 @@ const Accounting = () => {
   const [products, setProducts] = useState<any[]>([]);
   const [salesOrders, setSalesOrders] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
   const [showCreateInvoiceDialog, setShowCreateInvoiceDialog] = useState(false);
   
   // Custom Dialog - menggunakan hook terpusat
@@ -280,16 +309,67 @@ const Accounting = () => {
     const interval = setInterval(() => {
       loadData();
     }, 5000);
-    return () => clearInterval(interval);
+
+    // 🚀 CRITICAL FIX: Debounce storage change listener to prevent multiple reloads
+    // Batch ALL storage changes (invoiceNotifications, invoices, journalEntries) into a single reload
+    let storageChangeDebounceTimer: NodeJS.Timeout | null = null;
+    let pendingStorageChanges = new Set<string>();
+    
+    const handleStorageChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ key?: string }>;
+      const key = customEvent.detail?.key || '';
+      
+      // Track changes for keys that affect invoice display
+      if (key === 'invoiceNotifications' || key === 'invoices' || key === 'journalEntries') {
+        pendingStorageChanges.add(key);
+        console.log('[Accounting] 📧 Storage changed:', key, '- pending changes:', Array.from(pendingStorageChanges));
+        
+        // Clear previous timer
+        if (storageChangeDebounceTimer) {
+          clearTimeout(storageChangeDebounceTimer);
+        }
+        
+        // Debounce: wait 500ms before reloading to batch multiple changes
+        storageChangeDebounceTimer = setTimeout(() => {
+          console.log('[Accounting] 📧 Debounce complete - reloading data for changes:', Array.from(pendingStorageChanges));
+          loadData();
+          pendingStorageChanges.clear();
+          storageChangeDebounceTimer = null;
+        }, 500);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('app-storage-changed', handleStorageChange as EventListener);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (storageChangeDebounceTimer) {
+        clearTimeout(storageChangeDebounceTimer);
+      }
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('app-storage-changed', handleStorageChange as EventListener);
+      }
+    };
   }, []);
 
   const loadData = async () => {
-    const inv = await storageService.get<any[]>('invoices') || [];
-    const exp = await storageService.get<any[]>('expenses') || [];
-    const notifs = await storageService.get<any[]>('invoiceNotifications') || [];
-    const cust = await storageService.get<any[]>('customers') || [];
-    const prod = await storageService.get<any[]>('products') || [];
-    const so = await storageService.get<any[]>('salesOrders') || [];
+    let inv = await storageService.get<any[]>('invoices') || [];
+    let exp = await storageService.get<any[]>('expenses') || [];
+    // 🚀 FIX: Read invoice notifications from SERVER, not localStorage
+    // IMPORTANT: Read from 'invoiceNotifications' (created by DeliveryNote), not 'financeNotifications' (created by Purchasing)
+    let notifs: any[] = [];
+    try {
+      const notifData = await apiClient.get('invoiceNotifications');
+      notifs = Array.isArray(notifData) ? notifData : (notifData?.value ? (Array.isArray(notifData.value) ? notifData.value : []) : []);
+    } catch (error) {
+      console.error('[Accounting] Error loading invoice notifications from server:', error);
+      notifs = [];
+    }
+    let cust = await storageService.get<any[]>('customers') || [];
+    let prod = await storageService.get<any[]>('products') || [];
+    let so = await storageService.get<any[]>('salesOrders') || [];
     
     // 🚀 FIX: CRITICAL - Filter deleted items sebelum set ke state
     // Ini prevent data yang sudah di-delete muncul lagi setelah sync
@@ -336,7 +416,7 @@ const Accounting = () => {
     
     // Update notifications di storage (cleanup yang sudah tidak relevan)
     if (JSON.stringify(cleanedNotifs) !== JSON.stringify(notifsArray)) {
-      await storageService.set('invoiceNotifications', cleanedNotifs);
+      await storageService.set(StorageKeys.PACKAGING.INVOICE_NOTIFICATIONS, cleanedNotifs);
       console.log(`🧹 Cleaned up ${notifsArray.length - cleanedNotifs.length} obsolete invoice notifications`);
     }
     
@@ -354,6 +434,57 @@ const Accounting = () => {
     setCustomers(activeCustomers);
     setProducts(activeProducts);
     setSalesOrders(activeSalesOrders);
+  };
+
+  // 🚀 FIX: Partial load untuk avoid flicker saat notification di-klik
+  // Hanya reload invoices dan notifications, jangan reload customers/products/salesOrders
+  const loadDataPartial = async () => {
+    try {
+      let inv = await storageService.get<any[]>('invoices') || [];
+      let notifs: any[] = [];
+      try {
+        const notifData = await apiClient.get('invoiceNotifications');
+        notifs = Array.isArray(notifData) ? notifData : (notifData?.value ? (Array.isArray(notifData.value) ? notifData.value : []) : []);
+      } catch (error) {
+        console.error('[Accounting] Error loading invoice notifications:', error);
+        notifs = [];
+      }
+
+      const { filterActiveItems } = await import('../../utils/packaging-delete-helper');
+      const activeInvoices = filterActiveItems(Array.isArray(inv) ? inv : []);
+
+      // Update invoices
+      setInvoices((prev: any[]) => {
+        if (JSON.stringify(prev) === JSON.stringify(activeInvoices)) {
+          return prev;
+        }
+        return activeInvoices;
+      });
+
+      // Update notifications
+      const notifsArray = Array.isArray(notifs) ? notifs : [];
+      const invArray = activeInvoices;
+      const cleanedNotifs = notifsArray.filter((n: any) => {
+        const existingInvoice = invArray.find((i: any) => i.soNo === n.soNo && i.sjNo === n.sjNo);
+        if (existingInvoice) {
+          return false;
+        }
+        if (n.status === 'PROCESSED') {
+          return false;
+        }
+        return true;
+      });
+
+      const pendingNotifs = cleanedNotifs.filter((n: any) => n.status === 'PENDING');
+      setInvoiceNotifications((prev: any[]) => {
+        if (JSON.stringify(prev) === JSON.stringify(pendingNotifs)) {
+          return prev;
+        }
+        return pendingNotifs;
+      });
+    } catch (error) {
+      console.error('[Accounting] Error in loadDataPartial:', error);
+    }
   };
 
   // Calculate COGS (Cost of Goods Sold) dari BOM + PO price
@@ -443,7 +574,7 @@ const Accounting = () => {
     // Ensure deliveryList is always an array
     const deliveryListArray = Array.isArray(deliveryList) ? deliveryList : [];
     const delivery = deliveryListArray.find((d: any) => 
-      d.soNo === item.soNo && (d.status === 'OPEN' || d.status === 'CLOSE')
+    d.soNo === item.soNo && (d.status === 'OPEN' || d.status === 'CLOSE')
     );
     
     if (!delivery) {
@@ -601,10 +732,10 @@ const Accounting = () => {
           subtotal: subtotal,
           discount: 0,
           discountPercent: 0,
-          tax: 0,
-          taxPercent: 0,
+          tax: Math.ceil(subtotal * 0.11),
+          taxPercent: 11,
           biayaLain: 0,
-          total: subtotal,
+          total: subtotal + Math.ceil(subtotal * 0.11),
           paymentTerms: so.paymentTerms || 'TOP',
           poData: {
             topDays: so.topDays || 30,
@@ -621,7 +752,7 @@ const Accounting = () => {
       
       // invoicesArray already declared above at line 370
       const updated = [...invoicesArray, newInvoice];
-      await storageService.set('invoices', updated);
+      await storageService.set(StorageKeys.PACKAGING.INVOICES, updated);
       setInvoices(updated);
 
       // Auto-create journal entries untuk General Ledger
@@ -650,7 +781,7 @@ const Accounting = () => {
             { code: '6100', name: 'Administrative Expenses', type: 'Expense', balance: 0 },
             { code: '6200', name: 'Financial Expenses', type: 'Expense', balance: 0 },
           ];
-          await storageService.set('accounts', defaultAccounts);
+          await storageService.set(StorageKeys.PACKAGING.ACCOUNTS, defaultAccounts);
         }
         
         const entryDate = newInvoice.created ? new Date(newInvoice.created).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
@@ -702,7 +833,7 @@ const Accounting = () => {
             id: `${Date.now()}-${idx + 1}`,
             no: baseLength + idx + 1,
           }));
-          await storageService.set('journalEntries', [...journalEntriesArray, ...entriesWithNo]);
+          await storageService.set(StorageKeys.PACKAGING.JOURNAL_ENTRIES, [...journalEntriesArray, ...entriesWithNo]);
         }
 
         // Auto-create COGS journal entry (Debit COGS, Credit Inventory)
@@ -715,8 +846,12 @@ const Accounting = () => {
             const cogsAccount = accountsArray.find((a: any) => a.code === '5000') || { code: '5000', name: 'Cost of Goods Sold' };
             const inventoryAccount = accountsArray.find((a: any) => a.code === '1200') || { code: '1200', name: 'Inventory' };
             
+            // 🚀 FIX: Re-fetch journalEntries to ensure it's fresh and is an array
+            const currentEntries = await storageService.get<any[]>('journalEntries') || [];
+            const currentEntriesArray = Array.isArray(currentEntries) ? currentEntries : [];
+            
             // Cek apakah sudah ada COGS entry untuk invoice ini (prevent duplicate)
-            const hasCOGSEntry = journalEntries.some((entry: any) =>
+            const hasCOGSEntry = currentEntriesArray.some((entry: any) =>
               entry.reference === invoiceNo &&
               entry.account === '5000'
             );
@@ -743,15 +878,14 @@ const Accounting = () => {
                 },
               ];
 
-              const currentEntries = await storageService.get<any[]>('journalEntries') || [];
-              const baseLength = currentEntries.length;
+              const baseLength = currentEntriesArray.length;
               const cogsEntriesWithNo = cogsEntries.map((entry, idx) => ({
                 ...entry,
                 id: `${Date.now()}-cogs-${idx + 1}`,
                 no: baseLength + idx + 1,
               }));
 
-              await storageService.set('journalEntries', [...currentEntries, ...cogsEntriesWithNo]);
+              await storageService.set(StorageKeys.PACKAGING.JOURNAL_ENTRIES, [...currentEntriesArray, ...cogsEntriesWithNo]);
               console.log(`✅ COGS journal entries created for Invoice ${invoiceNo}: COGS +${cogsAmount}, Inventory -${cogsAmount}`);
             }
           }
@@ -770,7 +904,7 @@ const Accounting = () => {
         const updatedNotifs = invoiceNotificationsArray.map((n: any) =>
           n.id === notif.id ? { ...n, status: 'PROCESSED' } : n
         );
-        await storageService.set('invoiceNotifications', updatedNotifs);
+        await storageService.set(StorageKeys.PACKAGING.INVOICE_NOTIFICATIONS, updatedNotifs);
         setInvoiceNotifications(updatedNotifs.filter((n: any) => n.status === 'PENDING'));
       }
 
@@ -780,7 +914,7 @@ const Accounting = () => {
         : `\n⚠️ COGS tidak dapat dihitung (BOM tidak ditemukan atau material cost tidak tersedia)`;
       
       showAlert(`✅ Invoice created: ${invoiceNo}\n\nFrom Delivery: ${delivery.sjNo}\n✅ AR + Revenue journal entries created${cogsMessage}`, 'Success');
-      await loadData();
+      await loadDataPartial(); // 🚀 FIX: Use partial load to avoid flicker
     } catch (error: any) {
       showAlert(`Error creating invoice: ${error.message}`, 'Error');
     }
@@ -900,7 +1034,7 @@ const Accounting = () => {
       };
       
       const updated = [...invoicesArray, newInvoice];
-      await storageService.set('invoices', updated);
+      await storageService.set(StorageKeys.PACKAGING.INVOICES, updated);
       setInvoices(updated);
 
       // Auto-create journal entries
@@ -941,7 +1075,7 @@ const Accounting = () => {
             },
           ];
           
-          await storageService.set('journalEntries', [...currentEntries, ...newEntries]);
+          await storageService.set(StorageKeys.PACKAGING.JOURNAL_ENTRIES, [...currentEntries, ...newEntries]);
           console.log(`✅ Journal entries created for Invoice ${invoiceNo}`);
         }
       } catch (error: any) {
@@ -993,7 +1127,7 @@ const Accounting = () => {
                   no: baseLength + idx + 1,
                 }));
                 
-                await storageService.set('journalEntries', [...currentEntries, ...cogsEntriesWithNo]);
+                await storageService.set(StorageKeys.PACKAGING.JOURNAL_ENTRIES, [...currentEntries, ...cogsEntriesWithNo]);
                 console.log(`✅ COGS journal entries created for Invoice ${invoiceNo}: COGS +${cogsAmount}, Inventory -${cogsAmount}`);
               }
             }
@@ -1005,7 +1139,7 @@ const Accounting = () => {
       }
 
       showAlert(`✅ Invoice created: ${invoiceNo}\n\nCustomer: ${manualData.customer}\n✅ AR + Revenue journal entries created`, 'Success');
-      await loadData();
+      await loadDataPartial(); // 🚀 FIX: Use partial load to avoid flicker
     } catch (error: any) {
       showAlert(`Error creating invoice: ${error.message}`, 'Error');
     }
@@ -1020,88 +1154,53 @@ const Accounting = () => {
   };
 
   const handleViewPaymentProof = (item: any) => {
-    if (!item.paymentProof) {
+    if (!item.paymentProofId) {
       showAlert(`Bukti transfer untuk Invoice ${item.invoiceNo} belum di-upload`, 'Warning');
       return;
     }
 
-    const paymentProof = item.paymentProof;
+    const paymentProofId = item.paymentProofId;
     const fileName = item.paymentProofName || 'Bukti Transfer';
     
-    // Deteksi tipe file
-    const isPDF = fileName.toLowerCase().endsWith('.pdf') || 
-                  paymentProof.startsWith('data:application/pdf') ||
-                  (paymentProof.length > 100 && paymentProof.substring(0, 100).includes('JVBERi0'));
-    
-    // Normalize data URI format
-    let normalizedProof = paymentProof;
-    if (!normalizedProof.startsWith('data:')) {
-      if (isPDF) {
-        normalizedProof = `data:application/pdf;base64,${normalizedProof}`;
-      } else {
-        normalizedProof = `data:image/jpeg;base64,${normalizedProof}`;
-      }
+    if (!paymentProofId) {
+      showAlert('Tidak ada bukti transfer yang diupload', 'Information');
+      return;
     }
 
-    // Untuk PDF, langsung download
-    if (isPDF) {
-      handleDownloadPaymentProof(normalizedProof, fileName);
-    } else {
-      // Untuk image, buka di modal viewer
-      setSignatureViewer({
-        data: normalizedProof,
-        fileName: fileName,
-        isPDF: false
-      });
+    try {
+      // Use MinIO URL directly
+      const url = BlobService.getDownloadUrl(paymentProofId, 'packaging');
+      
+      // Deteksi tipe file
+      const isPDF = fileName.toLowerCase().endsWith('.pdf');
+      
+      if (isPDF) {
+        // Download PDF
+        BlobService.downloadFile(paymentProofId, fileName, 'packaging');
+      } else {
+        // View image
+        setSignatureViewer({
+          data: url,
+          fileName: fileName,
+          isPDF: false
+        });
+      }
+    } catch (error: any) {
+      showAlert(`Error viewing file: ${error.message}`, 'Error');
     }
   };
 
-  const handleDownloadPaymentProof = (paymentProof: string, fileName: string) => {
+  const handleDownloadPaymentProof = (url: string, fileName: string) => {
     try {
-      // Extract base64 data
-      let base64Data = paymentProof;
-      let mimeType = 'image/jpeg';
-      
-      if (base64Data.includes(',')) {
-        const parts = base64Data.split(',');
-        base64Data = parts[1] || '';
-        const mimeMatch = parts[0].match(/data:([^;]+)/);
-        if (mimeMatch) {
-          mimeType = mimeMatch[1];
-        }
-      }
-
-      // Convert base64 to blob
-      const byteCharacters = atob(base64Data);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: mimeType });
-      
-      // Create download link
-      const url = URL.createObjectURL(blob);
+      // Download from MinIO URL
       const link = document.createElement('a');
       link.href = url;
-      
-      // Determine file extension
-      let extension = 'png';
-      if (mimeType.includes('pdf')) {
-        extension = 'pdf';
-      } else if (mimeType.includes('jpeg') || mimeType.includes('jpg')) {
-        extension = 'jpg';
-      } else if (mimeType.includes('png')) {
-        extension = 'png';
-      }
-      
-      link.download = fileName || `PaymentProof.${extension}`;
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
     } catch (error: any) {
-      showAlert('Error', `Error downloading document: ${error.message}`);
+      showAlert(`Error downloading file: ${error.message}`, 'Error');
     }
   };
 
@@ -1129,12 +1228,38 @@ const Accounting = () => {
     // Ensure products is always an array
     const productsArray = Array.isArray(products) ? products : [];
     
-    const itemLinesArray = Array.isArray(item.lines) ? item.lines : [];
+    // 🚀 FALLBACK: Transform item.items (server format) ke item.lines (template format)
+    let itemLinesArray = Array.isArray(item.lines) ? item.lines : [];
+    if (itemLinesArray.length === 0 && Array.isArray(item.items) && item.items.length > 0) {
+      console.log('[Accounting] 🔄 Fallback: Transform item.items to lines format');
+      itemLinesArray = item.items.map((itemData: any) => ({
+        itemSku: itemData.productKode || itemData.itemSku || itemData.sku || itemData.kode || '',
+        itemName: itemData.productName || itemData.itemName || itemData.nama || '',
+        qty: Number(itemData.qty || 0),
+        unit: itemData.unit || 'PCS',
+        price: Number(itemData.price || 0),
+        total: Number(itemData.total || itemData.totalAkhir || 0),
+        discount: Number(itemData.discount || 0),
+        soNo: itemData.soNo || item.soNo || '',
+      }));
+    }
+    
     const productCodeMap: Record<string, string> = {}; // Map untuk kode item
     
-    // Build productMap dulu berdasarkan nama produk dari invoice lines atau dari master
+    // 🚀 CRITICAL FIX: Build productMap dengan prioritas:
+    // 1. Gunakan itemName dari invoice line jika sudah ada (server data sudah punya nama)
+    // 2. Cari di products master jika itemName kosong
+    // 3. Fallback ke itemSku jika tidak ketemu
     itemLinesArray.forEach((line: any) => {
-      // Cari produk berdasarkan itemSku (bisa berupa kode/SKU atau nama)
+      // Priority 1: Gunakan itemName dari line jika sudah ada (ini adalah nama produk dari server)
+      if (line.itemName && line.itemName.trim()) {
+        console.log(`[Accounting] ✅ Using itemName from line: ${line.itemSku} → ${line.itemName}`);
+        productMap[line.itemSku] = line.itemName;
+        productCodeMap[line.itemSku] = line.itemSku; // Gunakan itemSku sebagai kode
+        return; // Skip product lookup jika sudah ada itemName
+      }
+      
+      // Priority 2: Cari produk di master jika itemName kosong
       let product = productsArray.find((p: any) => 
         p.sku === line.itemSku || 
         p.kode === line.itemSku || 
@@ -1236,12 +1361,17 @@ const Accounting = () => {
       invNo: item.invoiceNo,
       customer: item.customer,
       createdAt: item.created,
-      notes: item.notes || '', // Include notes untuk ditampilkan di keterangan
+      // 🚀 FALLBACK: Server kirim 'keterangan', template expect 'notes'
+      notes: item.notes || item.keterangan || '', // Include notes untuk ditampilkan di keterangan
       // itemLinesArray already declared above
       lines: itemLinesArray.map((line: any) => ({
         itemSku: line.itemSku || '',
+        itemName: line.itemName || '', // ✅ Add itemName
         qty: line.qty || 0,
+        unit: line.unit || 'PCS', // ✅ Add unit
         price: line.price || 0,
+        total: line.total || 0, // ✅ Add total
+        discount: line.discount || 0, // ✅ Add discount
         soNo: line.soNo || item.soNo || '', // Simpan SO number jika ada, fallback ke invoice level
       })),
       bom: item.bom || {},
@@ -1266,6 +1396,45 @@ const Accounting = () => {
       setViewPdfData({ html, invoiceNo: item.invoiceNo });
     } catch (error: any) {
       showAlert(`Error generating Invoice preview: ${error.message}`, 'Error');
+    }
+  };
+
+  const handleViewTestTemplate = async (item: any) => {
+    try {
+      // Load customer data
+      const customers = await storageService.get<any[]>('customers') || [];
+      const customersArray = Array.isArray(customers) ? customers : [];
+      const customer = customersArray.find((c: any) => c.name === item.customer);
+      const customerAddress = customer?.address || '';
+      const customerNpwp = customer?.npwp || '';
+
+      // Load products
+      const products = await storageService.get<any[]>('products') || [];
+      const productsArray = Array.isArray(products) ? products : [];
+      const productMap: any = {};
+      const productCodeMap: any = {};
+      productsArray.forEach((p: any) => {
+        productMap[p.sku] = p.name;
+        productCodeMap[p.sku] = p.code;
+      });
+
+      // Load company
+      const company = await storageService.get<any>('company') || {};
+      const logoBase64 = await loadLogoAsBase64();
+
+      const html = generateInvoiceHtmlTestTemplate({
+        logo: logoBase64,
+        company,
+        inv: item,
+        customerAddress,
+        customerNpwp,
+        productMap,
+        productCodeMap,
+      });
+
+      setViewTestPdfData({ html, invoiceNo: item.invoiceNo });
+    } catch (error: any) {
+      showAlert(`Error generating Test Invoice preview: ${error.message}`, 'Error');
     }
   };
 
@@ -1622,10 +1791,11 @@ const Accounting = () => {
         <InvoiceActionMenu
           item={item}
           onViewDetail={() => handleViewDetail(item)}
+          onViewTestTemplate={() => handleViewTestTemplate(item)}
           onEdit={() => handleEditInvoice(item)}
           onPrint={() => handlePrintInvoice(item)}
           onUploadPaymentProof={item.status === 'OPEN' ? () => handleUpdateInvoice(item) : undefined}
-          onViewPaymentProof={item.status === 'CLOSE' && item.paymentProof ? () => handleViewPaymentProof(item) : undefined}
+          onViewPaymentProof={item.status === 'CLOSE' && item.paymentProofId ? () => handleViewPaymentProof(item) : undefined}
           onViewSuratJalan={item.sjNo ? () => handleViewSuratJalan(item) : undefined}
           onDelete={() => handleDeleteInvoice(item)}
         />
@@ -1649,17 +1819,30 @@ const Accounting = () => {
   const filteredInvoices = useMemo(() => {
     // Ensure sortedInvoices is always an array
     const sortedInvoicesArray = Array.isArray(sortedInvoices) ? sortedInvoices : [];
-    if (!searchQuery) return sortedInvoicesArray;
-    const query = searchQuery.toLowerCase();
-    return sortedInvoicesArray.filter((i: any) =>
-      (i.invoiceNo || '').toLowerCase().includes(query) ||
-      (i.customer || '').toLowerCase().includes(query) ||
-      (i.soNo || '').toLowerCase().includes(query) ||
-      (i.status || '').toLowerCase().includes(query) ||
-      (i.paymentTerms || '').toLowerCase().includes(query) ||
-      (i.sjNo || '').toLowerCase().includes(query)
-    );
-  }, [sortedInvoices, searchQuery]);
+    
+    return sortedInvoicesArray.filter((i: any) => {
+      // Search query filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesSearch = (i.invoiceNo || '').toLowerCase().includes(query) ||
+          (i.customer || '').toLowerCase().includes(query) ||
+          (i.soNo || '').toLowerCase().includes(query) ||
+          (i.status || '').toLowerCase().includes(query) ||
+          (i.paymentTerms || '').toLowerCase().includes(query) ||
+          (i.sjNo || '').toLowerCase().includes(query);
+        if (!matchesSearch) return false;
+      }
+      
+      // Date filter
+      if (dateFrom || dateTo) {
+        const invoiceDate = new Date(i.invoiceDate || i.created || '');
+        if (dateFrom && invoiceDate < new Date(dateFrom)) return false;
+        if (dateTo && invoiceDate > new Date(dateTo + 'T23:59:59')) return false;
+      }
+      
+      return true;
+    });
+  }, [sortedInvoices, searchQuery, dateFrom, dateTo]);
 
   // Filter expenses berdasarkan search query
   const filteredExpenses = useMemo(() => {
@@ -1790,6 +1973,16 @@ const Accounting = () => {
                       placeholder="Search by Invoice No, Customer, SO No, Status, Payment Terms, SJ No..."
                     />
                   </div>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <DateRangeFilter
+                      onDateChange={(from, to) => {
+                        setDateFrom(from);
+                        setDateTo(to);
+                      }}
+                      defaultFrom={dateFrom}
+                      defaultTo={dateTo}
+                    />
+                  </div>
                   <Button 
                     variant="primary" 
                     onClick={() => setShowCreateInvoiceDialog(true)}
@@ -1883,6 +2076,56 @@ const Accounting = () => {
                   backgroundColor: '#fff',
                 }}
                 title="PDF Preview"
+              />
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Test PDF Preview Modal */}
+      {viewTestPdfData && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 10000,
+          }}
+          onClick={() => setViewTestPdfData(null)}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90%', width: '1200px', maxHeight: '90vh', overflow: 'auto' }}>
+            <Card className="dialog-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h2>🧪 Test Template - {viewTestPdfData.invoiceNo}</h2>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <Button variant="primary" onClick={() => {
+                    const link = document.createElement('a');
+                    link.href = `data:text/html;charset=utf-8,${encodeURIComponent(viewTestPdfData.html)}`;
+                    link.download = `test-invoice-${viewTestPdfData.invoiceNo}.html`;
+                    link.click();
+                  }}>
+                    💾 Save HTML
+                  </Button>
+                  <Button variant="secondary" onClick={() => setViewTestPdfData(null)}>
+                    ✕ Close
+                  </Button>
+                </div>
+              </div>
+              <iframe
+                srcDoc={viewTestPdfData.html}
+                style={{
+                  width: '100%',
+                  height: '70vh',
+                  border: 'none',
+                  backgroundColor: '#fff',
+                }}
+                title="Test PDF Preview"
               />
             </Card>
           </div>
@@ -2113,7 +2356,7 @@ const Accounting = () => {
             const updated = invoices.map(inv =>
               inv.id === editingInvoice.id ? { ...inv, ...updatedData } : inv
             );
-            await storageService.set('invoices', updated);
+            await storageService.set(StorageKeys.PACKAGING.INVOICES, updated);
             setInvoices(updated);
             setEditingInvoice(null);
             showAlert('✅ Invoice updated', 'Success');
@@ -2128,19 +2371,19 @@ const Accounting = () => {
           invoice={updatingInvoice}
           onClose={() => setUpdatingInvoice(null)}
           showAlert={showAlert}
-          onSave={async (paymentProof: string, paymentProofName: string) => {
+          onSave={async (paymentProofId: string, paymentProofName: string) => {
             const updated = invoices.map(inv =>
               inv.id === updatingInvoice.id
                 ? {
                     ...inv,
                     status: 'CLOSE' as const,
-                    paymentProof: paymentProof,
+                    paymentProofId: paymentProofId,
                     paymentProofName: paymentProofName,
                     paidAt: new Date().toISOString(),
                   }
                 : inv
             );
-            await storageService.set('invoices', updated);
+            await storageService.set(StorageKeys.PACKAGING.INVOICES, updated);
             setInvoices(updated);
             
             // Create payment record untuk AR tracking
@@ -2171,7 +2414,7 @@ const Accounting = () => {
                   created: new Date().toISOString(),
                 };
                 
-                await storageService.set('payments', [...existingPayments, newPayment]);
+                await storageService.set(StorageKeys.PACKAGING.PAYMENTS, [...existingPayments, newPayment]);
               }
             } catch (error: any) {
               console.error('Error creating payment record:', error);
@@ -2225,7 +2468,7 @@ const Accounting = () => {
                   id: `${Date.now()}-${idx + 1}`,
                   no: baseLength + idx + 1,
                 }));
-                await storageService.set('journalEntries', [...journalEntries, ...entriesWithNo]);
+                await storageService.set(StorageKeys.PACKAGING.JOURNAL_ENTRIES, [...journalEntries, ...entriesWithNo]);
               }
             } catch (error: any) {
               console.error('Error creating journal entries for payment:', error);
@@ -2239,7 +2482,7 @@ const Accounting = () => {
                   ? { ...so, status: 'CLOSE' as const }
                   : so
               );
-              await storageService.set('salesOrders', updatedSOs);
+              await storageService.set(StorageKeys.PACKAGING.SALES_ORDERS, updatedSOs);
               
               // Auto-close SPK yang terkait dengan SO ini
               const spkList = await storageService.get<any[]>('spk') || [];
@@ -2308,7 +2551,27 @@ const EditInvoiceDialog = ({
   onClose: () => void; 
   onSave: (data: any) => Promise<void> 
 }) => {
-  const [lines, setLines] = useState<any[]>(invoice.lines || []);
+  // 🚀 FALLBACK: Transform item.items (server format) ke lines (form format)
+  const getInvoiceLines = (): any[] => {
+    const lines = Array.isArray(invoice.lines) ? invoice.lines : [];
+    if (lines.length === 0 && Array.isArray(invoice.items) && invoice.items.length > 0) {
+      console.log('[EditInvoiceDialog] 🔄 Fallback: Transform invoice.items to lines format');
+      return invoice.items.map((itemData: any) => ({
+        itemSku: itemData.productKode || itemData.itemSku || itemData.sku || itemData.kode || '',
+        itemName: itemData.productName || itemData.itemName || itemData.nama || '',
+        qty: Number(itemData.qty || 0),
+        unit: itemData.unit || 'PCS',
+        price: Number(itemData.price || 0),
+        total: Number(itemData.total || itemData.totalAkhir || 0),
+        discount: Number(itemData.discount || 0),
+        soNo: itemData.soNo || invoice.soNo || '',
+      }));
+    }
+    
+    return lines;
+  };
+
+  const [lines, setLines] = useState<any[]>(getInvoiceLines());
   const [qtyInputValues, setQtyInputValues] = useState<{ [key: number]: string }>({});
   const [priceInputValues, setPriceInputValues] = useState<{ [key: number]: string }>({});
   
@@ -2322,15 +2585,17 @@ const EditInvoiceDialog = ({
   const initialDiscount = initialBom.discount || 0;
   const initialTax = initialBom.tax || 0;
   const initialDiscountPercent = initialSubtotal > 0 ? (initialDiscount / initialSubtotal) * 100 : 0;
-  const initialTaxPercent = initialSubtotal > 0 ? (initialTax / initialSubtotal) * 100 : 0;
+  // Default tax to 11% if not set
+  const initialTaxPercent = initialBom.taxPercent || (initialSubtotal > 0 ? (initialTax / initialSubtotal) * 100 : 11);
+  const initialTaxAmount = initialBom.tax || (initialSubtotal > 0 ? (initialSubtotal * 0.11) : 0);
   
   const [bom, setBom] = useState<any>({
     ...initialBom,
     subtotal: initialSubtotal,
     discount: initialDiscount,
     discountPercent: initialDiscountPercent,
-    tax: initialTax,
-    taxPercent: initialTaxPercent,
+    tax: initialTaxAmount,
+    taxPercent: initialTaxPercent || 11, // 🚀 FIX: Default to 11% if not set
     biayaLain: initialBom.biayaLain || 0,
     tanggalJt: initialBom.tanggalJt || '',
     dpPo: initialBom.dpPo || 0,
@@ -2342,7 +2607,8 @@ const EditInvoiceDialog = ({
   });
   const [paymentTerms, setPaymentTerms] = useState(invoice.paymentTerms || 'TOP');
   const [topDays, setTopDays] = useState(invoice.topDays || 30);
-  const [notes, setNotes] = useState(invoice.notes || '');
+  // 🚀 FALLBACK: Server kirim 'keterangan', form expect 'notes'
+  const [notes, setNotes] = useState(invoice.notes || invoice.keterangan || '');
   const [templateType, setTemplateType] = useState(invoice.templateType || 'template1');
 
   // Helper function to calculate due date based on payment terms
@@ -2431,6 +2697,26 @@ const EditInvoiceDialog = ({
 
   const handleBomChange = (field: string, value: any) => {
     const updated = { ...bom, [field]: value };
+    
+    // 🚀 FIX: Auto-calculate related fields when discount or tax changes
+    if (field === 'discountPercent') {
+      // When discount % changes, calculate discount Rp
+      const discount = (updated.subtotal || 0) * (value / 100);
+      updated.discount = discount;
+    } else if (field === 'discount') {
+      // When discount Rp changes, calculate discount %
+      const percent = (updated.subtotal || 0) > 0 ? (value / (updated.subtotal || 1)) * 100 : 0;
+      updated.discountPercent = percent;
+    } else if (field === 'taxPercent') {
+      // When tax % changes, calculate tax Rp
+      const tax = (updated.subtotal || 0) * (value / 100);
+      updated.tax = tax;
+    } else if (field === 'tax') {
+      // When tax Rp changes, calculate tax %
+      const percent = (updated.subtotal || 0) > 0 ? (value / (updated.subtotal || 1)) * 100 : 0;
+      updated.taxPercent = percent;
+    }
+    
     setBom(updated);
     recalculateTotals(lines, updated);
   };
@@ -3126,12 +3412,16 @@ const UpdateInvoiceDialog = ({
     }
 
     try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const base64 = e.target?.result as string;
-        await onSave(base64, paymentFile.name);
-      };
-      reader.readAsDataURL(paymentFile);
+      // Validate file
+      const validation = BlobService.validateFile(paymentFile, 50, ['image/*', 'application/pdf']);
+      if (!validation.valid) {
+        parentShowAlert(validation.error || 'Invalid file', 'Error');
+        return;
+      }
+
+      // Upload to MinIO
+      const result = await BlobService.uploadFile(paymentFile, 'packaging');
+      await onSave(result.fileId, paymentFile.name);
     } catch (error: any) {
       parentShowAlert(`Error uploading file: ${error.message}`, 'Error');
     }

@@ -3,10 +3,12 @@ import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
 import NotificationBell from '../../components/NotificationBell';
-import { storageService } from '../../services/storage';
+import DateRangeFilter from '../../components/DateRangeFilter';
+import { storageService, StorageKeys } from '../../services/storage';
 import { openPrintWindow } from '../../utils/actions';
 import { filterActiveItems } from '../../utils/data-persistence-helper';
 import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
+import { useLanguage } from '../../hooks/useLanguage';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
 import '../../styles/common.css';
@@ -22,6 +24,9 @@ interface QCResult {
   product: string;
   qty: number;
   qcResult?: string;
+  qcFiles?: Array<{ data: string; name: string }>; // Base64 files instead of MinIO
+  qcNote?: string; // QC notes
+  qcDate?: string; // QC date
   status: 'DRAFT' | 'OPEN' | 'CLOSE';
   created: string;
   batchNo?: string; // Batch number (A, B, C, etc.)
@@ -33,12 +38,14 @@ interface QCResult {
 const QCActionMenu = ({
   item,
   onViewDetail,
+  onViewQCFiles,
   onQCCheck,
   onPrint,
   onDelete,
 }: {
   item: QCResult;
   onViewDetail?: () => void;
+  onViewQCFiles?: () => void;
   onQCCheck?: () => void;
   onPrint?: () => void;
   onDelete?: () => void;
@@ -140,6 +147,26 @@ const QCActionMenu = ({
               👁️ View Detail
             </button>
           )}
+          {onViewQCFiles && (
+            <button
+              onClick={() => { onViewQCFiles(); setShowMenu(false); }}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                fontSize: '11px',
+                borderRadius: '4px',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              📎 View QC Files
+            </button>
+          )}
           {onQCCheck && item.status === 'OPEN' && (
             <button
               onClick={() => { onQCCheck(); setShowMenu(false); }}
@@ -210,10 +237,21 @@ const QCActionMenu = ({
 };
 
 const QAQC = () => {
+  const { t } = useLanguage();
   const [qcResults, setQcResults] = useState<QCResult[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [selectedQCForCheck, setSelectedQCForCheck] = useState<QCResult | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+  const [qcFileViewer, setQcFileViewer] = useState<{
+    url: string;
+    fileName: string;
+    isPDF: boolean;
+    qcId: string;
+  } | null>(null);
   const [dialogState, setDialogState] = useState<{
     show: boolean;
     type?: 'alert' | 'confirm';
@@ -339,6 +377,74 @@ const QAQC = () => {
     showAlert('QC Detail', detailMsg);
   };
 
+  const closeQcFileViewer = () => {
+    setQcFileViewer(null);
+  };
+
+  const handleViewQCFiles = async (item: QCResult) => {
+    try {
+      // Get QC data from storage
+      const qcList = await storageService.get<any[]>('qc') || [];
+      const qc = qcList.find((q: any) => q.id === item.id);
+      
+      if (!qc || !qc.qcFiles || qc.qcFiles.length === 0) {
+        showAlert('No Files', 'Tidak ada file QC result yang di-upload untuk QC ini.');
+        return;
+      }
+      
+      // If multiple files, show selection dialog
+      if (qc.qcFiles.length > 1) {
+        const fileList = qc.qcFiles.map((file: any, idx: number) => 
+          `${idx + 1}. ${file.name || `File ${idx + 1}`}`
+        ).join('\n');
+        
+        showAlert(
+          'QC Result Files',
+          `QC ini memiliki ${qc.qcFiles.length} file:\n\n${fileList}\n\nKlik pada file di card view untuk melihat.`
+        );
+        return;
+      }
+      
+      // If single file, open directly
+      const file = qc.qcFiles[0];
+      const fileName = file.name || 'QC Result File';
+      const isPDF = fileName.toLowerCase().endsWith('.pdf');
+      
+      setQcFileViewer({
+        url: file.data,
+        fileName: fileName,
+        isPDF: isPDF,
+        qcId: item.id,
+      });
+    } catch (error: any) {
+      showAlert('Error', `Error loading QC files: ${error.message}`);
+    }
+  };
+
+  const handleViewSingleQCFile = (qc: QCResult, fileIndex: number) => {
+    // This function will be called from card view to view a specific file
+    storageService.get<any[]>('qc').then((qcList) => {
+      const qcData = qcList?.find((q: any) => q.id === qc.id);
+      if (!qcData || !qcData.qcFiles || !qcData.qcFiles[fileIndex]) {
+        showAlert('Error', 'File tidak ditemukan.');
+        return;
+      }
+      
+      const file = qcData.qcFiles[fileIndex];
+      const fileName = file.name || `QC Result File ${fileIndex + 1}`;
+      const isPDF = fileName.toLowerCase().endsWith('.pdf');
+      
+      setQcFileViewer({
+        url: file.data,
+        fileName: fileName,
+        isPDF: isPDF,
+        qcId: qc.id,
+      });
+    }).catch((error: any) => {
+      showAlert('Error', `Error loading file: ${error.message}`);
+    });
+  };
+
   const handleQCCheck = (item: QCResult) => {
     setSelectedQCForCheck(item);
   };
@@ -375,7 +481,7 @@ const QAQC = () => {
             }
           : q
       );
-      await storageService.set('qc', updated);
+      await storageService.set(StorageKeys.PACKAGING.QC, updated);
       setQcResults(updated);
       
       // Handle QC FAIL: Reset production status dari CLOSE ke OPEN agar bisa submit lagi
@@ -388,7 +494,7 @@ const QAQC = () => {
           }
           return p;
         });
-        await storageService.set('production', updatedProduction);
+        await storageService.set(StorageKeys.PACKAGING.PRODUCTION, updatedProduction);
         
         // Reset schedule status juga jika ada
         const scheduleList = await storageService.get<any[]>('schedule') || [];
@@ -398,7 +504,7 @@ const QAQC = () => {
           }
           return s;
         });
-        await storageService.set('schedule', updatedSchedules);
+        await storageService.set(StorageKeys.PACKAGING.SCHEDULE, updatedSchedules);
         
         showAlert(
           `⚠️ QC Result: FAIL\n\n` +
@@ -429,7 +535,7 @@ const QAQC = () => {
             }
             return p;
           });
-          await storageService.set('production', updatedProduction);
+          await storageService.set(StorageKeys.PACKAGING.PRODUCTION, updatedProduction);
           
           // Reset schedule status juga jika ada
           const scheduleList = await storageService.get<any[]>('schedule') || [];
@@ -439,7 +545,7 @@ const QAQC = () => {
             }
             return s;
           });
-          await storageService.set('schedule', updatedSchedules);
+          await storageService.set(StorageKeys.PACKAGING.SCHEDULE, updatedSchedules);
         }
         
         // Update QC record dengan qtyPassed dan qtyFailed
@@ -458,7 +564,7 @@ const QAQC = () => {
               }
             : q
         );
-        await storageService.set('qc', updatedQC);
+        await storageService.set(StorageKeys.PACKAGING.QC, updatedQC);
         setQcResults(updatedQC);
         
         // Update inventory hanya untuk qty yang PASS (gunakan qtyPassed, bukan qty total)
@@ -488,171 +594,16 @@ const QAQC = () => {
             ? { ...s, status: 'CLOSE' }
             : s
         );
-        await storageService.set('spk', updatedSPK);
+        await storageService.set(StorageKeys.PACKAGING.SPK, updatedSPK);
         
-        // Update inventory - Product RECEIVE dari QC PASS (bukan dari Production)
-        try {
-          const inventory = await storageService.get<any[]>('inventory') || [];
-          const products = await storageService.get<any[]>('products') || [];
-          const customers = await storageService.get<any[]>('customers') || [];
-          const salesOrders = await storageService.get<any[]>('salesOrders') || [];
-          
-          const so = salesOrders.find((s: any) => s.soNo === selectedQCForCheck.soNo);
-          const spkList = await storageService.get<any[]>('spk') || [];
-          const spkNo = selectedQCForCheck.spkNo || '';
-          
-          // Cari SPK untuk mendapatkan product yang spesifik
-          const spk = spkList.find((s: any) => s.spkNo === spkNo);
-          const qcProductName = (selectedQCForCheck.product || '').toString().trim().toLowerCase();
-          const qcProductId = spk?.product_id || spk?.kode || '';
-          
-          if (so && so.items) {
-            for (const soItem of so.items) {
-              const productId = (soItem.productId || soItem.productKode || '').toString().trim();
-              const product = products.find((p: any) => {
-                const pId = (p.product_id || p.kode || '').toString().trim();
-                return pId === productId || pId.toLowerCase() === productId.toLowerCase();
-              });
-              
-              if (!product) {
-                continue;
-              }
-              
-              const productCode = product.product_id || product.kode || '';
-              const productName = product.nama || '';
-              
-              // FILTER: Hanya update product yang sesuai dengan QC (berdasarkan product name atau product_id dari SPK)
-              // QC PASS hanya untuk 1 product dengan 1 SPK, bukan semua product di SO
-              const productNameMatch = qcProductName && productName.toLowerCase().trim() === qcProductName;
-              const productIdMatch = qcProductId && (productCode.toLowerCase() === qcProductId.toLowerCase() || productId.toLowerCase() === qcProductId.toLowerCase());
-              
-              if (!productNameMatch && !productIdMatch && (qcProductName || qcProductId)) {
-                continue; // Skip product yang tidak match
-              }
-              
-              // IMPORTANT: Pakai qty dari soItem (per product), BUKAN dari selectedQCForCheck.qty (total)
-              // Karena setiap product di SO punya qty masing-masing
-              // Tapi jika ada qtyPassed dari QC PARTIAL, pakai itu (proporsional dengan soItem.qty)
-              let qtyPassed = soItem.qty || 0;
-              if (data.qcResult === 'PARTIAL' && data.qtyPassed) {
-                // Jika QC PARTIAL, hitung proporsional qtyPassed untuk product ini
-                const totalQty = selectedQCForCheck.qty || soItem.qty || 0;
-                const qtyPassedRatio = totalQty > 0 ? data.qtyPassed / totalQty : 0;
-                qtyPassed = Math.round(soItem.qty * qtyPassedRatio);
-              }
-              
-              // Get price dari SO (Sales Order) - bukan dari master product
-              const soPrice = soItem.price || soItem.unitPrice || 0;
-              const pricePerUnit = qtyPassed > 0 ? soPrice / qtyPassed : soPrice;
-              
-              // Find existing product inventory
-              let existingProductInventory = inventory.find((inv: any) => {
-                const invCode = (inv.codeItem || '').toString().trim().toLowerCase();
-                const invDesc = (inv.description || '').toLowerCase().trim();
-                const searchCode = productCode.toLowerCase().trim();
-                const searchName = productName.toLowerCase().trim();
-                return invCode === searchCode || invDesc === searchName;
-              });
-              
-              // Get customer untuk supplierName (Product = Customer)
-              const customer = customers.find((c: any) => c.nama === selectedQCForCheck.customer) || customers[0];
-              
-              // ANTI-DUPLICATE: Cek di inventory apakah SPK sudah pernah diproses
-              if (existingProductInventory && spkNo) {
-                const processedSPKs = existingProductInventory.processedSPKs || [];
-                if (processedSPKs.includes(spkNo)) {
-                  continue; // Skip product ini, lanjut ke product berikutnya
-                }
-              }
-              
-              if (existingProductInventory) {
-                // Update existing product inventory - tambah RECEIVE dari QC PASS
-                // Update price dengan price dari SO (jika ada)
-                const oldReceive = existingProductInventory.receive || 0;
-                const newReceive = oldReceive + qtyPassed;
-                const updatedPrice = soPrice > 0 ? pricePerUnit : (existingProductInventory.price || product.hargaFg || product.hargaSales || 0);
-                
-                // Tambahkan SPK number ke processedSPKs untuk anti-duplicate
-                const processedSPKs = existingProductInventory.processedSPKs || [];
-                if (spkNo && !processedSPKs.includes(spkNo)) {
-                  processedSPKs.push(spkNo);
-                }
-                
-                existingProductInventory.receive = newReceive;
-                existingProductInventory.price = updatedPrice; // Update price dari SO
-                existingProductInventory.supplierName = selectedQCForCheck.customer || customer?.nama || existingProductInventory.supplierName;
-                existingProductInventory.processedSPKs = processedSPKs; // Track SPK yang sudah diproses
-                existingProductInventory.nextStock = 
-                  (existingProductInventory.stockPremonth || 0) + 
-                  newReceive - 
-                  (existingProductInventory.outgoing || 0) + 
-                  (existingProductInventory.return || 0);
-                existingProductInventory.lastUpdate = new Date().toISOString();
-              } else {
-                // Create new product inventory entry
-                // Price diambil dari SO, bukan dari master product
-                const productPrice = soPrice > 0 ? pricePerUnit : (product.hargaFg || product.hargaSales || 0);
-                const newInventoryEntry = {
-                  id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-                  supplierName: selectedQCForCheck.customer || customer?.nama || '',
-                  codeItem: productCode,
-                  description: productName,
-                  kategori: product.kategori || 'Product',
-                  satuan: product.satuan || 'PCS',
-                  price: productPrice, // Price dari SO
-                  stockPremonth: 0,
-                  receive: qtyPassed,
-                  outgoing: 0,
-                  return: 0,
-                  nextStock: 0 + qtyPassed - 0 + 0, // stockPremonth + receive - outgoing + return
-                  processedSPKs: spkNo ? [spkNo] : [], // Track SPK yang sudah diproses
-                  lastUpdate: new Date().toISOString(),
-                };
-                inventory.push(newInventoryEntry);
-              }
-            }
-          }
-          
-          await storageService.set('inventory', inventory);
-        } catch (error: any) {
-          // Jangan block QC process jika inventory update gagal
-        }
-        
-        // REMOVED: QC tidak lagi membuat delivery notifications
-        // Hanya PPIC yang membuat delivery notifications dari schedule
-        // Delivery Note akan auto-update status berdasarkan Production CLOSE + QC PASS
-        // Ini mencegah duplikasi notifikasi antara QC dan PPIC
-        //   // Support both formats: old format (strip) and new format (slash)
-        //   const normalize = (spk: string) => {
-        //     // Convert to slash format for comparison
-        //     return spk.replace(/-/g, '/');
-        //   };
-        //   const normalized1 = normalize(spk1);
-        //   const normalized2 = normalize(spk2);
-        //   if (normalized1 === normalized2) return true;
-        //   // Match base SPK (first 2 parts: SPK/251212)
-        //   const base1 = normalized1.split('/').slice(0, 2).join('/');
-        //   const base2 = normalized2.split('/').slice(0, 2).join('/');
-        //   return base1 === base2;
-        // };
-        // 
-        // const qcSpkNo = selectedQCForCheck.spkNo;
-        // const qcSoNo = selectedQCForCheck.soNo;
-        // 
-        // // Cek apakah production sudah CLOSE untuk SPK ini
-        // const prod = productionList.find((p: any) => {
-        //   if (!p.spkNo) return false;
-        //   return qcSpkNo && matchSPK(p.spkNo, qcSpkNo) && p.status === 'CLOSE';
-        // });
-        
-        // REMOVED: QC tidak lagi membuat delivery notifications
-        // Hanya PPIC yang membuat delivery notifications dari schedule
-        // Delivery Note akan auto-update status berdasarkan Production CLOSE + QC PASS
-        // Ini mencegah duplikasi notifikasi antara QC dan PPIC
+        // QC hanya untuk check saja, tidak update inventory
+        // Inventory update akan dilakukan di:
+        // 1. Production: ongoing material (kurangi material di inventory)
+        // 2. Delivery Note: ongoing product (kurangi product di inventory saat SJ di-upload)
         
         showAlert(
           'QC Completed',
-          `QC Check completed (${data.qcResult})\n\n✅ SPK auto-closed\n✅ Inventory updated (Product RECEIVE from QC PASS)`,
+          `QC Check completed (${data.qcResult})\n\n✅ SPK auto-closed`,
         );
       } else {
         showAlert(
@@ -766,13 +717,13 @@ const QAQC = () => {
     }
   };
 
-  const columns = [
+  const columns = useMemo(() => [
     { key: 'qcNo', header: 'QC No' },
     { key: 'productionNo', header: 'Production No' },
-    { key: 'soNo', header: 'SO No' },
-    { key: 'customer', header: 'Customer' },
-    { key: 'product', header: 'Product' },
-    { key: 'qty', header: 'Qty' },
+    { key: 'soNo', header: t('salesOrder.number') || 'SO No' },
+    { key: 'customer', header: t('master.customerName') || 'Customer' },
+    { key: 'product', header: t('master.productName') || 'Product' },
+    { key: 'qty', header: t('common.quantity') || 'Qty' },
     {
       key: 'batchNo',
       header: 'Batch',
@@ -812,7 +763,7 @@ const QAQC = () => {
     },
     {
       key: 'status',
-      header: 'Status',
+      header: t('common.status') || 'Status',
       render: (item: QCResult) => (
         <span className={`status-badge status-${item.status.toLowerCase()}`}>
           {item.status}
@@ -821,7 +772,7 @@ const QAQC = () => {
     },
     {
       key: 'created',
-      header: 'Created',
+      header: t('common.createdAt') || 'Created',
       render: (item: QCResult) => {
         if (!item.created) return '-';
         try {
@@ -837,36 +788,48 @@ const QAQC = () => {
     },
     {
       key: 'actions',
-      header: 'Actions',
+      header: t('common.actions') || 'Actions',
       render: (item: QCResult) => (
         <QCActionMenu
           item={item}
           onViewDetail={() => handleViewDetail(item)}
+          onViewQCFiles={() => handleViewQCFiles(item)}
           onQCCheck={() => handleQCCheck(item)}
           onPrint={() => handlePrint(item)}
           onDelete={() => handleDeleteQC(item)}
         />
       ),
     },
-  ];
+  ], [t]);
 
   const filteredQCResults = useMemo(() => {
     // Ensure qcResults is always an array
     const qcResultsArray = Array.isArray(qcResults) ? qcResults : [];
     const filtered = qcResultsArray.filter(qc => {
       if (!qc) return false;
-      if (!searchQuery) return true;
-      const query = searchQuery.toLowerCase();
-      return (
-        (qc.qcNo || '').toLowerCase().includes(query) ||
-        (qc.productionNo || '').toLowerCase().includes(query) ||
-        (qc.spkNo || '').toLowerCase().includes(query) ||
-        (qc.soNo || '').toLowerCase().includes(query) ||
-        (qc.customer || '').toLowerCase().includes(query) ||
-        (qc.product || '').toLowerCase().includes(query) ||
-        (qc.status || '').toLowerCase().includes(query) ||
-        (qc.qcResult || '').toLowerCase().includes(query)
-      );
+      
+      // Search filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesSearch = (
+          (qc.qcNo || '').toLowerCase().includes(query) ||
+          (qc.productionNo || '').toLowerCase().includes(query) ||
+          (qc.spkNo || '').toLowerCase().includes(query) ||
+          (qc.soNo || '').toLowerCase().includes(query) ||
+          (qc.customer || '').toLowerCase().includes(query) ||
+          (qc.product || '').toLowerCase().includes(query) ||
+          (qc.status || '').toLowerCase().includes(query) ||
+          (qc.qcResult || '').toLowerCase().includes(query)
+        );
+        if (!matchesSearch) return false;
+      }
+      
+      // Date filtering
+      const qcDate = new Date(qc.created);
+      const matchesDateFrom = !dateFrom || qcDate >= new Date(dateFrom);
+      const matchesDateTo = !dateTo || qcDate <= new Date(dateTo);
+      
+      return matchesDateFrom && matchesDateTo;
     });
     
     // Sort: Terbaru di atas, CLOSE di bawah
@@ -881,7 +844,21 @@ const QAQC = () => {
       const dateB = new Date(b.created || 0).getTime();
       return dateB - dateA; // Descending (newest first)
     });
-  }, [qcResults, searchQuery]);
+  }, [qcResults, searchQuery, dateFrom, dateTo]);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  // Paginated results
+  const paginatedQCResults = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredQCResults.slice(startIndex, endIndex);
+  }, [filteredQCResults, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredQCResults.length / itemsPerPage);
 
   // Format notifications untuk NotificationBell
   const qcNotifications = useMemo(() => {
@@ -942,7 +919,7 @@ const QAQC = () => {
         qcResult: qc.qcResult || '',
         qcNote: qc.qcNote || '',
         qcDate: qc.qcDate || '',
-        qcFiles: qc.qcFiles ? (Array.isArray(qc.qcFiles) ? qc.qcFiles.length : 1) : 0,
+        qcFiles: qc.qcFiles ? (Array.isArray(qc.qcFiles) ? qc.qcFiles.length : 0) : 0,
         status: qc.status || '',
         created: qc.created || '',
       }));
@@ -1098,8 +1075,103 @@ const QAQC = () => {
               fontFamily: 'inherit',
             }}
           />
+          <DateRangeFilter
+            onDateChange={(from, to) => {
+              setDateFrom(from);
+              setDateTo(to);
+            }}
+          />
         </div>
-        <Table columns={columns} data={filteredQCResults} emptyMessage={searchQuery ? "No QC results found matching your search" : "No QC results"} />
+        <Table columns={columns} data={paginatedQCResults} emptyMessage={searchQuery ? "No QC results found matching your search" : "No QC results"} />
+        
+        {/* Pagination Controls */}
+        {filteredQCResults.length > itemsPerPage && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginTop: '16px',
+            paddingTop: '12px',
+            borderTop: '1px solid var(--border-color)',
+          }}>
+            <Button
+              variant="secondary"
+              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage === 1}
+              style={{ padding: '6px 12px', fontSize: '12px' }}
+            >
+              ← Previous
+            </Button>
+            
+            <div style={{
+              display: 'flex',
+              gap: '4px',
+              alignItems: 'center',
+            }}>
+              {(() => {
+                const pages: (number | string)[] = [];
+                const maxPagesToShow = 5;
+                
+                if (totalPages <= maxPagesToShow) {
+                  for (let i = 1; i <= totalPages; i++) {
+                    pages.push(i);
+                  }
+                } else {
+                  pages.push(1);
+                  if (currentPage > 3) pages.push('...');
+                  
+                  const startPage = Math.max(2, currentPage - 1);
+                  const endPage = Math.min(totalPages - 1, currentPage + 1);
+                  for (let i = startPage; i <= endPage; i++) {
+                    pages.push(i);
+                  }
+                  
+                  if (currentPage < totalPages - 2) pages.push('...');
+                  pages.push(totalPages);
+                }
+                
+                return pages.map((page, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => typeof page === 'number' && setCurrentPage(page)}
+                    disabled={page === '...'}
+                    style={{
+                      padding: '6px 10px',
+                      border: page === currentPage ? '2px solid var(--primary-color)' : '1px solid var(--border-color)',
+                      backgroundColor: page === currentPage ? 'var(--primary-color)' : 'var(--bg-primary)',
+                      color: page === currentPage ? '#fff' : 'var(--text-primary)',
+                      borderRadius: '4px',
+                      cursor: page === '...' ? 'default' : 'pointer',
+                      fontSize: '12px',
+                      fontWeight: page === currentPage ? '600' : '400',
+                      opacity: page === '...' ? 0.5 : 1,
+                    }}
+                  >
+                    {page}
+                  </button>
+                ));
+              })()}
+            </div>
+            
+            <Button
+              variant="secondary"
+              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage === totalPages}
+              style={{ padding: '6px 12px', fontSize: '12px' }}
+            >
+              Next →
+            </Button>
+          </div>
+        )}
+        
+        <div style={{
+          marginTop: '12px',
+          fontSize: '12px',
+          color: 'var(--text-secondary)',
+          textAlign: 'center',
+        }}>
+          Page {currentPage} of {totalPages} ({filteredQCResults.length} total)
+        </div>
       </Card>
 
       {selectedQCForCheck && (
@@ -1168,6 +1240,61 @@ const QAQC = () => {
           </div>
         );
       })()}
+
+      {/* QC File Viewer Modal */}
+      {qcFileViewer && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            display: 'flex',
+            flexDirection: 'column',
+            zIndex: 10002,
+            backdropFilter: 'blur(8px)',
+          }}
+          onClick={closeQcFileViewer}
+        >
+          <div style={{
+            padding: '20px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            borderBottom: '1px solid rgba(255,255,255,0.1)',
+          }}>
+            <div>
+              <h3 style={{ margin: 0, color: '#fff', fontSize: '20px', fontWeight: '600' }}>
+                {qcFileViewer.fileName}
+              </h3>
+              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '14px' }}>
+                {qcFileViewer.isPDF ? 'PDF Document' : 'Image Document'}
+              </div>
+            </div>
+            <button onClick={closeQcFileViewer} style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', backgroundColor: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: '24px', cursor: 'pointer' }}>
+              ×
+            </button>
+          </div>
+          <div style={{ flex: 1, padding: '20px', display: 'flex', justifyContent: 'center', alignItems: qcFileViewer.isPDF ? 'flex-start' : 'center' }} onClick={(e) => e.stopPropagation()}>
+            {qcFileViewer.isPDF ? (
+              <div style={{ width: '100%', maxWidth: '1200px', height: '100%', backgroundColor: '#fff', borderRadius: '8px', overflow: 'hidden' }}>
+                <object data={qcFileViewer.url} type="application/pdf" style={{ width: '100%', height: '100%' }} title={qcFileViewer.fileName}>
+                  <embed src={qcFileViewer.url} type="application/pdf" style={{ width: '100%', height: '100%' }} />
+                </object>
+              </div>
+            ) : (
+              <img src={qcFileViewer.url} alt={qcFileViewer.fileName} style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: '8px' }} />
+            )}
+          </div>
+          <div style={{ padding: '20px', display: 'flex', justifyContent: 'center', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+            <button onClick={closeQcFileViewer} style={{ padding: '10px 24px', borderRadius: '6px', border: 'none', backgroundColor: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: '14px', cursor: 'pointer' }}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1234,18 +1361,25 @@ const QCCheckDialog = ({
     }
 
     // Convert files to base64
-    const qcFilesBase64: any[] = [];
-    for (const file of qcFiles) {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      qcFilesBase64.push({
-        name: file.name,
-        data: base64,
-      });
+    const qcFilesData: Array<{ data: string; name: string }> = [];
+    
+    if (qcFiles.length > 0) {
+      try {
+        setLoading(true);
+        for (const file of qcFiles) {
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+          qcFilesData.push({ data: base64, name: file.name });
+        }
+      } catch (error: any) {
+        showAlert('Error', `Error reading files: ${error.message}`);
+        setLoading(false);
+        return;
+      }
     }
 
     const submitData = {
@@ -1253,7 +1387,7 @@ const QCCheckDialog = ({
       qtyPassed: qtyPassedNum,
       qtyFailed: qtyFailedNum,
       qcNote: qcNote.trim(),
-      qcFiles: qcFilesBase64.length > 0 ? qcFilesBase64 : undefined,
+      qcFiles: qcFilesData.length > 0 ? qcFilesData : undefined,
     };
 
     setLoading(true);
