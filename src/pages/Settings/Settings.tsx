@@ -481,21 +481,8 @@ const Settings = () => {
     setUpdateProgress(null);
     
     try {
-      // Desktop (Electron) - use electron-updater
       if (window.electronAPI?.checkForUpdates) {
         const result = await window.electronAPI.checkForUpdates();
-        // Suppress app-update.yml errors - they're expected and normal
-        if (!result.success && result.message && (
-          result.message.includes('app-update.yml') ||
-          result.message.includes('app-updates.yml') ||
-          result.message.includes('ENOENT') ||
-          (result.message.includes('no such file') && result.message.includes('app-update'))
-        )) {
-          // This is a normal error - app-update.yml is on server, not local
-          console.log('[Settings] Suppressing expected app-update.yml error:', result.message);
-          setCheckingUpdate(false);
-          return;
-        }
         if (!result.success) {
           showAlert(result.message || 'Failed to check for updates', 'Error');
           setCheckingUpdate(false);
@@ -503,38 +490,24 @@ const Settings = () => {
         return;
       }
       
-      // Mobile (Capacitor) - check server for APK updates
+      // Mobile (Capacitor)
       if ((window as any).Capacitor) {
         try {
           const currentVersion = appVersion || '1.0.0';
           const result = await checkMobileUpdate(currentVersion, storageService);
-          
-          if (result.available && result.version) {
-            setUpdateStatus({
-              status: 'available',
-              message: result.message,
-              version: result.version
-            });
-          } else {
-            setUpdateStatus({
-              status: result.available ? 'available' : 'not-available',
-              message: result.message,
-              version: result.version || undefined
-            });
-          }
-        } catch (error: any) {
-          console.error('Error checking for mobile update:', error);
           setUpdateStatus({
-            status: 'error',
-            message: `Failed to check for updates: ${error.message}`
+            status: result.available ? 'available' : 'not-available',
+            message: result.message,
+            version: result.version || undefined
           });
+        } catch (error: any) {
+          setUpdateStatus({ status: 'error', message: `Failed to check for updates: ${error.message}` });
         } finally {
           setCheckingUpdate(false);
         }
         return;
       }
       
-      // Fallback
       showAlert('Update feature not available', 'Information');
       setCheckingUpdate(false);
     } catch (error: any) {
@@ -990,7 +963,7 @@ const Settings = () => {
             )}
           </div>
           <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-            💡 Update akan menginstall versi baru tanpa menghapus data Anda.
+            💡 Update otomatis dari GitHub Releases. Klik "Check for Updates" untuk cek versi terbaru, download berjalan di background, lalu klik "Install & Restart".
           </div>
         </Card>
       )}
