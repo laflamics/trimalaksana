@@ -1364,8 +1364,10 @@ if (app.isPackaged) {
     provider: 'github',
     owner: 'laflamics',
     repo: 'trimalaksana',
+    // CRITICAL: Use v* tags for Windows releases (not mac-* tags)
+    releaseType: 'release',
   });
-  console.log('[Auto-Updater] Using GitHub Releases for updates');
+  console.log('[Auto-Updater] Using GitHub Releases for updates (Windows: v* tags)');
 
   autoUpdater.on('error', (error) => {
     const err = error as any;
