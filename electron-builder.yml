@@ -54,9 +54,6 @@ nsis:
   allowElevation: true
   runAfterFinish: false
 publish:
-  provider: generic
-  url: "https://www.noxtiz.com/api/updates/"  # noxtiz.com untuk update check
-  # Note: This URL is used when publishing updates
-  # The app will check for updates at: {url}latest.yml
-  # Set to null to generate latest.yml without actually publishing
-  # url: null
+  provider: github
+  owner: laflamics
+  repo: trimalaksana

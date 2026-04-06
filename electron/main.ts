@@ -1353,61 +1353,29 @@ ipcMain.handle('run-import-script', async (event, scriptName: string) => {
 });
 
 // Auto-updater configuration
-autoUpdater.autoDownload = false; // Manual download
-autoUpdater.autoInstallOnAppQuit = true; // Auto install on quit
-autoUpdater.allowDowngrade = false; // Don't downgrade
-autoUpdater.allowPrerelease = false; // Don't use pre-release versions
+autoUpdater.autoDownload = false; // Manual download - user trigger via "Check Update"
+autoUpdater.autoInstallOnAppQuit = true;
+autoUpdater.allowDowngrade = false;
+autoUpdater.allowPrerelease = false;
 
-// Set update server URL (only in production)
-// Note: Don't set in development to avoid certificate errors
-// Server URL akan di-set saat check-for-updates dipanggil (dari storage config)
+// Use GitHub Releases as update source
 if (app.isPackaged) {
-  // Default server URL (akan di-override saat check-for-updates dengan server dari config)
-  const defaultServerUrl = process.env.UPDATE_SERVER_URL || 
-    process.env.SERVER_URL || 
-    'https://vercel-proxy-blond-nine.vercel.app';  // Vercel Proxy untuk update check (lebih cepat)
-  
-  // 🚀 FIX: Always use Vercel proxy for update check (lebih cepat dan stabil)
-  // Normalize URL: remove port, handle protocol
-  const cleanUrl = defaultServerUrl.replace(/:\d+$/, '').replace(/^https?:\/\//, '');
-  // Pastikan selalu pakai https untuk Vercel proxy
-  const isVercelProxy = cleanUrl.includes('vercel.app') || cleanUrl.includes('vercel-proxy');
-  const protocol = isVercelProxy ? 'https' : (cleanUrl.includes('.ts.net') ? 'https' : 'http');
-  const baseUrl = defaultServerUrl.startsWith('http') ? defaultServerUrl : `${protocol}://${cleanUrl}`;
-  
-  // electron-updater will append /latest.yml to the feed URL
-  // So we set it to /api/updates/ (without latest) so it becomes /api/updates/latest.yml
-  const feedUrl = `${baseUrl}/api/updates/`;
-  // Set feed URL with provider: generic
-  // IMPORTANT: Set channel to 'latest' to avoid looking for app-update.yml locally
-  // Note: URL ini akan di-update saat check-for-updates dengan server dari storage config
-  autoUpdater.setFeedURL({ 
-    provider: 'generic',
-    url: feedUrl,
-    channel: 'latest'
+  autoUpdater.setFeedURL({
+    provider: 'github',
+    owner: 'laflamics',
+    repo: 'trimalaksana',
   });
-  console.log(`[Auto-Updater] Initial update server: ${feedUrl}`);
-  console.log(`[Auto-Updater] Will use server from storage config when checking for updates`);
-  console.log(`[Auto-Updater] Certificate verification disabled for Tailscale funnel`);
-  
-  // Suppress local app-update.yml/app-updates.yml errors (file is on server, not local)
+  console.log('[Auto-Updater] Using GitHub Releases for updates');
+
   autoUpdater.on('error', (error) => {
-    // SUPPRESS ALL ENOENT errors - they're expected when checking server
     const err = error as any;
-    if (err.code === 'ENOENT' || 
-        err.message?.includes('app-update.yml') || 
-        err.message?.includes('app-updates.yml') ||
-        err.message?.includes('no such file') ||
-        err.message?.includes('ENOENT') ||
-        err.message?.includes('resources')) {
-      console.log('[Auto-Updater] Suppressed expected error (file on server, not local):', err.message);
-      return; // Suppress this error - it's expected behavior
+    if (err.code === 'ENOENT' || err.message?.includes('ENOENT') || err.message?.includes('resources')) {
+      console.log('[Auto-Updater] Suppressed expected error:', err.message);
+      return;
     }
-    // Log other errors normally
     console.error('[Auto-Updater] Error:', error);
   });
 } else {
-  // In development, don't set update server to avoid certificate errors
   console.log(`[Auto-Updater] Skipped in development mode`);
 }
 
@@ -1577,162 +1545,25 @@ ipcMain.handle('check-for-updates', async () => {
     if (!app.isPackaged) {
       return { success: false, message: 'Updates only available in production' };
     }
-    
-    // CRITICAL FIX: Get full version with build number and set it to electron-updater
-    // electron-updater uses app.getVersion() internally, which may not include build number
-    // We need to manually set the currentVersion to ensure correct comparison
-    const fullVersion = getFullVersion();
-    console.log(`[Auto-Updater] Current app version: ${fullVersion}`);
-    console.log(`[Auto-Updater] app.getVersion(): ${app.getVersion()}`);
-    
-    // 🚀 FIX: Use noxtiz.com for update check
-    // Server URL dari config atau default ke noxtiz.com
-    let updateServerUrl = process.env.UPDATE_SERVER_URL || 
-      process.env.SERVER_URL || 
-      'https://www.noxtiz.com';  // noxtiz.com untuk update check
-    
-    // 🚀 CRITICAL: Gunakan noxtiz.com untuk update check
-    // noxtiz.com adalah production server untuk update
-    const configUrl = await getServerUrlFromConfig();
-    if (configUrl && !configUrl.includes('noxtiz.com')) {
-      // Jika config URL bukan noxtiz.com, tetap pakai noxtiz.com untuk update
-      console.log(`[Auto-Updater] Config URL: ${configUrl}, tetap menggunakan noxtiz.com untuk update`);
-    } else if (configUrl && configUrl.includes('noxtiz.com')) {
-      // Config URL adalah noxtiz.com, pakai itu untuk update
-      updateServerUrl = configUrl;
-      console.log(`[Auto-Updater] Menggunakan noxtiz.com dari config: ${updateServerUrl}`);
-    }
-    
-    // Normalize URL: remove port, handle protocol
-    let cleanUrl = updateServerUrl.replace(/:\d+$/, '').replace(/^https?:\/\//, '');
-    // noxtiz.com selalu pakai https
-    const isNoxtizServer = cleanUrl.includes('noxtiz.com');
-    const protocol = isNoxtizServer ? 'https' : 'http';
-    const baseUrl = cleanUrl.startsWith('http') ? updateServerUrl : `${protocol}://${cleanUrl}`;
-    
-    // electron-updater akan append /latest.yml ke feed URL
-    // Jadi kita set ke /api/updates/ supaya jadi /api/updates/latest.yml
-    const feedUrl = `${baseUrl}/api/updates/`;
-    
-    // Re-set feed URL to ensure it's correct
-    autoUpdater.setFeedURL({ 
-      provider: 'generic',
-      url: feedUrl,
-      channel: 'latest'
-    });
-    
-    // CRITICAL: Override currentVersion for electron-updater
-    // This ensures electron-updater uses the full version with build number for comparison
-    // Note: electron-updater doesn't have a direct API to set currentVersion,
-    // but we can work around by ensuring package.json.version is correct
-    // The real fix is to ensure package.json.version includes build number before build
-    
-    console.log(`[Auto-Updater] Checking for updates from: ${feedUrl}latest.yml`);
-    console.log(`[Auto-Updater] Using version: ${fullVersion} for comparison`);
-    
-    // Also check windows-version endpoint for additional info
-    try {
-      const versionCheckUrl = `${baseUrl}/api/app/windows-version`;
-      console.log(`[Auto-Updater] Checking version info from: ${versionCheckUrl}`);
-      
-      // Use AbortController for timeout instead of fetch timeout option
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-      
-      const versionResponse = await fetch(versionCheckUrl, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      
-      if (versionResponse.ok) {
-        const versionInfo = await versionResponse.json();
-        console.log(`[Auto-Updater] Version info from server:`, versionInfo);
-      }
-    } catch (versionCheckError: any) {
-      console.log(`[Auto-Updater] Version check endpoint not available (optional):`, versionCheckError?.message || String(versionCheckError));
-    }
-    
-    // Check for updates
+    console.log('[Auto-Updater] Checking for updates from GitHub Releases...');
     const result = await autoUpdater.checkForUpdates();
-    console.log(`[Auto-Updater] Check result:`, result);
-    
+    console.log('[Auto-Updater] Check result:', result);
     return { success: true, message: 'Checking for updates...' };
   } catch (error: any) {
     console.error('Error checking for updates:', error);
-    // Ignore ENOENT errors for app-update.yml/app-updates.yml (it's normal, file is on server)
-    if (error.message && (
-      error.message.includes('app-update.yml') || 
-      error.message.includes('app-updates.yml') ||
-      error.message.includes('ENOENT') ||
-      error.message.includes('no such file') ||
-      error.message.includes('resources') ||
-      error.code === 'ENOENT')) {
-      console.log('[Auto-Updater] Ignoring app-update.yml/app-updates.yml local file error (file is on server, this is normal)');
-      // Error handler sudah suppress error ini, jadi kita anggap success
-      // electron-updater akan tetap check dari server meskipun ada error ini
-      return { success: true, message: 'Checking for updates from server...' };
-    }
     return { success: false, message: error.message };
   }
 });
 
 ipcMain.handle('download-update', async () => {
   try {
-    // 🚀 FIX: Pastikan feed URL sudah benar sebelum download
-    // Re-set feed URL untuk memastikan menggunakan server URL yang benar
-    const defaultServerUrl = process.env.UPDATE_SERVER_URL || 
-      process.env.SERVER_URL || 
-      'https://www.noxtiz.com';  // noxtiz.com
-    
-    const configUrl = await getServerUrlFromConfig();
-    let updateServerUrl = defaultServerUrl;
-    
-    if (configUrl && configUrl.includes('noxtiz.com')) {
-      updateServerUrl = configUrl;
-    }
-    
-    const cleanUrl = updateServerUrl.replace(/:\d+$/, '').replace(/^https?:\/\//, '');
-    const isNoxtizServer = cleanUrl.includes('noxtiz.com');
-    const protocol = isNoxtizServer ? 'https' : 'http';
-    const baseUrl = updateServerUrl.startsWith('http') ? updateServerUrl : `${protocol}://${cleanUrl}`;
-    const feedUrl = `${baseUrl}/api/updates/`;
-    
-    // Re-set feed URL sebelum download
-    autoUpdater.setFeedURL({ 
-      provider: 'generic',
-      url: feedUrl,
-      channel: 'latest'
-    });
-    
-    console.log(`[Auto-Updater] Downloading update from: ${feedUrl}latest.yml`);
-    
     await autoUpdater.downloadUpdate();
     return { success: true, message: 'Downloading update...' };
   } catch (error: any) {
     console.error('Error downloading update:', error);
-    // Suppress ENOENT errors untuk app-updates.yml (file ada di server, bukan lokal)
-    if (error.message && (
-      error.message.includes('app-update.yml') || 
-      error.message.includes('app-updates.yml') ||
-      error.message.includes('ENOENT') ||
-      error.message.includes('no such file') ||
-      error.message.includes('resources') ||
-      error.code === 'ENOENT')) {
-      console.log('[Auto-Updater] Ignoring app-updates.yml ENOENT error during download (file is on server)');
-      // Coba download lagi (mungkin error ini hanya warning)
-      try {
-        await autoUpdater.downloadUpdate();
-        return { success: true, message: 'Downloading update...' };
-      } catch (retryError: any) {
-        return { success: false, message: retryError.message };
-      }
-    }
     return { success: false, message: error.message };
   }
 });
-
 ipcMain.handle('install-update', async () => {
   try {
     autoUpdater.quitAndInstall(false, true);
