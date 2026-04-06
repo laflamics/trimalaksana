@@ -1360,14 +1360,14 @@ autoUpdater.allowPrerelease = false;
 
 // Use GitHub Releases as update source
 if (app.isPackaged) {
+  // CRITICAL FIX: Explicitly set channel to 'latest' and use custom URL
+  // This prevents electron-updater from looking at mac-* tags
   autoUpdater.setFeedURL({
-    provider: 'github',
-    owner: 'laflamics',
-    repo: 'trimalaksana',
-    // CRITICAL: Use v* tags for Windows releases (not mac-* tags)
-    releaseType: 'release',
+    provider: 'generic',
+    url: 'https://github.com/laflamics/trimalaksana/releases/latest/download',
+    channel: 'latest'
   });
-  console.log('[Auto-Updater] Using GitHub Releases for updates (Windows: v* tags)');
+  console.log('[Auto-Updater] Using GitHub Releases (generic provider) for Windows updates');
 
   autoUpdater.on('error', (error) => {
     const err = error as any;
