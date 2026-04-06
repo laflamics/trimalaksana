@@ -733,7 +733,7 @@ export function generateInvoiceHtml({
           ${companyAddressLine3 ? `<span class="company-address-line">${companyAddressLine3}</span>` : ''}
         </div>
         <div class="bank-info">
-          ${company.bankName ? `${company.bankName}, a/c : ${company.bankAccount || ''}` : `Bank MANDIRI, a/c : 129-00-1116726-5`}${company.bankBranch ? `<br/>${company.bankBranch}` : ''}${company.bankAccountName ? `<br/>a/n : ${company.bankAccountName}` : ''}
+          Bank MANDIRI, a/c : 156-00-28092015<br/>KCP Cikarang Central City<br/>a/n : PT. Trimalaksana Jaya P
         </div>
       </div>
     </div>
@@ -776,7 +776,7 @@ export function generateInvoiceHtml({
           </tr>
         `;
   }).join('')}
-      ${Array(Math.max(0, 56 - lines.length)).fill(0).map(() => `
+      ${Array(Math.max(0, 53 - lines.length)).fill(0).map(() => `
         <tr>
           <td></td>
           <td></td>
@@ -820,7 +820,7 @@ export function generateInvoiceHtml({
 
       <!-- SIGNATURE -->
       <div class="signature-block">
-        Hormat kami<br/><br/><br/><br/>
+        Hormat kami<br/><br/><br/>
         <div class="signature-name">
           ${bom.tandaTangan || '(.........................)'}
         </div>
@@ -1466,7 +1466,7 @@ function generateInvoiceHtmlTemplate2({
           ${company.npwp ? `NPWP: ${company.npwp}` : ''}
         </div>
         <div class="company-bank">
-          ${company.bankName ? `${company.bankName}, a/c : ${company.bankAccount || ''}` : ''}${company.bankBranch ? `<br/>${company.bankBranch}` : ''}${company.bankAccountName ? `<br/>a/n : ${company.bankAccountName}` : ''}
+          Bank MANDIRI, a/c : 156-00-28092015<br/>KCP Cikarang Central City<br/>a/n : PT. Trimalaksana Jaya P
         </div>
       </div>
     </div>
@@ -1552,7 +1552,7 @@ function generateInvoiceHtmlTemplate2({
           </tr>
         `;
       }).join('')}
-      ${Array(Math.max(0, 56 - lines.length)).fill(0).map(() => `
+      ${Array(Math.max(0, 53 - lines.length)).fill(0).map(() => `
         <tr>
           <td></td>
           <td></td>
@@ -2137,7 +2137,7 @@ function generateInvoiceHtmlTemplate3({
           ${company.npwp ? `NPWP: ${company.npwp}` : ''}
         </div>
         <div class="company-bank">
-          ${company.bankName ? `${company.bankName}, a/c : ${company.bankAccount || ''}` : ''}${company.bankBranch ? `<br/>${company.bankBranch}` : ''}${company.bankAccountName ? `<br/>a/n : ${company.bankAccountName}` : ''}
+          Bank MANDIRI, a/c : 156-00-28092015<br/>KCP Cikarang Central City<br/>a/n : PT. Trimalaksana Jaya P
         </div>
       </div>
     </div>
@@ -2224,7 +2224,7 @@ function generateInvoiceHtmlTemplate3({
           </tr>
         `;
       }).join('')}
-      ${Array(Math.max(0, 56 - lines.length)).fill(0).map(() => `
+      ${Array(Math.max(0, 53 - lines.length)).fill(0).map(() => `
         <tr>
           <td></td>
           <td></td>
@@ -2838,7 +2838,7 @@ function generateInvoiceHtmlTemplate4({
           ${company.npwp ? `NPWP: ${company.npwp}` : ''}
         </div>
         <div class="company-bank">
-          ${company.bankName ? `${company.bankName}, a/c : ${company.bankAccount || ''}` : ''}${company.bankBranch ? `<br/>${company.bankBranch}` : ''}${company.bankAccountName ? `<br/>a/n : ${company.bankAccountName}` : ''}
+          Bank MANDIRI, a/c : 156-00-28092015<br/>KCP Cikarang Central City<br/>a/n : PT. Trimalaksana Jaya P
         </div>
       </div>
     </div>
@@ -2922,7 +2922,7 @@ function generateInvoiceHtmlTemplate4({
           </tr>
         `;
       }).join('')}
-      ${Array(Math.max(0, 56 - lines.length)).fill(0).map(() => `
+      ${Array(Math.max(0, 53 - lines.length)).fill(0).map(() => `
         <tr>
           <td></td>
           <td></td>

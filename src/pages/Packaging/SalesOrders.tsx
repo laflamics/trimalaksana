@@ -722,11 +722,30 @@ const SalesOrders = () => {
     // ENHANCED: Filter out deleted items for display (but keep them in storage for tombstone)
     const activeOrders = filterActiveItems(data);
 
+    // Deduplicate by soNo — keep the latest entry (highest timestamp or last in array)
+    const seenSoNos = new Map<string, SalesOrder>();
+    activeOrders.forEach(order => {
+      const key = (order.soNo || '').trim().toUpperCase();
+      if (!key) return;
+      const existing = seenSoNos.get(key);
+      if (!existing) {
+        seenSoNos.set(key, order);
+      } else {
+        // Keep the one with the latest timestamp
+        const existingTs = existing.timestamp || existing._timestamp || 0;
+        const currentTs = order.timestamp || order._timestamp || 0;
+        if (currentTs > existingTs) {
+          seenSoNos.set(key, order);
+        }
+      }
+    });
+    const deduplicatedOrders = Array.from(seenSoNos.values());
+
     // Load products to update padCode (don't rely on state)
     const currentProducts = await storageService.get<Product[]>('products') || [];
 
     // Update padCode from master product for all items and ensure all items have IDs
-    const ordersWithUpdatedPadCode = activeOrders.map(order => {
+    const ordersWithUpdatedPadCode = deduplicatedOrders.map(order => {
       if (!order.items || order.items.length === 0) return order;
 
       const updatedItems = order.items.map((item, idx) => {
@@ -3114,6 +3133,39 @@ const SalesOrders = () => {
     }
   };
 
+  const handleRemoveDuplicates = async () => {
+    showConfirm(
+      'Hapus semua duplikat SO No dari storage dan server? Data yang dipertahankan adalah yang paling baru.',
+      async () => {
+        try {
+          const data = await storageService.get<SalesOrder[]>('salesOrders') || [];
+          const seen = new Map<string, SalesOrder>();
+          data.forEach(order => {
+            const key = (order.soNo || '').trim().toUpperCase();
+            if (!key) { seen.set(order.id, order); return; }
+            const existing = seen.get(key);
+            if (!existing) {
+              seen.set(key, order);
+            } else {
+              const existingTs = existing.timestamp || existing._timestamp || 0;
+              const currentTs = order.timestamp || order._timestamp || 0;
+              if (currentTs > existingTs) seen.set(key, order);
+            }
+          });
+          const deduplicated = Array.from(seen.values());
+          const removed = data.length - deduplicated.length;
+          await storageService.set(StorageKeys.PACKAGING.SALES_ORDERS, deduplicated);
+          await loadOrders();
+          showToast(`Selesai! ${removed} duplikat dihapus dari storage.`, 'success');
+        } catch (err: any) {
+          showToast(`Gagal hapus duplikat: ${err.message}`, 'error');
+        }
+      },
+      undefined,
+      'Hapus Duplikat SO'
+    );
+  };
+
   const handleExportExcel = async () => {
     try {
       const wb = XLSX.utils.book_new();
@@ -5178,6 +5230,7 @@ const SalesOrders = () => {
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
             <Button variant="secondary" onClick={handleImportExcel}>📤 Import Excel</Button>
+            <Button variant="secondary" onClick={handleRemoveDuplicates} style={{ backgroundColor: '#ff9800', color: '#fff', border: 'none' }}>🧹 Hapus Duplikat</Button>
             <Button onClick={handleCreate}>+ Create SO</Button>
           </div>
         </div>

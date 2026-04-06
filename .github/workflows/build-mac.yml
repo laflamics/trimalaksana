@@ -1,14 +1,16 @@
 name: Build Mac App
 
 on:
-  workflow_dispatch:  # Manual trigger dari GitHub UI
+  workflow_dispatch:
   push:
     tags:
-      - 'v*'  # Otomatis trigger kalau push tag seperti v1.0.0
+      - 'v*'
 
 jobs:
   build-mac:
     runs-on: macos-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
@@ -29,18 +31,19 @@ jobs:
           SKIP_NOTARIZATION: true
         run: npm run build:app:mac:fast
 
-      - name: Upload DMG artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: mac-dmg
-          path: release-build/*.dmg
-          if-no-files-found: warn
-          retention-days: 7
+      - name: Get version
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
 
-      - name: Upload ZIP artifact
-        uses: actions/upload-artifact@v4
+      - name: Create Release and Upload DMG
+        uses: softprops/action-gh-release@v2
         with:
-          name: mac-zip
-          path: release-build/*.zip
-          if-no-files-found: warn
-          retention-days: 7
+          tag_name: mac-${{ steps.version.outputs.version }}
+          name: Mac Build v${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: false
+          files: |
+            release-build/*.dmg
+            release-build/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
