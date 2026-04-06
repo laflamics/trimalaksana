@@ -53,3 +53,7 @@ ios/App/*.xcodeproj/xcuserdata/
 *.ipa
 *.xcarchive
 DerivedData/
+
+srcbackup/
+scripts/
+test/

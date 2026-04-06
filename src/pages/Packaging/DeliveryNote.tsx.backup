@@ -1,0 +1,738 @@
+import React, { useState, useEffect } from 'react';
+import './DeliveryNote.css';
+import { storageService, StorageKeys } from '@/services/storage';
+import Button from '@/components/Button';
+import Table from '@/components/Table';
+import { generatePackagingRecapHtmlByTemplate } from '@/pdf/packaging-delivery-recap-templates';
+import { loadLogoAsBase64 } from '@/utils/logo-loader';
+import { useDialog } from '@/hooks/useDialog';
+
+interface DeliveryNoteItem {
+  product: string;
+  productCode: string;
+  qty: number;
+  unit: string;
+  spkNo?: string;
+  soNo?: string;
+  fromInventory?: boolean;
+  inventoryId?: string;
+}
+
+interface DeliveryNote {
+  id: string;
+  sjNo: string;
+  soNo: string;
+  soNos?: string[];
+  customer: string;
+  customerAddress?: string;
+  product?: string;
+  qty?: number;
+  unit?: string;
+  items?: DeliveryNoteItem[];
+  deliveryDate: string;
+  driver?: string;
+  vehicleNo?: string;
+  specNote?: string;
+  status: 'DRAFT' | 'SENT' | 'DELIVERED';
+  productCodeDisplay?: 'padCode' | 'productId';
+  isRecap?: boolean;
+  mergedSjNos?: string[];
+  createdAt: string;
+  updatedAt: string;
+  processedOutgoing?: boolean;
+  deleted?: boolean;
+}
+
+interface Product {
+  id: string;
+  kode: string;
+  product_id: string;
+  nama: string;
+  padCode: string;
+  sku?: string;
+  kodeIpos?: string;
+  kategori?: string;
+  satuan?: string;
+  hargaFg?: number;
+  hargaSales?: number;
+}
+
+export default function DeliveryNoteModule() {
+  const [deliveryNotes, setDeliveryNotes] = useState<DeliveryNote[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+
+  const [selectedDelivery, setSelectedDelivery] = useState<DeliveryNote | null>(null);
+  const [formData, setFormData] = useState<Partial<DeliveryNote>>({});
+  const [formItems, setFormItems] = useState<DeliveryNoteItem[]>([]);
+  const [productCodeDisplay, setProductCodeDisplay] = useState<'padCode' | 'productId'>('padCode');
+
+  // Notification states
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [isProcessingNotification, setIsProcessingNotification] = useState<string | null>(null);
+  const [isLoadingNotificationData, setIsLoadingNotificationData] = useState(false);
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(false);
+
+  // Dialog hooks
+  const { showAlert, showConfirm } = useDialog();
+
+  useEffect(() => {
+    loadData();
+    loadNotifications();
+  }, []);
+
+  const loadNotifications = async () => {
+    try {
+      const storedNotifications = await storageService.get<any[]>(StorageKeys.PACKAGING.DELIVERY_NOTIFICATIONS) || [];
+      setNotifications(storedNotifications);
+    } catch (err) {
+      console.error('Error loading notifications:', err);
+    }
+  };
+
+  const setOutgoingFromDelivery = async (delivery: DeliveryNote) => {
+    try {
+      const allDeliveries = await storageService.get<DeliveryNote[]>(StorageKeys.PACKAGING.DELIVERY) || [];
+      const existingDelivery = allDeliveries.find((d: any) => d.id === delivery.id);
+      
+      if (existingDelivery?.processedOutgoing === true) {
+        console.log('[DeliveryNote] Delivery already processed for outgoing:', delivery.id);
+        return;
+      }
+      
+      const inventory = await storageService.get<any[]>(StorageKeys.PACKAGING.INVENTORY) || [];
+      const productsList = products;
+
+      const itemsToProcess = delivery.items && delivery.items.length > 0
+        ? delivery.items
+        : delivery.product
+          ? [{ product: delivery.product, qty: delivery.qty || 0, productCode: '', unit: 'PCS', inventoryId: undefined }]
+          : [];
+
+      if (itemsToProcess.length === 0) {
+        return;
+      }
+
+      for (const item of itemsToProcess) {
+        const productName = item.product || '';
+        const qtyDelivery = item.qty || 0;
+
+        if (!productName || qtyDelivery <= 0) {
+          continue;
+        }
+
+        const product = productsList.find((p: any) => {
+          const pName = (p.nama || '').toLowerCase().trim();
+          const pCode = ((p.product_id || p.kode) || '').toString().toLowerCase().trim();
+          const itemName = productName.toLowerCase().trim();
+          return pName === itemName || pCode === itemName;
+        });
+
+        let productCode: string;
+        if (!product) {
+          productCode = productName.trim();
+        } else {
+          productCode = (product.product_id || product.kode || '').toString().trim();
+        }
+
+        let existingProductInventory: any = null;
+
+        if (item.inventoryId) {
+          existingProductInventory = inventory.find((inv: any) => inv.id === item.inventoryId);
+        }
+
+        if (!existingProductInventory) {
+          existingProductInventory = inventory.find((inv: any) => {
+            const invCode = (inv.codeItem || '').toString().trim().toLowerCase();
+            const invDesc = (inv.description || '').toLowerCase().trim();
+            const searchCode = productCode.toLowerCase();
+            const searchName = productName.toLowerCase().trim();
+            return invCode === searchCode || invDesc === searchName;
+          });
+
+          if (!existingProductInventory) {
+            existingProductInventory = inventory.find((inv: any) => {
+              const invDesc = (inv.description || '').toLowerCase().trim();
+              return invDesc === productName.toLowerCase().trim();
+            });
+          }
+        }
+
+        const deliveryKey = `DELIVERY_${delivery.id}`;
+
+        if (existingProductInventory) {
+          const processedDeliveries = existingProductInventory.processedDeliveries || [];
+          if (processedDeliveries.includes(deliveryKey)) {
+            continue;
+          }
+
+          const oldOutgoing = existingProductInventory.outgoing || 0;
+          const newOutgoing = oldOutgoing + qtyDelivery;
+
+          processedDeliveries.push(deliveryKey);
+
+          existingProductInventory.outgoing = newOutgoing;
+          existingProductInventory.processedDeliveries = processedDeliveries;
+          existingProductInventory.lastUpdate = new Date().toISOString();
+        } else {
+          const newInventoryEntry = {
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+            supplierName: delivery.customer || '',
+            codeItem: productCode,
+            description: productName,
+            kategori: product?.kategori || 'Product',
+            satuan: product?.satuan || 'PCS',
+            price: product?.hargaFg || product?.hargaSales || 0,
+            stockPremonth: 0,
+            receive: 0,
+            outgoing: qtyDelivery,
+            return: 0,
+            onGoing: 0,
+            on_going: 0,
+            productionStock: 0,
+            nextStock: 0,
+            processedDeliveries: [deliveryKey],
+            processedSPKs: [],
+            lastUpdate: new Date().toISOString(),
+          };
+          inventory.push(newInventoryEntry);
+        }
+      }
+
+      await storageService.set(StorageKeys.PACKAGING.INVENTORY, inventory);
+    } catch (error: any) {
+      console.error('[DeliveryNote] Error setting outgoing:', error);
+    }
+  };
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const notes = await storageService.get<DeliveryNote[]>(StorageKeys.PACKAGING.DELIVERY);
+      const prods = await storageService.get<Product[]>(StorageKeys.PACKAGING.PRODUCTS);
+
+      setDeliveryNotes(notes || []);
+      setProducts(prods || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateNew = () => {
+    setFormData({
+      sjNo: `SJ-${Date.now()}`,
+      soNo: '',
+      customer: '',
+      deliveryDate: new Date().toISOString().split('T')[0],
+      status: 'DRAFT',
+    });
+    setFormItems([]);
+    setProductCodeDisplay('padCode');
+    setShowCreateDialog(true);
+  };
+
+  const handleEdit = (delivery: DeliveryNote) => {
+    setSelectedDelivery(delivery);
+    setFormData(delivery);
+    setFormItems(delivery.items || []);
+    setProductCodeDisplay(delivery.productCodeDisplay || 'padCode');
+    setShowEditDialog(true);
+  };
+
+  const handleSave = async () => {
+    try {
+      if (!formData.sjNo || !formData.soNo || !formData.customer) {
+        alert('Please fill in all required fields');
+        return;
+      }
+
+      const newDelivery: DeliveryNote = {
+        id: selectedDelivery?.id || `DN-${Date.now()}`,
+        sjNo: formData.sjNo || '',
+        soNo: formData.soNo || '',
+        customer: formData.customer || '',
+        customerAddress: formData.customerAddress || '',
+        product: formData.product || '',
+        qty: formData.qty || 0,
+        unit: formData.unit || 'PCS',
+        items: formItems,
+        deliveryDate: formData.deliveryDate || new Date().toISOString(),
+        driver: formData.driver || '',
+        vehicleNo: formData.vehicleNo || '',
+        specNote: formData.specNote || '',
+        status: formData.status || 'DRAFT',
+        productCodeDisplay: productCodeDisplay,
+        isRecap: formData.isRecap || false,
+        createdAt: selectedDelivery?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updated = selectedDelivery
+        ? deliveryNotes.map(d => d.id === selectedDelivery.id ? newDelivery : d)
+        : [...deliveryNotes, newDelivery];
+
+      await storageService.set(StorageKeys.PACKAGING.DELIVERY, updated);
+      setDeliveryNotes(updated);
+
+      setShowCreateDialog(false);
+      setShowEditDialog(false);
+      setSelectedDelivery(null);
+      setFormData({});
+      setFormItems([]);
+
+      alert('Delivery note saved successfully');
+    } catch (err) {
+      alert(`Error saving: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure?')) return;
+
+    try {
+      const updated = deliveryNotes.filter(d => d.id !== id);
+      await storageService.set(StorageKeys.PACKAGING.DELIVERY, updated);
+      setDeliveryNotes(updated);
+      alert('Deleted successfully');
+    } catch (err) {
+      alert(`Error deleting: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleCreateFromNotification = async (notif: any) => {
+    console.log('[DeliveryNote] handleCreateFromNotification called with:', notif);
+    
+    if (notif.processed === true || notif.processedAt) {
+      console.log('⚠️ [Delivery Note] Notification already processed:', notif.id);
+      return;
+    }
+    
+    const notifId = notif.id || `${notif.soNo}-${notif.spkNo || notif.spkNos?.join('-') || 'unknown'}`;
+    console.log('[DeliveryNote] notifId:', notifId, 'isProcessingNotification:', isProcessingNotification);
+    
+    if (isProcessingNotification === notifId) {
+      console.log('⚠️ [Delivery Note] Already processing notification:', notifId);
+      return;
+    }
+    
+    setIsProcessingNotification(notifId);
+    setIsLoadingNotificationData(true);
+    
+    try {
+      const allNotifications = await storageService.get<any[]>(StorageKeys.PACKAGING.DELIVERY_NOTIFICATIONS) || [];
+      const updatedNotifications = allNotifications.filter((n: any) => n.id !== notif.id);
+      await storageService.set(StorageKeys.PACKAGING.DELIVERY_NOTIFICATIONS, updatedNotifications);
+      console.log('[DeliveryNote] ✅ Notification cleared immediately:', notifId);
+      
+      setNotifications((prev: any[]) => prev.filter((n: any) => n.id !== notif.id));
+      console.log('[DeliveryNote] ✅ Notification removed from UI state');
+    } catch (error) {
+      console.error('[DeliveryNote] Error clearing notification:', error);
+    }
+
+    setSelectedDelivery(null);
+    setIsProcessingNotification(notifId);
+
+    const notificationsToProcess = notif.isGrouped && notif.groupedNotifications
+      ? notif.groupedNotifications
+      : [notif];
+
+    let confirmMsg = `Create Delivery Note?\n\n`;
+    if (notif.isGrouped) {
+      confirmMsg += `Customer: ${notif.customer}\nSO No: ${notif.soNo}\n\n`;
+      confirmMsg += `Products (${notificationsToProcess.length} items):\n`;
+      notificationsToProcess.forEach((n: any) => {
+        let spkList: string[] = [];
+        if (Array.isArray(n.spkNos)) {
+          spkList = n.spkNos;
+        } else if (n.spkNo) {
+          spkList = [n.spkNo];
+        }
+        
+        let productQty = n.qty || 0;
+
+        if (notif.deliveryBatches && Array.isArray(notif.deliveryBatches) && notif.deliveryBatches.length > 0) {
+          const matchingBatch = notif.deliveryBatches.find((db: any) => {
+            if (n.productId && db.productId) {
+              return String(n.productId).trim().toLowerCase() === String(db.productId).trim().toLowerCase();
+            }
+            if (db.spkNo && spkList.length > 0) {
+              return spkList.some((spk: string) => {
+                const normalizeSPK = (s: string) => s.replace(/-/g, '/');
+                const base1 = normalizeSPK(spk).split('/').slice(0, 2).join('/');
+                const base2 = normalizeSPK(db.spkNo).split('/').slice(0, 2).join('/');
+                return base1 === base2 || db.spkNo === spk;
+              });
+            }
+            return false;
+          });
+
+          if (matchingBatch && matchingBatch.qty) {
+            productQty = matchingBatch.qty;
+          }
+        }
+
+        const spkNo = spkList[0] || n.spkNo || 'N/A';
+        confirmMsg += `- ${n.product} - ${productQty} PCS (SPK: ${spkNo})\n`;
+      });
+    } else {
+      const spkNo = notif.spkNo || (notif.spkNos && notif.spkNos.length > 0 ? notif.spkNos[0] : 'N/A');
+      confirmMsg += `SPK: ${spkNo}\nSO No: ${notif.soNo}\nCustomer: ${notif.customer}\nProduct: ${notif.product || 'Multiple Products'}\nQty: ${notif.qty || 0} PCS`;
+    }
+
+    showConfirm(
+      confirmMsg,
+      async () => {
+        try {
+          setShowLoadingOverlay(true);
+          setIsLoadingNotificationData(true);
+          console.log('[DeliveryNote] Starting delivery note creation...');
+          
+          const now = new Date();
+          const year = String(now.getFullYear()).slice(-2);
+          const month = String(now.getMonth() + 1).padStart(2, '0');
+          const day = String(now.getDate()).padStart(2, '0');
+          const randomCode = Math.random().toString(36).substr(2, 5).toUpperCase();
+          const sjNo = `SJ-${year}${month}${day}-${randomCode}`;
+
+          const deliveryItems: DeliveryNoteItem[] = [];
+          
+          const spkNo = notif.spkNo || (notif.spkNos && notif.spkNos.length > 0 ? notif.spkNos[0] : '');
+          const productName = notif.product || notif.products?.[0]?.product || '';
+          const productCode = notif.deliveryBatches?.[0]?.productId || notif.products?.[0]?.productId || '';
+          const qty = notif.deliveryBatches?.[0]?.qty || notif.qty || 0;
+
+          console.log('[DeliveryNote] Creating SJ with data:', { spkNo, productName, productCode, qty, notif });
+
+          if (spkNo && productName && qty > 0) {
+            deliveryItems.push({
+              spkNo: spkNo,
+              product: productName,
+              productCode: productCode,
+              qty: qty,
+              unit: 'PCS',
+              soNo: notif.soNo || '',
+              fromInventory: true,
+            });
+            console.log('[DeliveryNote] Delivery item added:', deliveryItems[0]);
+          }
+
+          const newDelivery: DeliveryNote = {
+            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            sjNo,
+            soNo: notif.soNo || '',
+            soNos: [notif.soNo || ''],
+            customer: notif.customer || '',
+            items: deliveryItems,
+            status: 'DRAFT',
+            deliveryDate: notif.deliveryBatches?.[0]?.deliveryDate || new Date().toISOString(),
+            productCodeDisplay: 'padCode',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+
+          const allDeliveries = await storageService.get<DeliveryNote[]>(StorageKeys.PACKAGING.DELIVERY) || [];
+          
+          const existingDelivery = allDeliveries.find((d: any) => {
+            if (d.items && Array.isArray(d.items)) {
+              return d.items.some((item: any) => {
+                const normalize = (s: string) => String(s).trim().toLowerCase().replace(/-/g, '/');
+                return normalize(item.spkNo) === normalize(spkNo);
+              });
+            }
+            return false;
+          });
+          
+          if (existingDelivery) {
+            console.log('[DeliveryNote] ⚠️ Delivery already exists for SPK:', spkNo, 'SJ No:', existingDelivery.sjNo);
+            showAlert('Already Created', `Delivery Note untuk SPK ini sudah dibuat!\n\nSJ No: ${existingDelivery.sjNo}`);
+            setIsProcessingNotification(null);
+            setIsLoadingNotificationData(false);
+            return;
+          }
+
+          await setOutgoingFromDelivery(newDelivery);
+          
+          newDelivery.processedOutgoing = true;
+          
+          const updated = [...allDeliveries, newDelivery];
+          await storageService.set(StorageKeys.PACKAGING.DELIVERY, updated);
+
+          const allNotifications = await storageService.get<any[]>(StorageKeys.PACKAGING.DELIVERY_NOTIFICATIONS) || [];
+          
+          const notificationExists = allNotifications.some((n: any) => n.id === notif.id);
+          if (notificationExists) {
+            console.log('[DeliveryNote] ⚠️ Notification still exists, deleting now:', notif.id);
+            const updatedNotifications = allNotifications.filter((n: any) => n.id !== notif.id);
+            await storageService.set(StorageKeys.PACKAGING.DELIVERY_NOTIFICATIONS, updatedNotifications);
+          }
+
+          console.log('[DeliveryNote] SJ created successfully:', sjNo);
+          showAlert('Success', `✅ Surat Jalan berhasil dibuat!\n\nSJ No: ${sjNo}`);
+          setIsProcessingNotification(null);
+          setIsLoadingNotificationData(false);
+          
+          setShowLoadingOverlay(false);
+          
+          const activeDeliveries = updated.filter(d => !d.deleted);
+          setDeliveryNotes(activeDeliveries);
+
+        } catch (error: any) {
+          console.error('[DeliveryNote] Error in handleCreateFromNotification:', error);
+          console.error('[DeliveryNote] Error stack:', error.stack);
+          showAlert('Error', `Error preparing form: ${error.message}`);
+          setIsProcessingNotification(null);
+          setIsLoadingNotificationData(false);
+        } finally {
+          setIsLoadingNotificationData(false);
+        }
+      },
+      () => {
+        setIsProcessingNotification(null);
+        setIsLoadingNotificationData(false);
+      }
+    );
+  };
+
+  const handleGeneratePDF = async (delivery: DeliveryNote) => {
+    try {
+      const logo = await loadLogoAsBase64();
+      const company = {
+        companyName: 'PT TRIMA LAKSANA JAYA PRATAMA',
+        address: 'Jl. Raya Bekasi Km. 28, Cikarang, Bekasi 17530',
+      };
+
+      const sjData = {
+        sjNo: delivery.sjNo,
+        sjDate: delivery.deliveryDate,
+        driver: delivery.driver || '',
+        vehicleNo: delivery.vehicleNo || '',
+      };
+
+      const itemWithDisplay = {
+        ...delivery,
+        productCodeDisplay: delivery.productCodeDisplay || 'padCode',
+        items: delivery.items || [],
+      };
+
+      const templateId = 1; // Default template
+      const html = generatePackagingRecapHtmlByTemplate(templateId, {
+        logo,
+        company,
+        item: itemWithDisplay,
+        sjData,
+        products,
+      });
+
+      // Open in new window for printing
+      const printWindow = window.open('', '', 'width=800,height=600');
+      if (printWindow) {
+        printWindow.document.write(html);
+        printWindow.document.close();
+        printWindow.print();
+      }
+    } catch (err) {
+      alert(`Error generating PDF: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
+  if (loading) return <div className="delivery-note-container">Loading...</div>;
+  if (error) return <div className="delivery-note-container error">{error}</div>;
+
+  return (
+    <div className="delivery-note-container">
+      <div className="delivery-note-header">
+        <h1>Delivery Notes</h1>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          {notifications.length > 0 && (
+            <div style={{ padding: '10px', background: '#fff3cd', borderRadius: '4px', color: '#856404' }}>
+              📬 {notifications.length} Notification(s)
+            </div>
+          )}
+          <Button variant="primary" onClick={handleCreateNew}>
+            Create New
+          </Button>
+        </div>
+      </div>
+
+      {/* Notifications Section */}
+      {notifications.length > 0 && (
+        <div style={{ marginBottom: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '4px', border: '1px solid #dee2e6' }}>
+          <h3 style={{ marginTop: 0 }}>📬 Pending Notifications</h3>
+          {notifications.map((notif: any, idx: number) => (
+            <div key={idx} style={{ marginBottom: '10px', padding: '10px', background: 'white', borderRadius: '4px', border: '1px solid #dee2e6' }}>
+              <div><strong>SO:</strong> {notif.soNo}</div>
+              <div><strong>Customer:</strong> {notif.customer}</div>
+              <div><strong>Product:</strong> {notif.product}</div>
+              <div><strong>Qty:</strong> {notif.qty} PCS</div>
+              <Button
+                variant="primary"
+                onClick={() => handleCreateFromNotification(notif)}
+                disabled={isLoadingNotificationData || isProcessingNotification === (notif.id || `${notif.soNo}-${notif.spkNo || notif.spkNos?.join('-') || 'unknown'}`)}
+                style={{ marginTop: '8px', fontSize: '12px', padding: '5px 10px' }}
+              >
+                {isProcessingNotification === (notif.id || `${notif.soNo}-${notif.spkNo || notif.spkNos?.join('-') || 'unknown'}`) ? 'Processing...' : 'Create SJ'}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Table
+        columns={[
+          { key: 'sjNo', header: 'SJ No' },
+          { key: 'soNo', header: 'SO No' },
+          { key: 'customer', header: 'Customer' },
+          { key: 'deliveryDate', header: 'Delivery Date' },
+          { key: 'status', header: 'Status' },
+          {
+            key: 'actions',
+            header: 'Actions',
+            render: (item: DeliveryNote) => (
+              <div className="action-buttons">
+                <button onClick={() => handleEdit(item)}>Edit</button>
+                <button onClick={() => handleGeneratePDF(item)}>PDF</button>
+                <button onClick={() => handleDelete(item.id)}>Delete</button>
+              </div>
+            ),
+          },
+        ]}
+        data={deliveryNotes}
+        pageSize={20}
+      />
+
+      {/* Create/Edit Dialog */}
+      {(showCreateDialog || showEditDialog) && (
+        <div className="dialog-overlay">
+          <div className="dialog">
+            <h2>{selectedDelivery ? 'Edit Delivery Note' : 'Create Delivery Note'}</h2>
+
+            <div className="form-group">
+              <label>SJ No *</label>
+              <input
+                type="text"
+                value={formData.sjNo || ''}
+                onChange={(e) => setFormData({ ...formData, sjNo: e.target.value })}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>SO No *</label>
+              <input
+                type="text"
+                value={formData.soNo || ''}
+                onChange={(e) => setFormData({ ...formData, soNo: e.target.value })}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Customer *</label>
+              <input
+                type="text"
+                value={formData.customer || ''}
+                onChange={(e) => setFormData({ ...formData, customer: e.target.value })}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Delivery Date</label>
+              <input
+                type="date"
+                value={formData.deliveryDate?.split('T')[0] || ''}
+                onChange={(e) => setFormData({ ...formData, deliveryDate: e.target.value })}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Product Code Display</label>
+              <select
+                value={productCodeDisplay}
+                onChange={(e) => setProductCodeDisplay(e.target.value as 'padCode' | 'productId')}
+              >
+                <option value="padCode">Pad Code</option>
+                <option value="productId">Product Code (SKU)</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Driver</label>
+              <input
+                type="text"
+                value={formData.driver || ''}
+                onChange={(e) => setFormData({ ...formData, driver: e.target.value })}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Vehicle No</label>
+              <input
+                type="text"
+                value={formData.vehicleNo || ''}
+                onChange={(e) => setFormData({ ...formData, vehicleNo: e.target.value })}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Special Note</label>
+              <textarea
+                value={formData.specNote || ''}
+                onChange={(e) => setFormData({ ...formData, specNote: e.target.value })}
+              />
+            </div>
+
+            <div className="dialog-actions">
+              <Button variant="primary" onClick={handleSave}>
+                Save
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowCreateDialog(false);
+                  setShowEditDialog(false);
+                  setSelectedDelivery(null);
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading Overlay */}
+      {showLoadingOverlay && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 2000,
+        }}>
+          <div style={{
+            background: 'white',
+            padding: '30px',
+            borderRadius: '8px',
+            textAlign: 'center',
+          }}>
+            <div style={{ fontSize: '24px', marginBottom: '10px' }}>⏳</div>
+            <div>Processing notification...</div>
+            <div style={{ fontSize: '12px', color: '#666', marginTop: '10px' }}>Please wait</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

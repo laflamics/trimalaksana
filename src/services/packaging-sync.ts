@@ -6,7 +6,6 @@
 export type SyncPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
 
-import { websocketClient } from './websocket-client';
 import { storageService } from './storage';
 
 export interface SyncOperation {
@@ -70,44 +69,8 @@ class PackagingSync {
   }
 
   private initializeWebSocket() {
-    // WebSocket untuk real-time sync (wajib untuk performa optimal)
-    try {
-      // Check if WebSocket is explicitly enabled
-      const wsEnabled = localStorage.getItem('websocket_enabled') === 'true';
-      if (!wsEnabled) {
-        // WebSocket disabled - use polling fallback silently
-        return;
-      }
-      
-      // Use fixed WebSocket URL
-      const wsUrl = 'wss://server-tljp.tail75a421.ts.net/ws';
-      
-      this.ws = new WebSocket(wsUrl);
-      
-      this.ws.onopen = () => {
-      };
-      
-      this.ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          this.handleWebSocketMessage(message);
-        } catch (e) {
-        }
-      };
-      
-      this.ws.onerror = (error) => {
-        // Silently handle WebSocket errors - polling will be used instead
-        this.ws = null;
-      };
-      
-      this.ws.onclose = () => {
-        // WebSocket closed - will use polling
-        this.ws = null;
-      };
-    } catch (error) {
-      // Silently fail - polling will be used instead
-      this.ws = null;
-    }
+    // WebSocket disabled - using polling fallback only
+    this.ws = null;
   }
 
   private handleWebSocketMessage(message: any) {

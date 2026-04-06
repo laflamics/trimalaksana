@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
@@ -7,8 +7,10 @@ import { storageService, StorageKeys } from '../../services/storage';
 import { filterActiveItems } from '../../utils/data-persistence-helper';
 import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import { useLanguage } from '../../hooks/useLanguage';
+import { useToast } from '../../hooks/useToast';
 import * as XLSX from 'xlsx';
 import '../../styles/common.css';
+import '../../styles/toast.css';
 import './Master.css';
 
 interface Material {
@@ -28,20 +30,6 @@ interface Material {
   priceMtr?: number;
 }
 
-interface InventoryItem {
-  id: string;
-  codeItem: string;
-  description: string;
-  kategori: string;
-  satuan: string;
-  price: number;
-  stockP1?: number;
-  stockP2?: number;
-  stockPremonth: number;
-  nextStock: number;
-  supplierName: string;
-}
-
 interface Supplier {
   id: string;
   kode: string;
@@ -50,95 +38,19 @@ interface Supplier {
 
 const Materials = () => {
   const { t } = useLanguage();
+  const { showToast, ToastContainer } = useToast();
   const [materials, setMaterials] = useState<Material[]>([]);
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<Material | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(50);
   const [supplierInputValue, setSupplierInputValue] = useState('');
-  const [supplierSearch, setSupplierSearch] = useState('');
   const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
-  const [stockAmanInputValue, setStockAmanInputValue] = useState('');
-  const [stockMinimumInputValue, setStockMinimumInputValue] = useState('');
-  const [priceInputValue, setPriceInputValue] = useState('');
+  const debounceTimer = useRef<NodeJS.Timeout>();
+  const itemsPerPage = 15;
 
-  // Custom Dialog state
-  const [dialogState, setDialogState] = useState<{
-    show: boolean;
-    type: 'alert' | 'confirm' | null;
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-  }>({
-    show: false,
-    type: null,
-    title: '',
-    message: '',
-  });
-
-  // Helper functions untuk dialog
-  const showAlert = (message: string, title: string = 'Information') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'alert',
-      title,
-      message,
-    });
-  };
-
-  const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'confirm',
-      title,
-      message,
-      onConfirm,
-      onCancel,
-    });
-  };
-
-  const closeDialog = () => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(false);
-    }
-    setDialogState({
-      show: false,
-      type: null,
-      title: '',
-      message: '',
-    });
-  };
-  
-  // Format date function - format: dd/mm/yyyy hh:mm:ss
-  const formatDateTime = (dateString: string | undefined) => {
-    if (!dateString) return '-';
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return '-';
-      
-      const day = String(date.getDate()).padStart(2, '0');
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const year = date.getFullYear();
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      const seconds = String(date.getSeconds()).padStart(2, '0');
-      
-      return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
-    } catch {
-      return '-';
-    }
-  };
-  
   const [formData, setFormData] = useState<Partial<Material>>({
     kode: '',
     nama: '',
@@ -150,6 +62,16 @@ const Materials = () => {
     priceMtr: 0,
   });
 
+  // Debounce search - 300ms
+  useEffect(() => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setCurrentPage(1);
+    }, 300);
+    return () => clearTimeout(debounceTimer.current);
+  }, [searchQuery]);
+
   useEffect(() => {
     loadMaterials();
     loadSuppliers();
@@ -157,9 +79,7 @@ const Materials = () => {
 
   const loadMaterials = async () => {
     const dataRaw = await storageService.get<Material[]>('materials') || [];
-    // Filter out deleted items menggunakan helper function
     const data = filterActiveItems(dataRaw);
-    // Sort berdasarkan kode (SKU/ID) secara ascending
     const sorted = data.sort((a, b) => {
       const kodeA = (a.kode || '').toUpperCase();
       const kodeB = (b.kode || '').toUpperCase();
@@ -173,76 +93,41 @@ const Materials = () => {
     setSuppliers(data);
   };
 
-  // Helper function untuk remove leading zero dari input angka
-  const removeLeadingZero = (value: string): string => {
-    if (!value) return value;
-    // Jika hanya "0", "0.", atau "0," biarkan
-    if (value === '0' || value === '0.' || value === '0,') {
-      return value;
-    }
-    // Hapus semua leading zero kecuali untuk "0." atau "0,"
-    if (value.startsWith('0') && value.length > 1) {
-      // Jika dimulai dengan "0." atau "0," biarkan
-      if (value.startsWith('0.') || value.startsWith('0,')) {
-        return value;
-      }
-      // Hapus semua leading zero
-      const cleaned = value.replace(/^0+/, '');
-      return cleaned || '0';
-    }
-    return value;
-  };
-
-  const getSupplierInputDisplayValue = () => {
-    if (supplierInputValue !== undefined && supplierInputValue !== '') {
-      return supplierInputValue;
-    }
-    if (formData.supplier) {
-      const supplier = suppliers.find(s => s.nama === formData.supplier);
-      if (supplier) {
-        return `${supplier.kode} - ${supplier.nama}`;
-      }
-      return formData.supplier;
-    }
-    return '';
-  };
-
-  // Filtered suppliers untuk dropdown
+  // Optimized supplier filter - limit to 50 items
   const filteredSuppliers = useMemo(() => {
-    const suppliersArray = Array.isArray(suppliers) ? suppliers : [];
-    if (!supplierSearch) return suppliersArray.slice(0, 200); // Limit untuk performance
-    const query = supplierSearch.toLowerCase();
-    return suppliersArray
+    if (!supplierInputValue) return suppliers.slice(0, 50);
+    const query = supplierInputValue.toLowerCase();
+    return suppliers
       .filter(s => {
-        if (!s) return false;
         const code = (s.kode || '').toLowerCase();
         const name = (s.nama || '').toLowerCase();
         return code.includes(query) || name.includes(query);
       })
-      .slice(0, 200); // Limit untuk performance
-  }, [supplierSearch, suppliers]);
+      .slice(0, 50);
+  }, [supplierInputValue, suppliers]);
 
-  const handleSupplierInputChange = (text: string) => {
-    setSupplierInputValue(text);
-    setSupplierSearch(text);
-    setShowSupplierDropdown(true);
-    if (!text) {
-      setFormData({ ...formData, supplier: '' });
-      return;
-    }
-    const normalized = text.toLowerCase();
-    const matchedSupplier = suppliers.find(s => {
-      const label = `${s.kode || ''}${s.kode ? ' - ' : ''}${s.nama || ''}`.toLowerCase();
-      const code = (s.kode || '').toLowerCase();
-      const name = (s.nama || '').toLowerCase();
-      return label === normalized || code === normalized || name === normalized;
+  // Optimized search filter with debounce
+  const filteredMaterials = useMemo(() => {
+    const materialsArray = Array.isArray(materials) ? materials : [];
+    if (!debouncedSearch) return materialsArray;
+    
+    const query = debouncedSearch.toLowerCase();
+    return materialsArray.filter(material => {
+      if (!material) return false;
+      return (
+        (material.kode || '').toLowerCase().includes(query) ||
+        (material.nama || '').toLowerCase().includes(query) ||
+        (material.kategori || '').toLowerCase().includes(query) ||
+        (material.supplier || '').toLowerCase().includes(query) ||
+        (material.satuan || '').toLowerCase().includes(query)
+      );
     });
-    if (matchedSupplier) {
-      setFormData({ ...formData, supplier: matchedSupplier.nama });
-    } else {
-      setFormData({ ...formData, supplier: text });
-    }
-  };
+  }, [materials, debouncedSearch]);
+
+  const totalPages = Math.ceil(filteredMaterials.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedMaterials = filteredMaterials.slice(startIndex, endIndex);
 
   const handleSave = async () => {
     try {
@@ -264,7 +149,6 @@ const Materials = () => {
         } as Material;
         updated = [...materials, newMaterial];
       }
-      // Sort berdasarkan kode sebelum save
       const sorted = updated.sort((a, b) => {
         const kodeA = (a.kode || '').toUpperCase();
         const kodeB = (b.kode || '').toUpperCase();
@@ -272,304 +156,82 @@ const Materials = () => {
       });
       await storageService.set(StorageKeys.PACKAGING.MATERIALS, sorted);
       setMaterials(sorted.map((m, idx) => ({ ...m, no: idx + 1 })));
-      setShowForm(false);
-      setEditingItem(null);
-      setSupplierInputValue('');
-      setStockAmanInputValue('');
-      setStockMinimumInputValue('');
-      setPriceInputValue('');
-      setFormData({ kode: '', nama: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', supplier: '', priceMtr: 0 });
+      resetForm();
+      showToast(`Material "${formData.nama}" ${editingItem ? 'updated' : 'added'}`, 'success');
     } catch (error: any) {
-      showAlert(`Error saving material: ${error.message}`, 'Error');
+      showToast(`Error saving material: ${error.message}`, 'error');
     }
+  };
+
+  const resetForm = () => {
+    setShowForm(false);
+    setEditingItem(null);
+    setSupplierInputValue('');
+    setFormData({ kode: '', nama: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', supplier: '', priceMtr: 0 });
   };
 
   const handleEdit = (item: Material) => {
     setEditingItem(item);
     const supplier = suppliers.find(s => s.nama === item.supplier);
-    if (supplier) {
-      setSupplierInputValue(`${supplier.kode} - ${supplier.nama}`);
-    } else {
-      setSupplierInputValue(item.supplier || '');
-    }
-    setStockAmanInputValue('');
-    setStockMinimumInputValue('');
-    setPriceInputValue('');
+    setSupplierInputValue(supplier ? `${supplier.kode} - ${supplier.nama}` : item.supplier || '');
     setFormData(item);
     setShowForm(true);
   };
 
   const handleDelete = async (item: Material) => {
+    if (!item.id) {
+      showToast(`Material "${item.nama}" tidak memiliki ID. Tidak bisa dihapus.`, 'error');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete Material: ${item.nama}?\n\n⚠️ Data akan dihapus dengan aman.\n\nTindakan ini tidak bisa dibatalkan.`
+    );
+
+    if (!confirmed) return;
+
     try {
-      console.log('[Materials] handleDelete called for:', item.nama, item.id);
-      
-      // Validate item.id exists
-      if (!item.id) {
-        console.error('[Materials] Item missing ID:', item);
-        showAlert(`❌ Error: Material "${item.nama}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
-        return;
+      const deleteResult = await deletePackagingItem('materials', item.id, 'id');
+      if (deleteResult.success) {
+        await reloadPackagingData('materials', setMaterials);
+        const currentMaterials = await storageService.get<Material[]>('materials') || [];
+        const activeMaterials = filterActiveItems(currentMaterials);
+        const sorted = activeMaterials.sort((a, b) => {
+          const kodeA = (a.kode || '').toUpperCase();
+          const kodeB = (b.kode || '').toUpperCase();
+          return kodeA.localeCompare(kodeB, undefined, { numeric: true, sensitivity: 'base' });
+        });
+        setMaterials(sorted.map((m, idx) => ({ ...m, no: idx + 1 })));
+        showToast(`Material "${item.nama}" deleted`, 'success');
+      } else {
+        showToast(`Error deleting material "${item.nama}": ${deleteResult.error || 'Unknown error'}`, 'error');
       }
-      
-      showConfirm(
-        `Hapus Material: ${item.nama}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
-        async () => {
-          try {
-            console.log('[Materials] Delete confirmed for:', item.nama, item.id);
-            
-            // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
-            console.log('[Materials] Calling deletePackagingItem...');
-            const deleteResult = await deletePackagingItem('materials', item.id, 'id');
-            console.log('[Materials] Delete result:', deleteResult);
-            
-            if (deleteResult.success) {
-              // Reload data dengan helper (handle race condition) - sama seperti SalesOrders
-              console.log('[Materials] Reloading data...');
-              await reloadPackagingData('materials', setMaterials);
-              
-              // Re-number materials setelah reload dan sort berdasarkan kode
-              const currentMaterials = await storageService.get<Material[]>('materials') || [];
-              const activeMaterials = filterActiveItems(currentMaterials);
-              const sorted = activeMaterials.sort((a, b) => {
-                const kodeA = (a.kode || '').toUpperCase();
-                const kodeB = (b.kode || '').toUpperCase();
-                return kodeA.localeCompare(kodeB, undefined, { numeric: true, sensitivity: 'base' });
-              });
-              setMaterials(sorted.map((m, idx) => ({ ...m, no: idx + 1 })));
-              
-              showAlert(`✅ Material "${item.nama}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
-            } else {
-              console.error('[Materials] Delete failed:', deleteResult.error);
-              showAlert(`❌ Error deleting material "${item.nama}": ${deleteResult.error || 'Unknown error'}`, 'Error');
-            }
-          } catch (error: any) {
-            console.error('[Materials] Error in delete:', error);
-            showAlert(`❌ Error deleting material: ${error.message}`, 'Error');
-          }
-        },
-        () => {
-          console.log('[Materials] Delete cancelled');
-        },
-        'Safe Delete Confirmation'
-      );
     } catch (error: any) {
-      console.error('[Materials] Error in handleDelete:', error);
-      showAlert(`❌ Error: ${error.message}`, 'Error');
+      showToast(`Error deleting material: ${error.message}`, 'error');
     }
   };
 
-  // Cleanup Duplicates
-  const handleCleanupDuplicates = async () => {
-    try {
-      const currentMaterials = Array.isArray(materials) ? materials : [];
-      
-      if (currentMaterials.length === 0) {
-        showAlert('Tidak ada data material untuk dibersihkan', 'Info');
-        return;
-      }
-
-      showConfirm(
-        `🧹 Bersihkan Data Duplikat?
-
-Fungsi ini akan:
-- Deteksi duplikat berdasarkan Kode atau Nama
-- Merge duplikat (ambil yang lebih lengkap/baru)
-- Simpan data yang sudah dibersihkan
-
-Total material saat ini: ${currentMaterials.length}
-
-Lanjutkan?`,
-        async () => {
-          try {
-            const deduplicatedMap = new Map<string, Material>();
-            const duplicatesFound: string[] = [];
-            
-            // Helper untuk normalize nama
-            const normalizeName = (name: string): string => {
-              return name.toLowerCase().trim()
-                .replace(/\s+/g, ' ')
-                .trim();
-            };
-
-            // Build lookup maps
-            const materialsByKode = new Map<string, Material>();
-            const materialsByNama = new Map<string, Material[]>();
-            
-            currentMaterials.forEach(m => {
-              const kode = (m.kode || '').trim().toLowerCase();
-              const nama = normalizeName(m.nama || '');
-              
-              if (kode) materialsByKode.set(kode, m);
-              if (nama) {
-                if (!materialsByNama.has(nama)) {
-                  materialsByNama.set(nama, []);
-                }
-                materialsByNama.get(nama)!.push(m);
-              }
-            });
-
-            // Group materials yang harus di-merge
-            const materialGroups = new Map<string, Material[]>();
-            const processedIds = new Set<string>();
-            
-            currentMaterials.forEach((material, index) => {
-              const materialId = material.id || `unknown-${index}`;
-              if (processedIds.has(materialId)) return;
-              
-              const kode = (material.kode || '').trim().toLowerCase();
-              const nama = normalizeName(material.nama || '');
-              
-              let groupKey = '';
-              
-              // Prioritas 1: Gunakan kode sebagai group key
-              if (kode) {
-                groupKey = `kode:${kode}`;
-              }
-              
-              // Prioritas 2: Gunakan nama sebagai group key
-              if (!groupKey && nama) {
-                groupKey = `nama:${nama}`;
-              }
-              
-              // Fallback: Gunakan id
-              if (!groupKey) {
-                groupKey = `id:${materialId}`;
-              }
-
-              if (groupKey) {
-                if (!materialGroups.has(groupKey)) {
-                  materialGroups.set(groupKey, []);
-                }
-                materialGroups.get(groupKey)!.push(material);
-                processedIds.add(materialId);
-              }
-            });
-
-            // Merge materials dalam setiap group
-            materialGroups.forEach((groupMaterials, groupKey) => {
-              if (groupMaterials.length === 1) {
-                deduplicatedMap.set(groupKey, groupMaterials[0]);
-                return;
-              }
-
-              // Duplikat ditemukan - merge dengan memilih yang lebih lengkap
-              duplicatesFound.push(`${groupMaterials[0].kode || groupMaterials[0].nama || 'Unknown'} (${groupKey})`);
-              
-              // Score setiap material dalam group
-              const scoredMaterials = groupMaterials.map(material => {
-                const score = 
-                  (material.harga && material.harga > 0 ? 100 : 0) +
-                  (material.nama || '').trim().length +
-                  (material.kategori && material.kategori.trim() ? 50 : 0);
-                
-                return { score, material };
-              });
-              
-              // Sort by score (desc), then by lastUpdate (desc)
-              scoredMaterials.sort((a, b) => {
-                if (a.score !== b.score) return b.score - a.score;
-                const aUpdate = a.material.lastUpdate || '';
-                const bUpdate = b.material.lastUpdate || '';
-                return bUpdate.localeCompare(aUpdate);
-              });
-              
-              // Ambil yang terbaik dan merge data dari yang lain
-              const bestMaterial = scoredMaterials[0].material;
-              
-              const mergedMaterial: Material = {
-                ...bestMaterial,
-                kode: bestMaterial.kode || groupMaterials.find(m => m.kode)?.kode || '',
-                nama: groupMaterials.reduce((longest, m) => 
-                  (m.nama || '').trim().length > (longest.nama || '').trim().length ? m : longest
-                ).nama,
-                satuan: bestMaterial.satuan || groupMaterials.find(m => m.satuan)?.satuan || '',
-                kategori: bestMaterial.kategori || groupMaterials.find(m => m.kategori)?.kategori || '',
-                supplier: bestMaterial.supplier || groupMaterials.find(m => m.supplier)?.supplier || '',
-                harga: Math.max(...groupMaterials.map(m => m.harga || 0)),
-                stockAman: Math.max(...groupMaterials.map(m => m.stockAman || 0)),
-                stockMinimum: Math.max(...groupMaterials.map(m => m.stockMinimum || 0)),
-              };
-              
-              deduplicatedMap.set(groupKey, mergedMaterial);
-            });
-
-            const deduplicated = Array.from(deduplicatedMap.values());
-            const removedCount = currentMaterials.length - deduplicated.length;
-            
-            if (removedCount === 0) {
-              showAlert('✅ Tidak ada duplikat ditemukan. Data sudah bersih!', 'Success');
-              return;
-            }
-
-            // Re-number materials
-            const renumbered = deduplicated.map((m, idx) => ({ ...m, no: idx + 1 }));
-
-            // Save to storage
-            await storageService.set(StorageKeys.PACKAGING.MATERIALS, renumbered);
-            setMaterials(renumbered);
-
-            const duplicateList = duplicatesFound.slice(0, 10).join('\n');
-            const moreText = duplicatesFound.length > 10 ? `\n... dan ${duplicatesFound.length - 10} duplikat lainnya` : '';
-            
-            showAlert(
-              `✅ Data duplikat berhasil dibersihkan!\n\n` +
-              `📊 Statistik:\n` +
-              `- Sebelum: ${currentMaterials.length} material\n` +
-              `- Sesudah: ${renumbered.length} material\n` +
-              `- Dihapus: ${removedCount} duplikat\n\n` +
-              `Duplikat yang ditemukan:\n${duplicateList}${moreText}`,
-              'Success'
-            );
-          } catch (error: any) {
-            showAlert(`❌ Error membersihkan duplikat: ${error.message}`, 'Error');
-          }
-        },
-        () => {
-          // Cancelled
-        },
-        'Cleanup Duplicates Confirmation'
-      );
-    } catch (error: any) {
-      showAlert(`❌ Error: ${error.message}`, 'Error');
-    }
-  };
-
-  // Download Template Excel
   const handleDownloadTemplate = () => {
     try {
       const templateData = [
         { 'Kode': 'MTR-001', 'Nama': 'Material Example 1', 'Satuan': 'KG', 'Kategori': 'Material', 'Supplier': 'Supplier A', 'Stock Aman': '100', 'Stock Minimum': '50', 'Price MTR': '25000' },
         { 'Kode': 'MTR-002', 'Nama': 'Material Example 2', 'Satuan': 'PCS', 'Kategori': 'Material', 'Supplier': 'Supplier B', 'Stock Aman': '200', 'Stock Minimum': '100', 'Price MTR': '35000' },
       ];
-
       const ws = XLSX.utils.json_to_sheet(templateData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Template');
-      
-      const fileName = `Materials_Template.xlsx`;
-      XLSX.writeFile(wb, fileName);
-      showAlert(`✅ Template downloaded! Silakan isi data sesuai format dan import kembali.`, 'Success');
+      XLSX.writeFile(wb, `Materials_Template.xlsx`);
+      showToast(`Template downloaded!`, 'success');
     } catch (error: any) {
-      showAlert(`Error downloading template: ${error.message}`, 'Error');
+      showToast(`Error downloading template: ${error.message}`, 'error');
     }
   };
 
   const handleImportExcel = () => {
-    // Show preview dialog dengan contoh header sebelum browse file
-    const exampleHeaders = ['Kode', 'Nama', 'Satuan', 'Kategori', 'Supplier', 'Stock Aman', 'Stock Minimum', 'Price MTR'];
-    const exampleData = [
-      { 'Kode': 'MTR-001', 'Nama': 'Material Example 1', 'Satuan': 'KG', 'Kategori': 'Material', 'Supplier': 'Supplier A', 'Stock Aman': '100', 'Stock Minimum': '50', 'Price MTR': '25000' },
-      { 'Kode': 'MTR-002', 'Nama': 'Material Example 2', 'Satuan': 'PCS', 'Kategori': 'Material', 'Supplier': 'Supplier B', 'Stock Aman': '200', 'Stock Minimum': '100', 'Price MTR': '35000' },
-    ];
-    
-    const showPreviewDialog = () => {
-      showConfirm(
-        `📋 Format Excel untuk Import Materials\n\nPastikan file Excel Anda memiliki header berikut:\n\n${exampleHeaders.join(' | ')}\n\nContoh data:\n${exampleData.map((row, idx) => `${idx + 1}. ${exampleHeaders.map(h => String(row[h as keyof typeof row] || '')).join(' | ')}`).join('\n')}\n\n⚠️ Catatan:\n- Header harus ada di baris pertama\n- Kode dan Nama wajib diisi\n- Header bisa menggunakan variasi: Kode/Code/SKU, Nama/Name, Satuan/Unit/UOM, dll\n\nKlik "Download Template" untuk mendapatkan file Excel template, atau "Lanjutkan" untuk memilih file Excel yang sudah Anda siapkan.`,
-        () => {
-          closeDialog();
-          const input = document.createElement('input');
-          input.type = 'file';
-          input.accept = '.xlsx,.xls,.csv';
-          input.onchange = async (e: any) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xlsx,.xls,.csv';
+    input.onchange = async (e: any) => {
       const file = e.target.files[0];
       if (!file) return;
 
@@ -581,7 +243,7 @@ Lanjutkan?`,
         const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
         if (jsonData.length === 0) {
-          showAlert('Excel file is empty or has no data', 'Error');
+          showToast('Excel file is empty or has no data', 'error');
           return;
         }
 
@@ -595,118 +257,89 @@ Lanjutkan?`,
         };
 
         const newMaterials: Material[] = [];
-        const errors: string[] = [];
-
         jsonData.forEach((row, index) => {
-          try {
-            const kode = mapColumn(row, ['Kode', 'KODE', 'Code', 'CODE', 'SKU', 'sku', 'Material Code', 'material_code']);
-            const nama = mapColumn(row, ['Nama', 'NAMA', 'Name', 'NAME', 'Material Name', 'material_name']);
-            const satuan = mapColumn(row, ['Satuan', 'SATUAN', 'Unit', 'UNIT', 'UOM', 'uom']);
-            const kategori = mapColumn(row, ['Kategori', 'KATEGORI', 'Category', 'CATEGORY']);
-            const supplier = mapColumn(row, ['Supplier', 'SUPPLIER', 'Supplier Name', 'supplier_name']);
-            const stockAmanStr = mapColumn(row, ['Stock Aman', 'STOCK AMAN', 'Safe Stock', 'safe_stock']);
-            const stockMinimumStr = mapColumn(row, ['Stock Minimum', 'STOCK MINIMUM', 'Min Stock', 'min_stock']);
-            const priceMtrStr = mapColumn(row, ['Price MTR', 'PRICE MTR', 'Price', 'PRICE', 'Material Price', 'material_price']);
+          const kode = mapColumn(row, ['Kode', 'Code', 'SKU']);
+          const nama = mapColumn(row, ['Nama', 'Name']);
+          const satuan = mapColumn(row, ['Satuan', 'Unit', 'UOM']);
+          const kategori = mapColumn(row, ['Kategori', 'Category']);
+          const supplier = mapColumn(row, ['Supplier']);
+          const stockAman = parseFloat(mapColumn(row, ['Stock Aman', 'Safe Stock'])) || 0;
+          const stockMinimum = parseFloat(mapColumn(row, ['Stock Minimum', 'Min Stock'])) || 0;
+          const priceMtr = parseFloat(mapColumn(row, ['Price MTR', 'Price'])) || 0;
 
-            if (!kode && !nama) return;
+          if (!kode || !nama) return;
 
-            if (!kode || !nama) {
-              errors.push(`Row ${index + 2}: Kode and Nama are required`);
-              return;
-            }
-
-            const existingIndex = materials.findIndex(m => m.kode.toLowerCase() === kode.toLowerCase());
-            const stockAman = parseFloat(stockAmanStr) || 0;
-            const stockMinimum = parseFloat(stockMinimumStr) || 0;
-            const priceMtr = parseFloat(priceMtrStr) || 0;
-
-            if (existingIndex >= 0) {
-              const existing = materials[existingIndex];
-              newMaterials.push({
-                ...existing,
-                kode,
-                nama,
-                satuan: satuan || existing.satuan || 'PCS',
-                kategori: kategori || existing.kategori || '',
-                supplier: supplier || existing.supplier || '',
-                stockAman,
-                stockMinimum,
-                priceMtr,
-                lastUpdate: new Date().toISOString(),
-                userUpdate: 'System',
-                ipAddress: '127.0.0.1',
-              });
-            } else {
-              newMaterials.push({
-                id: Date.now().toString() + index,
-                no: materials.length + newMaterials.length + 1,
-                kode,
-                nama,
-                satuan: satuan || 'PCS',
-                kategori: kategori || '',
-                supplier: supplier || '',
-                stockAman,
-                stockMinimum,
-                priceMtr,
-                lastUpdate: new Date().toISOString(),
-                userUpdate: 'System',
-                ipAddress: '127.0.0.1',
-              } as Material);
-            }
-          } catch (error: any) {
-            errors.push(`Row ${index + 2}: ${error.message}`);
+          const existingIndex = materials.findIndex(m => m.kode.toLowerCase() === kode.toLowerCase());
+          if (existingIndex >= 0) {
+            const existing = materials[existingIndex];
+            newMaterials.push({
+              ...existing,
+              kode,
+              nama,
+              satuan: satuan || existing.satuan || 'PCS',
+              kategori: kategori || existing.kategori || '',
+              supplier: supplier || existing.supplier || '',
+              stockAman,
+              stockMinimum,
+              priceMtr,
+              lastUpdate: new Date().toISOString(),
+              userUpdate: 'System',
+              ipAddress: '127.0.0.1',
+            });
+          } else {
+            newMaterials.push({
+              id: Date.now().toString() + index,
+              no: materials.length + newMaterials.length + 1,
+              kode,
+              nama,
+              satuan: satuan || 'PCS',
+              kategori: kategori || '',
+              supplier: supplier || '',
+              stockAman,
+              stockMinimum,
+              priceMtr,
+              lastUpdate: new Date().toISOString(),
+              userUpdate: 'System',
+              ipAddress: '127.0.0.1',
+            } as Material);
           }
         });
 
         if (newMaterials.length === 0) {
-          showAlert('No valid data found in Excel file', 'Error');
+          showToast('No valid data found in Excel file', 'error');
           return;
         }
 
-        const importMaterials = async () => {
-          const updatedMaterials = [...materials];
-          newMaterials.forEach(newMaterial => {
-            const existingIndex = updatedMaterials.findIndex(m => m.kode.toLowerCase() === newMaterial.kode.toLowerCase());
-            if (existingIndex >= 0) {
-              updatedMaterials[existingIndex] = newMaterial;
-            } else {
-              updatedMaterials.push(newMaterial);
-            }
-          });
-
-          // Sort berdasarkan kode sebelum save
-          const sorted = updatedMaterials.sort((a, b) => {
-            const kodeA = (a.kode || '').toUpperCase();
-            const kodeB = (b.kode || '').toUpperCase();
-            return kodeA.localeCompare(kodeB, undefined, { numeric: true, sensitivity: 'base' });
-          });
-          const renumbered = sorted.map((m, idx) => ({ ...m, no: idx + 1 }));
-          await storageService.set(StorageKeys.PACKAGING.MATERIALS, renumbered);
-          setMaterials(renumbered);
-
-          if (errors.length > 0) {
-            showAlert(`Imported ${newMaterials.length} materials, but ${errors.length} errors occurred.\n\nFirst few errors:\n${errors.slice(0, 5).join('\n')}`, 'Import Completed');
-          } else {
-            showAlert(`✅ Successfully imported ${newMaterials.length} materials`, 'Success');
-          }
-        };
-
-        showConfirm(
-          `Import ${newMaterials.length} materials from Excel?${errors.length > 0 ? `\n\n${errors.length} errors occurred.` : ''}`,
-          importMaterials,
-          undefined,
-          'Confirm Import'
+        const confirmed = window.confirm(
+          `Import ${newMaterials.length} materials from Excel?`
         );
+
+        if (!confirmed) return;
+
+        const updatedMaterials = [...materials];
+        newMaterials.forEach(newMaterial => {
+          const existingIndex = updatedMaterials.findIndex(m => m.kode.toLowerCase() === newMaterial.kode.toLowerCase());
+          if (existingIndex >= 0) {
+            updatedMaterials[existingIndex] = newMaterial;
+          } else {
+            updatedMaterials.push(newMaterial);
+          }
+        });
+
+        const sorted = updatedMaterials.sort((a, b) => {
+          const kodeA = (a.kode || '').toUpperCase();
+          const kodeB = (b.kode || '').toUpperCase();
+          return kodeA.localeCompare(kodeB, undefined, { numeric: true, sensitivity: 'base' });
+        });
+        const renumbered = sorted.map((m, idx) => ({ ...m, no: idx + 1 }));
+        await storageService.set(StorageKeys.PACKAGING.MATERIALS, renumbered);
+        setMaterials(renumbered);
+        showToast(`Successfully imported ${newMaterials.length} materials`, 'success');
       } catch (error: any) {
-        showAlert(`Error importing Excel: ${error.message}\n\nMake sure the file is a valid Excel file (.xlsx or .xls)`, 'Error');
+        showToast(`Error importing Excel: ${error.message}`, 'error');
       }
-          };
-          input.click();
-        }
-      );
     };
-    
-    showPreviewDialog();
+    input.click();
   };
 
   const handleExportExcel = () => {
@@ -721,86 +354,41 @@ Lanjutkan?`,
         'Stock Aman': material.stockAman || 0,
         'Stock Minimum': material.stockMinimum || 0,
         'Price MTR': material.priceMtr || 0,
-        'Last Update': material.lastUpdate ? new Date(material.lastUpdate).toLocaleString('id-ID') : '',
       }));
 
       const ws = XLSX.utils.json_to_sheet(dataToExport);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Materials');
-      
       const fileName = `Materials_${new Date().toISOString().split('T')[0]}.xlsx`;
       XLSX.writeFile(wb, fileName);
-      showAlert(`✅ Exported ${dataToExport.length} materials to ${fileName}`, 'Success');
+      showToast(`Exported ${dataToExport.length} materials`, 'success');
     } catch (error: any) {
-      showAlert(`Error exporting to Excel: ${error.message}`, 'Error');
+      showToast(`Error exporting to Excel: ${error.message}`, 'error');
     }
   };
 
-  const filteredMaterials = useMemo(() => {
-    // Ensure materials is always an array
-    const materialsArray = Array.isArray(materials) ? materials : [];
-    const filtered = materialsArray.filter(material => {
-      if (!material) return false;
-      if (!searchQuery) return true;
-      const query = searchQuery.toLowerCase();
-      return (
-        (material.kode || '').toLowerCase().includes(query) ||
-        (material.nama || '').toLowerCase().includes(query) ||
-        (material.kategori || '').toLowerCase().includes(query) ||
-        (material.supplier || '').toLowerCase().includes(query) ||
-        (material.satuan || '').toLowerCase().includes(query)
-      );
-    });
-    // Sort by stockAman in descending order (highest stock first), then by kode
-    return filtered.sort((a, b) => {
-      const stockADiff = (b.stockAman || 0) - (a.stockAman || 0);
-      if (stockADiff !== 0) return stockADiff;
-      const kodeA = (a.kode || '').toUpperCase();
-      const kodeB = (b.kode || '').toUpperCase();
-      return kodeA.localeCompare(kodeB, undefined, { numeric: true, sensitivity: 'base' });
-    });
-  }, [materials, searchQuery]);
-
-  const totalPages = Math.ceil(filteredMaterials.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedMaterials = filteredMaterials.slice(startIndex, endIndex);
-
-  // Reset to page 1 when search changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery]);
-
+  // Optimized columns - no findIndex, use index directly
   const columns = useMemo(() => [
     { 
       key: 'no', 
       header: t('common.number') || 'No',
+      width: '50px',
       render: (item: Material) => {
-        const index = paginatedMaterials.findIndex(m => m.id === item.id);
-        return index >= 0 ? startIndex + index + 1 : '';
+        const idx = paginatedMaterials.indexOf(item);
+        return idx >= 0 ? startIndex + idx + 1 : '';
       },
     },
     { key: 'kode', header: t('master.materialCode') || 'Kode (SKU/ID)' },
     { key: 'nama', header: t('master.materialName') || 'Nama' },
-    { key: 'satuan', header: t('master.unit') || 'Satuan (Unit)' },
+    { key: 'satuan', header: t('master.unit') || 'Satuan' },
     { key: 'kategori', header: t('master.category') || 'Kategori' },
     { key: 'supplier', header: t('master.supplierName') || 'Supplier' },
     { 
-      key: 'lastUpdate', 
-      header: t('common.updatedAt') || 'Last Update',
-      render: (item: Material) => formatDateTime(item.lastUpdate)
-    },
-    { key: 'userUpdate', header: t('common.updatedBy') || 'User Update' },
-    { 
       key: 'priceMtr', 
-      header: t('master.price') || 'Harga Satuan',
+      header: t('master.price') || 'Harga',
       render: (item: Material) => {
         const harga = item.priceMtr || item.harga || 0;
-        return harga > 0 ? new Intl.NumberFormat('id-ID', { 
-          style: 'currency', 
-          currency: 'IDR',
-          minimumFractionDigits: 0 
-        }).format(harga) : '-';
+        return harga > 0 ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(harga) : '-';
       },
     },
     {
@@ -813,471 +401,133 @@ Lanjutkan?`,
         </div>
       ),
     },
-  ], [t, paginatedMaterials, startIndex]);
+  ], [t, startIndex, paginatedMaterials]);
 
   return (
     <div className="master-compact">
+      <ToastContainer />
       <div className="page-header">
         <h1>Master Material</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <Button variant="secondary" onClick={handleCleanupDuplicates}>🧹 Bersihkan Duplikat</Button>
           <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
           <Button variant="secondary" onClick={handleDownloadTemplate}>📋 Download Template</Button>
           <Button variant="primary" onClick={handleImportExcel}>📤 Import Excel</Button>
-          <Button onClick={() => { 
-              setSupplierInputValue('');
-              setStockAmanInputValue('');
-              setStockMinimumInputValue('');
-              setPriceInputValue('');
-              setFormData({ kode: '', nama: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', supplier: '', priceMtr: 0 });
-              setEditingItem(null);
-            setShowForm(true);
-          }}>
+          <Button onClick={() => { setFormData({ kode: '', nama: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', supplier: '', priceMtr: 0 }); setEditingItem(null); setSupplierInputValue(''); setShowForm(true); }}>
             + Tambah Material
           </Button>
         </div>
       </div>
 
       {showForm && (
-        <div className="dialog-overlay" onClick={() => { setShowForm(false); setEditingItem(null); setSupplierInputValue(''); setStockAmanInputValue(''); setStockMinimumInputValue(''); setPriceInputValue(''); setFormData({ kode: '', nama: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', supplier: '', priceMtr: 0 }); }} style={{ zIndex: 10000 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', width: '90%', maxHeight: '90vh', overflowY: 'auto', zIndex: 10001 }}>
-            <Card title={editingItem ? "Edit Material" : "Tambah Material Baru"} className="dialog-card">
-          <Input
-            label="Kode (SKU/ID)"
-            value={formData.kode || ''}
-            onChange={(v) => setFormData({ ...formData, kode: v })}
-          />
-          <Input
-            label="Nama"
-            value={formData.nama || ''}
-            onChange={(v) => setFormData({ ...formData, nama: v })}
-          />
-          <Input
-            label="Satuan (Unit)"
-            value={formData.satuan || ''}
-            onChange={(v) => setFormData({ ...formData, satuan: v })}
-          />
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Stock Aman
-            </label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={stockAmanInputValue !== undefined && stockAmanInputValue !== '' ? stockAmanInputValue : (formData.stockAman !== undefined && formData.stockAman !== null && formData.stockAman !== 0 ? String(formData.stockAman) : '')}
-              onFocus={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = formData.stockAman;
-                if (currentVal === 0 || currentVal === null || currentVal === undefined || String(currentVal) === '0') {
-                  setStockAmanInputValue('');
-                  input.value = '';
-                } else {
-                  input.select();
-                }
-              }}
-              onMouseDown={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = formData.stockAman;
-                if (currentVal === 0 || currentVal === null || currentVal === undefined || String(currentVal) === '0') {
-                  setStockAmanInputValue('');
-                  input.value = '';
-                }
-              }}
-              onChange={(e) => {
-                let val = e.target.value;
-                val = val.replace(/[^\d.,]/g, '');
-                const cleaned = removeLeadingZero(val);
-                setStockAmanInputValue(cleaned);
-                setFormData({ ...formData, stockAman: cleaned === '' ? 0 : Number(cleaned) || 0 });
-              }}
-              onBlur={(e) => {
-                const val = e.target.value;
-                if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
-                  setFormData({ ...formData, stockAman: 0 });
-                  setStockAmanInputValue('');
-                } else {
-                  setFormData({ ...formData, stockAman: Number(val) });
-                  setStockAmanInputValue('');
-                }
-              }}
-              onKeyDown={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = input.value;
-                if ((currentVal === '' || currentVal === '0') && /^[1-9]$/.test(e.key)) {
-                  e.preventDefault();
-                  const newVal = e.key;
-                  setStockAmanInputValue(newVal);
-                  input.value = newVal;
-                  setFormData({ ...formData, stockAman: Number(newVal) });
-                }
-              }}
-              placeholder="0"
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Stock Minimum
-            </label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={stockMinimumInputValue !== undefined && stockMinimumInputValue !== '' ? stockMinimumInputValue : (formData.stockMinimum !== undefined && formData.stockMinimum !== null && formData.stockMinimum !== 0 ? String(formData.stockMinimum) : '')}
-              onFocus={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = formData.stockMinimum;
-                if (currentVal === 0 || currentVal === null || currentVal === undefined || String(currentVal) === '0') {
-                  setStockMinimumInputValue('');
-                  input.value = '';
-                } else {
-                  input.select();
-                }
-              }}
-              onMouseDown={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = formData.stockMinimum;
-                if (currentVal === 0 || currentVal === null || currentVal === undefined || String(currentVal) === '0') {
-                  setStockMinimumInputValue('');
-                  input.value = '';
-                }
-              }}
-              onChange={(e) => {
-                let val = e.target.value;
-                val = val.replace(/[^\d.,]/g, '');
-                const cleaned = removeLeadingZero(val);
-                setStockMinimumInputValue(cleaned);
-                setFormData({ ...formData, stockMinimum: cleaned === '' ? 0 : Number(cleaned) || 0 });
-              }}
-              onBlur={(e) => {
-                const val = e.target.value;
-                if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
-                  setFormData({ ...formData, stockMinimum: 0 });
-                  setStockMinimumInputValue('');
-                } else {
-                  setFormData({ ...formData, stockMinimum: Number(val) });
-                  setStockMinimumInputValue('');
-                }
-              }}
-              onKeyDown={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = input.value;
-                if ((currentVal === '' || currentVal === '0') && /^[1-9]$/.test(e.key)) {
-                  e.preventDefault();
-                  const newVal = e.key;
-                  setStockMinimumInputValue(newVal);
-                  input.value = newVal;
-                  setFormData({ ...formData, stockMinimum: Number(newVal) });
-                }
-              }}
-              placeholder="0"
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-              }}
-            />
-          </div>
-          <Input
-            label="Kategori"
-            value={formData.kategori || ''}
-            onChange={(v) => setFormData({ ...formData, kategori: v })}
-          />
-          <div style={{ marginBottom: '16px', position: 'relative' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Supplier
-            </label>
-            <input
-              type="text"
-              value={getSupplierInputDisplayValue()}
-              onChange={(e) => {
-                handleSupplierInputChange(e.target.value);
-              }}
-              onFocus={() => setShowSupplierDropdown(true)}
-              onBlur={() => setTimeout(() => setShowSupplierDropdown(false), 200)}
-              placeholder="Type to search supplier..."
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-              }}
-            />
-            {showSupplierDropdown && filteredSuppliers.length > 0 && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  right: 0,
-                  backgroundColor: 'var(--bg-primary)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '4px',
-                  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-                  zIndex: 10002,
-                  maxHeight: '300px',
-                  overflowY: 'auto',
-                  marginTop: '4px',
-                }}
-              >
-                {filteredSuppliers.map(s => (
-                  <div
-                    key={s.id}
-                    onClick={() => {
-                      const label = `${s.kode || ''}${s.kode ? ' - ' : ''}${s.nama || ''}`;
-                      setSupplierInputValue(label);
-                      setSupplierSearch('');
-                      setFormData({ ...formData, supplier: s.nama });
-                      setShowSupplierDropdown(false);
-                    }}
-                    style={{
-                      padding: '10px 12px',
-                      cursor: 'pointer',
-                      borderBottom: '1px solid var(--border)',
-                      fontSize: '13px',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = 'var(--hover-bg)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                    }}
-                  >
-                    <div style={{ fontWeight: '500' }}>{s.kode || ''}{s.kode ? ' - ' : ''}{s.nama || ''}</div>
-                  </div>
-              ))}
+        <div className="dialog-overlay" onClick={resetForm} style={{ zIndex: 10000 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '550px', width: '90%', maxHeight: '90vh', overflowY: 'auto', zIndex: 10001, borderRadius: '10px' }}>
+            {/* Header dengan Gradient */}
+            <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '14px 18px', borderRadius: '10px 10px 0 0', color: 'white' }}>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>
+                {editingItem ? '✏️ Edit Material' : '➕ Tambah Material'}
+              </h2>
+            </div>
+
+            {/* Form Content */}
+            <div style={{ background: 'var(--bg-primary)', padding: '16px', borderRadius: '0 0 10px 10px' }}>
+              {/* Basic Information Section */}
+              <div style={{ marginBottom: '14px' }}>
+                <h3 style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: '8px' }}>📋 Informasi Dasar</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <Input label="Kode (SKU/ID)" value={formData.kode || ''} onChange={(v) => setFormData({ ...formData, kode: v })} placeholder="MTR-001" />
+                  <Input label="Nama" value={formData.nama || ''} onChange={(v) => setFormData({ ...formData, nama: v })} placeholder="Nama material" />
+                  <Input label="Satuan" value={formData.satuan || ''} onChange={(v) => setFormData({ ...formData, satuan: v })} placeholder="KG/PCS" />
+                  <Input label="Kategori" value={formData.kategori || ''} onChange={(v) => setFormData({ ...formData, kategori: v })} placeholder="Material" />
+                </div>
               </div>
-            )}
-          </div>
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Harga Satuan
-            </label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={priceInputValue !== undefined && priceInputValue !== '' ? priceInputValue : (formData.priceMtr || formData.harga ? String(formData.priceMtr || formData.harga || 0) : '')}
-              onFocus={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = formData.priceMtr || formData.harga || 0;
-                if (currentVal === 0 || currentVal === null || currentVal === undefined || String(currentVal) === '0') {
-                  setPriceInputValue('');
-                  input.value = '';
-                } else {
-                  input.select();
-                }
-              }}
-              onMouseDown={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = formData.priceMtr || formData.harga || 0;
-                if (currentVal === 0 || currentVal === null || currentVal === undefined || String(currentVal) === '0') {
-                  setPriceInputValue('');
-                  input.value = '';
-                }
-              }}
-              onChange={(e) => {
-                let val = e.target.value;
-                val = val.replace(/[^\d.,]/g, '');
-                const cleaned = removeLeadingZero(val);
-                setPriceInputValue(cleaned);
-                setFormData({ ...formData, priceMtr: cleaned === '' ? 0 : Number(cleaned) || 0 });
-              }}
-              onBlur={(e) => {
-                const val = e.target.value;
-                if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
-                  setFormData({ ...formData, priceMtr: 0 });
-                  setPriceInputValue('');
-                } else {
-                  setFormData({ ...formData, priceMtr: Number(val) });
-                  setPriceInputValue('');
-                }
-              }}
-              onKeyDown={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = input.value;
-                if ((currentVal === '' || currentVal === '0') && /^[1-9]$/.test(e.key)) {
-                  e.preventDefault();
-                  const newVal = e.key;
-                  setPriceInputValue(newVal);
-                  input.value = newVal;
-                  setFormData({ ...formData, priceMtr: Number(newVal) });
-                }
-              }}
-              placeholder="0"
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-              }}
-            />
-          </div>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
-            <Button onClick={() => { setShowForm(false); setEditingItem(null); setSupplierInputValue(''); setStockAmanInputValue(''); setStockMinimumInputValue(''); setPriceInputValue(''); setFormData({ kode: '', nama: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', supplier: '', priceMtr: 0 }); }} variant="secondary">
-              Batal
-            </Button>
-            <Button onClick={handleSave} variant="primary">
-              {editingItem ? 'Update Material' : 'Simpan Material'}
-            </Button>
-          </div>
-        </Card>
+
+              {/* Stock Information Section */}
+              <div style={{ marginBottom: '14px' }}>
+                <h3 style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: '8px' }}>📦 Stok</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <Input label="Stock Aman" type="number" value={String(formData.stockAman || 0)} onChange={(v) => setFormData({ ...formData, stockAman: parseInt(v) || 0 })} placeholder="0" />
+                  <Input label="Stock Minimum" type="number" value={String(formData.stockMinimum || 0)} onChange={(v) => setFormData({ ...formData, stockMinimum: parseInt(v) || 0 })} placeholder="0" />
+                </div>
+              </div>
+
+              {/* Pricing & Supplier Section */}
+              <div style={{ marginBottom: '14px' }}>
+                <h3 style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: '8px' }}>💰 Harga & Supplier</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <Input label="Harga Satuan" type="number" value={String(formData.priceMtr || 0)} onChange={(v) => setFormData({ ...formData, priceMtr: parseInt(v) || 0 })} placeholder="0" />
+                  <div style={{ position: 'relative' }}>
+                    <label style={{ display: 'block', marginBottom: '4px', color: 'var(--text-primary)', fontWeight: '500', fontSize: '12px' }}>Supplier</label>
+                    <input
+                      type="text"
+                      value={supplierInputValue}
+                      onChange={(e) => setSupplierInputValue(e.target.value)}
+                      onFocus={() => setShowSupplierDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowSupplierDropdown(false), 200)}
+                      placeholder="Cari supplier..."
+                      style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--border)', borderRadius: '4px', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '12px', transition: 'all 0.2s' }}
+                    />
+                    {showSupplierDropdown && filteredSuppliers.length > 0 && (
+                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '4px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', zIndex: 10002, maxHeight: '180px', overflowY: 'auto', marginTop: '2px' }}>
+                        {filteredSuppliers.map(s => (
+                          <div key={s.id} onClick={() => { setSupplierInputValue(`${s.kode} - ${s.nama}`); setFormData({ ...formData, supplier: s.nama }); setShowSupplierDropdown(false); }} style={{ padding: '6px 8px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: '11px', transition: 'background 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--hover-bg)'; }} onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}>
+                            <div style={{ fontWeight: '500' }}>{s.kode}</div>
+                            <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{s.nama}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
+                <Button onClick={resetForm} variant="secondary" style={{ minWidth: '80px', padding: '6px 12px', fontSize: '12px' }}>
+                  Batal
+                </Button>
+                <Button onClick={handleSave} variant="primary" style={{ minWidth: '80px', padding: '6px 12px', fontSize: '12px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+                  {editingItem ? 'Update' : 'Simpan'}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
       <Card>
-        <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ marginBottom: '12px' }}>
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by Kode, Nama, Kategori, Supplier, Satuan..."
-            style={{
-              flex: 1,
-              padding: '8px 12px',
-              background: 'var(--bg-tertiary)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '6px',
-              color: 'var(--text-primary)',
-              fontSize: '14px',
-              fontFamily: 'inherit',
-            }}
+            style={{ flex: 1, padding: '8px 12px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: '6px', color: 'var(--text-primary)', fontSize: '14px', fontFamily: 'inherit', width: '100%' }}
           />
         </div>
-        <Table columns={columns} data={paginatedMaterials} showPagination={false} emptyMessage={searchQuery ? "Tidak ada material yang cocok dengan pencarian" : "Tidak ada data material"} />
+        <Table columns={columns} data={paginatedMaterials} showPagination={false} emptyMessage={searchQuery ? "Tidak ada material yang cocok" : "Tidak ada data material"} />
         
-        {/* Pagination Controls */}
-        {(totalPages > 1 || filteredMaterials.length > 0) && (
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center', 
-            gap: '8px', 
-            marginTop: '20px',
-            padding: '16px',
-            borderTop: '1px solid var(--border)'
-          }}>
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginTop: '20px', padding: '16px', borderTop: '1px solid var(--border)' }}>
             <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-              Showing {startIndex + 1}-{Math.min(endIndex, filteredMaterials.length)} of {filteredMaterials.length} materials
-              {searchQuery && ` (filtered from ${materials.length} total)`}
+              Showing {startIndex + 1}-{Math.min(endIndex, filteredMaterials.length)} of {filteredMaterials.length}
             </div>
-            {totalPages > 1 && (
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'center', 
-              alignItems: 'center', 
-              gap: '8px'
-            }}>
-            <Button 
-              variant="secondary" 
-              onClick={() => setCurrentPage(1)}
-              disabled={currentPage === 1}
-            >
-              First
-            </Button>
-            <Button 
-              variant="secondary" 
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-            >
-              Previous
-            </Button>
-            <div style={{ 
-              display: 'flex', 
-              gap: '4px',
-              alignItems: 'center'
-            }}>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <Button variant="secondary" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>First</Button>
+              <Button variant="secondary" onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1}>Prev</Button>
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pageNum;
-                if (totalPages <= 5) {
-                  pageNum = i + 1;
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1;
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i;
-                } else {
-                  pageNum = currentPage - 2 + i;
-                }
+                let pageNum = currentPage <= 3 ? i + 1 : currentPage >= totalPages - 2 ? totalPages - 4 + i : currentPage - 2 + i;
                 return (
-                  <Button
-                    key={pageNum}
-                    variant={currentPage === pageNum ? 'primary' : 'secondary'}
-                    onClick={() => setCurrentPage(pageNum)}
-                    style={{ minWidth: '40px', padding: '6px 12px' }}
-                  >
+                  <Button key={pageNum} variant={currentPage === pageNum ? 'primary' : 'secondary'} onClick={() => setCurrentPage(pageNum)} style={{ minWidth: '40px' }}>
                     {pageNum}
                   </Button>
                 );
               })}
+              <Button variant="secondary" onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages}>Next</Button>
+              <Button variant="secondary" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}>Last</Button>
             </div>
-            <Button 
-              variant="secondary" 
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
-            >
-              Next
-            </Button>
-            <Button 
-              variant="secondary" 
-              onClick={() => setCurrentPage(totalPages)}
-              disabled={currentPage === totalPages}
-            >
-              Last
-            </Button>
-            <div style={{ marginLeft: '16px', color: 'var(--text-secondary)', fontSize: '14px' }}>
-              Page {currentPage} of {totalPages}
-            </div>
-            </div>
-            )}
           </div>
         )}
       </Card>
-
-      {/* Custom Dialog */}
-      {dialogState.show && (
-        <div className="dialog-overlay" onClick={closeDialog}>
-          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
-            <Card className="dialog-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h2>{dialogState.title}</h2>
-                <Button variant="secondary" onClick={closeDialog} style={{ padding: '6px 12px' }}>✕</Button>
-              </div>
-              <p style={{ marginBottom: '20px', whiteSpace: 'pre-wrap' }}>{dialogState.message}</p>
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                {dialogState.type === 'confirm' && (
-                  <Button variant="secondary" onClick={closeDialog}>Cancel</Button>
-                )}
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    if (dialogState.onConfirm) dialogState.onConfirm();
-                    closeDialog();
-                  }}
-                >
-                  {dialogState.type === 'confirm' ? 'Confirm' : 'OK'}
-                </Button>
-              </div>
-            </Card>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

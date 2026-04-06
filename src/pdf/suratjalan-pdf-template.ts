@@ -117,8 +117,8 @@ export function generateSuratJalanHtml({
       // Default: Pad Code → Code (kode) → KRT (kodeIpos) → SKU
       return product?.padCode || product?.kode || product?.kodeIpos || product?.sku || product?.id || defaultCode;
     } else {
-      // Product ID / SKU ID (tetap dengan prioritas yang sama)
-      return product?.padCode || product?.kode || product?.kodeIpos || product?.sku || product?.id || defaultCode;
+      // Product ID / SKU ID: product_id → id → kode (fallback)
+      return product?.product_id || product?.id || product?.kode || product?.padCode || product?.kodeIpos || product?.sku || defaultCode;
     }
   };
 
@@ -372,7 +372,7 @@ export function generateSuratJalanHtml({
   <style>
     @page { 
       size: 9.5in 11in; 
-      margin: -40 2px 10mm 2px; 
+      margin: -40 8mm 10mm 8mm; 
     }
     
     /* Ensure images load properly for PDF */
@@ -394,10 +394,10 @@ export function generateSuratJalanHtml({
       font-family: Arial, Helvetica, sans-serif; 
       font-size: 18px; font-weight: bold; 
       color: #000; 
-      padding: 1px 2px 10mm 2px; 
+      padding: 1px 8mm 10mm 8mm; 
       transform: scale(0.95);
       transform-origin: top left;
-      width: 105.26%;
+      width: 100%;
     }
 
     /* Header: Logo kiri, Company name + address center, garis sejajar dengan panjang alamat */
@@ -561,34 +561,32 @@ export function generateSuratJalanHtml({
     }
 
     .info .label {
-      display: inline-block;
+      display: inline;
       font-weight: 700;
-      width: 180px;
       vertical-align: top;
-      padding-right: 8px;
-      position: relative;
+      padding-right: 4px;
     }
 
     .info .label-text {
       text-align: left;
-      display: inline-block;
+      display: inline;
     }
 
     .info .label-colon {
-      position: absolute;
-      right: calc(4px + 8mm);
+      display: inline;
+      margin-left: 2px;
     }
 
     .info .right .label {
-      width: 180px;
+      display: inline;
     }
 
     .info .value {
-      display: inline-block;
+      display: inline;
       word-wrap: break-word;
       word-break: break-word;
       vertical-align: top;
-      margin-left: -8mm;
+      margin-left: 4px;
     }
 
     .info .value-line {
@@ -741,10 +739,10 @@ export function generateSuratJalanHtml({
     @media print {
       @page { 
         size: 9.5in 11in; 
-        margin: -5mm 0px 10mm 5mm; 
+        margin: -5mm 8mm 10mm 8mm; 
       }
       body { 
-        padding: 1px 2px 10mm 2px; 
+        padding: 1px 8mm 10mm 8mm; 
         font-family: Arial, Helvetica, sans-serif;
       }
       .header-logo {
@@ -813,7 +811,7 @@ export function generateSuratJalanHtml({
         <span class="value">${htmlEscape(sj.vehicleNo || '')}</span>
       </div>
       <div class="info-row">
-        <span class="label"><span class="label-text">No-PO</span><span class="label-colon"> :</span></span>
+        <span class="label"><span class="label-text">No-PO:</span></span>
         <span class="value">${htmlEscape(item.soNo || '')}</span>
       </div>
     </div>
@@ -949,8 +947,8 @@ export function generateSuratJalanRecapHtml({
   // Untuk SJ Recap, prioritaskan soNos jika ada, jika tidak ada gunakan soNo sebagai fallback
   const allSoNos = Array.isArray(soNos) && soNos.length > 0 ? soNos : (soNo ? [soNo] : []);
   const soNosHtml = allSoNos.length > 0 
-    ? allSoNos.map((so: string) => `<div class="value-line">${htmlEscape(so)}</div>`).join('')
-    : '<div class="value-line">-</div>';
+    ? allSoNos.map((so: string) => `<div class="value-line" style="font-size: 12px;">${htmlEscape(so)}</div>`).join('')
+    : '<div</div>';
 
   // Build items table dengan description berisi nomor SJ lama
   const itemsHtml = (item.items || []).map((itm, idx) => {
@@ -983,7 +981,7 @@ export function generateSuratJalanRecapHtml({
   <style>
     @page { 
       size: 9.5in 11in; 
-      margin: -5mm 2px 10mm 5mm; 
+      margin: -5mm 2px 10mm 2px; 
     }
     
     img {
@@ -1161,34 +1159,32 @@ export function generateSuratJalanRecapHtml({
     }
 
     .info .label {
-      display: inline-block;
+      display: inline;
       font-weight: 700;
-      width: 180px;
       vertical-align: top;
-      padding-right: 8px;
-      position: relative;
+      padding-right: 4px;
     }
 
     .info .label-text {
       text-align: left;
-      display: inline-block;
+      display: inline;
     }
 
     .info .label-colon {
-      position: absolute;
-      right: calc(4px + 8mm);
+      display: inline;
+      margin-left: 2px;
     }
 
     .info .right .label {
-      width: 180px;
+      display: inline;
     }
 
     .info .value {
-      display: inline-block;
+      display: inline;
       word-wrap: break-word;
       word-break: break-word;
       vertical-align: top;
-      margin-left: -8mm;
+      margin-left: 4px;
     }
 
     .info .value-line {
@@ -1377,7 +1373,7 @@ export function generateSuratJalanRecapHtml({
     @media print {
       @page { 
         size: 9.5in 11in; 
-        margin: -5mm 2px 10mm 5mm; 
+        margin: -5mm 2px 10mm 2px; 
       }
       body { 
         padding: 1px 2px 10mm 2px; 
@@ -1554,8 +1550,16 @@ export function generateGTDeliveryNoteHtml({
   };
 
   const getProductCode = (product: any, defaultCode: string): string => {
-    // Prioritas: Pad Code → Code (kode) → KRT (kodeIpos) → SKU
-    return product?.padCode || product?.kode || product?.kodeIpos || product?.sku || product?.id || defaultCode;
+    // Get productCodeDisplay preference from item (default: 'padCode')
+    const productCodeDisplay = (item as any).productCodeDisplay || 'padCode';
+    
+    if (productCodeDisplay === 'padCode') {
+      // Default: Pad Code → Code (kode) → KRT (kodeIpos) → SKU
+      return product?.padCode || product?.kode || product?.kodeIpos || product?.sku || product?.id || defaultCode;
+    } else {
+      // Product ID / SKU ID: product_id → id → kode (fallback)
+      return product?.product_id || product?.id || product?.kode || product?.padCode || product?.kodeIpos || product?.sku || defaultCode;
+    }
   };
 
   const sj = sjData || { sjNo: '', sjDate: '', driver: '', vehicleNo: '' };
@@ -1681,7 +1685,7 @@ export function generateGTDeliveryNoteHtml({
   <style>
     @page { 
       size: 9.5in 11in; 
-      margin: -5mm 2px 10mm 5mm; 
+      margin: -5mm 2px 10mm 2px; 
     }
     * {
       box-sizing: border-box;

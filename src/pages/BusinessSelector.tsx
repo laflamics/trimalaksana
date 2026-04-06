@@ -87,21 +87,7 @@ const BusinessSelector = () => {
   }, [accessibleBusinesses]);
 
   const handleSelectBusiness = async (businessId: string, path: string) => {
-    const currentUser = getCurrentUser();
-    if (!currentUser) {
-      navigate('/login', { replace: true });
-      return;
-    }
-
-    // Check access before allowing navigation
-    if (!isDefaultAdmin(currentUser)) {
-      const hasAccess = await hasBusinessUnitAccess(businessId, currentUser.id);
-      if (!hasAccess) {
-        // User doesn't have access, don't navigate
-        return;
-      }
-    }
-
+    // No need to check access again - if business is in the list, user already has access
     localStorage.setItem('selectedBusiness', businessId);
     await logNavigation(path);
     navigate(path);

@@ -9,9 +9,11 @@ import { storageService, extractStorageValue, StorageKeys } from '../../services
 import { filterActiveItems } from '../../utils/data-persistence-helper';
 import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import { openPrintWindow, focusAppWindow } from '../../utils/actions';
+import { debounce } from '../../utils/debounce';
 import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
 import { useDialog } from '../../hooks/useDialog';
+import { useToast } from '../../hooks/useToast';
 import { useLanguage } from '../../hooks/useLanguage';
 import { logCreate, logUpdate, logDelete } from '../../utils/activity-logger';
 import { generateQuotationHtml } from '../../pdf/quotation-pdf-template';
@@ -350,7 +352,11 @@ const SalesOrders = () => {
   const [showHiddenPopup, setShowHiddenPopup] = useState(false);
 
   // Custom Dialog - menggunakan hook terpusat
-  const { showAlert, showConfirm, closeDialog, DialogComponent } = useDialog();
+  const { showConfirm, closeDialog, DialogComponent } = useDialog();
+  const { showToast, ToastContainer } = useToast();
+
+  // Prevent infinite loop on storage changes
+  const isProcessingProductsRef = useRef(false);
 
   // Helper function untuk remove leading zero dari input angka
   const removeLeadingZero = (value: string): string => {
@@ -387,6 +393,14 @@ const SalesOrders = () => {
 
   // Permissions (simplified - bisa di-extend dengan user management)
 
+  // ⚡ PERFORMANCE: Create debounced handlers for form input
+  const debouncedUpdateItem = useCallback(
+    debounce((index: number, field: keyof SOItem, value: any) => {
+      handleUpdateItem(index, field, value);
+    }, 300),
+    []
+  );
+
   // Simple product loading - SAME AS PRODUCTION.TSX
   const loadProducts = async () => {
     const dataRaw = extractStorageValue(await storageService.get<Product[]>('products'));
@@ -403,24 +417,40 @@ const SalesOrders = () => {
   };
 
   useEffect(() => {
+    // ⚡ PERFORMANCE: Priority 1 - Load essential data first
     loadOrders();
-    loadQuotations();
-    loadCustomers();
-    loadProducts();
-    loadMaterials();
-    loadBOM();
-    loadDeliveries();
+    loadCustomers(); // Small dataset, OK to load all
+    
+    // ⚡ PERFORMANCE: Priority 2 - Load in background (1 second delay)
+    const timer1 = setTimeout(() => {
+      loadProducts();
+      loadBOM();
+    }, 1000);
+    
+    // ⚡ PERFORMANCE: Priority 3 - Load on demand (not loaded initially)
+    // loadMaterials() - only when needed
+    // loadDeliveries() - only when needed
+    // loadQuotations() - only when needed
+    
+    return () => {
+      clearTimeout(timer1);
+    };
   }, []);
 
   // Listen for storage changes to auto-reload products (SAME AS MASTER PRODUCTS)
   useEffect(() => {
     const handleStorageChange = (event: CustomEvent) => {
+      // Prevent infinite loop - skip if already processing
+      if (isProcessingProductsRef.current) return;
+      
       const { key } = event.detail || {};
-      const storageKey = (storageService as any).getStorageKey('products');
 
       // Reload products if products data changed
-      if (key === storageKey || key === 'products') {
-        loadProducts();
+      if (key === StorageKeys.PACKAGING.PRODUCTS || key === 'products') {
+        isProcessingProductsRef.current = true;
+        loadProducts().finally(() => {
+          isProcessingProductsRef.current = false;
+        });
       }
     };
 
@@ -695,23 +725,29 @@ const SalesOrders = () => {
     // Load products to update padCode (don't rely on state)
     const currentProducts = await storageService.get<Product[]>('products') || [];
 
-    // Update padCode from master product for all items
+    // Update padCode from master product for all items and ensure all items have IDs
     const ordersWithUpdatedPadCode = activeOrders.map(order => {
       if (!order.items || order.items.length === 0) return order;
 
-      const updatedItems = order.items.map(item => {
+      const updatedItems = order.items.map((item, idx) => {
+        // Ensure item has a unique ID
+        const itemWithId = {
+          ...item,
+          id: item.id || `${order.id}-item-${idx}-${Date.now()}`
+        };
+
         if (item.productId || item.productKode) {
           const productId = item.productId || item.productKode;
           const masterProduct = currentProducts.find(p =>
             (p.product_id || p.kode) === productId
           );
           if (masterProduct && masterProduct.padCode) {
-            return { ...item, padCode: masterProduct.padCode };
+            return { ...itemWithId, padCode: masterProduct.padCode };
           } else if (!item.padCode) {
-            return { ...item, padCode: '' };
+            return { ...itemWithId, padCode: '' };
           }
         }
-        return item;
+        return itemWithId;
       });
 
       return { ...order, items: updatedItems };
@@ -1310,6 +1346,11 @@ const SalesOrders = () => {
       (item as any)[field] = value;
     }
 
+    // CRITICAL: Ensure item always has a unique ID before saving
+    if (!item.id) {
+      item.id = `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    }
+
     newItems[index] = item;
     // Force state update dengan spread operator baru
     setFormData(prev => ({ ...prev, items: [...newItems] }));
@@ -1601,11 +1642,11 @@ const SalesOrders = () => {
 
   const handleGenerateQuotationFromForm = async () => {
     if (!quotationFormData.customer) {
-      showAlert('Please select customer', 'Validation Error');
+      showToast('Please select customer', 'error');
       return;
     }
     if (!quotationFormData.items || quotationFormData.items.length === 0) {
-      showAlert('Please add at least one product', 'Validation Error');
+      showToast('Please add at least one product', 'error');
       return;
     }
     // Validate items: productId harus ada, qty harus > 0
@@ -1629,7 +1670,7 @@ const SalesOrders = () => {
       const errorMsg = invalidQuotationItems.length === 1
         ? invalidQuotationItems[0].reason
         : `Terdapat ${invalidQuotationItems.length} item yang belum lengkap:\n${invalidQuotationItems.map(i => `- ${i.reason}`).join('\n')}`;
-      showAlert(errorMsg, 'Validation Error');
+      showToast(errorMsg, 'error');
       return;
     }
 
@@ -1645,7 +1686,7 @@ const SalesOrders = () => {
 
     if (invalidItems.length > 0) {
       const invalidNames = invalidItems.map(item => item.productName || item.productId).join(', ');
-      showAlert(`Item berikut tidak tersedia di master products: ${invalidNames}. Silakan hapus atau ganti dengan product yang valid.`, 'Validation Error');
+      showToast(`Item berikut tidak tersedia di master products: ${invalidNames}. Silakan hapus atau ganti dengan product yang valid.`, 'error');
       return;
     }
 
@@ -1674,7 +1715,7 @@ const SalesOrders = () => {
         );
         await storageService.set(StorageKeys.PACKAGING.QUOTATIONS, updated);
         setQuotations(updated);
-        showAlert(`Quotation ${editingQuotation.soNo} updated successfully`, 'Success');
+        showToast(`Quotation ${editingQuotation.soNo} updated successfully`, 'success');
       } else {
         // Create new quotation - selalu auto generate quotation no dengan format baru
         const quotationNo = generateQuotationNo(quotations);
@@ -1715,7 +1756,7 @@ const SalesOrders = () => {
         // Check duplicate quotation no
         const existingQuotation = quotationsArray.find(q => q.soNo.trim().toUpperCase() === quotationNo.trim().toUpperCase());
         if (existingQuotation) {
-          showAlert(`Quotation No "${quotationNo}" sudah ada! Gunakan nomor yang berbeda.`, 'Validation Error');
+          showToast(`Quotation No "${quotationNo}" sudah ada! Gunakan nomor yang berbeda.`, 'error');
           return;
         }
 
@@ -1723,7 +1764,7 @@ const SalesOrders = () => {
         const updated = [...quotationsArray, quotationData];
         await storageService.set(StorageKeys.PACKAGING.QUOTATIONS, updated);
         setQuotations(updated);
-        showAlert(`Quotation ${quotationNo} created successfully`, 'Success');
+        showToast(`Quotation ${quotationNo} created successfully`, 'success');
       }
 
       // Reset form dan tutup dialog
@@ -1750,7 +1791,7 @@ const SalesOrders = () => {
       setQuotationDiscountInputValue('');
       setShowQuotationFormDialog(false);
     } catch (error) {
-      showAlert('Failed to save quotation. Please try again.', 'Error');
+      showToast('Failed to save quotation. Please try again.', 'error');
     }
   };
 
@@ -1809,15 +1850,15 @@ const SalesOrders = () => {
   // Handle Save
   const handleSave = async () => {
     if (!formData.soNo || !formData.soNo.trim()) {
-      showAlert('SO No wajib diisi! Masukkan nomor PO dari customer.', 'Validation Error');
+      showToast('SO No wajib diisi! Masukkan nomor PO dari customer.', 'error');
       return;
     }
     if (!formData.customer) {
-      showAlert('Please select customer', 'Validation Error');
+      showToast('Please select customer', 'error');
       return;
     }
     if (!formData.items || formData.items.length === 0) {
-      showAlert('Please add at least one product', 'Validation Error');
+      showToast('Please add at least one product', 'error');
       return;
     }
     // Validate items: productId harus ada, qty harus > 0
@@ -1843,7 +1884,7 @@ const SalesOrders = () => {
       const errorMsg = invalidItems.length === 1
         ? invalidItems[0].reason
         : `Terdapat ${invalidItems.length} item yang belum lengkap:\n${invalidItems.map(i => `- ${i.reason}`).join('\n')}`;
-      showAlert(errorMsg, 'Validation Error');
+      showToast(errorMsg, 'error');
       return;
     }
 
@@ -1853,7 +1894,7 @@ const SalesOrders = () => {
         const ordersArray = Array.isArray(orders) ? orders : [];
         const existingSO = ordersArray.find(o => o.soNo.trim().toUpperCase() === formData.soNo?.trim().toUpperCase());
         if (existingSO) {
-          showAlert(`SO No "${formData.soNo}" sudah ada! Gunakan nomor PO customer yang berbeda.`, 'Validation Error');
+          showToast(`SO No "${formData.soNo}" sudah ada! Gunakan nomor PO customer yang berbeda.`, 'error');
           return;
         }
       }
@@ -1930,19 +1971,25 @@ const SalesOrders = () => {
             } as SalesOrder
             : o
         );
-        await storageService.set(StorageKeys.PACKAGING.SALES_ORDERS, updated);
+        
+        // ⚡ OPTIMISTIC UPDATE: Update UI immediately
         setOrders(updated);
-        // Log activity
-        try {
-          await logUpdate('SALES_ORDER', editingOrder.id, '/packaging/sales-orders', {
-            soNo: formDataWithPadCode.soNo || editingOrder.soNo,
-            customer: formDataWithPadCode.customer,
-            itemCount: itemsWithPadCode.length,
-          });
-        } catch (logError) {
+        showToast(`SO ${formDataWithPadCode.soNo || 'N/A'} updated successfully`, 'success');
+        
+        // 🔄 BACKGROUND: Save to storage (don't wait)
+        storageService.set(StorageKeys.PACKAGING.SALES_ORDERS, updated).catch(err => {
+          console.error('Failed to save SO:', err);
+          showToast('Failed to save SO to storage', 'error');
+        });
+        
+        // 📝 BACKGROUND: Log activity (don't wait)
+        logUpdate('SALES_ORDER', editingOrder.id, '/packaging/sales-orders', {
+          soNo: formDataWithPadCode.soNo || editingOrder.soNo,
+          customer: formDataWithPadCode.customer,
+          itemCount: itemsWithPadCode.length,
+        }).catch(() => {
           // Silent fail
-        }
-        showAlert(`SO ${formDataWithPadCode.soNo || 'N/A'} updated successfully`, 'Success');
+        });
       } else {
         const newOrder: SalesOrder = {
           id: Date.now().toString(),
@@ -1960,71 +2007,78 @@ const SalesOrders = () => {
         };
         const ordersArray = Array.isArray(orders) ? orders : [];
         const updated = [...ordersArray, newOrder];
-        await storageService.set(StorageKeys.PACKAGING.SALES_ORDERS, updated);
+        
+        // ⚡ OPTIMISTIC UPDATE: Update UI immediately
         setOrders(updated);
-        // Log activity
-        try {
-          await logCreate('SALES_ORDER', newOrder.id, '/packaging/sales-orders', {
-            soNo: newOrder.soNo,
-            customer: newOrder.customer,
-            itemCount: itemsWithPadCode.length,
-            status: newOrder.status,
-          });
-        } catch (logError) {
+        showToast(`SO ${newOrder.soNo} created successfully`, 'success');
+        
+        // 🔄 BACKGROUND: Save to storage (don't wait)
+        storageService.set(StorageKeys.PACKAGING.SALES_ORDERS, updated).catch(err => {
+          console.error('Failed to save SO:', err);
+          showToast('Failed to save SO to storage', 'error');
+        });
+        
+        // 📝 BACKGROUND: Log activity (don't wait)
+        logCreate('SALES_ORDER', newOrder.id, '/packaging/sales-orders', {
+          soNo: newOrder.soNo,
+          customer: newOrder.customer,
+          itemCount: itemsWithPadCode.length,
+          status: newOrder.status,
+        }).catch(() => {
           // Silent fail
-        }
+        });
 
-        // Update inventory premonth stock untuk items yang punya inventoryQty
-        if (formData.items && formData.items.length > 0) {
-          const inventoryData = await storageService.get<any[]>('inventory') || [];
-          const updatedInventory = [...inventoryData];
+        // ⚡ BACKGROUND: Update inventory if needed (don't wait)
+        (async () => {
+          if (formData.items && formData.items.length > 0) {
+            const inventoryData = await storageService.get<any[]>('inventory') || [];
+            const updatedInventory = [...inventoryData];
 
-          formData.items.forEach((item: SOItem) => {
-            if (item.inventoryQty && item.inventoryQty > 0 && item.productId) {
-              const productId = item.productId.toLowerCase();
-              const inventoryItem = updatedInventory.find(inv =>
-                (inv.item_code || inv.codeItem || '').toLowerCase() === productId
-              );
-
-              if (inventoryItem) {
-                // Update premonth stock
-                inventoryItem.stockPremonth = (inventoryItem.stockPremonth || 0) + item.inventoryQty;
-                inventoryItem.lastUpdate = new Date().toISOString();
-              } else {
-                // Create new inventory item jika belum ada
-                const product = products.find(p =>
-                  ((p.product_id || p.kode) || '').toLowerCase() === productId
+            formData.items.forEach((item: SOItem) => {
+              if (item.inventoryQty && item.inventoryQty > 0 && item.productId) {
+                const productId = item.productId.toLowerCase();
+                const inventoryItem = updatedInventory.find(inv =>
+                  (inv.item_code || inv.codeItem || '').toLowerCase() === productId
                 );
-                if (product) {
-                  updatedInventory.push({
-                    id: Date.now().toString() + productId,
-                    supplierName: formData.customer || '',
-                    codeItem: item.productId,
-                    description: item.productName || product.nama || '',
-                    kategori: product.kategori || 'Product',
-                    satuan: item.unit || product.satuan || 'PCS',
-                    price: item.price || product.hargaFg || product.hargaSales || 0,
-                    padCode: item.padCode || product.padCode || '',
-                    stockPremonth: item.inventoryQty,
-                    receive: 0,
-                    outgoing: 0,
-                    return: 0,
-                    nextStock: item.inventoryQty,
-                    lastUpdate: new Date().toISOString(),
-                  });
+
+                if (inventoryItem) {
+                  inventoryItem.stockPremonth = (inventoryItem.stockPremonth || 0) + item.inventoryQty;
+                  inventoryItem.lastUpdate = new Date().toISOString();
+                } else {
+                  const product = products.find(p =>
+                    ((p.product_id || p.kode) || '').toLowerCase() === productId
+                  );
+                  if (product) {
+                    updatedInventory.push({
+                      id: Date.now().toString() + productId,
+                      supplierName: formData.customer || '',
+                      codeItem: item.productId,
+                      description: item.productName || product.nama || '',
+                      kategori: product.kategori || 'Product',
+                      satuan: item.unit || product.satuan || 'PCS',
+                      price: item.price || product.hargaFg || product.hargaSales || 0,
+                      padCode: item.padCode || product.padCode || '',
+                      stockPremonth: item.inventoryQty,
+                      receive: 0,
+                      outgoing: 0,
+                      return: 0,
+                      nextStock: item.inventoryQty,
+                      lastUpdate: new Date().toISOString(),
+                    });
+                  }
                 }
               }
+            });
+
+            if (updatedInventory.length !== inventoryData.length ||
+              formData.items.some(item => item.inventoryQty && item.inventoryQty > 0)) {
+              await storageService.set(StorageKeys.PACKAGING.INVENTORY, updatedInventory);
             }
-          });
-
-          if (updatedInventory.length !== inventoryData.length ||
-            formData.items.some(item => item.inventoryQty && item.inventoryQty > 0)) {
-            await storageService.set(StorageKeys.PACKAGING.INVENTORY, updatedInventory);
           }
-        }
-
-        showAlert(`SO ${formData.soNo} created successfully`, 'Success');
+        })().catch(err => console.error('Inventory update failed:', err));
       }
+      
+      // ⚡ OPTIMISTIC CLOSE: Close form immediately (don't wait for background tasks)
       setShowForm(false);
       setEditingOrder(null);
       setFormData({ soNo: '', customer: '', customerKode: '', paymentTerms: 'TOP', topDays: 30, items: [], globalSpecNote: '', category: 'packaging', created: '' });
@@ -2036,7 +2090,7 @@ const SalesOrders = () => {
       setQtyInputValue({});
       setPriceInputValue({});
     } catch (error: any) {
-      showAlert(`Error saving SO: ${error.message}`, 'Error');
+      showToast(`Error saving SO: ${error.message}`, 'error');
     }
   };
 
@@ -2048,7 +2102,7 @@ const SalesOrders = () => {
     // Bisa edit jika status OPEN (untuk sync dengan PO customer)
     // Tidak bisa edit jika sudah CLOSE
     if (item.status === 'CLOSE') {
-      showAlert(`Cannot edit SO ${item.soNo}. SO with status ${item.status} cannot be edited.`, 'Cannot Edit');
+      showToast(`Cannot edit SO ${item.soNo}. SO with status ${item.status} cannot be edited.`, 'error');
       return;
     }
 
@@ -2223,16 +2277,16 @@ const SalesOrders = () => {
         if (hasProduction) relatedItems.push('Production');
         if (hasPR) relatedItems.push('PR');
 
-        showAlert(
+        showToast(
           `Tidak bisa menghapus SO ${item.soNo}!\n\nSO ini sudah memiliki turunan:\n${relatedItems.map(i => `• ${i}`).join('\n')}\n\nJika ingin membatalkan, tutup SO melalui workflow normal (CLOSE).`,
-          'Cannot Delete'
+          'error'
         );
         return;
       }
 
       // Cek apakah SO sudah CLOSE
       if (item.status === 'CLOSE') {
-        showAlert(`Tidak bisa menghapus SO ${item.soNo} yang sudah CLOSE.`, 'Cannot Delete');
+        showToast(`Tidak bisa menghapus SO ${item.soNo} yang sudah CLOSE.`, 'error');
         return;
       }
 
@@ -2242,9 +2296,15 @@ const SalesOrders = () => {
           try {
             // Validate item.id exists
             if (!item.id) {
-              showAlert(`❌ Error: SO ${item.soNo} tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+              showToast(`Error: SO ${item.soNo} tidak memiliki ID`, 'error');
               return;
             }
+
+            // Close dialog IMMEDIATELY to prevent re-renders
+            closeDialog();
+
+            // Show loading toast
+            showToast(`Deleting SO ${item.soNo}...`, 'info');
 
             // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
             const deleteResult = await deletePackagingItem('salesOrders', item.id, 'id');
@@ -2262,22 +2322,21 @@ const SalesOrders = () => {
               // Reload data dengan helper (handle race condition)
               await reloadPackagingData('salesOrders', setOrders);
 
-              closeDialog();
-              showAlert(`✅ SO ${item.soNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+              showToast(`SO ${item.soNo} deleted successfully`, 'success');
             } else {
-              showAlert(`❌ Error deleting SO ${item.soNo}: ${deleteResult.error || 'Unknown error'}`, 'Error');
+              showToast(`Error deleting SO ${item.soNo}: ${deleteResult.error || 'Unknown error'}`, 'error');
             }
           } catch (error: any) {
-            showAlert(`❌ Error deleting SO: ${error.message}`, 'Error');
+            showToast(`Error deleting SO: ${error.message}`, 'error');
           }
         },
         () => {
           closeDialog();
         },
-        'Safe Delete Confirmation'
+        'Delete Confirmation'
       );
     } catch (error: any) {
-      showAlert(`❌ Error: ${error.message}`, 'Error');
+      showToast(`Error: ${error.message}`, 'error');
     }
   };
 
@@ -2286,7 +2345,7 @@ const SalesOrders = () => {
   // Handle Generate Quotation
   const handleGenerateQuotation = (item: SalesOrder) => {
     if (!item.items || item.items.length === 0) {
-      showAlert(`SO ${item.soNo} has no items. Please add items first.`, 'Validation Error');
+      showToast(`SO ${item.soNo} has no items. Please add items first.`, 'error');
       return;
     }
     setQuotationPreviewData(item);
@@ -2332,15 +2391,15 @@ const SalesOrders = () => {
     try {
       // Validate item.id exists
       if (!quotation.id) {
-        showAlert(`❌ Error: Quotation ${quotation.soNo} tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        showToast(`Error: Quotation ${quotation.soNo} tidak memiliki ID`, 'error');
         return;
       }
 
       // Cek apakah quotation sudah di-convert ke SO
       if (quotation.matchedSoNo) {
-        showAlert(
+        showToast(
           `Tidak bisa menghapus Quotation ${quotation.soNo}!\n\nQuotation ini sudah di-convert ke Sales Order: ${quotation.matchedSoNo}\n\nJika ingin membatalkan, hapus Sales Order terkait terlebih dahulu.`,
-          'Cannot Delete'
+          'error'
         );
         return;
       }
@@ -2349,6 +2408,12 @@ const SalesOrders = () => {
         `Hapus Quotation: ${quotation.soNo}?\n\nCustomer: ${quotation.customer}\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
         async () => {
           try {
+            // Close dialog IMMEDIATELY to prevent re-renders
+            closeDialog();
+
+            // Show loading toast
+            showToast(`Deleting Quotation ${quotation.soNo}...`, 'info');
+
             // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
             const deleteResult = await deletePackagingItem('quotations', quotation.id, 'id');
 
@@ -2365,21 +2430,21 @@ const SalesOrders = () => {
               // Reload quotations dengan helper (handle race condition)
               await reloadPackagingData('quotations', setQuotations);
 
-              showAlert(`✅ Quotation ${quotation.soNo} berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+              showToast(`Quotation ${quotation.soNo} deleted successfully`, 'success');
             } else {
-              showAlert(`❌ Error deleting Quotation ${quotation.soNo}: ${deleteResult.error || 'Unknown error'}`, 'Error');
+              showToast(`Error deleting Quotation ${quotation.soNo}: ${deleteResult.error || 'Unknown error'}`, 'error');
             }
           } catch (error: any) {
-            showAlert(`❌ Error deleting Quotation: ${error.message}`, 'Error');
+            showToast(`Error deleting Quotation: ${error.message}`, 'error');
           }
         },
         () => {
           // Quotation delete cancelled
         },
-        'Safe Delete Confirmation'
+        'Delete Confirmation'
       );
     } catch (error: any) {
-      showAlert(`❌ Error: ${error.message}`, 'Error');
+      showToast(`Error: ${error.message}`, 'error');
     }
   };
 
@@ -2511,7 +2576,7 @@ const SalesOrders = () => {
       document.head.appendChild(script);
     } catch (error) {
       console.error('Error saving PDF:', error);
-      showAlert('Error', 'Failed to save PDF. Please try again.');
+      showToast('Failed to save PDF. Please try again.', 'error');
     }
   };
 
@@ -2623,16 +2688,26 @@ const SalesOrders = () => {
         const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
         if (jsonData.length === 0) {
-          showAlert('Excel file is empty or has no data', 'Error');
+          showToast('Excel file is empty or has no data', 'error');
           return;
         }
 
-        // Helper untuk map column (case-insensitive)
+        // Log headers for debugging
+        if (jsonData.length > 0) {
+          console.log('Excel headers found:', Object.keys(jsonData[0]));
+        }
+
+        // Helper untuk map column (case-insensitive, handles extra whitespace/invisible chars)
         const mapColumn = (row: any, possibleNames: string[]): string => {
+          const keys = Object.keys(row);
+          // Normalize keys: strip all non-printable chars and trim
+          const normalizedKeys = keys.map(k => ({ original: k, normalized: k.replace(/[^\x20-\x7E]/g, '').toLowerCase().trim() }));
           for (const name of possibleNames) {
-            const keys = Object.keys(row);
-            const found = keys.find(k => k.toLowerCase().trim() === name.toLowerCase().trim());
-            if (found && row[found]) return String(row[found]).trim();
+            const target = name.replace(/[^\x20-\x7E]/g, '').toLowerCase().trim();
+            const found = normalizedKeys.find(k => k.normalized === target);
+            if (found && row[found.original] !== undefined && row[found.original] !== '') {
+              return String(row[found.original]).trim();
+            }
           }
           return '';
         };
@@ -2661,40 +2736,39 @@ const SalesOrders = () => {
               return dateStr;
             }
 
-            // Check if it's an Excel serial number
+            // Try format "02-Jan-26" or "02-Jan-2026" FIRST (before serial number check)
+            const parts = dateStr.split('-');
+            if (parts.length === 3) {
+              const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+              const monthIdx = monthNames.findIndex(m => m.toLowerCase() === parts[1].toLowerCase());
+              if (monthIdx !== -1) {
+                const day = parseInt(parts[0], 10);
+                let year = parseInt(parts[2], 10);
+                if (year < 100) year += 2000;
+                const parsed = new Date(year, monthIdx, day);
+                if (!isNaN(parsed.getTime())) {
+                  console.log('Date parsing: DD-Mon-YY format success =', parsed.toISOString());
+                  return parsed.toISOString();
+                }
+              }
+            }
+
+            // Check if it's an Excel serial number (must be > 1000 to avoid false positives like day numbers)
             const serialNumber = parseFloat(dateStr);
-            if (!isNaN(serialNumber) && serialNumber > 0 && serialNumber < 100000) {
-              // Excel serial number: 46043 = 02-Jan-2026
-              // Excel epoch starts at 1900-01-01, but Excel incorrectly treats 1900 as a leap year
-              // So we need to adjust by 1 day for dates after 1900-02-28
-              const excelEpoch = new Date(1900, 0, 1); // 1900-01-01
-              const daysOffset = serialNumber - 2; // Adjust for Excel leap year bug
-              const date = new Date(excelEpoch.getTime() + (daysOffset * 24 * 60 * 60 * 1000));
+            if (!isNaN(serialNumber) && serialNumber > 1000 && serialNumber < 100000) {
+              // Excel epoch is 1899-12-30 (accounts for Excel's fake 1900 leap year bug)
+              const date = new Date(Date.UTC(1899, 11, 30) + serialNumber * 86400000);
               if (!isNaN(date.getTime())) {
                 console.log('Date parsing: Excel serial number success =', date.toISOString());
                 return date.toISOString();
               }
             }
 
-            // Try to parse various date formats
+            // Try native Date.parse as fallback
             const date = new Date(dateStr);
             if (!isNaN(date.getTime())) {
               console.log('Date parsing: native Date.parse() success =', date.toISOString());
               return date.toISOString();
-            }
-            // Try format "02-Jan-26" atau "02-Jan-2026"
-            const parts = dateStr.split('-');
-            if (parts.length === 3) {
-              const day = parseInt(parts[0], 10);
-              const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-              const month = monthNames.indexOf(parts[1]) + 1;
-              let year = parseInt(parts[2], 10);
-              if (year < 100) year += 2000; // Convert 26 to 2026
-              const date = new Date(year, month - 1, day);
-              if (!isNaN(date.getTime())) {
-                console.log('Date parsing: custom format success =', date.toISOString());
-                return date.toISOString();
-              }
             }
           } catch (e) {
             console.log('Date parsing: error =', e);
@@ -2713,8 +2787,8 @@ const SalesOrders = () => {
             const noSo = mapColumn(row, ['No So', 'NO SO', 'No SO', 'no so', 'SO No', 'SO NO', 'soNo', 'so_no']);
             const customerCode = mapColumn(row, ['Customer Code', 'CUSTOMER CODE', 'Customer Code', 'customer code', 'customerCode']);
             const customer = mapColumn(row, ['CUSTOMER', 'Customer', 'customer']);
-            const kodeItem = mapColumn(row, ['Kd. Item', 'KD. ITEM', 'Kd Item', 'kd item', 'Kode Item', 'KODE ITEM', 'kode item']);
-            const namaItem = mapColumn(row, ['Nama Item', 'NAMA ITEM', 'Nama Item', 'nama item', 'Product Name', 'product name']);
+            const kodeItem = mapColumn(row, ['Kd. Item', 'KD. ITEM', 'Kd Item', 'kd item', 'Kode Item', 'KODE ITEM', 'kode item', 'Code', 'CODE', 'code', 'Kode', 'kode']);
+            const namaItem = mapColumn(row, ['Nama Item', 'NAMA ITEM', 'nama item', 'NamaItem', 'namaitem', 'Product Name', 'product name', 'Item Name', 'item name']);
             const padCode = mapColumn(row, ['Pad Code', 'PAD CODE', 'Pad Code', 'pad code', 'padCode']);
             const jml = parseFloat(mapColumn(row, ['Jml', 'JML', 'Jumlah', 'jumlah', 'Qty', 'qty', 'Quantity', 'quantity'])) || 0;
             const hargaStr = mapColumn(row, ['Harga', 'HARGA', 'Price', 'price', 'Harga Satuan', 'harga satuan']);
@@ -2758,7 +2832,7 @@ const SalesOrders = () => {
         });
 
         if (ordersMap.size === 0) {
-          showAlert('No valid data found in Excel file', 'Error');
+          showToast('No valid data found in Excel file', 'error');
           return;
         }
 
@@ -2769,15 +2843,23 @@ const SalesOrders = () => {
             const firstItem = items[0];
             const createDate = parseDate(firstItem.createDate);
 
-            // Find customer
+            // Find customer - exact match first, then partial/fuzzy, then fallback to raw name
             const customerData = customers.find(c =>
               c.nama.toLowerCase().trim() === firstItem.customer.toLowerCase().trim() ||
               (firstItem.customerCode && c.kode.toLowerCase().trim() === firstItem.customerCode.toLowerCase().trim())
+            ) || customers.find(c =>
+              c.nama.toLowerCase().includes(firstItem.customer.toLowerCase().trim()) ||
+              firstItem.customer.toLowerCase().includes(c.nama.toLowerCase().trim())
             );
 
+            // Use fallback if not found - don't skip the SO
+            const resolvedCustomer = customerData
+              ? { nama: customerData.nama, kode: customerData.kode }
+              : { nama: firstItem.customer, kode: firstItem.customerCode || '' };
+
             if (!customerData) {
-              errors.push(`SO ${noSo}: Customer "${firstItem.customer}" not found in master`);
-              return;
+              console.warn(`SO ${noSo}: Customer "${firstItem.customer}" not in master, importing anyway`);
+              errors.push(`SO ${noSo}: Customer "${firstItem.customer}" not in master (imported with raw name)`);
             }
 
             // Convert items
@@ -2879,8 +2961,8 @@ const SalesOrders = () => {
             newOrders.push({
               id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
               soNo: noSo,
-              customer: customerData.nama,
-              customerKode: customerData.kode,
+              customer: resolvedCustomer.nama,
+              customerKode: resolvedCustomer.kode,
               paymentTerms: 'TOP',
               topDays: 30,
               status: 'OPEN',
@@ -2898,7 +2980,7 @@ const SalesOrders = () => {
         });
 
         if (newOrders.length === 0) {
-          showAlert(`No valid orders to import. Errors: ${errors.slice(0, 5).join('; ')}${errors.length > 5 ? '...' : ''}`, 'Error');
+          showToast(`No valid orders to import. Errors: ${errors.slice(0, 5).join('; ')}${errors.length > 5 ? '...' : ''}`, 'error');
           return;
         }
 
@@ -2923,14 +3005,14 @@ const SalesOrders = () => {
               logCreate('Sales Order', order.soNo, `Imported from Excel: ${order.soNo}`);
             });
 
-            showAlert(`✅ Successfully imported ${newOrders.length} Sales Order(s)${errors.length > 0 ? `. ${errors.length} errors occurred.` : ''}`, 'Success');
+            showToast(`Successfully imported ${newOrders.length} Sales Order(s)${errors.length > 0 ? `. ${errors.length} errors occurred.` : ''}`, 'success');
             loadOrders();
           },
           undefined,
           'Confirm Import'
         );
       } catch (error: any) {
-        showAlert(`Error importing Excel: ${error.message}\n\nMake sure the file is a valid Excel file (.xlsx or .xls)`, 'Error');
+        showToast(`Error importing Excel: ${error.message}\n\nMake sure the file is a valid Excel file (.xlsx or .xls)`, 'error');
       }
     };
     input.click();
@@ -2944,7 +3026,7 @@ const SalesOrders = () => {
         async () => {
           try {
             // Show loading
-            showAlert('⏳ Importing historical data...\n\nThis may take a few seconds. Please wait.', 'Processing');
+            showToast('Importing historical data...', 'info');
             
             // Check if electronAPI is available
             const electronAPI = (window as any).electronAPI;
@@ -2958,40 +3040,29 @@ const SalesOrders = () => {
                 await loadOrders();
                 
                 const summary = result.summary;
-                showAlert(
-                  `✅ Import Complete!\n\n` +
-                  `📊 Created:\n` +
-                  `• Sales Orders: ${summary.created.salesOrders}\n` +
-                  `• Deliveries: ${summary.created.deliveries}\n` +
-                  `• Invoices: ${summary.created.invoices}\n` +
-                  `• Tax Records: ${summary.created.taxRecords}\n\n` +
-                  `⚠️ Skipped (duplicates): ${summary.skipped.salesOrders + summary.skipped.deliveries + summary.skipped.invoices + summary.skipped.taxRecords}\n\n` +
-                  `⏱️ Duration: ${summary.duration}s`,
-                  'Success'
+                showToast(
+                  `Import Complete! Created: ${summary.created.salesOrders} SO, ${summary.created.deliveries} Deliveries, ${summary.created.invoices} Invoices`,
+                  'success'
                 );
               } else {
-                showAlert(`❌ Import Failed:\n\n${result.error}`, 'Error');
+                showToast(`Import Failed: ${result.error}`, 'error');
               }
             } else {
               // Fallback: Manual instruction
-              showAlert(
-                '📝 Manual Import Instructions:\n\n' +
-                '1. Open terminal in project root\n' +
-                '2. Run: node scripts/import-packaging-historical-data.js\n' +
-                '3. Refresh this page after import completes\n\n' +
-                'Note: Electron API not available for automated import.',
-                'Manual Import Required'
+              showToast(
+                'Manual Import Required: Run "node scripts/import-packaging-historical-data.js" in terminal',
+                'info'
               );
             }
           } catch (error: any) {
-            showAlert(`Error during import: ${error.message}`, 'Error');
+            showToast(`Error during import: ${error.message}`, 'error');
           }
         },
         undefined,
         'Confirm Import'
       );
     } catch (error: any) {
-      showAlert(`Error: ${error.message}`, 'Error');
+      showToast(`Error: ${error.message}`, 'error');
     }
   };
 
@@ -3003,7 +3074,7 @@ const SalesOrders = () => {
         async () => {
           try {
             // Show loading
-            showAlert('⏳ Importing payment data...\n\nThis may take a few seconds. Please wait.', 'Processing');
+            showToast('Importing payment data...', 'info');
             
             // Check if electronAPI is available
             const electronAPI = (window as any).electronAPI;
@@ -3017,39 +3088,29 @@ const SalesOrders = () => {
                 await loadOrders();
                 
                 const summary = result.summary;
-                showAlert(
-                  `✅ Payment Import Complete!\n\n` +
-                  `📊 Updated:\n` +
-                  `• Payment records: ${summary.paymentRecords}\n` +
-                  `• Invoices updated: ${summary.invoicesUpdated}\n` +
-                  `• Not found: ${summary.notFound}\n` +
-                  `• Total invoices: ${summary.totalInvoices}\n\n` +
-                  `⏱️ Duration: ${summary.duration}s`,
-                  'Success'
+                showToast(
+                  `Payment Import Complete! Updated ${summary.invoicesUpdated} invoices`,
+                  'success'
                 );
               } else {
-                showAlert(`❌ Import Failed:\n\n${result.error}`, 'Error');
+                showToast(`Import Failed: ${result.error}`, 'error');
               }
             } else {
               // Fallback: Manual instruction
-              showAlert(
-                '📝 Manual Import Instructions:\n\n' +
-                '1. Open terminal in project root\n' +
-                '2. Run: node scripts/import-payment-data.js\n' +
-                '3. Refresh this page after import completes\n\n' +
-                'Note: Electron API not available for automated import.',
-                'Manual Import Required'
+              showToast(
+                'Manual Import Required: Run "node scripts/import-payment-data.js" in terminal',
+                'info'
               );
             }
           } catch (error: any) {
-            showAlert(`Error during import: ${error.message}`, 'Error');
+            showToast(`Error during import: ${error.message}`, 'error');
           }
         },
         undefined,
         'Confirm Import'
       );
     } catch (error: any) {
-      showAlert(`Error: ${error.message}`, 'Error');
+      showToast(`Error: ${error.message}`, 'error');
     }
   };
 
@@ -3237,9 +3298,9 @@ const SalesOrders = () => {
 
       const fileName = `Sales Report_${new Date().toISOString().split('T')[0]}.xlsx`;
       XLSX.writeFile(wb, fileName);
-      showAlert(`✅ Exported Sales Report (${reportData.length} items) to ${fileName}`, 'Success');
+      showToast(`Exported Sales Report (${reportData.length} items) to ${fileName}`, 'success');
     } catch (error: any) {
-      showAlert(`Error exporting to Excel: ${error.message}`, 'Error');
+      showToast(`Error exporting to Excel: ${error.message}`, 'error');
       console.error('Export error:', error);
     }
   };
@@ -3637,7 +3698,7 @@ const SalesOrders = () => {
       });
 
       if (!hasBOM) {
-        showAlert(`BOM Check untuk ${product.productName}:\n\n⚠️ BOM belum dikonfigurasi untuk product ini.\n\nSilakan tambahkan BOM di Master Products terlebih dahulu.`, 'BOM Check');
+        showToast(`BOM belum dikonfigurasi untuk ${product.productName}. Silakan tambahkan BOM di Master Products terlebih dahulu.`, 'warning');
         return;
       }
 
@@ -3668,9 +3729,9 @@ const SalesOrders = () => {
         `• ${b.materialName} (${b.materialId})\n  Qty: ${b.qty} ${b.unit} (Ratio: ${b.ratio})`
       ).join('\n\n');
 
-      showAlert(`BOM Check untuk ${product.productName}:\n\n✅ BOM tersedia.\n\nDetail BOM:\n${bomText}`, 'BOM Check');
+      showToast(`BOM tersedia untuk ${product.productName}`, 'success');
     } catch (error: any) {
-      showAlert(`Error loading BOM: ${error.message}`, 'Error');
+      showToast(`Error loading BOM: ${error.message}`, 'error');
     }
   };
 
@@ -3751,7 +3812,7 @@ const SalesOrders = () => {
   // Handle Confirm SO (kirim ke PPIC)
   const handleConfirm = async (item: SalesOrder) => {
     if (item.status === 'CLOSE') {
-      showAlert(`Cannot confirm SO ${item.soNo}. SO dengan status CLOSE tidak bisa dikonfirmasi.`, 'Cannot Confirm');
+      showToast(`Cannot confirm SO ${item.soNo}. SO dengan status CLOSE tidak bisa dikonfirmasi.`, 'error');
       return;
     }
 
@@ -3777,9 +3838,9 @@ const SalesOrders = () => {
           await storageService.set(StorageKeys.PACKAGING.SALES_ORDERS, updatedOrders);
           setOrders(updatedOrders);
           closeDialog();
-          showAlert(`SO ${item.soNo} telah dikonfirmasi dan dikirim ke PPIC untuk diproses.`, 'Success');
+          showToast(`SO ${item.soNo} telah dikonfirmasi dan dikirim ke PPIC untuk diproses.`, 'success');
         } catch (error: any) {
-          showAlert(`Error confirming SO: ${error.message}`, 'Error');
+          showToast(`Error confirming SO: ${error.message}`, 'error');
         }
       },
       () => closeDialog(),
@@ -4106,28 +4167,15 @@ const SalesOrders = () => {
           setCustomerSearch('');
           setProductInputValue({});
           setShowBOMPreview(false);
-        }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1200px', width: '95%', maxHeight: '90vh', overflowY: 'auto' }}>
-            <Card
-              title={editingOrder ? `Edit SO: ${editingOrder.soNo}` : 'Create New Sales Order'}
-              className="dialog-card"
-            >
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setShowForm(false);
-                    setEditingOrder(null);
-                    setFormData({ soNo: '', customer: '', customerKode: '', paymentTerms: 'TOP', topDays: 30, items: [], globalSpecNote: '', category: 'packaging', created: '' });
-                    setCustomerSearch('');
-                    setProductInputValue({});
-                    setShowBOMPreview(false);
-                  }}
-                  style={{ fontSize: '14px', padding: '6px 12px' }}
-                >
-                  ✕ Close
-                </Button>
-              </div>
+        }} style={{ zIndex: 10000 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1200px', width: '95%', maxHeight: '90vh', overflowY: 'auto', zIndex: 10001, borderRadius: '10px' }}>
+            <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '14px 18px', borderRadius: '10px 10px 0 0', color: 'white' }}>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>
+                {editingOrder ? `✏️ Edit SO: ${editingOrder.soNo}` : '➕ Create New Sales Order'}
+              </h2>
+            </div>
+
+            <div style={{ background: 'var(--bg-primary)', padding: '16px', borderRadius: '0 0 10px 10px' }}>
               <Input
                 label="SO No * (Nomor PO dari Customer)"
                 value={formData.soNo || ''}
@@ -4285,7 +4333,7 @@ const SalesOrders = () => {
                             </td>
                             <td style={{ padding: '8px' }}>
                               <input
-                                key={`padCode-${item.id}-${formKey}`}
+                                key={`padCode-${item.id}`}
                                 type="text"
                                 value={item.padCode || ''}
                                 onChange={(e) => {
@@ -4313,7 +4361,7 @@ const SalesOrders = () => {
                             </td>
                             <td style={{ padding: '8px' }}>
                               <input
-                                key={`qty-${item.id}-${formKey}`}
+                                key={`qty-${item.id}`}
                                 type="text"
                                 inputMode="decimal"
                                 value={qtyInputValue[index] !== undefined ? qtyInputValue[index] : (item.qty !== undefined && item.qty !== null && item.qty !== 0 ? String(item.qty) : '')}
@@ -4345,8 +4393,8 @@ const SalesOrders = () => {
                                   // Hapus semua karakter non-numeric kecuali titik dan koma
                                   val = val.replace(/[^\d.,]/g, '');
                                   const cleaned = removeLeadingZero(val);
+                                  // ⚡ Update local state immediately for UI feedback - NO DEBOUNCE
                                   setQtyInputValue(prev => ({ ...prev, [index]: cleaned }));
-                                  handleUpdateItem(index, 'qty', cleaned === '' ? '' : cleaned);
                                 }}
                                 onBlur={(e) => {
                                   e.stopPropagation();
@@ -4397,7 +4445,7 @@ const SalesOrders = () => {
                             </td>
                             <td style={{ padding: '8px' }}>
                               <input
-                                key={`unit-${item.id}-${formKey}`}
+                                key={`unit-${item.id}`}
                                 type="text"
                                 value={item.unit || 'PCS'}
                                 onMouseDown={(e) => {
@@ -4439,76 +4487,39 @@ const SalesOrders = () => {
                             </td>
                             <td style={{ padding: '8px' }}>
                               <input
-                                key={`price-${item.id}-${formKey}`}
+                                key={`price-${item.id}`}
                                 type="text"
                                 inputMode="decimal"
-                                value={priceInputValue[index] !== undefined ? priceInputValue[index] : (item.price !== undefined && item.price !== null && item.price !== 0 ? String(item.price) : '')}
+                                value={priceInputValue[index] !== undefined ? priceInputValue[index] : (item.price && item.price > 0 ? String(item.price) : '')}
                                 onFocus={(e) => {
                                   e.stopPropagation();
                                   const input = e.target as HTMLInputElement;
-                                  const currentPrice = item.price;
-                                  // Jika value adalah 0, langsung clear
-                                  if (currentPrice === 0 || currentPrice === null || currentPrice === undefined || String(currentPrice) === '0') {
-                                    setPriceInputValue(prev => ({ ...prev, [index]: '' }));
-                                    input.value = '';
-                                  } else {
-                                    input.select();
-                                  }
-                                }}
-                                onMouseDown={(e) => {
-                                  e.stopPropagation();
-                                  const input = e.target as HTMLInputElement;
-                                  const currentPrice = item.price;
-                                  // Clear jika value adalah 0 saat mouse down
-                                  if (currentPrice === 0 || currentPrice === null || currentPrice === undefined || String(currentPrice) === '0') {
-                                    setPriceInputValue(prev => ({ ...prev, [index]: '' }));
-                                    input.value = '';
-                                  }
+                                  input.select();
                                 }}
                                 onChange={(e) => {
                                   e.stopPropagation();
                                   let val = e.target.value;
-                                  // Hapus semua karakter non-numeric kecuali titik dan koma
                                   val = val.replace(/[^\d.,]/g, '');
                                   const cleaned = removeLeadingZero(val);
                                   setPriceInputValue(prev => ({ ...prev, [index]: cleaned }));
-                                  handleUpdateItem(index, 'price', cleaned === '' ? '' : cleaned);
+                                  handleUpdateItem(index, 'price', cleaned === '' ? 0 : Number(cleaned));
                                 }}
                                 onBlur={(e) => {
                                   e.stopPropagation();
                                   const val = e.target.value;
-                                  if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
+                                  const numVal = val === '' ? 0 : Number(val);
+                                  if (isNaN(numVal) || numVal < 0) {
                                     handleUpdateItem(index, 'price', 0);
-                                    setPriceInputValue(prev => {
-                                      const newVal = { ...prev };
-                                      delete newVal[index];
-                                      return newVal;
-                                    });
                                   } else {
-                                    handleUpdateItem(index, 'price', Number(val));
-                                    setPriceInputValue(prev => {
-                                      const newVal = { ...prev };
-                                      delete newVal[index];
-                                      return newVal;
-                                    });
+                                    handleUpdateItem(index, 'price', numVal);
                                   }
+                                  setPriceInputValue(prev => {
+                                    const newVal = { ...prev };
+                                    delete newVal[index];
+                                    return newVal;
+                                  });
                                 }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                }}
-                                onKeyDown={(e) => {
-                                  e.stopPropagation();
-                                  const input = e.target as HTMLInputElement;
-                                  const currentVal = input.value;
-                                  // Jika kosong atau "0" dan user ketik angka 1-9, langsung replace
-                                  if ((currentVal === '' || currentVal === '0') && /^[1-9]$/.test(e.key)) {
-                                    e.preventDefault();
-                                    const newVal = e.key;
-                                    setPriceInputValue(prev => ({ ...prev, [index]: newVal }));
-                                    input.value = newVal;
-                                    handleUpdateItem(index, 'price', newVal);
-                                  }
-                                }}
+                                onClick={(e) => e.stopPropagation()}
                                 placeholder="0"
                                 style={{
                                   width: '120px',
@@ -4526,7 +4537,7 @@ const SalesOrders = () => {
                             </td>
                             <td style={{ padding: '8px' }}>
                               <input
-                                key={`inventoryQty-${item.id}-${formKey}`}
+                                key={`inventoryQty-${item.id}`}
                                 type="text"
                                 inputMode="decimal"
                                 value={item.inventoryQty !== undefined && item.inventoryQty !== null && item.inventoryQty !== 0 ? String(item.inventoryQty) : ''}
@@ -4574,7 +4585,7 @@ const SalesOrders = () => {
                             </td>
                             <td style={{ padding: '8px' }}>
                               <input
-                                key={`specNote-${item.id}-${formKey}`}
+                                key={`specNote-${item.id}`}
                                 type="text"
                                 value={item.specNote || ''}
                                 onMouseDown={(e) => {
@@ -4761,7 +4772,7 @@ const SalesOrders = () => {
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
                 <Button
                   onClick={() => {
                     setShowForm(false);
@@ -4772,14 +4783,15 @@ const SalesOrders = () => {
                     setShowBOMPreview(false);
                   }}
                   variant="secondary"
+                  style={{ minWidth: '80px', padding: '6px 12px', fontSize: '12px' }}
                 >
                   Cancel
                 </Button>
-                <Button onClick={handleSave} variant="primary">
+                <Button onClick={handleSave} variant="primary" style={{ minWidth: '80px', padding: '6px 12px', fontSize: '12px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
                   {editingOrder ? 'Update SO' : 'Save SO'}
                 </Button>
               </div>
-            </Card>
+            </div>
           </div>
         </div>
       )}
@@ -5905,24 +5917,11 @@ const SalesOrders = () => {
                               <td style={{ padding: '8px' }}>
                                 <input
                                   type="text"
-                                  value={quotationPriceInputValue[index] !== undefined ? quotationPriceInputValue[index] : (item.price !== undefined && item.price !== null && item.price !== 0 ? String(item.price) : '')}
+                                  value={quotationPriceInputValue[index] !== undefined ? quotationPriceInputValue[index] : (item.price && item.price > 0 ? String(item.price) : '')}
                                   onFocus={(e) => {
                                     e.stopPropagation();
                                     const input = e.target as HTMLInputElement;
-                                    const currentPrice = item.price;
-                                    if (currentPrice === 0 || currentPrice === null || currentPrice === undefined || String(currentPrice) === '0') {
-                                      setQuotationPriceInputValue(prev => ({ ...prev, [index]: '' }));
-                                      input.value = '';
-                                    }
-                                  }}
-                                  onMouseDown={(e) => {
-                                    e.stopPropagation();
-                                    const input = e.target as HTMLInputElement;
-                                    const currentPrice = item.price;
-                                    if (currentPrice === 0 || currentPrice === null || currentPrice === undefined || String(currentPrice) === '0') {
-                                      setQuotationPriceInputValue(prev => ({ ...prev, [index]: '' }));
-                                      input.value = '';
-                                    }
+                                    input.select();
                                   }}
                                   onChange={(e) => {
                                     e.stopPropagation();
@@ -5930,41 +5929,24 @@ const SalesOrders = () => {
                                     val = val.replace(/[^\d.,]/g, '');
                                     const cleaned = removeLeadingZero(val);
                                     setQuotationPriceInputValue(prev => ({ ...prev, [index]: cleaned }));
-                                    handleQuotationUpdateItem(index, 'price', cleaned === '' ? '' : cleaned);
+                                    handleQuotationUpdateItem(index, 'price', cleaned === '' ? 0 : Number(cleaned));
                                   }}
                                   onBlur={(e) => {
                                     e.stopPropagation();
                                     const val = e.target.value;
-                                    if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
+                                    const numVal = val === '' ? 0 : Number(val);
+                                    if (isNaN(numVal) || numVal < 0) {
                                       handleQuotationUpdateItem(index, 'price', 0);
-                                      setQuotationPriceInputValue(prev => {
-                                        const newVal = { ...prev };
-                                        delete newVal[index];
-                                        return newVal;
-                                      });
                                     } else {
-                                      handleQuotationUpdateItem(index, 'price', Number(val));
-                                      setQuotationPriceInputValue(prev => {
-                                        const newVal = { ...prev };
-                                        delete newVal[index];
-                                        return newVal;
-                                      });
+                                      handleQuotationUpdateItem(index, 'price', numVal);
                                     }
+                                    setQuotationPriceInputValue(prev => {
+                                      const newVal = { ...prev };
+                                      delete newVal[index];
+                                      return newVal;
+                                    });
                                   }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                  }}
-                                  onKeyDown={(e) => {
-                                    e.stopPropagation();
-                                    const input = e.target as HTMLInputElement;
-                                    const currentVal = input.value;
-                                    if ((currentVal === '' || currentVal === '0') && /^[1-9]$/.test(e.key)) {
-                                      e.preventDefault();
-                                      const newVal = e.key;
-                                      setQuotationPriceInputValue(prev => ({ ...prev, [index]: newVal }));
-                                      handleQuotationUpdateItem(index, 'price', newVal);
-                                    }
-                                  }}
+                                  onClick={(e) => e.stopPropagation()}
                                   style={{
                                     width: '120px',
                                     padding: '6px 8px',
@@ -6201,6 +6183,7 @@ const SalesOrders = () => {
 
       {/* Custom Dialog - menggunakan hook terpusat */}
       <DialogComponent />
+      <ToastContainer />
     </div>
   );
 };

@@ -16,6 +16,7 @@
   border-collapse: separate;
   border-spacing: 0;
   font-size: 14px;
+  table-layout: fixed;
 }
 
 .table thead {
@@ -51,6 +52,9 @@
   vertical-align: top;
   font-size: 11px;
   text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .table tbody {

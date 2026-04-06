@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Card from '../../components/Card';
 import Table from '../../components/Table';
 import Button from '../../components/Button';
@@ -7,12 +6,13 @@ import Input from '../../components/Input';
 import BOMDialog from '../../components/BOMDialog';
 import { storageService, extractStorageValue, StorageKeys } from '../../services/storage';
 import { filterActiveItems } from '../../utils/data-persistence-helper';
-import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import { useDialog } from '../../hooks/useDialog';
+import { useToast } from '../../hooks/useToast';
 import { useLanguage } from '../../hooks/useLanguage';
 import BlobService from '../../services/blob-service';
 import * as XLSX from 'xlsx';
 import '../../styles/common.css';
+import '../../styles/toast.css';
 import './Master.css';
 
 interface Product {
@@ -46,8 +46,8 @@ interface Customer {
 }
 
 const Products = () => {
-  const navigate = useNavigate();
   const { t } = useLanguage();
+  const { showToast, ToastContainer } = useToast();
   const [products, setProducts] = useState<Product[]>([]);
   const [bomData, setBomData] = useState<any[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -57,14 +57,10 @@ const Products = () => {
   const isSavingBOMRef = useRef(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(50);
+  const [itemsPerPage] = useState(15);
   const [customerInputValue, setCustomerInputValue] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
-  const [stockAmanInputValue, setStockAmanInputValue] = useState('');
-  const [stockMinimumInputValue, setStockMinimumInputValue] = useState('');
-  const [priceInputValue, setPriceInputValue] = useState('');
-  const [purchasePriceInputValue, setPurchasePriceInputValue] = useState('');
   const [previewImageId, setPreviewImageId] = useState<string | null>(null);
   const [productImage, setProductImage] = useState<string | null>(null);
   const [previewPdfId, setPreviewPdfId] = useState<string | null>(null);
@@ -99,31 +95,20 @@ const Products = () => {
     satuan: '',
     stockAman: 0,
     stockMinimum: 0,
-    kategori: '',
+    kategori: 'Product',
     customer: '',
     hargaFg: 0,
     hargaBeli: 0,
   });
 
   const loadProducts = useCallback(async () => {
-    console.log('[Products] 🔄 Loading products and BOM data...');
     const dataRaw = extractStorageValue(await storageService.get<Product[]>('products'));
     // Filter out deleted items menggunakan helper function
     const data = filterActiveItems(dataRaw);
     const bom = extractStorageValue(await storageService.get<any[]>('bom'));
     
-    console.log('[Products] 📊 Loaded data:', {
-      products: data.length,
-      bom: bom ? bom.length : 0,
-      bomSample: bom ? bom.slice(0, 3) : []
-    });
-    
     // Update bomData (simple update, no comparison needed for now)
     setBomData(bom);
-    console.log('[Products] 💾 BOM data set to state:', {
-      bomCount: bom.length,
-      firstFewIds: bom.slice(0, 5).map(b => b.product_id)
-    });
     
     // Ensure padCode and kode are always present for all products
     const productsWithPadCode = data.map((p, idx) => ({ 
@@ -188,87 +173,7 @@ const Products = () => {
     };
   }, [loadProducts]);
 
-  // Auto-fill padCode dari customer kode untuk semua products yang padCode-nya kosong
-  useEffect(() => {
-    if (!products || products.length === 0 || !customers || customers.length === 0) {
-      return;
-    }
 
-    console.log('[Products] 🔄 Auto-filling padCode from customer kode...');
-    
-    // Check apakah ada product yang perlu di-fill
-    const productsNeedingFill = products.filter(p => {
-      const hasCustomer = !!(p.customer || p.supplier);
-      const padCodeEmpty = !p.padCode || p.padCode.trim() === '';
-      return hasCustomer && padCodeEmpty;
-    });
-
-    if (productsNeedingFill.length === 0) {
-      console.log('[Products] ✅ No products need padCode auto-fill');
-      return;
-    }
-
-    console.log(`[Products] 📝 Found ${productsNeedingFill.length} products needing padCode auto-fill`);
-
-    // Auto-fill padCode untuk products yang kosong
-    const updatedProducts = products.map(p => {
-      const hasCustomer = !!(p.customer || p.supplier);
-      const padCodeEmpty = !p.padCode || p.padCode.trim() === '';
-
-      if (!hasCustomer || !padCodeEmpty) {
-        return p; // Skip - tidak perlu di-fill
-      }
-
-      // Cari customer berdasarkan nama
-      const customerName = (p.customer || p.supplier || '').trim();
-      const customer = customers.find(c => 
-        c.nama && c.nama.toLowerCase() === customerName.toLowerCase()
-      );
-
-      if (!customer || !customer.kode) {
-        return p; // Customer tidak ditemukan atau tidak punya kode
-      }
-
-      // Return product dengan padCode yang sudah di-fill
-      console.log(`[Products] ✅ Auto-filled padCode for "${p.nama}": ${customer.kode}`);
-      return {
-        ...p,
-        padCode: customer.kode.trim(),
-      };
-    });
-
-    // Check apakah ada perubahan
-    const hasChanges = updatedProducts.some((p, idx) => p.padCode !== products[idx].padCode);
-
-    if (hasChanges) {
-      console.log('[Products] 💾 Saving auto-filled padCode to storage...');
-      setProducts(updatedProducts);
-      // Save to storage
-      storageService.set(StorageKeys.PACKAGING.PRODUCTS, updatedProducts, true).catch(err => {
-        console.error('[Products] Error saving auto-filled padCode:', err);
-      });
-    }
-  }, [products, customers]);
-
-  // Helper function untuk remove leading zero dari input angka
-  const removeLeadingZero = (value: string): string => {
-    if (!value) return value;
-    // Jika hanya "0", "0.", atau "0," biarkan
-    if (value === '0' || value === '0.' || value === '0,') {
-      return value;
-    }
-    // Hapus semua leading zero kecuali untuk "0." atau "0,"
-    if (value.startsWith('0') && value.length > 1) {
-      // Jika dimulai dengan "0." atau "0," biarkan
-      if (value.startsWith('0.') || value.startsWith('0,')) {
-        return value;
-      }
-      // Hapus semua leading zero
-      const cleaned = value.replace(/^0+/, '');
-      return cleaned || '0';
-    }
-    return value;
-  };
 
   const getCustomerInputDisplayValue = () => {
     if (customerInputValue !== undefined && customerInputValue !== '') {
@@ -321,194 +226,37 @@ const Products = () => {
     }
   };
 
-  // Helper function untuk generate product_id dengan pattern FG-{customer code}-{sequence}
-  const generateProductId = useCallback((customerName: string): string => {
-    // Cari customer berdasarkan nama
-    const customer = customers.find(c => c.nama === customerName);
-    let customerCode = 'GEN'; // Default jika customer tidak ditemukan
-    
-    if (customer && customer.kode) {
-      // Ambil 3-4 karakter pertama dari kode customer, uppercase
-      customerCode = customer.kode.substring(0, 4).toUpperCase().replace(/[^A-Z0-9]/g, '');
-      if (customerCode.length < 3) {
-        // Jika kurang dari 3 karakter, ambil dari nama customer
-        const nameParts = customer.nama.split(' ').filter(p => p.length > 0);
-        if (nameParts.length > 0) {
-          customerCode = nameParts.map(p => p[0]).join('').substring(0, 3).toUpperCase();
-        }
-      }
-    } else if (customerName) {
-      // Jika customer ada tapi tidak ada di master, ambil inisial dari nama
-      const nameParts = customerName.split(' ').filter(p => p.length > 0);
-      if (nameParts.length > 0) {
-        customerCode = nameParts.map(p => p[0]).join('').substring(0, 3).toUpperCase();
-      }
-    }
-    
-    // Cari sequence number terakhir untuk customer ini (semua product_id)
-    const existingProducts = products.filter(p => {
-      const pid = (p.product_id || '').toString().trim();
-      // Sekarang mencocokkan semua product_id yang mengandung customerCode
-      return pid.includes(customerCode);
-    });
-    
-    // Extract sequence numbers dari semua format product_id
-    const sequences = existingProducts
-      .map(p => {
-        const pid = (p.product_id || '').toString().trim();
-        // Match angka di akhir product_id (bukan hanya FG pattern)
-        const match = pid.match(/(\d+)$/);
-        return match ? parseInt(match[1], 10) : 0;
-      })
-      .filter(n => !isNaN(n) && n > 0);
-    
-    // Get next sequence number
-    const nextSequence = sequences.length > 0 ? Math.max(...sequences) + 1 : 1;
-    
-    // Format: {customerCode}{sequence} - Bebas tanpa pattern FG
-    return `${customerCode}${String(nextSequence).padStart(3, '0')}`;
-  }, [customers, products]);
-
-  // Optimize: Create Set untuk fast BOM lookup (O(1) instead of O(n) dengan .some())
+  // Optimize: Create Set untuk fast BOM lookup (O(1) instead of O(n))
   const bomProductIdsSet = useMemo(() => {
-    console.log('[Products] 🔄 Creating bomProductIdsSet from bomData:', bomData.length);
     const bomDataArray = Array.isArray(bomData) ? bomData : [];
     const ids = new Set<string>();
     
     bomDataArray.forEach(b => {
-      const bomProductId = String(b.product_id || b.kode || '').trim().toLowerCase();
+      const bomProductId = String(b.product_id || '').trim().toLowerCase();
       if (bomProductId) {
         ids.add(bomProductId);
-        // Cross-reference: Tambahkan juga kode/kodeIpos/product_id/padCode dari produk yang match
-        const matchingProduct = products.find(p => {
-          if (!p) return false;
-          const pKode = String(p.kode || '').trim().toLowerCase();
-          const pKodeIpos = String(p.kodeIpos || '').trim().toLowerCase();
-          const pProductId = String(p.product_id || '').trim().toLowerCase();
-          const pPadCode = String(p.padCode || '').trim().toLowerCase();
-          
-          return (pKode && pKode === bomProductId) ||
-                 (pKodeIpos && pKodeIpos === bomProductId) ||
-                 (pProductId && pProductId === bomProductId) ||
-                 (pPadCode && pPadCode === bomProductId);
-        });
-        
-        if (matchingProduct) {
-          // Tambahkan semua ID dari produk yang match
-          if (matchingProduct.kode) ids.add(String(matchingProduct.kode).trim().toLowerCase());
-          if (matchingProduct.kodeIpos) ids.add(String(matchingProduct.kodeIpos).trim().toLowerCase());
-          if (matchingProduct.product_id) ids.add(String(matchingProduct.product_id).trim().toLowerCase());
-          if (matchingProduct.padCode) ids.add(String(matchingProduct.padCode).trim().toLowerCase());
-        }
       }
     });
     
-    console.log('[Products] ✅ bomProductIdsSet created:', {
-      size: ids.size,
-      bomDataLength: bomDataArray.length,
-      bomDataSample: bomDataArray.slice(0, 3),
-      ids: Array.from(ids).slice(0, 10)
-    });
     return ids;
-  }, [bomData, products]);
+  }, [bomData]);
 
-  // Helper function to normalize product ID for BOM matching
-  const normalizeProductIdForBOM = useCallback((id: string): string => {
-    if (!id) return '';
-    
-    let normalized = String(id).trim().toLowerCase();
-    
-    // Remove FG- prefix if exists
-    if (normalized.startsWith('fg-')) {
-      normalized = normalized.substring(3);
-    }
-    
-    // Remove customer code suffix (everything after last -)
-    // But keep KRT-style codes intact
-    if (normalized.includes('-') && !normalized.match(/^[a-z]{3}-?\d{4,5}$/)) {
-      const parts = normalized.split('-');
-      // If it looks like customer-product format, take the last part
-      if (parts.length > 1 && parts[parts.length - 1].match(/^[a-z]{3}\d{4,5}$/)) {
-        normalized = parts[parts.length - 1];
-      }
-      // If it looks like product-customer format, take the first part  
-      else if (parts.length > 1 && parts[0].match(/^[a-z]{3}\d{4,5}$/)) {
-        normalized = parts[0];
-      }
-    }
-    
-    // Remove any remaining dashes for KRT codes
-    if (normalized.match(/^[a-z]{3}-\d{4,5}$/)) {
-      normalized = normalized.replace('-', '');
-    }
-    
-    return normalized;
-  }, []);
-
-  // Optimize: Memoized hasBOM function dengan Set lookup (O(1) instead of O(n))
+  // Optimize: Memoized hasBOM function dengan Set lookup (O(1))
   const hasBOM = useCallback((product: Product): boolean => {
-    const productId = (product.kode || product.product_id || '').toString().trim();
-    const result = bomProductIdsSet.has(productId.toLowerCase());
-    
-    // Debug log untuk first few products
-    if (product.no <= 5) {
-      console.log('[Products] 🔍 hasBOM check:', {
-        productName: product.nama,
-        productKode: product.kode,
-        productProductId: product.product_id,
-        checkingId: productId,
-        checkingIdLower: productId.toLowerCase(),
-        bomSetSize: bomProductIdsSet.size,
-        bomSetIds: Array.from(bomProductIdsSet).slice(0, 10),
-        hasBOM: result
-      });
-    }
-    
-    return result;
+    const productId = (product.product_id || '').toString().trim().toLowerCase();
+    return bomProductIdsSet.has(productId);
   }, [bomProductIdsSet]);
-
-  // Helper function to check if product has customer and price
-  const hasCustomerAndPrice = (product: Product): boolean => {
-    const hasCustomer = !!(product.customer || product.supplier);
-    const hasPrice = !!(product.hargaFg || product.harga) && 
-                     ((product.hargaFg || product.harga || 0) > 0);
-    return hasCustomer && hasPrice;
-  };
 
   // Filter products based on search query - MEMOIZED untuk performance
   const filteredProducts = useMemo(() => {
     const productsArray = Array.isArray(products) ? products : [];
-    
-    // Build lookup maps untuk cross-reference kodeIpos dengan kode
-    const productsByKode = new Map<string, Product[]>();
-    const productsByKodeIpos = new Map<string, Product[]>();
-    
-    productsArray.forEach(product => {
-      const kode = (product.kode || '').trim().toLowerCase();
-      const kodeIpos = (product.kodeIpos || '').trim().toLowerCase();
-      
-      if (kode) {
-        if (!productsByKode.has(kode)) {
-          productsByKode.set(kode, []);
-        }
-        productsByKode.get(kode)!.push(product);
-      }
-      
-      if (kodeIpos) {
-        if (!productsByKodeIpos.has(kodeIpos)) {
-          productsByKodeIpos.set(kodeIpos, []);
-        }
-        productsByKodeIpos.get(kodeIpos)!.push(product);
-      }
-    });
     
     // Filter first
     const filtered = productsArray.filter(product => {
       if (!searchQuery) return true;
       const query = searchQuery.toLowerCase().trim();
       
-      // Direct match
-      const directMatch = (
+      return (
         (product.kode || '').toLowerCase().includes(query) ||
         (product.product_id || '').toLowerCase().includes(query) ||
         (product.nama || '').toLowerCase().includes(query) ||
@@ -517,71 +265,18 @@ const Products = () => {
         (product.padCode || '').toLowerCase().includes(query) ||
         (product.kodeIpos || '').toLowerCase().includes(query)
       );
-      
-      if (directMatch) return true;
-      
-      // Cross-reference: Jika query sama dengan kodeIpos produk ini, cari produk lain yang punya kode sama dengan kodeIpos ini
-      const productKodeIpos = (product.kodeIpos || '').trim().toLowerCase();
-      if (productKodeIpos && productKodeIpos === query) {
-        // Cari produk lain yang punya kode sama dengan kodeIpos produk ini
-        const relatedProducts = productsByKode.get(productKodeIpos) || [];
-        if (relatedProducts.length > 0) {
-          return true; // Include produk ini karena kodeIpos-nya match dengan kode produk lain
-        }
-      }
-      
-      // Cross-reference: Jika query sama dengan kode produk ini, cari produk lain yang punya kodeIpos sama dengan kode ini
-      const productKode = (product.kode || '').trim().toLowerCase();
-      if (productKode && productKode === query) {
-        // Cari produk lain yang punya kodeIpos sama dengan kode produk ini
-        const relatedProducts = productsByKodeIpos.get(productKode) || [];
-        if (relatedProducts.length > 0) {
-          return true; // Include produk ini karena kode-nya match dengan kodeIpos produk lain
-        }
-      }
-      
-      return false;
     });
     
-    // Then sort dengan optimized BOM check
+    // Sort: Products with BOM first, then by kode
     return filtered.sort((a, b) => {
-      // Priority sorting:
-      // 1. Products with padCode (highest priority - muncul paling atas)
-      // 2. Products with customer + price + BOM
-      // 3. Products with customer + price (no BOM)
-      // 4. Products with BOM only (no customer/price)
-      // 5. Everything else
-      
-      const aHasPadCode = !!(a.padCode && a.padCode.trim());
-      const bHasPadCode = !!(b.padCode && b.padCode.trim());
-      
-      // Priority 1: padCode (highest)
-      if (aHasPadCode && !bHasPadCode) return -1;
-      if (!aHasPadCode && bHasPadCode) return 1;
-      
-      // Jika sama-sama punya padCode atau sama-sama tidak punya, lanjut ke priority berikutnya
-      const aHasCustomerPrice = hasCustomerAndPrice(a);
-      const bHasCustomerPrice = hasCustomerAndPrice(b);
       const aHasBOM = hasBOM(a);
       const bHasBOM = hasBOM(b);
       
-      // Calculate priority score (higher = better)
-      const getPriority = (hasCustomerPrice: boolean, hasBOM: boolean): number => {
-        if (hasCustomerPrice && hasBOM) return 3;
-        if (hasCustomerPrice) return 2;
-        if (hasBOM) return 1;
-        return 0;
-      };
+      // Products with BOM come first
+      if (aHasBOM && !bHasBOM) return -1;
+      if (!aHasBOM && bHasBOM) return 1;
       
-      const aPriority = getPriority(aHasCustomerPrice, aHasBOM);
-      const bPriority = getPriority(bHasCustomerPrice, bHasBOM);
-      
-      // Sort by priority (descending)
-      if (aPriority !== bPriority) {
-        return bPriority - aPriority;
-      }
-      
-      // Same priority, sort by kode
+      // Same BOM status, sort by kode
       return (a.kode || '').localeCompare(b.kode || '');
     });
   }, [products, searchQuery, hasBOM]);
@@ -613,7 +308,7 @@ const Products = () => {
       // Store only fileId (not base64)
       setProductImage(result.fileId);
       setFormData({ ...formData, productImageId: result.fileId });
-      showAlert('File uploaded successfully', 'Success');
+      showToast('File uploaded', 'success');
     } catch (error: any) {
       showAlert(`Error uploading file: ${error.message}`, 'Error');
     }
@@ -627,52 +322,29 @@ const Products = () => {
     
     // Delete from server in background (don't wait)
     if (fileIdToDelete) {
-      BlobService.deleteFile(fileIdToDelete, 'packaging').catch(error => {
-        console.warn('Background delete failed (ignored):', error.message);
+      BlobService.deleteFile(fileIdToDelete, 'packaging').catch(() => {
+        // Ignore background delete errors
       });
     }
   };
 
   const handleSave = async () => {
     try {
-      // Extract padCode and kodeIpos explicitly to ensure it's not lost
-      let padCodeValue = (formData.padCode || '').trim();
+      const padCodeValue = (formData.padCode || '').trim();
       const kodeIposValue = (formData.kodeIpos || '').trim();
       
       if (editingItem) {
         const updated = products.map(p => {
           if (p.id === editingItem.id) {
-            // Sync product_id dengan kode yang diedit
             const newKode = formData.kode !== undefined && formData.kode !== null ? String(formData.kode).trim() : (p.kode || '');
-            let productId = newKode; // product_id selalu sync dengan kode
             
-            // Fallback: Auto-generate product_id jika kode kosong
-            if (!productId || productId.trim() === '') {
-              const customerName = (formData.customer || p.customer || '').trim();
-              if (customerName) {
-                productId = generateProductId(customerName);
-              } else {
-                productId = p.product_id || ''; // Keep old product_id if no customer
-              }
-            }
-            
-            // Auto-fill padCode dari customer kode jika padCode kosong
-            const customerName = (formData.customer || p.customer || '').trim();
-            if (!padCodeValue && customerName) {
-              const customer = customers.find(c => c.nama && c.nama.toLowerCase() === customerName.toLowerCase());
-              if (customer && customer.kode) {
-                padCodeValue = customer.kode.trim();
-              }
-            }
-            
-            // Create new object with all fields explicitly set
             const updatedProduct: Product = {
               id: editingItem.id,
               no: editingItem.no,
               kode: newKode,
               nama: formData.nama !== undefined && formData.nama !== null ? String(formData.nama).trim() : (p.nama || ''),
-              padCode: padCodeValue, // Always set padCode explicitly (auto-filled if empty)
-              kodeIpos: kodeIposValue, // Always set kodeIpos explicitly
+              padCode: padCodeValue,
+              kodeIpos: kodeIposValue,
               satuan: formData.satuan !== undefined && formData.satuan !== null ? String(formData.satuan).trim() : (p.satuan || ''),
               stockAman: formData.stockAman !== undefined ? Number(formData.stockAman) : (p.stockAman || 0),
               stockMinimum: formData.stockMinimum !== undefined ? Number(formData.stockMinimum) : (p.stockMinimum || 0),
@@ -684,7 +356,7 @@ const Products = () => {
               harga: formData.harga !== undefined ? Number(formData.harga) : (p.harga || 0),
               bom: formData.bom !== undefined ? formData.bom : (p.bom || []),
               productImageId: formData.productImageId || p.productImageId,
-              product_id: productId,
+              product_id: newKode || p.product_id,
               lastUpdate: new Date().toISOString(), 
               userUpdate: 'System', 
               ipAddress: '127.0.0.1' 
@@ -694,36 +366,22 @@ const Products = () => {
           return p;
         });
         
-        await storageService.set(StorageKeys.PACKAGING.PRODUCTS, updated, true); // immediateSync = true
+        await storageService.set(StorageKeys.PACKAGING.PRODUCTS, updated);
         setProducts(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
+        showToast(`Product "${formData.nama}" updated`, 'success');
       } else {
-        // Auto-generate product_id untuk product baru jika kosong
-        let productId = '';
-        const customerName = (formData.customer || '').trim();
-        if (customerName) {
-          productId = generateProductId(customerName);
-        }
-        
-        // Auto-fill padCode dari customer kode jika padCode kosong
-        let finalPadCode = padCodeValue;
-        if (!finalPadCode && customerName) {
-          const customer = customers.find(c => c.nama && c.nama.toLowerCase() === customerName.toLowerCase());
-          if (customer && customer.kode) {
-            finalPadCode = customer.kode.trim();
-          }
-        }
-        
+        // Simple: gunakan apa yang user input, tanpa generate logic
         const newProduct: Product = {
           id: Date.now().toString(),
-          no: products.length + 1,
-          kode: productId || '',
+          no: 1,
+          kode: (formData.kode || '').trim(),
           nama: formData.nama || '',
-          padCode: finalPadCode, // Auto-filled padCode from customer kode
-          kodeIpos: kodeIposValue, // Explicitly set kodeIpos
+          padCode: padCodeValue,
+          kodeIpos: kodeIposValue,
           satuan: formData.satuan || '',
           stockAman: formData.stockAman || 0,
           stockMinimum: formData.stockMinimum || 0,
-          kategori: formData.kategori || '',
+          kategori: formData.kategori || 'Product',
           customer: formData.customer || '',
           supplier: formData.supplier,
           hargaFg: formData.hargaFg || 0,
@@ -731,26 +389,32 @@ const Products = () => {
           harga: formData.harga,
           bom: formData.bom,
           productImageId: formData.productImageId,
-          product_id: productId || undefined,
+          product_id: (formData.kode || '').trim() || undefined,
           lastUpdate: new Date().toISOString(),
           userUpdate: 'System',
           ipAddress: '127.0.0.1',
         } as Product;
-        const updated = [...products, newProduct];
-        await storageService.set(StorageKeys.PACKAGING.PRODUCTS, updated, true); // immediateSync = true
+        // Add new product at the beginning (index 0)
+        const updated = [newProduct, ...products];
+        await storageService.set(StorageKeys.PACKAGING.PRODUCTS, updated);
         setProducts(updated.map((p, idx) => ({ ...p, no: idx + 1 })));
+        showToast(`Product "${formData.nama}" created`, 'success');
       }
       setShowForm(false);
       setEditingItem(null);
       setCustomerInputValue('');
-      setStockAmanInputValue('');
-      setStockMinimumInputValue('');
-      setPriceInputValue('');
-      setPurchasePriceInputValue('');
-      setFormData({ kode: '', nama: '', padCode: '', kodeIpos: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0, hargaBeli: 0 });
+      setFormData({ kode: '', nama: '', padCode: '', kodeIpos: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: 'Product', customer: '', hargaFg: 0, hargaBeli: 0 });
     } catch (error: any) {
-      showAlert(`Error saving product: ${error.message}`, 'Error');
+      showAlert(`❌ Error saving product: ${error.message}`, 'Error');
     }
+  };
+
+  const resetFormState = () => {
+    setShowForm(false);
+    setEditingItem(null);
+    setCustomerInputValue('');
+    setProductImage(null);
+    setFormData({ kode: '', nama: '', padCode: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: 'Product', customer: '', hargaFg: 0, hargaBeli: 0 });
   };
 
   const handleEdit = (item: Product) => {
@@ -762,15 +426,11 @@ const Products = () => {
     } else {
       setCustomerInputValue(customerName);
     }
-    setStockAmanInputValue('');
-    setStockMinimumInputValue('');
-    setPriceInputValue('');
-    setPurchasePriceInputValue('');
     setProductImage(item.productImageId || null);
     setFormData({
       ...item,
-      customer: item.customer || item.supplier || '', // Use customer if available, fallback to supplier
-      padCode: item.padCode || '', // Ensure padCode is included
+      customer: item.customer || item.supplier || '',
+      padCode: item.padCode || '',
       productImageId: item.productImageId,
     });
     setShowForm(true);
@@ -780,48 +440,35 @@ const Products = () => {
     try {
       // Validate item.id exists
       if (!item.id) {
-        console.error('[Products] Item missing ID:', item);
         showAlert(`❌ Error: Product "${item.nama}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
         return;
       }
       
       showConfirm(
-        `Hapus Product: ${item.nama}?
+        `Delete Product: ${item.nama}?
 
-⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.
-
-Tindakan ini tidak bisa dibatalkan.`,
+This action cannot be undone.`,
         async () => {
           try {
-            // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
-            const deleteResult = await deletePackagingItem('products', item.id, 'id');
+            // Delete langsung dari array
+            const updatedProducts = products.filter(p => p.id !== item.id);
             
-            if (deleteResult.success) {
-              // Reload data dengan helper (handle race condition) - sama seperti SalesOrders
-              await reloadPackagingData('products', setProducts);
-              
-              // Re-number products setelah reload
-              const currentProducts = await storageService.get<Product[]>('products') || [];
-              const activeProducts = filterActiveItems(currentProducts);
-              setProducts(activeProducts.map((p, idx) => ({ ...p, no: idx + 1 })));
-              
-              showAlert(`✅ Product "${item.nama}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
-            } else {
-              console.error('[Products] Delete failed:', deleteResult.error);
-              showAlert(`❌ Error deleting product "${item.nama}": ${deleteResult.error || 'Unknown error'}`, 'Error');
-            }
+            // Save ke storage
+            await storageService.set(StorageKeys.PACKAGING.PRODUCTS, updatedProducts);
+            
+            // Update state dengan re-numbering
+            setProducts(updatedProducts.map((p, idx) => ({ ...p, no: idx + 1 })));
+            showToast(`Product "${item.nama}" deleted`, 'success');
           } catch (error: any) {
-            console.error('[Products] Error in delete:', error);
             showAlert(`❌ Error deleting product: ${error.message}`, 'Error');
           }
         },
         () => {
           // Delete cancelled
         },
-        'Safe Delete Confirmation'
+        'Delete Confirmation'
       );
     } catch (error: any) {
-      console.error('[Products] Error in handleDelete:', error);
       showAlert(`❌ Error: ${error.message}`, 'Error');
     }
   };
@@ -1098,7 +745,7 @@ Lanjutkan?`,
             const removedCount = currentProducts.length - deduplicated.length;
             
             if (removedCount === 0) {
-              showAlert('✅ Tidak ada duplikat ditemukan. Data sudah bersih!', 'Success');
+              showAlert('No duplicates found. Data is clean!', 'Info');
               return;
             }
 
@@ -1171,7 +818,6 @@ Lanjutkan?`,
       
       const fileName = `Products_Template.xlsx`;
       XLSX.writeFile(wb, fileName);
-      showAlert(`✅ Template downloaded! Silakan isi data sesuai format dan import kembali.`, 'Success');
     } catch (error: any) {
       showAlert(`Error downloading template: ${error.message}`, 'Error');
     }
@@ -1258,9 +904,7 @@ Klik "Download Template" untuk mendapatkan file Excel template, atau "Lanjutkan"
             const stockAmanStr = mapColumn(row, ['Stock Aman', 'STOCK AMAN', 'Safe Stock', 'safe_stock']);
             const stockMinimumStr = mapColumn(row, ['Stock Minimum', 'STOCK MINIMUM', 'Min Stock', 'min_stock']);
             const hargaFgStr = mapColumn(row, ['Harga FG', 'HARGA FG', 'Price', 'PRICE', 'Selling Price', 'selling_price']);
-            const lastUpdate = mapColumn(row, ['Last Update', 'LAST UPDATE', 'Update Date', 'update_date']);
             const userUpdate = mapColumn(row, ['User Update', 'USER UPDATE', 'Updated By', 'updated_by']);
-            const priceSatuanStr = mapColumn(row, ['Price Satuan', 'PRICE SATUAN', 'Price', 'price']);
             const bomKode = mapColumn(row, ['BOM Kode', 'BOM KODE', 'BOM', 'bom']);
             const materialKode = mapColumn(row, ['Material Kode', 'MATERIAL KODE', 'Material', 'material']);
             const namaMaterial = mapColumn(row, ['Nama Material', 'NAMA MATERIAL', 'Material Name', 'material_name']);
@@ -1328,13 +972,6 @@ Klik "Download Template" untuk mendapatkan file Excel template, atau "Lanjutkan"
             };
 
             const hargaFg = parseFloat(hargaFgStr) || 0;
-
-            // Parse Price Satuan (remove Rp and format)
-            let priceSatuan = hargaFg; // Default to hargaFg
-            if (priceSatuanStr) {
-              const cleanPrice = priceSatuanStr.replace(/[Rp\s.]/g, '').replace(',', '.');
-              priceSatuan = parseFloat(cleanPrice) || hargaFg;
-            }
 
             // Parse BOM data
             const bomItems: any[] = [];
@@ -1563,14 +1200,14 @@ Klik "Download Template" untuk mendapatkan file Excel template, atau "Lanjutkan"
           const availableKeys = jsonData.length > 0 ? Object.keys(jsonData[0]).join(', ') : 'none';
           showAlert(`❌ Tidak ada data valid yang ditemukan di file Excel.
 
-Total rows: ${jsonData.length}
-Available columns: ${availableKeys}
+            Total rows: ${jsonData.length}
+            Available columns: ${availableKeys}
 
-Pastikan:
-- Ada kolom "Nama" atau "Name"
-- Data tidak kosong semua
-- Format file benar`, 'Error');
-          return;
+            Pastikan:
+            - Ada kolom "Nama" atau "Name"
+            - Data tidak kosong semua
+            - Format file benar`, 'Error');
+                      return;
         }
 
         const importProducts = async () => {
@@ -1588,33 +1225,6 @@ Pastikan:
               .replace(/\s*([\/])\s*/g, '$1') // Normalize spasi di sekitar /
               .replace(/\s*([-])\s*/g, '$1') // Normalize spasi di sekitar -
               .trim();
-          };
-
-          // Helper function untuk cek nama mirip (yang pendek merge ke yang lengkap)
-          const isSimilarName = (name1: string, name2: string): boolean => {
-            const n1 = normalizeName(name1);
-            const n2 = normalizeName(name2);
-            
-            if (n1 === n2) return true;
-            
-            // Cek apakah yang satu adalah substring dari yang lain (minimal 70% match)
-            const longer = n1.length > n2.length ? n1 : n2;
-            const shorter = n1.length > n2.length ? n2 : n1;
-            
-            // Exact substring match
-            if (longer.includes(shorter)) {
-              return shorter.length >= longer.length * 0.7;
-            }
-            
-            // Cek similarity dengan menghitung karakter yang sama
-            let matches = 0;
-            const minLen = Math.min(n1.length, n2.length);
-            for (let i = 0; i < minLen; i++) {
-              if (n1[i] === n2[i]) matches++;
-            }
-            
-            // Minimal 85% karakter sama untuk dianggap mirip
-            return matches >= minLen * 0.85;
           };
 
           // Helper function untuk cek harga sama (dengan toleransi kecil)
@@ -1840,14 +1450,7 @@ Pastikan:
           syncToServer().catch(() => {}); // Fire and forget
 
           if (errors.length > 0) {
-            showAlert(`✅ Imported ${newProducts.length} products
-📊 Total: ${renumbered.length} products
-
-⚠️ ${errors.length} errors occurred:
-${errors.slice(0, 5).join('\\n')}
-')}`, 'Import Completed');
-          } else {
-            showAlert(`✅ Successfully imported ${newProducts.length} products\n📊 Total: ${renumbered.length} products`, 'Success');
+            showAlert(`⚠️ Imported ${newProducts.length} products with ${errors.length} errors`, 'Info');
           }
         };
 
@@ -1950,7 +1553,6 @@ ${errors.slice(0, 5).join('\\n')}
       
       const fileName = `Products_${new Date().toISOString().split('T')[0]}.xlsx`;
       XLSX.writeFile(wb, fileName);
-      showAlert(`✅ Exported ${dataToExport.length} products to ${fileName}`, 'Success');
     } catch (error: any) {
       showAlert(`Error exporting to Excel: ${error.message}`, 'Error');
     }
@@ -1973,20 +1575,11 @@ ${errors.slice(0, 5).join('\\n')}
 
       // Auto-generate product_id jika kosong
       if (!productId) {
-        const customerName = (currentEditingBOM.customer || '').trim();
-        if (customerName) {
-          productId = generateProductId(customerName);
-          
-          // Update product dengan product_id yang baru di-generate
-          const updatedProducts = products.map(p => 
-            p.id === currentEditingBOM.id
-              ? { ...p, product_id: productId }
-              : p
-          );
-          await storageService.set(StorageKeys.PACKAGING.PRODUCTS, updatedProducts);
-          setProducts(updatedProducts.map((p, idx) => ({ ...p, no: idx + 1 })));
-        } else {
-          showAlert('Product ID tidak ditemukan dan customer tidak ada. Tidak bisa menyimpan BOM.', 'Error');
+        // Jika product_id kosong, gunakan kode atau padCode yang ada
+        productId = (currentEditingBOM.kode || currentEditingBOM.padCode || currentEditingBOM.product_id || '').trim();
+        
+        if (!productId) {
+          showAlert('Product ID tidak ditemukan. Silakan isi kode product terlebih dahulu.', 'Error');
           setEditingBOM(null);
           isSavingBOMRef.current = false;
           return;
@@ -2071,12 +1664,8 @@ ${errors.slice(0, 5).join('\\n')}
       await storageService.set(StorageKeys.PACKAGING.BOM, updatedBOM);
       // storageService.set() akan trigger 'app-storage-changed' event
       // Event listener akan skip reload karena isSavingBOMRef.current = true
-
-      // Tampilkan pesan sukses dengan format sama seperti PPIC (sebelum close dialog)
-      const successMessage = `BOM berhasil disimpan untuk product: ${currentEditingBOM.nama || productId}\n\n(${newBOMItems.length} material)`;
-      showAlert(successMessage, 'Success');
       
-      // Close dialog setelah alert ditampilkan
+      // Close dialog setelah save
       setEditingBOM(null);
       
       // Reload data untuk update tampilan (setelah dialog ditutup)
@@ -2093,30 +1682,19 @@ ${errors.slice(0, 5).join('\\n')}
         }
       }, 200);
     } catch (error: any) {
-      console.error('Error saving BOM:', error);
       showAlert(`Error saving BOM: ${error.message}`, 'Error');
       setEditingBOM(null);
       isSavingBOMRef.current = false;
     }
-  }, [showAlert, loadProducts, products, generateProductId]);
+  }, [showAlert, loadProducts, products]);
 
   const columns = useMemo(() => [
     { 
       key: 'bomIndicator', 
       header: 'BOM',
+      width: '50px',
       render: (item: Product) => {
         const hasBom = hasBOM(item);
-        
-        // Debug log for first few items
-        if (item.no <= 3) {
-          console.log('[Products] 🎨 Rendering BOM indicator:', {
-            productName: item.nama,
-            productId: item.product_id || item.padCode || item.kode,
-            hasBom: hasBom,
-            color: hasBom ? '#388e3c' : '#ff9800'
-          });
-        }
-        
         return (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div
@@ -2136,19 +1714,19 @@ ${errors.slice(0, 5).join('\\n')}
     { 
       key: 'no', 
       header: t('common.number') || 'No.',
-      render: (item: Product) => {
-        const index = paginatedProducts.findIndex(p => p.id === item.id);
-        return index >= 0 ? startIndex + index + 1 : '';
-      },
+      width: '50px',
+      hidden: true,
+      render: (item: Product) => item.no,
     },
-    { key: 'product_id', header: t('master.productCode') || 'Kode (SKU/ID)' },
-    { key: 'nama', header: t('master.productName') || 'Nama' },
-    { key: 'padCode', header: 'Pad Code' },
-    { key: 'satuan', header: t('master.unit') || 'Satuan (Unit)' },
-    { key: 'kategori', header: t('master.category') || 'Kategori' },
+    { key: 'product_id', header: t('master.productCode') || 'Kode (SKU/ID)', width: '120px' },
+    { key: 'nama', header: t('master.productName') || 'Nama', width: '200px' },
+    { key: 'padCode', header: 'Pad Code', width: '100px' },
+    { key: 'satuan', header: t('master.unit') || 'Satuan (Unit)', width: '80px' },
+    { key: 'kategori', header: t('master.category') || 'Kategori', width: '100px' },
     { 
       key: 'customer', 
       header: t('master.customerName') || 'Customer',
+      width: '120px',
       render: (item: Product) => {
         return item.customer || item.supplier || '-';
       },
@@ -2156,12 +1734,14 @@ ${errors.slice(0, 5).join('\\n')}
     { 
       key: 'lastUpdate', 
       header: t('common.updatedAt') || 'Last Update',
+      width: '160px',
       render: (item: Product) => formatDateTime(item.lastUpdate)
     },
-    { key: 'userUpdate', header: t('common.updatedBy') || 'User Update' },
+    { key: 'userUpdate', header: t('common.updatedBy') || 'User Update', width: '100px' },
     { 
       key: 'hargaFg', 
       header: t('master.price') || 'Harga Satuan',
+      width: '130px',
       render: (item: Product) => {
         const harga = item.hargaFg || item.harga || 0;
         return harga > 0 ? new Intl.NumberFormat('id-ID', { 
@@ -2174,6 +1754,7 @@ ${errors.slice(0, 5).join('\\n')}
     { 
       key: 'hargaBeli', 
       header: 'Harga Beli',
+      width: '130px',
       render: (item: Product) => {
         const hargaBeli = item.hargaBeli || 0;
         return hargaBeli > 0 ? new Intl.NumberFormat('id-ID', { 
@@ -2186,6 +1767,7 @@ ${errors.slice(0, 5).join('\\n')}
     {
       key: 'actions',
       header: t('common.actions') || 'Actions',
+      width: '280px',
       render: (item: Product) => (
         <div style={{ display: 'flex', gap: '8px' }}>
           {item.productImageId && (
@@ -2212,466 +1794,131 @@ ${errors.slice(0, 5).join('\\n')}
           )}
           <Button variant="secondary" onClick={() => handleEdit(item)}>{t('common.edit') || 'Edit'}</Button>
           <Button variant="primary" onClick={() => handleEditBOM(item)}>Edit BOM</Button>
-          <Button 
-            variant="secondary" 
-            onClick={() => navigate('/packaging/master/inventory', { 
-              state: { highlightProduct: item.product_id || item.kode } 
-            })}
-            style={{ fontSize: '12px', padding: '4px 8px' }}
-          >
-            📊 Inventory
-          </Button>
           <Button variant="danger" onClick={() => handleDelete(item)}>{t('common.delete') || 'Delete'}</Button>
         </div>
       ),
     },
-  ], [t, paginatedProducts, startIndex, hasBOM, formatDateTime]);
+  ], [t, hasBOM, formatDateTime]);
 
   return (
     <div className="master-compact">
       <div className="page-header">
         <h1>{t('master.products') || 'Master Produk'}</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <Button variant="secondary" onClick={handleCleanupDuplicates}>🧹 Bersihkan Duplikat</Button>
-          <Button variant="secondary" onClick={handleExportExcel}>📥 Export Excel</Button>
-          <Button variant="secondary" onClick={handleDownloadTemplate}>📋 Download Template</Button>
-          <Button variant="primary" onClick={handleImportExcel}>📤 Import Excel</Button>
+          <Button variant="secondary" onClick={handleCleanupDuplicates}>🧹 Clean Duplicates</Button>
+          <Button variant="secondary" onClick={handleExportExcel}>📥 Export</Button>
+          <Button variant="secondary" onClick={handleDownloadTemplate}>📋 Template</Button>
+          <Button variant="primary" onClick={handleImportExcel}>📤 Import</Button>
           <Button onClick={() => { 
               setCustomerInputValue('');
-              setStockAmanInputValue('');
-              setStockMinimumInputValue('');
-              setPriceInputValue('');
-              setFormData({ kode: '', nama: '', padCode: '', kodeIpos: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0 });
+              setFormData({ kode: '', nama: '', padCode: '', kodeIpos: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: 'Product', customer: '', hargaFg: 0 });
               setEditingItem(null);
             setShowForm(true);
           }}>
-            + Tambah Produk
+            + Add Product
           </Button>
         </div>
       </div>
 
 
       {showForm && (
-        <div className="dialog-overlay" onClick={() => { setShowForm(false); setEditingItem(null); setCustomerInputValue(''); setStockAmanInputValue(''); setStockMinimumInputValue(''); setPriceInputValue(''); setPurchasePriceInputValue(''); setProductImage(null); setFormData({ kode: '', nama: '', padCode: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0, hargaBeli: 0 }); }} style={{ zIndex: 10000 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', width: '90%', maxHeight: '90vh', overflowY: 'auto', zIndex: 10001 }}>
-            <Card title={editingItem ? "Edit Produk" : "Tambah Produk Baru"} className="dialog-card">
-          <Input
-            label="Kode (SKU/ID)"
-            value={formData.kode || ''}
-            onChange={(v) => setFormData({ ...formData, kode: v })}
-          />
-          <Input
-            label="Nama"
-            value={formData.nama || ''}
-            onChange={(v) => setFormData({ ...formData, nama: v })}
-          />
-          <Input
-            label="Pad Code"
-            value={formData.padCode || ''}
-            onChange={(v) => setFormData({ ...formData, padCode: v })}
-          />
-          {/* Hidden: Kode Ipos input */}
-          {/* <Input
-            label="Kode Ipos"
-            value={formData.kodeIpos || ''}
-            onChange={(v) => setFormData({ ...formData, kodeIpos: v })}
-          /> */}
-          <Input
-            label="Satuan (Unit)"
-            value={formData.satuan || ''}
-            onChange={(v) => setFormData({ ...formData, satuan: v })}
-          />
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Stock Aman
-            </label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={stockAmanInputValue !== undefined && stockAmanInputValue !== '' ? stockAmanInputValue : (formData.stockAman !== undefined && formData.stockAman !== null && formData.stockAman !== 0 ? String(formData.stockAman) : '')}
-              onFocus={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = formData.stockAman;
-                if (currentVal === 0 || currentVal === null || currentVal === undefined || String(currentVal) === '0') {
-                  setStockAmanInputValue('');
-                  input.value = '';
-                } else {
-                  input.select();
-                }
-              }}
-              onMouseDown={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = formData.stockAman;
-                if (currentVal === 0 || currentVal === null || currentVal === undefined || String(currentVal) === '0') {
-                  setStockAmanInputValue('');
-                  input.value = '';
-                }
-              }}
-              onChange={(e) => {
-                let val = e.target.value;
-                val = val.replace(/[^\d.,]/g, '');
-                const cleaned = removeLeadingZero(val);
-                setStockAmanInputValue(cleaned);
-                setFormData({ ...formData, stockAman: cleaned === '' ? 0 : Number(cleaned) || 0 });
-              }}
-              onBlur={(e) => {
-                const val = e.target.value;
-                if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
-                  setFormData({ ...formData, stockAman: 0 });
-                  setStockAmanInputValue('');
-                } else {
-                  setFormData({ ...formData, stockAman: Number(val) });
-                  setStockAmanInputValue('');
-                }
-              }}
-              onKeyDown={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = input.value;
-                if ((currentVal === '' || currentVal === '0') && /^[1-9]$/.test(e.key)) {
-                  e.preventDefault();
-                  const newVal = e.key;
-                  setStockAmanInputValue(newVal);
-                  input.value = newVal;
-                  setFormData({ ...formData, stockAman: Number(newVal) });
-                }
-              }}
-              placeholder="0"
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Stock Minimum
-            </label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={stockMinimumInputValue !== undefined && stockMinimumInputValue !== '' ? stockMinimumInputValue : (formData.stockMinimum !== undefined && formData.stockMinimum !== null && formData.stockMinimum !== 0 ? String(formData.stockMinimum) : '')}
-              onFocus={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = formData.stockMinimum;
-                if (currentVal === 0 || currentVal === null || currentVal === undefined || String(currentVal) === '0') {
-                  setStockMinimumInputValue('');
-                  input.value = '';
-                } else {
-                  input.select();
-                }
-              }}
-              onMouseDown={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = formData.stockMinimum;
-                if (currentVal === 0 || currentVal === null || currentVal === undefined || String(currentVal) === '0') {
-                  setStockMinimumInputValue('');
-                  input.value = '';
-                }
-              }}
-              onChange={(e) => {
-                let val = e.target.value;
-                val = val.replace(/[^\d.,]/g, '');
-                const cleaned = removeLeadingZero(val);
-                setStockMinimumInputValue(cleaned);
-                setFormData({ ...formData, stockMinimum: cleaned === '' ? 0 : Number(cleaned) || 0 });
-              }}
-              onBlur={(e) => {
-                const val = e.target.value;
-                if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
-                  setFormData({ ...formData, stockMinimum: 0 });
-                  setStockMinimumInputValue('');
-                } else {
-                  setFormData({ ...formData, stockMinimum: Number(val) });
-                  setStockMinimumInputValue('');
-                }
-              }}
-              onKeyDown={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = input.value;
-                if ((currentVal === '' || currentVal === '0') && /^[1-9]$/.test(e.key)) {
-                  e.preventDefault();
-                  const newVal = e.key;
-                  setStockMinimumInputValue(newVal);
-                  input.value = newVal;
-                  setFormData({ ...formData, stockMinimum: Number(newVal) });
-                }
-              }}
-              placeholder="0"
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-              }}
-            />
-          </div>
-          <Input
-            label="Kategori"
-            value={formData.kategori || ''}
-            onChange={(v) => setFormData({ ...formData, kategori: v })}
-          />
-          <div style={{ marginBottom: '16px', position: 'relative' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Customer
-            </label>
-            <input
-              type="text"
-              value={getCustomerInputDisplayValue()}
-              onChange={(e) => {
-                handleCustomerInputChange(e.target.value);
-              }}
-              onFocus={() => setShowCustomerDropdown(true)}
-              onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
-              placeholder="Type to search customer..."
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-              }}
-            />
-            {showCustomerDropdown && filteredCustomers.length > 0 && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  right: 0,
-                  backgroundColor: 'var(--bg-primary)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '4px',
-                  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-                  zIndex: 10002,
-                  maxHeight: '300px',
-                  overflowY: 'auto',
-                  marginTop: '4px',
-                }}
-              >
-                {filteredCustomers.map(c => (
-                  <div
-                    key={c.id}
-                    onClick={() => {
-                      const label = `${c.kode || ''}${c.kode ? ' - ' : ''}${c.nama || ''}`;
-                      setCustomerInputValue(label);
-                      setCustomerSearch('');
-                      // Auto-link padCode from customer kode
-                      setFormData({ 
-                        ...formData, 
-                        customer: c.nama,
-                        padCode: c.kode // Auto-set padCode from customer kode
-                      });
-                      setShowCustomerDropdown(false);
-                    }}
-                    style={{
-                      padding: '10px 12px',
-                      cursor: 'pointer',
-                      borderBottom: '1px solid var(--border)',
-                      fontSize: '13px',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = 'var(--hover-bg)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                    }}
-                  >
-                    <div style={{ fontWeight: '500' }}>{c.kode || ''}{c.kode ? ' - ' : ''}{c.nama || ''}</div>
-                  </div>
-              ))}
+        <div className="dialog-overlay" onClick={() => resetFormState()} style={{ zIndex: 10000 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '550px', width: '90%', maxHeight: '90vh', overflowY: 'auto', zIndex: 10001, borderRadius: '10px' }}>
+            <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '14px 18px', borderRadius: '10px 10px 0 0', color: 'white' }}>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>
+                {editingItem ? '✏️ Edit Product' : '➕ Add Product'}
+              </h2>
+            </div>
+
+            <div style={{ background: 'var(--bg-primary)', padding: '16px', borderRadius: '0 0 10px 10px' }}>
+              {/* Basic Information Section */}
+              <div style={{ marginBottom: '14px' }}>
+                <h3 style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: '8px' }}>📋 Basic</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <Input label="Code" value={formData.kode || ''} onChange={(v) => setFormData({ ...formData, kode: v })} placeholder="SKU" />
+                  <Input label="Name" value={formData.nama || ''} onChange={(v) => setFormData({ ...formData, nama: v })} placeholder="Product name" />
+                  <Input label="Pad Code" value={formData.padCode || ''} onChange={(v) => setFormData({ ...formData, padCode: v })} placeholder="PAD" />
+                  <Input label="Unit" value={formData.satuan || ''} onChange={(v) => setFormData({ ...formData, satuan: v })} placeholder="PCS/KG" />
+                </div>
               </div>
-            )}
-          </div>
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Harga Satuan
-            </label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={priceInputValue !== undefined && priceInputValue !== '' ? priceInputValue : (formData.hargaFg || formData.harga ? String(formData.hargaFg || formData.harga || 0) : '')}
-              onFocus={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = formData.hargaFg || formData.harga || 0;
-                if (currentVal === 0 || currentVal === null || currentVal === undefined || String(currentVal) === '0') {
-                  setPriceInputValue('');
-                  input.value = '';
-                } else {
-                  input.select();
-                }
-              }}
-              onMouseDown={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = formData.hargaFg || formData.harga || 0;
-                if (currentVal === 0 || currentVal === null || currentVal === undefined || String(currentVal) === '0') {
-                  setPriceInputValue('');
-                  input.value = '';
-                }
-              }}
-              onChange={(e) => {
-                let val = e.target.value;
-                val = val.replace(/[^\d.,]/g, '');
-                const cleaned = removeLeadingZero(val);
-                setPriceInputValue(cleaned);
-                setFormData({ ...formData, hargaFg: cleaned === '' ? 0 : Number(cleaned) || 0 });
-              }}
-              onBlur={(e) => {
-                const val = e.target.value;
-                if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
-                  setFormData({ ...formData, hargaFg: 0 });
-                  setPriceInputValue('');
-                } else {
-                  setFormData({ ...formData, hargaFg: Number(val) });
-                  setPriceInputValue('');
-                }
-              }}
-              onKeyDown={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = input.value;
-                if ((currentVal === '' || currentVal === '0') && /^[1-9]$/.test(e.key)) {
-                  e.preventDefault();
-                  const newVal = e.key;
-                  setPriceInputValue(newVal);
-                  input.value = newVal;
-                  setFormData({ ...formData, hargaFg: Number(newVal) });
-                }
-              }}
-              placeholder="0"
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Harga Beli
-            </label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={purchasePriceInputValue !== undefined && purchasePriceInputValue !== '' ? purchasePriceInputValue : (formData.hargaBeli ? String(formData.hargaBeli || 0) : '')}
-              onFocus={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = formData.hargaBeli || 0;
-                if (currentVal === 0 || currentVal === null || currentVal === undefined || String(currentVal) === '0') {
-                  setPurchasePriceInputValue('');
-                  input.value = '';
-                } else {
-                  input.select();
-                }
-              }}
-              onMouseDown={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = formData.hargaBeli || 0;
-                if (currentVal === 0 || currentVal === null || currentVal === undefined || String(currentVal) === '0') {
-                  setPurchasePriceInputValue('');
-                  input.value = '';
-                }
-              }}
-              onChange={(e) => {
-                let val = e.target.value;
-                val = val.replace(/[^\d.,]/g, '');
-                const cleaned = removeLeadingZero(val);
-                setPurchasePriceInputValue(cleaned);
-                setFormData({ ...formData, hargaBeli: cleaned === '' ? 0 : Number(cleaned) || 0 });
-              }}
-              onBlur={(e) => {
-                const val = e.target.value;
-                if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
-                  setFormData({ ...formData, hargaBeli: 0 });
-                  setPurchasePriceInputValue('');
-                } else {
-                  setFormData({ ...formData, hargaBeli: Number(val) });
-                  setPurchasePriceInputValue('');
-                }
-              }}
-              onKeyDown={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = input.value;
-                if ((currentVal === '' || currentVal === '0') && /^[1-9]$/.test(e.key)) {
-                  e.preventDefault();
-                  const newVal = e.key;
-                  setPurchasePriceInputValue(newVal);
-                  input.value = newVal;
-                  setFormData({ ...formData, hargaBeli: Number(newVal) });
-                }
-              }}
-              placeholder="0"
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              📷 Product Photo
-            </label>
-            {productImage && (
-              <div style={{ marginBottom: '8px', position: 'relative', display: 'inline-block' }}>
-                <img src={BlobService.getDownloadUrl(productImage, 'packaging')} alt="Product" style={{ maxWidth: '150px', maxHeight: '150px', borderRadius: '4px', border: '1px solid var(--border)' }} />
-                <Button
-                  variant="danger"
-                  onClick={handleImageRemove}
-                  style={{ position: 'absolute', top: '4px', right: '4px', padding: '4px 8px', fontSize: '11px' }}
-                >
-                  ✕
+
+              {/* Stock Information Section */}
+              <div style={{ marginBottom: '14px' }}>
+                <h3 style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: '8px' }}>📦 Stock</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <Input label="Safe" type="number" value={String(formData.stockAman || 0)} onChange={(v) => setFormData({ ...formData, stockAman: parseInt(v) || 0 })} placeholder="0" />
+                  <Input label="Minimum" type="number" value={String(formData.stockMinimum || 0)} onChange={(v) => setFormData({ ...formData, stockMinimum: parseInt(v) || 0 })} placeholder="0" />
+                  <Input label="Category" value={formData.kategori || 'Product'} onChange={(v) => setFormData({ ...formData, kategori: v })} placeholder="Product" />
+                </div>
+              </div>
+
+              {/* Customer & Pricing Section */}
+              <div style={{ marginBottom: '14px' }}>
+                <h3 style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: '8px' }}>💰 Pricing</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div style={{ position: 'relative' }}>
+                    <label style={{ display: 'block', marginBottom: '4px', color: 'var(--text-primary)', fontWeight: '500', fontSize: '12px' }}>Customer</label>
+                    <input
+                      type="text"
+                      value={getCustomerInputDisplayValue()}
+                      onChange={(e) => handleCustomerInputChange(e.target.value)}
+                      onFocus={() => setShowCustomerDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
+                      placeholder="Search..."
+                      style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--border)', borderRadius: '4px', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '12px', transition: 'all 0.2s' }}
+                    />
+                    {showCustomerDropdown && filteredCustomers.length > 0 && (
+                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '4px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', zIndex: 10002, maxHeight: '180px', overflowY: 'auto', marginTop: '2px' }}>
+                        {filteredCustomers.map(c => (
+                          <div key={c.id} onClick={() => { const label = `${c.kode || ''}${c.kode ? ' - ' : ''}${c.nama || ''}`; setCustomerInputValue(label); setCustomerSearch(''); setFormData({ ...formData, customer: c.nama, padCode: c.kode }); setShowCustomerDropdown(false); }} style={{ padding: '6px 8px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: '11px', transition: 'background 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--hover-bg)'; }} onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}>
+                            <div style={{ fontWeight: '500' }}>{c.kode}</div>
+                            <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{c.nama}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <Input label="Price (FG)" type="number" value={String(formData.hargaFg || 0)} onChange={(v) => setFormData({ ...formData, hargaFg: parseInt(v) || 0 })} placeholder="0" />
+                  <Input label="Cost" type="number" value={String(formData.hargaBeli || 0)} onChange={(v) => setFormData({ ...formData, hargaBeli: parseInt(v) || 0 })} placeholder="0" />
+                </div>
+              </div>
+
+              {/* Product Photo Section */}
+              <div style={{ marginBottom: '12px' }}>
+                <h3 style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: '8px' }}>📸 Photo</h3>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1 }}>
+                    {productImage && (
+                      <div style={{ marginBottom: '6px', position: 'relative', display: 'inline-block' }}>
+                        <img src={BlobService.getDownloadUrl(productImage, 'packaging')} alt="Product" style={{ maxWidth: '100px', maxHeight: '100px', borderRadius: '6px', border: '1px solid var(--border)' }} />
+                        <Button variant="danger" onClick={handleImageRemove} style={{ position: 'absolute', top: '2px', right: '2px', padding: '2px 4px', fontSize: '10px' }}>✕</Button>
+                      </div>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => { const file = e.target.files?.[0]; if (file) handleImageUpload(file); }}
+                      style={{ display: 'none' }}
+                      id="product-image-input"
+                    />
+                    <label htmlFor="product-image-input" style={{ display: 'inline-block', padding: '6px 12px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', borderRadius: '4px', cursor: 'pointer', fontWeight: '500', fontSize: '12px', transition: 'transform 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.03)'; }} onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}>
+                      📤 Choose
+                    </label>
+                    <p style={{ fontSize: '10px', color: 'var(--text-secondary)', marginTop: '4px', margin: '4px 0 0 0' }}>Max 2MB</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
+                <Button onClick={resetFormState} variant="secondary" style={{ minWidth: '80px', padding: '6px 12px', fontSize: '12px' }}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSave} variant="primary" style={{ minWidth: '80px', padding: '6px 12px', fontSize: '12px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+                  {editingItem ? 'Update' : 'Save'}
                 </Button>
               </div>
-            )}
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  handleImageUpload(file);
-                }
-              }}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-              }}
-            />
-            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-              Max 5MB. Supported: JPG, PNG, GIF
             </div>
-          </div>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
-            <Button onClick={() => { setShowForm(false); setEditingItem(null); setCustomerInputValue(''); setStockAmanInputValue(''); setStockMinimumInputValue(''); setPriceInputValue(''); setPurchasePriceInputValue(''); setProductImage(null); setFormData({ kode: '', nama: '', padCode: '', satuan: '', stockAman: 0, stockMinimum: 0, kategori: '', customer: '', hargaFg: 0, hargaBeli: 0 }); }} variant="secondary">
-              Batal
-            </Button>
-            <Button onClick={handleSave} variant="primary">
-              {editingItem ? 'Update Produk' : 'Simpan Produk'}
-            </Button>
-          </div>
-        </Card>
           </div>
         </div>
       )}
@@ -2843,6 +2090,9 @@ ${errors.slice(0, 5).join('\\n')}
 
       {/* Custom Dialog - menggunakan hook terpusat */}
       <DialogComponent />
+      
+      {/* Toast Notifications */}
+      <ToastContainer />
     </div>
   );
 };

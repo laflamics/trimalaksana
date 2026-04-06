@@ -2079,6 +2079,16 @@ const Accounting = () => {
               />
             </Card>
           </div>
+          {showPageSizeDialog && (
+            <PageSizeDialog
+              defaultSize="A4"
+              onConfirm={(size) => {
+                setShowPageSizeDialog(false);
+                handleSaveToPDF(size);
+              }}
+              onCancel={() => setShowPageSizeDialog(false)}
+            />
+          )}
         </div>
       )}
 
@@ -2303,16 +2313,6 @@ const Accounting = () => {
       {/* Edit Invoice Dialog */}
       {/* Custom Dialog - menggunakan hook terpusat */}
       <DialogComponent />
-      {showPageSizeDialog && (
-        <PageSizeDialog
-          defaultSize="A4"
-          onConfirm={(size) => {
-            setShowPageSizeDialog(false);
-            handleSaveToPDF(size);
-          }}
-          onCancel={() => setShowPageSizeDialog(false)}
-        />
-      )}
 
       {showCreateInvoiceDialog && (
         <CreateInvoiceDialog
@@ -3502,6 +3502,8 @@ const CreateInvoiceDialog = ({
   const [deliveryNoteList, setDeliveryNoteList] = useState<any[]>([]);
   const [selectedSOs, setSelectedSOs] = useState<string[]>([]);
   const [selectedSJs, setSelectedSJs] = useState<string[]>([]);
+  const [soSearch, setSoSearch] = useState('');
+  const [sjSearch, setSjSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<'so' | 'sj' | 'manual'>('manual');
   
@@ -4123,6 +4125,23 @@ const CreateInvoiceDialog = ({
               <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-primary)', fontWeight: '500', fontSize: '12px' }}>
                 Select Sales Order(s) * (You can select multiple)
               </label>
+              <input
+                type="text"
+                placeholder="Search by SO No or Customer..."
+                value={soSearch}
+                onChange={(e) => setSoSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '6px 10px',
+                  marginBottom: '8px',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '4px',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '12px',
+                  boxSizing: 'border-box',
+                }}
+              />
               <div style={{ 
                 maxHeight: '300px', 
                 overflowY: 'auto', 
@@ -4136,7 +4155,12 @@ const CreateInvoiceDialog = ({
                     No Sales Order available
                   </div>
                 ) : (
-                  salesOrderList.map((soItem: any) => (
+                  salesOrderList
+                    .filter((soItem: any) => {
+                      const q = soSearch.toLowerCase();
+                      return !q || (soItem.soNo || '').toLowerCase().includes(q) || (soItem.customer || '').toLowerCase().includes(q);
+                    })
+                    .map((soItem: any) => (
                     <div 
                       key={soItem.soNo}
                       style={{
@@ -4417,6 +4441,23 @@ const CreateInvoiceDialog = ({
               <label style={{ display: 'block', marginBottom: '12px', color: 'var(--text-primary)', fontWeight: '500' }}>
                 Select Delivery Note(s) * (You can select multiple)
               </label>
+              <input
+                type="text"
+                placeholder="Search by DN No, SO No or Customer..."
+                value={sjSearch}
+                onChange={(e) => setSjSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '6px 10px',
+                  marginBottom: '8px',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '4px',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '12px',
+                  boxSizing: 'border-box',
+                }}
+              />
               <div style={{ 
                 maxHeight: '300px', 
                 overflowY: 'auto', 
@@ -4430,7 +4471,12 @@ const CreateInvoiceDialog = ({
                     No Delivery Note available
                   </div>
                 ) : (
-                  deliveryNoteList.map((sj: any) => (
+                  deliveryNoteList
+                    .filter((sj: any) => {
+                      const q = sjSearch.toLowerCase();
+                      return !q || (sj.sjNo || '').toLowerCase().includes(q) || (sj.soNo || '').toLowerCase().includes(q) || (sj.customer || '').toLowerCase().includes(q);
+                    })
+                    .map((sj: any) => (
                     <div 
                       key={sj.sjNo}
                       style={{

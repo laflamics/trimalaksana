@@ -46,11 +46,8 @@ const initializeWebAppConfig = async (): Promise<void> => {
 
 // Initialize app configuration
 initializeWebAppConfig().then(() => {
-  setTimeout(() => {
-    import('./services/websocket-client').catch(error => {
-      console.error('❌ Failed to load WebSocket client:', error);
-    });
-  }, 200);
+  // Configuration ready
+  console.log('✅ Web app configuration initialized');
 });
 
 // Initialize storage service

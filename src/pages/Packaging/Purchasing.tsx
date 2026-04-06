@@ -14,6 +14,7 @@ import { generatePRHtml } from '../../pdf/pr-pdf-template';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../utils/actions';
 import { loadLogoAsBase64 } from '../../utils/logo-loader';
 import { useDialog } from '../../hooks/useDialog';
+import { toast } from '../../utils/toast-helper';
 import { useLanguage } from '../../hooks/useLanguage';
 import BlobService from '../../services/blob-service';
 import * as XLSX from 'xlsx';
@@ -408,7 +409,6 @@ const Purchasing = () => {
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<PurchaseOrder | null>(null);
-  const [showEditDialog, setShowEditDialog] = useState(false);
   const [editFormData, setEditFormData] = useState<Partial<PurchaseOrder>>({});
   const [editSupplierInputValue, setEditSupplierInputValue] = useState('');
   const [editMaterialInputValue, setEditMaterialInputValue] = useState('');
@@ -710,11 +710,11 @@ const Purchasing = () => {
 
   const handleSaveEdit = async () => {
     if (!editFormData.supplier || !editFormData.materialItem || !editFormData.qty || editFormData.qty <= 0) {
-      showAlert('Please fill all required fields (Supplier, Material, Qty)', 'Validation Error');
+      toast.warning('Please fill all required fields (Supplier, Material, Qty)', { duration: 2000 });
       return;
     }
     if (!(editFormData.soNo && editFormData.soNo.trim()) && !(editFormData.purchaseReason && editFormData.purchaseReason.trim())) {
-      showAlert('Isi "Reason pembelian" jika tidak link ke SO/SPK.', 'Validation Error');
+      toast.warning('Isi "Reason pembelian" jika tidak link ke SO/SPK.', { duration: 2000 });
       return;
     }
     try {
@@ -751,8 +751,8 @@ const Purchasing = () => {
       } catch (logError) {
         // Silent fail
       }
-      showAlert(`PO updated: ${editingItem.poNo}`, 'Success');
-      setShowEditDialog(false);
+      toast.success(`PO updated: ${editingItem.poNo}`);
+      setShowForm(false);
       setEditingItem(null);
       setEditFormData({});
       setEditSupplierInputValue('');
@@ -760,17 +760,17 @@ const Purchasing = () => {
       setEditQtyInputValue('');
       setEditPriceInputValue('');
     } catch (error: any) {
-      showAlert(`Error saving PO: ${error.message}`, 'Error');
+      toast.error(`Error saving PO: ${error.message}`);
     }
   };
 
   const handleSave = async () => {
     if (!formData.supplier || !formData.materialItem || !formData.qty || formData.qty <= 0) {
-      showAlert('Please fill all required fields (Supplier, Material, Qty)', 'Validation Error');
+      toast.warning('Please fill all required fields (Supplier, Material, Qty)', { duration: 2000 });
       return;
     }
     if (!(formData.soNo && formData.soNo.trim()) && !(formData.purchaseReason && formData.purchaseReason.trim())) {
-      showAlert('Isi "Reason pembelian" jika tidak link ke SO/SPK.', 'Validation Error');
+      toast.warning('Isi "Reason pembelian" jika tidak link ke SO/SPK.', { duration: 2000 });
       return;
     }
     try {
@@ -845,7 +845,7 @@ const Purchasing = () => {
           }
         }
         
-        showAlert(`PO created: ${poNo}`, 'Success');
+        toast.success(`PO created: ${poNo}`);
       }
       setShowForm(false);
       setMaterialInputValue('');
@@ -865,7 +865,7 @@ const Purchasing = () => {
         purchaseReason: '',
       });
     } catch (error: any) {
-      showAlert(`Error saving PO: ${error.message}`, 'Error');
+      toast.error(`Error saving PO: ${error.message}`);
     }
   };
 
@@ -1019,7 +1019,7 @@ const Purchasing = () => {
       const html = await generatePOSheetHtmlContent(item);
       setViewPdfData({ html, poNo: item.poNo });
     } catch (error: any) {
-      showAlert(`Error generating PO Sheet preview: ${error.message}`, 'Error');
+      toast.error(`Error generating PO Sheet preview: ${error.message}`);
     }
   };
 
@@ -1029,7 +1029,7 @@ const Purchasing = () => {
       const html = await generatePOHtmlContent(item);
       setViewPdfData({ html, poNo: item.poNo });
     } catch (error: any) {
-      showAlert(`Error generating PO preview: ${error.message}`, 'Error');
+      toast.error(`Error generating PO preview: ${error.message}`);
     }
   };
 
@@ -1045,10 +1045,10 @@ const Purchasing = () => {
         // Electron: Use file picker to select save location, then convert HTML to PDF and save
         const result = await electronAPI.savePdf(viewPdfData.html, fileName);
         if (result.success) {
-          showAlert(`PDF saved successfully to:\n${result.path}`, 'Success');
+          toast.success(`PDF saved successfully to:\n${result.path}`);
           setViewPdfData(null);
         } else if (!result.canceled) {
-          showAlert(`Error saving PDF: ${result.error || 'Unknown error'}`, 'Error');
+          toast.error(`Error saving PDF: ${result.error || 'Unknown error'}`);
         }
         // If canceled, do nothing (user closed dialog)
       } else if (isMobile() || isCapacitor()) {
@@ -1057,23 +1057,23 @@ const Purchasing = () => {
           viewPdfData.html,
           fileName,
           (message) => {
-            showAlert(message, 'Success');
+            toast.success(message);
             setViewPdfData(null); // Close view setelah save
           },
-          (message) => showAlert(message, 'Error')
+          (message) => toast.error(message)
         );
       } else {
         // Browser: Open print dialog, user can select "Save as PDF"
         openPrintWindow(viewPdfData.html);
       }
     } catch (error: any) {
-      showAlert(`Error: ${error.message || 'Unknown error'}`, 'Error');
+      toast.error(`Error: ${error.message || 'Unknown error'}`);
     }
   };
 
   const handleEdit = (item: PurchaseOrder) => {
     if (item.status === 'CLOSE') {
-      showAlert(`Cannot edit PO ${item.poNo}. CLOSE status cannot be edited.`, 'Cannot Edit');
+      toast.warning(`Cannot edit PO ${item.poNo}. CLOSE status cannot be edited.`);
       return;
     }
     setEditingItem(item);
@@ -1106,12 +1106,13 @@ const Purchasing = () => {
       score: item.score || '',
       keterangan: item.keterangan || '',
     });
-    setShowEditDialog(true);
+    setShowForm(true);
+    setEditingItem(item);
   };
 
   const handleCreateGRN = async (item: PurchaseOrder) => {
     if (item.status !== 'OPEN') {
-      showAlert(`Cannot create GRN from PO: ${item.poNo}\n\nPO must be OPEN (approved) first.`, 'Cannot Create GRN');
+      toast.warning(`Cannot create GRN from PO: ${item.poNo}\n\nPO must be OPEN (approved) first.`);
       return;
     }
     
@@ -1155,7 +1156,7 @@ const Purchasing = () => {
       
       // IMPORTANT: Validate PO is not deleted (tombstone protection)
       if ((selectedPOForReceipt as any).deleted === true || (selectedPOForReceipt as any).deletedAt) {
-        showAlert('PO ini sudah dihapus. Tidak bisa membuat GRN untuk PO yang sudah dihapus.', 'Error');
+        toast.error('PO ini sudah dihapus. Tidak bisa membuat GRN untuk PO yang sudah dihapus.');
         grnSavingRef.current = false;
         return;
       }
@@ -1165,7 +1166,7 @@ const Purchasing = () => {
       const receivedDate = receiptData.receivedDate || new Date().toISOString().split('T')[0];
 
       if (qtyReceived <= 0) {
-        showAlert('Quantity received must be greater than 0', 'Validation Error');
+        toast.warning('Quantity received must be greater than 0');
         grnSavingRef.current = false;
         return;
       }
@@ -1210,7 +1211,7 @@ const Purchasing = () => {
               await (storageService as any).syncToServer();
             }
             
-            showAlert(`✅ Berhasil hapus ${existingGRNsForPO.length} GRN corrupt untuk PO ${item.poNo}.\n\nData sudah di-sync ke server.\n\nSilakan create GRN baru.`, 'Success');
+            toast.success(`✅ Berhasil hapus ${existingGRNsForPO.length} GRN corrupt untuk PO ${item.poNo}.\n\nData sudah di-sync ke server.\n\nSilakan create GRN baru.`);
             setSelectedPOForReceipt(null);
             loadOrders();
           },
@@ -1230,13 +1231,12 @@ const Purchasing = () => {
       
       if (qtyReceived > maxAllowedWithExisting) {
         const maxTotal = Math.ceil(maxAllowedQty);
-        showAlert(
+        toast.warning(
           `⚠️ Quantity received (${qtyReceived}) melebihi batas maksimal!\n\n` +
           `Qty Ordered: ${item.qty}\n` +
           `Total Sudah Diterima: ${totalQtyReceived}\n` +
           `Maksimal Total (dengan toleransi 10%): ${maxTotal}\n` +
-          `Maksimal yang bisa diterima sekarang: ${Math.ceil(maxAllowedWithExisting)}`,
-          'Validation Error'
+          `Maksimal yang bisa diterima sekarang: ${Math.ceil(maxAllowedWithExisting)}`
         );
         grnSavingRef.current = false;
         return;
@@ -1257,7 +1257,7 @@ const Purchasing = () => {
       );
       
       if (duplicateGRN) {
-        showAlert(`⚠️ GRN duplicate terdeteksi!\n\nGRN ${duplicateGRN.grnNo} dengan qty ${duplicateGRN.qtyReceived} untuk PO ${item.poNo} sudah ada.\n\nTidak bisa membuat GRN duplicate.`, 'Duplicate Detected');
+        toast.warning(`⚠️ GRN duplicate terdeteksi!\n\nGRN ${duplicateGRN.grnNo} dengan qty ${duplicateGRN.qtyReceived} untuk PO ${item.poNo} sudah ada.\n\nTidak bisa membuat GRN duplicate.`);
         grnSavingRef.current = false;
         return;
       }
@@ -1300,7 +1300,7 @@ const Purchasing = () => {
       )) || false;
       
       if (isDuplicate) {
-        showAlert('⚠️ GRN duplicate terdeteksi! Tidak bisa save.\n\nKemungkinan double-click atau data sudah ada.', 'Error');
+        toast.warning('⚠️ GRN duplicate terdeteksi! Tidak bisa save.\n\nKemungkinan double-click atau data sudah ada.');
         grnSavingRef.current = false;
         return;
       }
@@ -1330,14 +1330,14 @@ const Purchasing = () => {
       const materialId = getMaterialId(item);
       
       if (!materialId) {
-        showAlert('⚠️ Material ID tidak ditemukan. Inventory tidak dapat di-update.', 'Warning');
+        toast.warning('⚠️ Material ID tidak ditemukan. Inventory tidak dapat di-update.');
       } else {
         // Cari material di master untuk mendapatkan kode yang benar
         const materials = extractStorageValue(await storageService.get<any[]>('materials')) || [];
         const material = findMaterialById(materialId);
         
         if (!material) {
-          showAlert(`⚠️ Material tidak ditemukan di master data: ${materialId}\n\nInventory tidak dapat di-update.`, 'Warning');
+          toast.warning(`⚠️ Material tidak ditemukan di master data: ${materialId}\n\nInventory tidak dapat di-update.`);
         } else {
           // Gunakan material_id atau kode dari master sebagai codeItem
           const codeItem = (material.material_id || material.kode || materialId).toString().trim();
@@ -1367,7 +1367,7 @@ const Purchasing = () => {
           if (existingMaterial && poNo) {
             const processedPOs = existingMaterial.processedPOs || [];
             if (processedPOs.includes(poNo)) {
-              showAlert(`⚠️ PO ${poNo} sudah pernah diproses untuk material ini.\n\nInventory tidak di-update untuk menghindari double counting.`, 'Warning');
+              toast.warning(`⚠️ PO ${poNo} sudah pernah diproses untuk material ini.\n\nInventory tidak di-update untuk menghindari double counting.`);
               return;
             }
           }
@@ -1415,7 +1415,7 @@ const Purchasing = () => {
                 : inv
             );
             await storageService.set(StorageKeys.PACKAGING.INVENTORY, updatedInventory);
-            showAlert(`✅ Inventory updated: ${item.materialItem}\n\nStock: ${newNextStock} ${material.satuan || 'PCS'}\nPrice: Rp ${updatedPrice.toLocaleString('id-ID')}`, 'Success');
+            toast.success(`✅ Inventory updated: ${item.materialItem}\n\nStock: ${newNextStock} ${material.satuan || 'PCS'}\nPrice: Rp ${updatedPrice.toLocaleString('id-ID')}`);
           } else {
             // Create new inventory entry for material
             // Price diambil dari PO, bukan dari master material
@@ -1445,7 +1445,7 @@ const Purchasing = () => {
             };
             inventory.push(newInventoryEntry);
             await storageService.set(StorageKeys.PACKAGING.INVENTORY, inventory);
-            showAlert(`✅ New inventory entry created: ${item.materialItem}\n\nStock: ${qtyReceived} ${material.satuan || 'PCS'}\nPrice: Rp ${materialPrice.toLocaleString('id-ID')} (from PO)`, 'Success');
+            toast.success(`✅ New inventory entry created: ${item.materialItem}\n\nStock: ${qtyReceived} ${material.satuan || 'PCS'}\nPrice: Rp ${materialPrice.toLocaleString('id-ID')} (from PO)`);
           }
         }
       }
@@ -1847,10 +1847,10 @@ const Purchasing = () => {
       // Reload orders untuk update UI
       await loadOrders();
       
-      showAlert(`GRN created: ${newGRN.grnNo}\n\n✅ Inventory updated (+${qtyReceived})\n📧 Notification sent to Finance - Supplier Payment tab\n📧 Production notification updated - Material received\n\n✅ Production dapat dimulai sekarang!`, 'Success');
+      toast.success(`GRN created: ${newGRN.grnNo}\n\n✅ Inventory updated (+${qtyReceived})\n📧 Notification sent to Finance - Supplier Payment tab\n📧 Production notification updated - Material received\n\n✅ Production dapat dimulai sekarang!`);
       setSelectedPOForReceipt(null);
     } catch (error: any) {
-      showAlert(`Error creating GRN: ${error.message}`, 'Error');
+      toast.error(`Error creating GRN: ${error.message}`);
     } finally {
       // CRITICAL: Always reset saving flag to allow future saves
       grnSavingRef.current = false;
@@ -1862,7 +1862,7 @@ const Purchasing = () => {
       const html = await generatePOHtmlContent(item);
       openPrintWindow(html);
     } catch (error: any) {
-      showAlert(`Error generating PO PDF: ${error.message}`, 'Error');
+      toast.error(`Error generating PO PDF: ${error.message}`);
     }
   };
 
@@ -1871,7 +1871,7 @@ const Purchasing = () => {
       const html = await generatePOSheetHtmlContent(item);
       openPrintWindow(html);
     } catch (error: any) {
-      showAlert(`Error generating PO Sheet PDF: ${error.message}`, 'Error');
+      toast.error(`Error generating PO Sheet PDF: ${error.message}`);
     }
   };
 
@@ -1885,9 +1885,9 @@ const Purchasing = () => {
         );
         await storageService.set(StorageKeys.PACKAGING.PURCHASE_ORDERS, updated);
         setOrders(updated);
-        showAlert(`Status updated to: ${newStatus}`, 'Success');
+        toast.success(`Status updated to: ${newStatus}`);
       } catch (error: any) {
-        showAlert(`Error updating status: ${error.message}`, 'Error');
+        toast.error(`Error updating status: ${error.message}`);
       }
     }
   };
@@ -2113,15 +2113,15 @@ const Purchasing = () => {
       }
 
       if (wb.SheetNames.length === 0) {
-        showAlert('No data available to export', 'Error');
+        toast.warning('No data available to export');
         return;
       }
 
       const fileName = `Purchase_Orders_Complete_${new Date().toISOString().split('T')[0]}.xlsx`;
       XLSX.writeFile(wb, fileName);
-      showAlert(`✅ Exported complete purchase orders data (${poDataExport.length} PO, ${outstandingPO.length} outstanding) to ${fileName}`, 'Success');
+      toast.success(`✅ Exported complete purchase orders data (${poDataExport.length} PO, ${outstandingPO.length} outstanding) to ${fileName}`);
     } catch (error: any) {
-      showAlert(`Error exporting to Excel: ${error.message}`, 'Error');
+      toast.error(`Error exporting to Excel: ${error.message}`);
     }
   };
 
@@ -2575,7 +2575,7 @@ const Purchasing = () => {
       const html = await generatePRHtmlContent(pr);
       setViewPRPdfData({ html, prNo: pr.prNo });
     } catch (error: any) {
-      showAlert(`Error generating PR preview: ${error.message}`, 'Error');
+      toast.error(`Error generating PR preview: ${error.message}`);
     }
   };
 
@@ -2591,10 +2591,10 @@ const Purchasing = () => {
         // Electron: Use file picker to select save location, then convert HTML to PDF and save
         const result = await electronAPI.savePdf(viewPRPdfData.html, fileName);
         if (result.success) {
-          showAlert(`PDF saved successfully to:\n${result.path}`, 'Success');
+          toast.success(`PDF saved successfully to:\n${result.path}`);
           setViewPRPdfData(null);
         } else if (!result.canceled) {
-          showAlert(`Error saving PDF: ${result.error || 'Unknown error'}`, 'Error');
+          toast.error(`Error saving PDF: ${result.error || 'Unknown error'}`);
         }
         // If canceled, do nothing (user closed dialog)
       } else {
@@ -2602,7 +2602,7 @@ const Purchasing = () => {
         openPrintWindow(viewPRPdfData.html);
       }
     } catch (error: any) {
-      showAlert(`Error: ${error.message || 'Unknown error'}`, 'Error');
+      toast.error(`Error: ${error.message || 'Unknown error'}`);
     }
   };
 
@@ -2617,7 +2617,7 @@ const Purchasing = () => {
         const materialId = getMaterialId(item);
         const supplierName = selectedSuppliers[materialId] || item.supplier;
         if (!supplierName) {
-          showAlert(`Supplier belum dipilih untuk material: ${item.materialName}`, 'Validation Error');
+          toast.warning(`Supplier belum dipilih untuk material: ${item.materialName}`);
           return;
         }
 
@@ -2674,12 +2674,16 @@ const Purchasing = () => {
       await storageService.set(StorageKeys.PACKAGING.PURCHASE_REQUESTS, updatedPRs);
       setPurchaseRequests(updatedPRs);
 
-      showAlert(`PO berhasil dibuat dari PR ${pr.prNo}!\n\n${newPOs.length} Purchase Order telah dibuat.`, 'Success');
+      // Show success toast (non-blocking, auto-dismiss)
+      toast.success(`✅ ${newPOs.length} PO created from PR ${pr.prNo}`, { duration: 3000 });
+      
+      // Close dialog and reload orders
       setSelectedPR(null);
       loadOrders();
-      loadPurchaseRequests();
+      // NOTE: Don't call loadPurchaseRequests() - it causes message loop!
+      // PR state already updated above, no need to reload
     } catch (error: any) {
-      showAlert(`Error creating PO from PR: ${error.message}`, 'Error');
+      toast.error(`Error creating PO from PR: ${error.message}`, { duration: 3000 });
     }
   };
 
@@ -2765,18 +2769,18 @@ const Purchasing = () => {
   const handleMergePO = async () => {
     try {
       if (selectedPOsForMerge.length < 2) {
-        showAlert('Minimal pilih 2 PO untuk di-merge', 'Validation Error');
+        toast.warning('Minimal pilih 2 PO untuk di-merge');
         return;
       }
 
       const validation = validateMergeablePOs(selectedPOsForMerge);
       if (!validation.valid) {
-        showAlert(validation.error || 'Validasi merge gagal', 'Validation Error');
+        toast.warning(validation.error || 'Validasi merge gagal');
         return;
       }
 
       if (!validation.mergeableGroups || validation.mergeableGroups.length === 0) {
-        showAlert('Tidak ada PO yang bisa di-merge', 'Validation Error');
+        toast.warning('Tidak ada PO yang bisa di-merge');
         return;
       }
 
@@ -2840,7 +2844,7 @@ const Purchasing = () => {
       }
 
       if (newPOs.length === 0) {
-        showAlert('Tidak ada PO yang berhasil dibuat', 'Error');
+        toast.error('Tidak ada PO yang berhasil dibuat');
         return;
       }
 
@@ -3012,392 +3016,366 @@ const Purchasing = () => {
       </div>
 
       {showForm && !editingItem && (
-        <Card title="Create New Purchase Order" className="mb-4">
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Supplier *
-            </label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input
-                type="text"
-                value={getSupplierInputDisplayValue()}
-                onChange={(e) => {
-                  handleSupplierInputChange(e.target.value);
-                }}
-                placeholder="-- Pilih Supplier --"
-                readOnly
-                onClick={() => setShowSupplierDialog(true)}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  border: '1px solid var(--border)',
-                  borderRadius: '4px',
-                  backgroundColor: 'var(--bg-primary)',
-                  color: 'var(--text-primary)',
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                }}
+        <div className="dialog-overlay" onClick={() => {
+          setShowForm(false);
+          setFormData({
+            supplier: '',
+            soNo: '',
+            materialItem: '',
+            qty: 0,
+            price: 0,
+            total: 0,
+            paymentTerms: 'TOP',
+            topDays: 30,
+            receiptDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          });
+          setSupplierInputValue('');
+          setMaterialInputValue('');
+          setQtyInputValue('');
+          setPriceInputValue('');
+        }} style={{ zIndex: 10000 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '700px', width: '95%', maxHeight: '90vh', overflowY: 'auto', zIndex: 10001, borderRadius: '10px' }}>
+            <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '14px 18px', borderRadius: '10px 10px 0 0', color: 'white' }}>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>
+                ➕ Create New Purchase Order
+              </h2>
+            </div>
+
+            <div style={{ background: 'var(--bg-primary)', padding: '16px', borderRadius: '0 0 10px 10px' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  Supplier *
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    value={getSupplierInputDisplayValue()}
+                    onChange={(e) => {
+                      handleSupplierInputChange(e.target.value);
+                    }}
+                    placeholder="-- Pilih Supplier --"
+                    readOnly
+                    onClick={() => setShowSupplierDialog(true)}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      border: '1px solid var(--border)',
+                      borderRadius: '4px',
+                      backgroundColor: 'var(--bg-primary)',
+                      color: 'var(--text-primary)',
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                    }}
+                  />
+                  <Button
+                    variant="secondary"
+                    onClick={() => setShowSupplierDialog(true)}
+                    style={{ fontSize: '12px', padding: '8px 16px' }}
+                  >
+                    Select
+                  </Button>
+                </div>
+              </div>
+
+              <Input
+                label="SO No (Optional)"
+                value={formData.soNo || ''}
+                onChange={(v) => setFormData({ ...formData, soNo: v })}
               />
-              <Button
-                variant="secondary"
-                onClick={() => setShowSupplierDialog(true)}
-                style={{ fontSize: '12px', padding: '8px 16px' }}
-              >
-                Select
-              </Button>
+
+              <Input
+                label="Reason Pembelian (jika tanpa SO/SPK)"
+                value={formData.purchaseReason || ''}
+                onChange={(v) => setFormData({ ...formData, purchaseReason: v })}
+                placeholder="Contoh: Refill stock umum / sample R&D"
+              />
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  Material/Item *
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    value={getMaterialInputDisplayValue()}
+                    placeholder="-- Pilih Material --"
+                    readOnly
+                    onClick={() => {
+                      setMaterialDialogSearch('');
+                      setShowMaterialDialog(true);
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      border: '1px solid var(--border)',
+                      borderRadius: '4px',
+                      backgroundColor: 'var(--bg-primary)',
+                      color: 'var(--text-primary)',
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                    }}
+                  />
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setMaterialDialogSearch('');
+                      setShowMaterialDialog(true);
+                    }}
+                    style={{ fontSize: '12px', padding: '8px 16px' }}
+                  >
+                    🔍
+                  </Button>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  Qty *
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={qtyInputValue !== undefined && qtyInputValue !== '' ? qtyInputValue : (formData.qty !== undefined && formData.qty !== null && formData.qty !== 0 ? String(formData.qty) : '')}
+                  onFocus={(e) => {
+                    const input = e.target as HTMLInputElement;
+                    const currentQty = formData.qty;
+                    if (currentQty === 0 || currentQty === null || currentQty === undefined || String(currentQty) === '0') {
+                      setQtyInputValue('');
+                      input.value = '';
+                    } else {
+                      input.select();
+                    }
+                  }}
+                  onChange={(e) => {
+                    let val = e.target.value;
+                    val = val.replace(/[^\d.,]/g, '');
+                    const cleaned = removeLeadingZero(val);
+                    setQtyInputValue(cleaned);
+                    const qty = cleaned === '' ? 0 : Number(cleaned) || 0;
+                    const total = Math.ceil(qty * (formData.price || 0));
+                    setFormData({
+                      ...formData,
+                      qty,
+                      total,
+                    });
+                  }}
+                  onBlur={(e) => {
+                    const val = e.target.value;
+                    if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
+                      setFormData({
+                        ...formData,
+                        qty: 0,
+                        total: 0,
+                      });
+                      setQtyInputValue('');
+                    } else {
+                      const qty = Number(val);
+                      const total = Math.ceil(qty * (formData.price || 0));
+                      setFormData({
+                        ...formData,
+                        qty,
+                        total,
+                      });
+                      setQtyInputValue('');
+                    }
+                  }}
+                  placeholder="0"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  Price
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={priceInputValue !== undefined && priceInputValue !== '' ? priceInputValue : (formData.price !== undefined && formData.price !== null && formData.price !== 0 ? String(Math.ceil(formData.price)) : '')}
+                  onFocus={(e) => {
+                    const input = e.target as HTMLInputElement;
+                    const currentPrice = formData.price;
+                    if (currentPrice === 0 || currentPrice === null || currentPrice === undefined || String(currentPrice) === '0') {
+                      setPriceInputValue('');
+                      input.value = '';
+                    } else {
+                      input.select();
+                    }
+                  }}
+                  onChange={(e) => {
+                    let val = e.target.value;
+                    val = val.replace(/[^\d.,]/g, '');
+                    const cleaned = removeLeadingZero(val);
+                    setPriceInputValue(cleaned);
+                    const price = cleaned === '' ? 0 : Math.ceil(Number(cleaned) || 0);
+                    const total = Math.ceil((formData.qty || 0) * price);
+                    setFormData({
+                      ...formData,
+                      price,
+                      total,
+                    });
+                  }}
+                  onBlur={(e) => {
+                    const val = e.target.value;
+                    if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
+                      setFormData({
+                        ...formData,
+                        price: 0,
+                        total: 0,
+                      });
+                      setPriceInputValue('');
+                    } else {
+                      const price = Math.ceil(Number(val));
+                      const total = Math.ceil((formData.qty || 0) * price);
+                      setFormData({
+                        ...formData,
+                        price,
+                        total,
+                      });
+                      setPriceInputValue('');
+                    }
+                  }}
+                  placeholder="0"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  Total: Rp {Math.ceil((formData.qty || 0) * (formData.price || 0)).toLocaleString('id-ID', { maximumFractionDigits: 0 })}
+                </label>
+              </div>
+
+              <Input
+                label="Quality"
+                value={formData.quality || ''}
+                onChange={(v) => setFormData({ ...formData, quality: v })}
+                placeholder="Quality"
+              />
+
+              <Input
+                label="Score"
+                value={formData.score !== undefined && formData.score !== null ? String(formData.score) : ''}
+                onChange={(v) => setFormData({ ...formData, score: v === '' ? '' : (isNaN(Number(v)) ? v : Number(v)) })}
+                placeholder="Score"
+              />
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  Keterangan
+                </label>
+                <textarea
+                  value={formData.keterangan || ''}
+                  onChange={(e) => setFormData({ ...formData, keterangan: e.target.value })}
+                  placeholder="Keterangan"
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                    fontFamily: 'inherit',
+                    resize: 'vertical',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  Payment Terms *
+                </label>
+                <select
+                  value={formData.paymentTerms || 'TOP'}
+                  onChange={(e) => {
+                    const newPaymentTerms = e.target.value as any;
+                    const newTopDays = (newPaymentTerms === 'COD' || newPaymentTerms === 'CBD') ? 0 : (formData.topDays || 30);
+                    setFormData({ ...formData, paymentTerms: newPaymentTerms, topDays: newTopDays });
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
+                >
+                  <option value="TOP">TOP (Term of Payment)</option>
+                  <option value="COD">COD (Cash on Delivery)</option>
+                  <option value="CBD">CBD (Cash Before Delivery)</option>
+                </select>
+              </div>
+
+              {formData.paymentTerms === 'TOP' && (
+                <Input
+                  label="TOP Days"
+                  type="number"
+                  value={String(formData.topDays || 30)}
+                  onChange={(v) => setFormData({ ...formData, topDays: Number(v) })}
+                />
+              )}
+
+              <Input
+                label="Receipt Date (Tanggal Penerimaan)"
+                type="date"
+                value={formData.receiptDate || ''}
+                onChange={(v) => setFormData({ ...formData, receiptDate: v })}
+              />
+
+              <div style={{ display: 'flex', gap: '8px', marginTop: '20px', justifyContent: 'flex-end' }}>
+                <Button 
+                  onClick={() => { 
+                    setShowForm(false); 
+                    setMaterialInputValue('');
+                    setSupplierInputValue('');
+                    setQtyInputValue('');
+                    setPriceInputValue('');
+                    setFormData({ 
+                      supplier: '', 
+                      soNo: '', 
+                      materialItem: '', 
+                      qty: 0, 
+                      price: 0, 
+                      total: 0, 
+                      paymentTerms: 'TOP', 
+                      topDays: 30, 
+                      receiptDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                      quality: '',
+                      score: '',
+                      keterangan: '',
+                    }); 
+                  }} 
+                  variant="secondary"
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleSave} variant="primary">
+                  Save PO
+                </Button>
+              </div>
             </div>
           </div>
-          <Input
-            label={editingItem ? "SO No (Linked - Cannot Edit)" : "SO No (Optional)"}
-            value={formData.soNo || ''}
-            onChange={(v) => setFormData({ ...formData, soNo: v })}
-            disabled={!!editingItem}
-          />
-          <Input
-            label="Reason Pembelian (jika tanpa SO/SPK)"
-            value={formData.purchaseReason || ''}
-            onChange={(v) => setFormData({ ...formData, purchaseReason: v })}
-            placeholder="Contoh: Refill stock umum / sample R&D"
-          />
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Material/Item *
-            </label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input
-                type="text"
-                value={getMaterialInputDisplayValue()}
-                placeholder="-- Pilih Material --"
-                readOnly
-                onClick={() => {
-                  setMaterialDialogSearch('');
-                  setShowMaterialDialog(true);
-                }}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  border: '1px solid var(--border)',
-                  borderRadius: '4px',
-                  backgroundColor: 'var(--bg-primary)',
-                  color: 'var(--text-primary)',
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                }}
-              />
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setMaterialDialogSearch('');
-                  setShowMaterialDialog(true);
-                }}
-                style={{ fontSize: '12px', padding: '8px 16px' }}
-              >
-                🔍
-              </Button>
-            </div>
-          </div>
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Qty *
-            </label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={qtyInputValue !== undefined && qtyInputValue !== '' ? qtyInputValue : (formData.qty !== undefined && formData.qty !== null && formData.qty !== 0 ? String(formData.qty) : '')}
-              onFocus={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentQty = formData.qty;
-                // Jika value adalah 0, langsung clear
-                if (currentQty === 0 || currentQty === null || currentQty === undefined || String(currentQty) === '0') {
-                  setQtyInputValue('');
-                  input.value = '';
-                } else {
-                  input.select();
-                }
-              }}
-              onMouseDown={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentQty = formData.qty;
-                // Clear jika value adalah 0 saat mouse down
-                if (currentQty === 0 || currentQty === null || currentQty === undefined || String(currentQty) === '0') {
-                  setQtyInputValue('');
-                  input.value = '';
-                }
-              }}
-              onChange={(e) => {
-                let val = e.target.value;
-                // Hapus semua karakter non-numeric kecuali titik dan koma
-                val = val.replace(/[^\d.,]/g, '');
-                const cleaned = removeLeadingZero(val);
-                setQtyInputValue(cleaned);
-                const qty = cleaned === '' ? 0 : Number(cleaned) || 0;
-              const total = Math.ceil(qty * (formData.price || 0)); // Bulatkan ke atas
-              setFormData({
-                ...formData,
-                qty,
-                total,
-              });
-            }}
-              onBlur={(e) => {
-                const val = e.target.value;
-                if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
-                  setFormData({
-                    ...formData,
-                    qty: 0,
-                    total: 0,
-                  });
-                  setQtyInputValue('');
-                } else {
-                  const qty = Number(val);
-                  const total = Math.ceil(qty * (formData.price || 0)); // Bulatkan ke atas
-                  setFormData({
-                    ...formData,
-                    qty,
-                    total,
-                  });
-                  setQtyInputValue('');
-                }
-              }}
-              onKeyDown={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = input.value;
-                // Jika kosong atau "0" dan user ketik angka 1-9, langsung replace
-                if ((currentVal === '' || currentVal === '0') && /^[1-9]$/.test(e.key)) {
-                  e.preventDefault();
-                  const newVal = e.key;
-                  setQtyInputValue(newVal);
-                  input.value = newVal;
-                  const qty = Number(newVal);
-                  const total = Math.ceil(qty * (formData.price || 0));
-                  setFormData({
-                    ...formData,
-                    qty,
-                    total,
-                  });
-                }
-              }}
-              placeholder="0"
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Price
-            </label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={priceInputValue !== undefined && priceInputValue !== '' ? priceInputValue : (formData.price !== undefined && formData.price !== null && formData.price !== 0 ? String(Math.ceil(formData.price)) : '')}
-              onFocus={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentPrice = formData.price;
-                // Jika value adalah 0, langsung clear
-                if (currentPrice === 0 || currentPrice === null || currentPrice === undefined || String(currentPrice) === '0') {
-                  setPriceInputValue('');
-                  input.value = '';
-                } else {
-                  input.select();
-                }
-              }}
-              onMouseDown={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentPrice = formData.price;
-                // Clear jika value adalah 0 saat mouse down
-                if (currentPrice === 0 || currentPrice === null || currentPrice === undefined || String(currentPrice) === '0') {
-                  setPriceInputValue('');
-                  input.value = '';
-                }
-              }}
-              onChange={(e) => {
-                let val = e.target.value;
-                // Hapus semua karakter non-numeric kecuali titik dan koma
-                val = val.replace(/[^\d.,]/g, '');
-                const cleaned = removeLeadingZero(val);
-                setPriceInputValue(cleaned);
-                const price = cleaned === '' ? 0 : Math.ceil(Number(cleaned) || 0); // Bulatkan ke atas
-              const total = Math.ceil((formData.qty || 0) * price); // Bulatkan ke atas
-              setFormData({
-                ...formData,
-                price,
-                total,
-              });
-            }}
-              onBlur={(e) => {
-                const val = e.target.value;
-                if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
-                  setFormData({
-                    ...formData,
-                    price: 0,
-                    total: 0,
-                  });
-                  setPriceInputValue('');
-                } else {
-                  const price = Math.ceil(Number(val)); // Bulatkan ke atas
-                  const total = Math.ceil((formData.qty || 0) * price); // Bulatkan ke atas
-                  setFormData({
-                    ...formData,
-                    price,
-                    total,
-                  });
-                  setPriceInputValue('');
-                }
-              }}
-              onKeyDown={(e) => {
-                const input = e.target as HTMLInputElement;
-                const currentVal = input.value;
-                // Jika kosong atau "0" dan user ketik angka 1-9, langsung replace
-                if ((currentVal === '' || currentVal === '0') && /^[1-9]$/.test(e.key)) {
-                  e.preventDefault();
-                  const newVal = e.key;
-                  setPriceInputValue(newVal);
-                  input.value = newVal;
-                  const price = Math.ceil(Number(newVal));
-                  const total = Math.ceil((formData.qty || 0) * price);
-                  setFormData({
-                    ...formData,
-                    price,
-                    total,
-                  });
-                }
-              }}
-              placeholder="0"
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Total: Rp {Math.ceil((formData.qty || 0) * (formData.price || 0)).toLocaleString('id-ID', { maximumFractionDigits: 0 })}
-            </label>
-          </div>
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Quality
-            </label>
-            <Input
-              value={formData.quality || ''}
-              onChange={(v) => setFormData({ ...formData, quality: v })}
-              placeholder="Quality"
-            />
-          </div>
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Score
-            </label>
-            <Input
-              value={formData.score !== undefined && formData.score !== null ? String(formData.score) : ''}
-              onChange={(v) => setFormData({ ...formData, score: v === '' ? '' : (isNaN(Number(v)) ? v : Number(v)) })}
-              placeholder="Score"
-            />
-          </div>
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Keterangan
-            </label>
-            <textarea
-              value={formData.keterangan || ''}
-              onChange={(e) => setFormData({ ...formData, keterangan: e.target.value })}
-              placeholder="Keterangan"
-              rows={3}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-                fontFamily: 'inherit',
-                resize: 'vertical',
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
-              Payment Terms *
-            </label>
-            <select
-              value={formData.paymentTerms || 'TOP'}
-              onChange={(e) => {
-                const newPaymentTerms = e.target.value as any;
-                // Jika COD atau CBD, set topDays jadi 0
-                const newTopDays = (newPaymentTerms === 'COD' || newPaymentTerms === 'CBD') ? 0 : (formData.topDays || 30);
-                setFormData({ ...formData, paymentTerms: newPaymentTerms, topDays: newTopDays });
-              }}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '1px solid var(--border)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-primary)',
-                fontSize: '14px',
-              }}
-            >
-              <option value="TOP">TOP (Term of Payment)</option>
-              <option value="COD">COD (Cash on Delivery)</option>
-              <option value="CBD">CBD (Cash Before Delivery)</option>
-            </select>
-          </div>
-          {formData.paymentTerms === 'TOP' && (
-            <Input
-              label="TOP Days"
-              type="number"
-              value={String(formData.topDays || 30)}
-              onChange={(v) => setFormData({ ...formData, topDays: Number(v) })}
-            />
-          )}
-          <Input
-            label="Receipt Date (Tanggal Penerimaan)"
-            type="date"
-            value={formData.receiptDate || ''}
-            onChange={(v) => setFormData({ ...formData, receiptDate: v })}
-          />
-          <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-            <Button onClick={() => { 
-              setShowForm(false); 
-              setEditingItem(null);
-              setMaterialInputValue('');
-              setSupplierInputValue('');
-              setQtyInputValue('');
-              setPriceInputValue('');
-              setFormData({ 
-                supplier: '', 
-                soNo: '', 
-                materialItem: '', 
-                qty: 0, 
-                price: 0, 
-                total: 0, 
-                paymentTerms: 'TOP', 
-                topDays: 30, 
-                receiptDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                quality: '',
-                score: '',
-                keterangan: '',
-              }); 
-            }} variant="secondary">
-              Cancel
-            </Button>
-            <Button onClick={handleSave} variant="primary">
-              {editingItem ? 'Update PO' : 'Save PO'}
-            </Button>
-          </div>
-        </Card>
+        </div>
       )}
 
       <Card style={{ position: 'sticky', top: 0, zIndex: 100, marginBottom: '16px' }}>
@@ -4253,34 +4231,336 @@ const Purchasing = () => {
         </div>
       )}
 
-      {/* Edit PO Dialog */}
-      {showEditDialog && editingItem && (
-        <EditPODialog
-          po={editingItem}
-          suppliers={suppliers}
-          materials={materials}
-          formData={editFormData}
-          setFormData={setEditFormData}
-          supplierInputValue={editSupplierInputValue}
-          setSupplierInputValue={setEditSupplierInputValue}
-          materialInputValue={editMaterialInputValue}
-          setMaterialInputValue={setEditMaterialInputValue}
-          qtyInputValue={editQtyInputValue}
-          setQtyInputValue={setEditQtyInputValue}
-          priceInputValue={editPriceInputValue}
-          setPriceInputValue={setEditPriceInputValue}
-          onClose={() => {
-            setShowEditDialog(false);
-            setEditingItem(null);
-            setEditFormData({});
-            setEditSupplierInputValue('');
-            setEditMaterialInputValue('');
-            setEditQtyInputValue('');
-            setEditPriceInputValue('');
-          }}
-          onSave={handleSaveEdit}
-          removeLeadingZero={removeLeadingZero}
-        />
+      {/* Edit PO Dialog - Using same form as Create */}
+      {showForm && editingItem && (
+        <div className="dialog-overlay" onClick={() => {
+          setShowForm(false);
+          setEditingItem(null);
+          setEditFormData({});
+          setEditSupplierInputValue('');
+          setEditMaterialInputValue('');
+          setEditQtyInputValue('');
+          setEditPriceInputValue('');
+        }} style={{ zIndex: 10000 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '700px', width: '95%', maxHeight: '90vh', overflowY: 'auto', zIndex: 10001, borderRadius: '10px' }}>
+            <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '14px 18px', borderRadius: '10px 10px 0 0', color: 'white' }}>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>
+                ✏️ Edit Purchase Order: {editingItem.poNo}
+              </h2>
+            </div>
+
+            <div style={{ background: 'var(--bg-primary)', padding: '16px', borderRadius: '0 0 10px 10px' }}>
+              <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px' }}>
+                <div><strong>PO No:</strong> {editingItem.poNo}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                  Status: {editingItem.status} | Created: {new Date(editingItem.created).toLocaleDateString('id-ID')}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  Supplier *
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    value={editSupplierInputValue || (editFormData.supplier ? `${suppliers.find(s => s.nama === editFormData.supplier)?.kode || ''} - ${editFormData.supplier}` : '')}
+                    onChange={(e) => {
+                      setEditSupplierInputValue(e.target.value);
+                      const normalized = e.target.value.toLowerCase();
+                      const matched = suppliers.find(s => {
+                        const label = `${s.kode || ''}${s.kode ? ' - ' : ''}${s.nama || ''}`.toLowerCase();
+                        return label === normalized || (s.kode || '').toLowerCase() === normalized || (s.nama || '').toLowerCase() === normalized;
+                      });
+                      if (matched) {
+                        setEditFormData({ ...editFormData, supplier: matched.nama });
+                      }
+                    }}
+                    placeholder="-- Pilih Supplier --"
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      border: '1px solid var(--border)',
+                      borderRadius: '4px',
+                      backgroundColor: 'var(--bg-primary)',
+                      color: 'var(--text-primary)',
+                      fontSize: '14px',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <Input
+                label="SO No (Linked - Cannot Edit)"
+                value={editFormData.soNo || ''}
+                onChange={(v) => setEditFormData({ ...editFormData, soNo: v })}
+                disabled={true}
+              />
+
+              <Input
+                label="Reason Pembelian (jika tanpa SO/SPK)"
+                value={editFormData.purchaseReason || ''}
+                onChange={(v) => setEditFormData({ ...editFormData, purchaseReason: v })}
+                placeholder="Contoh: Refill stock umum / sample R&D"
+              />
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  Material/Item *
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    value={editMaterialInputValue || (editFormData.materialItem ? `${materials.find(m => m.nama === editFormData.materialItem)?.material_id || materials.find(m => m.nama === editFormData.materialItem)?.kode || ''} - ${editFormData.materialItem}` : '')}
+                    onChange={(e) => {
+                      setEditMaterialInputValue(e.target.value);
+                      const normalized = e.target.value.toLowerCase();
+                      const matched = materials.find(m => {
+                        const label = `${m.material_id || m.kode || ''}${m.material_id || m.kode ? ' - ' : ''}${m.nama || ''}`.toLowerCase();
+                        return label === normalized || (m.material_id || m.kode || '').toLowerCase() === normalized || (m.nama || '').toLowerCase() === normalized;
+                      });
+                      if (matched) {
+                        const materialPrice = matched.priceMtr || matched.harga || 0;
+                        const roundedPrice = Math.ceil(materialPrice);
+                        const roundedTotal = Math.ceil((editFormData.qty || 0) * roundedPrice);
+                        setEditFormData({
+                          ...editFormData,
+                          materialItem: matched.nama,
+                          price: roundedPrice,
+                          total: roundedTotal,
+                        });
+                      }
+                    }}
+                    placeholder="-- Pilih Material --"
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      border: '1px solid var(--border)',
+                      borderRadius: '4px',
+                      backgroundColor: 'var(--bg-primary)',
+                      color: 'var(--text-primary)',
+                      fontSize: '14px',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  Qty *
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={editQtyInputValue !== undefined && editQtyInputValue !== '' ? editQtyInputValue : (editFormData.qty !== undefined && editFormData.qty !== null && editFormData.qty !== 0 ? String(editFormData.qty) : '')}
+                  onChange={(e) => {
+                    let val = e.target.value;
+                    val = val.replace(/[^\d.,]/g, '');
+                    const cleaned = removeLeadingZero(val);
+                    setEditQtyInputValue(cleaned);
+                    const qty = cleaned === '' ? 0 : Number(cleaned) || 0;
+                    const total = Math.ceil(qty * (editFormData.price || 0));
+                    setEditFormData({
+                      ...editFormData,
+                      qty,
+                      total,
+                    });
+                  }}
+                  onBlur={(e) => {
+                    const val = e.target.value;
+                    if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
+                      setEditFormData({
+                        ...editFormData,
+                        qty: 0,
+                        total: 0,
+                      });
+                      setEditQtyInputValue('');
+                    } else {
+                      const qty = Number(val);
+                      const total = Math.ceil(qty * (editFormData.price || 0));
+                      setEditFormData({
+                        ...editFormData,
+                        qty,
+                        total,
+                      });
+                      setEditQtyInputValue('');
+                    }
+                  }}
+                  placeholder="0"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  Price
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={editPriceInputValue !== undefined && editPriceInputValue !== '' ? editPriceInputValue : (editFormData.price !== undefined && editFormData.price !== null && editFormData.price !== 0 ? String(Math.ceil(editFormData.price)) : '')}
+                  onChange={(e) => {
+                    let val = e.target.value;
+                    val = val.replace(/[^\d.,]/g, '');
+                    const cleaned = removeLeadingZero(val);
+                    setEditPriceInputValue(cleaned);
+                    const price = cleaned === '' ? 0 : Math.ceil(Number(cleaned) || 0);
+                    const total = Math.ceil((editFormData.qty || 0) * price);
+                    setEditFormData({
+                      ...editFormData,
+                      price,
+                      total,
+                    });
+                  }}
+                  onBlur={(e) => {
+                    const val = e.target.value;
+                    if (val === '' || isNaN(Number(val)) || Number(val) < 0) {
+                      setEditFormData({
+                        ...editFormData,
+                        price: 0,
+                        total: 0,
+                      });
+                      setEditPriceInputValue('');
+                    } else {
+                      const price = Math.ceil(Number(val));
+                      const total = Math.ceil((editFormData.qty || 0) * price);
+                      setEditFormData({
+                        ...editFormData,
+                        price,
+                        total,
+                      });
+                      setEditPriceInputValue('');
+                    }
+                  }}
+                  placeholder="0"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  Total: Rp {Math.ceil((editFormData.qty || 0) * (editFormData.price || 0)).toLocaleString('id-ID', { maximumFractionDigits: 0 })}
+                </label>
+              </div>
+
+              <Input
+                label="Quality"
+                value={editFormData.quality || ''}
+                onChange={(v) => setEditFormData({ ...editFormData, quality: v })}
+                placeholder="Quality"
+              />
+
+              <Input
+                label="Score"
+                value={editFormData.score !== undefined && editFormData.score !== null ? String(editFormData.score) : ''}
+                onChange={(v) => setEditFormData({ ...editFormData, score: v === '' ? '' : (isNaN(Number(v)) ? v : Number(v)) })}
+                placeholder="Score"
+              />
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  Keterangan
+                </label>
+                <textarea
+                  value={editFormData.keterangan || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, keterangan: e.target.value })}
+                  placeholder="Keterangan"
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                    fontFamily: 'inherit',
+                    resize: 'vertical',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  Payment Terms *
+                </label>
+                <select
+                  value={editFormData.paymentTerms || 'TOP'}
+                  onChange={(e) => {
+                    const newPaymentTerms = e.target.value as any;
+                    const newTopDays = (newPaymentTerms === 'COD' || newPaymentTerms === 'CBD') ? 0 : (editFormData.topDays || 30);
+                    setEditFormData({ ...editFormData, paymentTerms: newPaymentTerms, topDays: newTopDays });
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
+                >
+                  <option value="TOP">TOP (Term of Payment)</option>
+                  <option value="COD">COD (Cash on Delivery)</option>
+                  <option value="CBD">CBD (Cash Before Delivery)</option>
+                </select>
+              </div>
+
+              {editFormData.paymentTerms === 'TOP' && (
+                <Input
+                  label="TOP Days"
+                  type="number"
+                  value={String(editFormData.topDays || 30)}
+                  onChange={(v) => setEditFormData({ ...editFormData, topDays: Number(v) })}
+                />
+              )}
+
+              <Input
+                label="Receipt Date (Tanggal Penerimaan)"
+                type="date"
+                value={editFormData.receiptDate || ''}
+                onChange={(v) => setEditFormData({ ...editFormData, receiptDate: v })}
+              />
+
+              <div style={{ display: 'flex', gap: '8px', marginTop: '20px', justifyContent: 'flex-end' }}>
+                <Button 
+                  onClick={() => { 
+                    setShowForm(false); 
+                    setEditingItem(null);
+                    setEditFormData({});
+                    setEditSupplierInputValue('');
+                    setEditMaterialInputValue('');
+                    setEditQtyInputValue('');
+                    setEditPriceInputValue('');
+                  }} 
+                  variant="secondary"
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleSaveEdit} variant="primary">
+                  Update PO
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* PDF Preview Dialog untuk PR */}

@@ -63,7 +63,7 @@ export async function deletePackagingItem(
     }
 
     const updatedData = currentData.filter((_, index) => index !== itemIndex);
-    await storageService.set(storageKey, updatedData, true);
+    await storageService.set(storageKey, updatedData);
 
     window.dispatchEvent(new CustomEvent('app-storage-changed', {
       detail: { 

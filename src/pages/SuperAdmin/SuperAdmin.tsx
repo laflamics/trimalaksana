@@ -10,6 +10,7 @@ import { filterActiveItems } from '../../utils/data-persistence-helper';
 import { ActivityLog } from '../../utils/activity-logger';
 import { ProxyLog, getProxyLogs, clearProxyLogs } from '../../utils/proxy-logger';
 import UserControl from '../Settings/UserControl';
+import BackupRestore from './BackupRestore';
 import '../../styles/common.css';
 import '../../styles/compact.css';
 import './SuperAdmin.css';
@@ -109,7 +110,7 @@ interface UserAccess {
 
 const SuperAdmin = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'users' | 'logs' | 'proxy' | 'usage'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'logs' | 'proxy' | 'usage' | 'backup'>('users');
   const [activityLogs, setActivityLogs] = useState<(ActivityLog & { businessContext?: string })[]>([]);
   const [proxyLogs, setProxyLogs] = useState<ProxyLog[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -239,7 +240,7 @@ const SuperAdmin = () => {
           // If we have very few logs, try force reload from file
           if (logs.length <= 1) {
             console.log(`[SuperAdmin] Few ${context.name} logs detected, trying force reload from file...`);
-            const fileData = await storageService.forceReloadFromFile<ActivityLog[]>(context.key);
+            const fileData = await storageService.forceReloadFromFile<ActivityLog[]>();
             if (fileData && Array.isArray(fileData) && fileData.length > logs.length) {
               console.log(`[SuperAdmin] Force reload successful: ${fileData.length} ${context.name} logs from file`);
               logs = fileData;
@@ -683,6 +684,12 @@ const SuperAdmin = () => {
         >
           📊 Usage Stats
         </button>
+        <button
+          className={`tab-button ${activeTab === 'backup' ? 'active' : ''}`}
+          onClick={() => setActiveTab('backup')}
+        >
+          💾 Backup & Restore
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -1065,6 +1072,12 @@ const SuperAdmin = () => {
               </div>
             </div>
           </Card>
+        </div>
+      )}
+
+      {activeTab === 'backup' && (
+        <div className="tab-content">
+          <BackupRestore />
         </div>
       )}
     </div>

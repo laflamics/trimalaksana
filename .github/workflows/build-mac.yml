@@ -1,0 +1,44 @@
+name: Build Mac App
+
+on:
+  workflow_dispatch:  # Manual trigger dari GitHub UI
+  push:
+    tags:
+      - 'v*'  # Otomatis trigger kalau push tag seperti v1.0.0
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Mac app
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          SKIP_NOTARIZATION: true
+        run: npm run build:app:mac:fast
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-dmg
+          path: release/*.dmg
+          retention-days: 7
+
+      - name: Upload ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-zip
+          path: release/*.zip
+          retention-days: 7

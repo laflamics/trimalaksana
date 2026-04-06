@@ -27,6 +27,7 @@ import * as XLSX from 'xlsx';
 import { createStyledWorksheet, setColumnWidths, ExcelColumn } from '../../utils/excel-helper';
 import { getTheme } from '../../utils/theme';
 import { logCreate, logUpdate, logDelete } from '../../utils/activity-logger';
+import { toast } from '../../utils/toast-helper';
 import '../../styles/common.css';
 import '../../styles/compact.css';
 
@@ -689,24 +690,73 @@ const PPIC = () => {
   };
 
   const loadData = async () => {
-    // CRITICAL: Load from storage service (uses server in server mode, localStorage in local mode)
-    // This ensures we always get fresh data from the configured storage backend
-    const spkRaw = await loadFromStorage('spk');
+    // 🏎️ SPEED FULL MCLAREN: Load ONLY essential data first (4 keys)
+    // Load other data in background (lazy load)
+    const [
+      spkRaw,
+      ptpRaw,
+      schedule,
+      production,
+    ] = await Promise.all([
+      loadFromStorage('spk'),
+      loadFromStorage('ptp'),
+      loadFromStorage('schedule'),
+      loadFromStorage('production'),
+    ]);
+    
     let spk = filterActiveItems(spkRaw); // Filter deleted SPK items (tombstone pattern)
-    const ptpRaw = await loadFromStorage('ptp');
-    const ptp = filterActiveItems(ptpRaw); // Filter deleted PTP items
-    let schedule = await loadFromStorage('schedule');
-    let production = await loadFromStorage('production');
-    const customersData = await loadFromStorage('customers');
-    const productsData = await loadFromStorage('products');
-    const salesOrdersData = await loadFromStorage('salesOrders');
-    const materialsData = await loadFromStorage('materials');
-    const bomDataLoaded = await loadFromStorage('bom');
-    const inventoryData = await loadFromStorage('inventory');
-    const purchaseOrdersData = await loadFromStorage('purchaseOrders');
-    const deliveryNotesData = await loadFromStorage('delivery');
-    const deliveryNotificationsData = await loadFromStorage('deliveryNotifications');
-    const purchaseRequestsData = await loadFromStorage('purchaseRequests');
+    let ptp = filterActiveItems(ptpRaw); // Filter deleted PTP items
+    
+    // Load other data in background (non-blocking)
+    const lazyLoadData = async () => {
+      const [
+        customersData,
+        productsData,
+        salesOrdersData,
+        materialsData,
+        bomDataLoaded,
+        inventoryData,
+        purchaseOrdersData,
+        deliveryNotesData,
+        purchaseRequestsData,
+      ] = await Promise.all([
+        loadFromStorage('customers'),
+        loadFromStorage('products'),
+        loadFromStorage('salesOrders'),
+        loadFromStorage('materials'),
+        loadFromStorage('bom'),
+        loadFromStorage('inventory'),
+        loadFromStorage('purchaseOrders'),
+        loadFromStorage('delivery'),
+        loadFromStorage('purchaseRequests'),
+      ]);
+      
+      // Update state with lazy-loaded data
+      setCustomers(customersData);
+      setProducts(productsData);
+      setSalesOrders(filterActiveItems(salesOrdersData));
+      setMaterials(materialsData);
+      setBomData(bomDataLoaded);
+      setInventory(inventoryData);
+      setPurchaseOrders(purchaseOrdersData);
+      setDeliveryNotes(deliveryNotesData);
+      setPurchaseRequests(purchaseRequestsData);
+    };
+    
+    // Start lazy loading in background (don't await)
+    lazyLoadData().catch(err => console.error('[PPIC] Error lazy loading data:', err));
+    
+    // Initialize empty data for lazy-loaded items (will be updated by lazyLoadData)
+    let customersData: any[] = [];
+    let productsData: any[] = [];
+    let salesOrdersData: any[] = [];
+    let materialsData: any[] = [];
+    let bomDataLoaded: any[] = [];
+    let inventoryData: any[] = [];
+    let purchaseOrdersData: any[] = [];
+    let deliveryNotesData: any[] = [];
+    let purchaseRequestsData: any[] = [];
+    const deliveryNotificationsData: any[] = [];
     
     // NOTE: Tidak perlu background sync manual di sini karena:
     // 1. storageService.get() sudah punya background sync sendiri
@@ -714,7 +764,20 @@ const PPIC = () => {
     // 3. Load dari localStorage sudah cukup untuk instant UI update
     
     // Cleanup: Hapus SPK utama yang sudah di-split menjadi batch SPK
-    // Cek setiap SPK, jika ada batch SPK dengan pattern `${spkNo}-A`, `${spkNo}-B`, dst, hapus SPK utama
+    // OPTIMIZED: Build a Set of parent SPK numbers yang punya batch untuk O(1) lookup
+    const spkNosWithBatches = new Set<string>();
+    for (const spkItem of spk) {
+      const spkNo = (spkItem.spkNo || '').toString().trim();
+      if (!spkNo) continue;
+      
+      // Jika ini batch SPK (ends with -A, -B, etc), extract parent SPK no
+      const batchMatch = spkNo.match(/^(.+)-[A-Z0-9]$/);
+      if (batchMatch) {
+        spkNosWithBatches.add(batchMatch[1]);
+      }
+    }
+    
+    // Filter dengan O(1) lookup
     let hasCleanedSpk = false;
     const cleanedSpk = spk.filter((spkItem: any) => {
       const spkNo = (spkItem.spkNo || '').toString().trim();
@@ -731,26 +794,10 @@ const PPIC = () => {
         return true; // Ini batch SPK, keep
       }
       
-      // Cek apakah ada SPK batch yang berasal dari SPK ini
-      const hasBatchSPKs = spk.some((otherSpk: any) => {
-        const otherSpkNo = (otherSpk.spkNo || '').toString().trim();
-        if (!otherSpkNo) return false;
-        
-        // Cek apakah otherSpk adalah batch dari spk ini
-        if (otherSpkNo.startsWith(spkNo + '-')) {
-          const suffix = otherSpkNo.substring(spkNo.length + 1);
-          // Valid jika suffix adalah single character (A-Z) atau single digit (0-9)
-          if (suffix.length === 1 && /^[A-Z0-9]$/.test(suffix)) {
-            return true;
-          }
-        }
-        return false;
-      });
-      
-      // Jika ada batch SPK, hapus SPK utama ini
-      if (hasBatchSPKs) {
+      // Cek apakah ada SPK batch yang berasal dari SPK ini (O(1) lookup)
+      if (spkNosWithBatches.has(spkNo)) {
         hasCleanedSpk = true;
-        return false;
+        return false; // Hapus SPK utama ini
       }
       
       return true;
@@ -765,8 +812,27 @@ const PPIC = () => {
     // Auto-update SPK status berdasarkan:
     // 1. Production progress: CLOSE jika production sudah selesai (progress >= target)
     // 2. Delivery: CLOSE jika product sudah terkirim
-    // - OPEN jika SPK sudah CLOSE tapi production belum selesai DAN product belum terkirim (re-open)
-    // IMPORTANT: Setiap SPK di-close secara independen berdasarkan product di SPK tersebut, bukan semua product di SO
+    // OPTIMIZED: Pre-build lookup maps untuk O(1) access
+    const productionMap = new Map(production.map((p: any) => [p.spkNo, p]));
+    const deliveryBySpkMap = new Map<string, any[]>();
+    
+    // Build delivery map: spkNo -> [deliveries]
+    deliveryNotesData.forEach((del: any) => {
+      if (del.status === 'CLOSE' || del.status === 'DELIVERED') {
+        if (del.items && Array.isArray(del.items)) {
+          del.items.forEach((item: any) => {
+            const spkNo = (item.spkNo || '').toString().trim();
+            if (spkNo) {
+              if (!deliveryBySpkMap.has(spkNo)) {
+                deliveryBySpkMap.set(spkNo, []);
+              }
+              deliveryBySpkMap.get(spkNo)!.push(item);
+            }
+          });
+        }
+      }
+    });
+    
     let updatedSPK = false;
     const updatedSpkList = cleanedSpk.map((s: any) => {
       if (!s.soNo || !s.spkNo) return s;
@@ -774,62 +840,42 @@ const PPIC = () => {
       const spkQty = parseFloat(s.qty || '0') || 0;
       if (spkQty <= 0) return s; // Skip jika qty 0
 
-      // Cek production progress untuk SPK ini
-      const relatedProduction = production.find((p: any) => p.spkNo === s.spkNo);
+      // Cek production progress untuk SPK ini (O(1) lookup)
+      const relatedProduction = productionMap.get(s.spkNo);
       const productionProgress = relatedProduction ? (relatedProduction.progress || relatedProduction.producedQty || 0) : 0;
       const productionTarget = relatedProduction ? (relatedProduction.target || relatedProduction.targetQty || spkQty) : spkQty;
       const isProductionComplete = productionProgress >= productionTarget;
       
-      // Cek apakah product di SPK ini sudah terkirim
-      const spkProductId = (s.product_id || s.productId || '').toString().trim();
+      // Cek apakah product di SPK ini sudah terkirim (O(1) lookup)
+      const spkProductId = (s.kode || s.product_id || s.productId || '').toString().trim();
       const spkProductName = (s.product || '').toString().trim();
-
-      // Cari semua delivery yang terkait dengan SO ini dan statusnya CLOSE atau DELIVERED
-      const relatedDeliveries = deliveryNotesData.filter((del: any) => 
-        del.soNo === s.soNo && 
-        (del.status === 'CLOSE' || del.status === 'DELIVERED')
-      );
-
+      const deliveryItems = deliveryBySpkMap.get(s.spkNo) || [];
+      
       // Hitung total qty yang sudah terkirim untuk product di SPK ini
       let totalDeliveredQty = 0;
-      relatedDeliveries.forEach((del: any) => {
-        if (del.items && Array.isArray(del.items)) {
-          del.items.forEach((delItem: any) => {
-            // IMPORTANT: Cek apakah delivery item ini terkait dengan SPK ini
-            // Delivery item punya spkNo field (bukan spkNos array)
-            const deliverySpkNo = (delItem.spkNo || '').toString().trim();
-            const currentSpkNo = (s.spkNo || '').toString().trim();
-            const isRelatedToThisSPK = deliverySpkNo === currentSpkNo;
-            
-            if (!isRelatedToThisSPK) return; // Skip jika tidak terkait dengan SPK ini
-            
-            // Match berdasarkan productId, productKode, atau productName
-            const delProductId = (delItem.productId || delItem.productKode || '').toString().trim().toLowerCase();
-            const delProductName = (delItem.product || delItem.productName || '').toString().trim().toLowerCase();
-            const spkProductIdLower = spkProductId.toLowerCase();
-            const spkProductNameLower = spkProductName.toLowerCase();
-            
-            // Match jika productId sama, atau productName sama
-            const productIdMatch = spkProductIdLower && delProductId && spkProductIdLower === delProductId;
-            const productNameMatch = spkProductNameLower && delProductName && spkProductNameLower === delProductName;
-            
-            if (productIdMatch || productNameMatch) {
-              totalDeliveredQty += parseFloat(delItem.qty || '0') || 0;
-            }
-          });
+      for (const delItem of deliveryItems) {
+        const delProductId = (delItem.productId || delItem.productKode || '').toString().trim().toLowerCase();
+        const delProductName = (delItem.product || delItem.productName || '').toString().trim().toLowerCase();
+        const spkProductIdLower = spkProductId.toLowerCase();
+        const spkProductNameLower = spkProductName.toLowerCase();
+        
+        // Match jika productId sama, atau productName sama
+        const productIdMatch = spkProductIdLower && delProductId && spkProductIdLower === delProductId;
+        const productNameMatch = spkProductNameLower && delProductName && spkProductNameLower === delProductName;
+        
+        if (productIdMatch || productNameMatch) {
+          totalDeliveredQty += parseFloat(delItem.qty || '0') || 0;
         }
-      });
+      }
 
       // Update status berdasarkan production progress ATAU delivery status
       const isDelivered = totalDeliveredQty >= spkQty;
       const shouldBeClosed = isProductionComplete || isDelivered;
       
       if (shouldBeClosed && s.status !== 'CLOSE') {
-        // Production sudah selesai ATAU product sudah terkirim, close SPK
         updatedSPK = true;
         return { ...s, status: 'CLOSE' as const };
       } else if (!shouldBeClosed && s.status === 'CLOSE') {
-        // SPK sudah CLOSE tapi production belum selesai DAN product belum terkirim, re-open SPK
         updatedSPK = true;
         return { ...s, status: 'OPEN' as const };
       }
@@ -842,7 +888,42 @@ const PPIC = () => {
     }
     
     // Auto-fulfill SPK dari stock jika stock product cukup
-    // Cek setiap SPK OPEN, jika stock product cukup, auto-fulfill (skip PR, Schedule, BOM, QC, langsung ke delivery)
+    // OPTIMIZED: Pre-build inventory map untuk O(1) lookup
+    const inventoryMap = new Map(inventoryData.map((inv: any) => [
+      (inv.item_code || inv.codeItem || '').toString().trim(),
+      inv
+    ]));
+    
+    // Build SPK by product map untuk hitung stock usage
+    const spkByProductMap = new Map<string, any[]>();
+    (updatedSPK ? updatedSpkList : cleanedSpk).forEach((s: any) => {
+      if (s.status !== 'CLOSE' && !s.stockFulfilled) {
+        const productId = (s.kode || s.product_id || s.productId || '').toString().trim();
+        if (productId) {
+          if (!spkByProductMap.has(productId)) {
+            spkByProductMap.set(productId, []);
+          }
+          spkByProductMap.get(productId)!.push(s);
+        }
+      }
+    });
+    
+    // Build delivery by product map untuk hitung stock usage
+    const deliveryByProductMap = new Map<string, number>();
+    deliveryNotesData.forEach((del: any) => {
+      if (del.status !== 'CLOSE' && del.status !== 'DELIVERED' && del.deleted !== true) {
+        if (del.items && Array.isArray(del.items)) {
+          del.items.forEach((item: any) => {
+            const productId = (item.productId || item.productKode || '').toString().trim();
+            if (productId) {
+              const qty = parseFloat(item.qty || '0') || 0;
+              deliveryByProductMap.set(productId, (deliveryByProductMap.get(productId) || 0) + qty);
+            }
+          });
+        }
+      }
+    });
+    
     let hasAutoFulfilled = false;
     const autoFulfilledSpkList = (updatedSPK ? updatedSpkList : cleanedSpk).map((s: any) => {
       // Hanya proses SPK yang statusnya OPEN dan belum fulfilled
@@ -855,17 +936,11 @@ const PPIC = () => {
       const spkProductId = (s.kode || s.product_id || s.productId || '').toString().trim();
       if (!spkProductId) return s; // Skip jika tidak ada product ID
       
-      // Cari product di inventory Packaging
-      let inventoryItem = inventoryData.find((inv: any) => {
-        const invCode = (inv.item_code || inv.codeItem || '').toString().trim();
-        return invCode === spkProductId;
-      });
-      
+      // Cari product di inventory (O(1) lookup)
+      const inventoryItem = inventoryMap.get(spkProductId);
       if (!inventoryItem) return s; // Skip jika product tidak ada di inventory
       
       // Hitung available stock
-      // Available stock = stockPremonth + receive - outgoing + return
-      // Atau bisa juga pakai nextStock jika sudah dihitung
       const baseStock = inventoryItem.nextStock !== undefined 
         ? (inventoryItem.nextStock || 0)
         : (
@@ -875,141 +950,76 @@ const PPIC = () => {
             (inventoryItem.return || 0)
           );
       
-      // IMPORTANT: Hitung stock yang sudah digunakan oleh SPK lain (yang belum di-close)
-      // Cek delivery data untuk melihat stock yang sudah digunakan oleh SPK lain untuk product yang sama
-      let stockUsedByOtherSPKs = 0;
-      const currentSpkNo = (s.spkNo || '').toString().trim();
+      // Hitung stock yang sudah digunakan oleh SPK lain (O(1) lookup)
+      const otherSpksQty = (spkByProductMap.get(spkProductId) || [])
+        .filter((other: any) => other.spkNo !== s.spkNo)
+        .reduce((sum: number, other: any) => sum + (parseFloat(other.qty || '0') || 0), 0);
       
-      // Cek semua SPK lain yang menggunakan product yang sama dan belum di-close
-      const otherSPKsWithSameProduct = (updatedSPK ? updatedSpkList : cleanedSpk).filter((otherSpk: any) => {
-        const otherSpkNo = (otherSpk.spkNo || '').toString().trim();
-        const otherSpkProductId = (otherSpk.kode || otherSpk.product_id || otherSpk.productId || '').toString().trim();
-        // Skip SPK ini sendiri
-        if (otherSpkNo === currentSpkNo) return false;
-        // Skip SPK yang sudah di-close
-        if (otherSpk.status === 'CLOSE') return false;
-        // Skip jika product berbeda
-        if (otherSpkProductId !== spkProductId) return false;
-        // Skip jika sudah stockFulfilled (sudah dialokasikan stock)
-        if (otherSpk.stockFulfilled === true) return false;
-        return true;
-      });
-      
-      // Hitung total qty dari SPK lain yang sudah menggunakan stock
-      otherSPKsWithSameProduct.forEach((otherSpk: any) => {
-        const otherSpkQty = parseFloat(otherSpk.qty || '0') || 0;
-        stockUsedByOtherSPKs += otherSpkQty;
-      });
-      
-      // Cek juga delivery yang sudah dibuat untuk SPK lain (yang belum di-close)
-      const deliveriesForOtherSPKs = deliveryNotesData.filter((del: any) => {
-        // Skip delivery yang sudah di-close atau deleted
-        if (del.status === 'CLOSE' || del.status === 'DELIVERED' || del.deleted === true) return false;
-        // Cek apakah delivery ini untuk product yang sama
-        if (del.items && Array.isArray(del.items)) {
-          return del.items.some((item: any) => {
-            const itemProductId = (item.productId || item.productKode || '').toString().trim();
-            const itemSpkNo = (item.spkNo || '').toString().trim();
-            // Skip jika untuk SPK ini sendiri
-            if (itemSpkNo === currentSpkNo) return false;
-            // Cek apakah product sama
-            return itemProductId === spkProductId;
-          });
-        }
-        return false;
-      });
-      
-      // Hitung total qty dari delivery yang sudah dibuat untuk SPK lain
-      deliveriesForOtherSPKs.forEach((del: any) => {
-        if (del.items && Array.isArray(del.items)) {
-          del.items.forEach((item: any) => {
-            const itemProductId = (item.productId || item.productKode || '').toString().trim();
-            const itemSpkNo = (item.spkNo || '').toString().trim();
-            // Skip jika untuk SPK ini sendiri
-            if (itemSpkNo === currentSpkNo) return;
-            // Cek apakah product sama
-            if (itemProductId === spkProductId) {
-              const itemQty = parseFloat(item.qty || '0') || 0;
-              stockUsedByOtherSPKs += itemQty;
-            }
-          });
-        }
-      });
+      const deliveryQty = deliveryByProductMap.get(spkProductId) || 0;
+      const stockUsedByOtherSPKs = otherSpksQty + deliveryQty;
       
       // Available stock = base stock - stock yang sudah digunakan oleh SPK lain
       const availableStock = Math.max(0, baseStock - stockUsedByOtherSPKs);
       
       // IMPORTANT: Validasi stock harus > 0 dan cukup untuk fulfill SPK ini
-      // Jangan set stockFulfilled jika inventory kosong atau stock tidak cukup
       if (availableStock > 0 && availableStock >= spkQty) {
         hasAutoFulfilled = true;
         
         // Update schedule progress jika ada
-        const relatedSchedule = schedule.find((sch: any) => sch.spkNo === s.spkNo);
-        if (relatedSchedule) {
-          schedule = schedule.map((sch: any) => {
-            if (sch.spkNo === s.spkNo) {
-              return {
-                ...sch,
-                progress: spkQty, // Set progress = target
-                updated: new Date().toISOString(),
-              };
-            }
-            return sch;
-          });
+        const scheduleIndex = schedule.findIndex((sch: any) => sch.spkNo === s.spkNo);
+        if (scheduleIndex !== -1) {
+          schedule[scheduleIndex] = {
+            ...schedule[scheduleIndex],
+            progress: spkQty,
+            updated: new Date().toISOString(),
+          };
         }
         
         // Update production progress jika ada
-        const relatedProduction = production.find((p: any) => p.spkNo === s.spkNo);
-        if (relatedProduction) {
-          production = production.map((p: any) => {
-            if (p.spkNo === s.spkNo) {
-              return {
-                ...p,
-                progress: spkQty, // Set progress = target
-                producedQty: spkQty,
-                updated: new Date().toISOString(),
-              };
-            }
-            return p;
-          });
+        const productionIndex = production.findIndex((p: any) => p.spkNo === s.spkNo);
+        if (productionIndex !== -1) {
+          production[productionIndex] = {
+            ...production[productionIndex],
+            progress: spkQty,
+            producedQty: spkQty,
+            updated: new Date().toISOString(),
+          };
         }
         
         // Mark SPK sebagai stock-fulfilled
         return {
           ...s,
           stockFulfilled: true,
-          progress: spkQty, // Set progress = target untuk display
+          progress: spkQty,
         };
       }
       
       return s;
     });
     
-    // Save jika ada auto-fulfill
+    // Save jika ada auto-fulfill (batch save)
     if (hasAutoFulfilled) {
-      await storageService.set(StorageKeys.PACKAGING.SPK, autoFulfilledSpkList);
+      const saveTasks = [
+        storageService.set(StorageKeys.PACKAGING.SPK, autoFulfilledSpkList),
+      ];
       if (schedule.length > 0) {
-        await storageService.set(StorageKeys.PACKAGING.SCHEDULE, schedule);
+        saveTasks.push(storageService.set(StorageKeys.PACKAGING.SCHEDULE, schedule));
       }
       if (production.length > 0) {
-        await storageService.set(StorageKeys.PACKAGING.PRODUCTION, production);
+        saveTasks.push(storageService.set(StorageKeys.PACKAGING.PRODUCTION, production));
       }
+      await Promise.all(saveTasks);
     }
     
     setSpkData(hasAutoFulfilled ? autoFulfilledSpkList : (updatedSPK ? updatedSpkList : cleanedSpk));
     
-    // IMPORTANT: Sync notifications dari schedule data yang sudah ada
-    // Ini memastikan notifications dibuat untuk semua schedule yang punya deliveryBatches
-    if (schedule && Array.isArray(schedule) && schedule.length > 0) {
-      schedule.forEach((s: any) => {
-        const batches = Array.isArray(s.deliveryBatches) ? s.deliveryBatches : [];
-        const batchesForSJ = batches.filter((b: any) => b && b.createSJ !== false);
-      });
-    }
-    
     // Auto-fulfill PTP dari stock jika stock product cukup
-    // Cek setiap PTP OPEN, jika stock product cukup, auto-fulfill (skip PR, Schedule, BOM, QC, langsung ke delivery)
+    // OPTIMIZED: Build product lookup map
+    const productMap = new Map(productsData.map((prod: any) => [
+      (prod.kode || prod.product_id || '').toString().trim().toLowerCase(),
+      prod
+    ]));
+    
     let hasAutoFulfilledPTP = false;
     const autoFulfilledPtpList = ptp.map((p: any) => {
       // Hanya proses PTP yang statusnya OPEN dan belum fulfilled
@@ -1018,33 +1028,18 @@ const PPIC = () => {
       const ptpQty = parseFloat(p.qty || '0') || 0;
       if (ptpQty <= 0) return p; // Skip jika qty 0
       
-      // Cari product dari productItem (bisa nama atau kode)
+      // Cari product dari productItem (O(1) lookup)
       const productItemLower = (p.productItem || '').toLowerCase().trim();
       if (!productItemLower) return p; // Skip jika tidak ada productItem
       
-      // Cari product di master products
-      const product = productsData.find((prod: any) => {
-        const productName = (prod.nama || '').toLowerCase().trim();
-        const productCode = (prod.kode || '').toLowerCase().trim();
-        const productId = (prod.product_id || '').toLowerCase().trim();
-        return productName === productItemLower || 
-               productCode === productItemLower || 
-               productId === productItemLower ||
-               productName.includes(productItemLower) ||
-               productCode.includes(productItemLower);
-      });
-      
+      const product = productMap.get(productItemLower);
       if (!product) return p; // Skip jika product tidak ditemukan
       
-      // Cari product di inventory menggunakan product_id atau kode
+      // Cari product di inventory (O(1) lookup)
       const productId = (product.kode || product.product_id || '').toString().trim();
       if (!productId) return p; // Skip jika tidak ada product ID
       
-      let inventoryItem = inventoryData.find((inv: any) => {
-        const invCode = (inv.item_code || inv.codeItem || '').toString().trim();
-        return invCode === productId;
-      });
-      
+      const inventoryItem = inventoryMap.get(productId);
       if (!inventoryItem) return p; // Skip jika product tidak ada di inventory
       
       // Hitung available stock
@@ -1065,7 +1060,7 @@ const PPIC = () => {
         return {
           ...p,
           stockFulfilled: true,
-          progress: ptpQty, // Set progress = target untuk display
+          progress: ptpQty,
         };
       }
       
@@ -1074,7 +1069,6 @@ const PPIC = () => {
     
     // Save jika ada auto-fulfill PTP
     if (hasAutoFulfilledPTP) {
-      // CRITICAL: Force immediate sync ke server untuk PTP (PUT)
       await storageService.set(StorageKeys.PACKAGING.PTP, autoFulfilledPtpList, true);
     }
     
@@ -1082,10 +1076,7 @@ const PPIC = () => {
     setScheduleData(schedule);
     setProductionData(production);
     setDeliveryNotifications(deliveryNotificationsData);
-    setCustomers(customersData);
-    setProducts(productsData);
-    // ENHANCED: Filter active items for display (hide deleted items)
-    setSalesOrders(filterActiveItems(salesOrdersData));
+    // Other data will be set by lazyLoadData in background
     setMaterials(materialsData);
     setBomData(bomDataLoaded);
     setInventory(inventoryData);
@@ -1096,46 +1087,44 @@ const PPIC = () => {
 
   // Group SPK by SO No (satu SO jadi satu baris dengan list SPK)
   const groupedSpkData = useMemo(() => {
+    // OPTIMIZED: Pre-build lookup maps untuk O(1) access
+    // Build SPK batch map: parent SPK no -> [batch SPKs]
+    const spkNosWithBatches = new Set<string>();
+    for (const spkItem of spkData) {
+      const spkNo = (spkItem.spkNo || '').toString().trim();
+      if (!spkNo) continue;
+      
+      // Jika ini batch SPK (ends with -A, -B, etc), extract parent SPK no
+      const batchMatch = spkNo.match(/^(.+)-[A-Z0-9]$/);
+      if (batchMatch) {
+        spkNosWithBatches.add(batchMatch[1]);
+      }
+    }
+    
+    // Build schedule and production maps untuk O(1) lookup
+    const scheduleMap = new Map(scheduleData.map((s: any) => [s.spkNo, s]));
+    const productionMap = new Map(productionData.map((p: any) => [p.spkNo, p]));
+    const soMap = new Map(salesOrders.map((s: any) => [String(s.soNo || '').trim(), s]));
+    
     // Filter: Skip SPK utama yang sudah di-split menjadi batch SPK
-    // Cek apakah ada SPK batch dengan pattern `${spkNo}-A`, `${spkNo}-B`, dst
     const filteredSpkData = spkData.filter((spk: any) => {
       const spkNo = (spk.spkNo || '').toString().trim();
-      if (!spkNo) return true; // Skip jika tidak ada spkNo
+      if (!spkNo) return true; // Keep jika tidak ada spkNo
       
-      // Jika SPK ini punya originalSpkNo atau batchNo, berarti ini SPK batch (valid, jangan skip)
+      // Jika SPK ini punya originalSpkNo atau batchNo, berarti ini SPK batch (valid, keep)
       if (spk.originalSpkNo || spk.batchNo) {
         return true;
       }
       
       // Cek apakah SPK ini sendiri adalah batch (punya pattern `-A`, `-B`, dst di akhir)
-      // Pattern: "SPK-02/12/25/00003-A" adalah batch, "SPK-02/12/25/00003" adalah utama
       const isBatchSPK = /-[A-Z0-9]$/.test(spkNo);
       if (isBatchSPK) {
-        return true; // Ini batch SPK, valid
+        return true; // Ini batch SPK, keep
       }
       
-      // Cek apakah ada SPK batch yang berasal dari SPK ini
-      // Pattern: SPK utama "SPK-02/12/25/00003" akan punya batch "SPK-02/12/25/00003-A", "SPK-02/12/25/00003-B", dst
-      const hasBatchSPKs = spkData.some((otherSpk: any) => {
-        const otherSpkNo = (otherSpk.spkNo || '').toString().trim();
-        if (!otherSpkNo) return false;
-        
-        // Cek apakah otherSpk adalah batch dari spk ini
-        // Pattern: otherSpkNo harus dimulai dengan spkNo + "-"
-        if (otherSpkNo.startsWith(spkNo + '-')) {
-          // Pastikan suffix adalah single letter (A, B, C, dst) atau angka
-          const suffix = otherSpkNo.substring(spkNo.length + 1);
-          // Valid jika suffix adalah single character (A-Z) atau single digit (0-9)
-          if (suffix.length === 1 && /^[A-Z0-9]$/.test(suffix)) {
-            return true;
-          }
-        }
-        return false;
-      });
-      
-      // Jika ada batch SPK, skip SPK utama ini
-      if (hasBatchSPKs) {
-        return false;
+      // Cek apakah ada SPK batch yang berasal dari SPK ini (O(1) lookup)
+      if (spkNosWithBatches.has(spkNo)) {
+        return false; // Hapus SPK utama ini
       }
       
       return true;
@@ -1145,14 +1134,8 @@ const PPIC = () => {
     const grouped = filteredSpkData.reduce((acc: any, spk: any) => {
       const soNo = spk.soNo || '';
       if (!acc[soNo]) {
-        // IMPORTANT: Gunakan confirmedAt atau created dari SO untuk sorting yang benar
-        // Cari SO dari salesOrders untuk mendapatkan tanggal yang tepat
-        // Pastikan pencarian case-sensitive dan exact match
-        const so = salesOrders.find((s: any) => {
-          if (!s || !s.soNo) return false;
-          return String(s.soNo).trim() === String(soNo).trim();
-        });
-        // Prioritaskan confirmedAt, lalu created dari SO, baru fallback ke SPK created
+        // OPTIMIZED: O(1) lookup dari soMap
+        const so = soMap.get(String(soNo).trim());
         const soDate = so?.confirmedAt || so?.created || '';
         
         acc[soNo] = {
@@ -1161,15 +1144,13 @@ const PPIC = () => {
           spkList: [],
           totalQty: 0,
           statuses: new Set<string>(),
-          created: soDate || spk.created || '', // Prioritaskan SO date (confirmedAt atau created)
+          created: soDate || spk.created || '',
         };
       }
       
-      // Get progress from schedule or production
-      // Untuk SPK batch, cari schedule berdasarkan spkNo batch
-      // Prioritaskan spk.progress jika ada (untuk stock-fulfilled SPK)
-      const schedule = scheduleData.find((s: any) => s.spkNo === spk.spkNo);
-      const production = productionData.find((p: any) => p.spkNo === spk.spkNo);
+      // Get progress from schedule or production (O(1) lookup)
+      const schedule = scheduleMap.get(spk.spkNo);
+      const production = productionMap.get(spk.spkNo);
       const progress = spk.progress !== undefined 
         ? spk.progress 
         : (schedule?.progress || production?.progress || production?.producedQty || 0);
@@ -1184,19 +1165,13 @@ const PPIC = () => {
       acc[soNo].totalQty += target;
       if (spk.status) acc[soNo].statuses.add(spk.status);
       
-      // IMPORTANT: Jangan update created date jika sudah ada SO date
-      // Hanya update jika tidak ada SO dan perlu fallback ke latest SPK date
-      const so = salesOrders.find((s: any) => {
-        if (!s || !s.soNo) return false;
-        return String(s.soNo).trim() === String(soNo).trim();
-      });
+      // Update created date jika tidak ada SO
+      const so = soMap.get(String(soNo).trim());
       if (!so) {
-        // Jika tidak ada SO, gunakan latest SPK created date sebagai fallback
         if (spk.created && (!acc[soNo].created || spk.created > acc[soNo].created)) {
           acc[soNo].created = spk.created;
         }
       }
-      // Jika ada SO, jangan update - sudah di-set di awal dengan SO date
       
       return acc;
     }, {});
@@ -1204,20 +1179,17 @@ const PPIC = () => {
     // Convert to array and sort: Terbaru di atas, SEMUA SPK CLOSE di bawah
     return Object.values(grouped).sort((a: any, b: any) => {
       // Priority 1: Hanya SO yang SEMUA SPK-nya CLOSE yang pindah ke bawah
-      // Cek apakah semua SPK dalam SO itu statusnya CLOSE
       const allCloseA = a.spkList && a.spkList.length > 0 && a.spkList.every((spk: any) => spk.status === 'CLOSE');
       const allCloseB = b.spkList && b.spkList.length > 0 && b.spkList.every((spk: any) => spk.status === 'CLOSE');
       
       if (allCloseA !== allCloseB) {
-        return allCloseA ? 1 : -1; // Semua CLOSE di bawah, yang masih ada OPEN di atas
+        return allCloseA ? 1 : -1;
       }
       
-      // Priority 2: Yang paling baru di atas (berdasarkan confirmedAt atau created dari SO)
-      // Pastikan date valid sebelum compare
+      // Priority 2: Yang paling baru di atas
       const dateAStr = a.created || '';
       const dateBStr = b.created || '';
       
-      // Parse dates dengan validasi
       let dateA = 0;
       let dateB = 0;
       
@@ -1231,7 +1203,6 @@ const PPIC = () => {
         dateB = isNaN(parsedB) ? 0 : parsedB;
       }
       
-      // Descending (newest first) - yang lebih besar (lebih baru) di atas
       return dateB - dateA;
     });
   }, [spkData, scheduleData, productionData, salesOrders]);
@@ -1538,15 +1509,27 @@ const PPIC = () => {
       return result;
     }
     
+    // OPTIMIZED: Pre-build lookup maps untuk O(1) access
+    const spkMap = new Map(spkData.map((s: any) => [s.spkNo, s]));
+    const spkBySoMap = new Map<string, any[]>();
+    spkData.forEach((s: any) => {
+      if (s.soNo) {
+        if (!spkBySoMap.has(s.soNo)) {
+          spkBySoMap.set(s.soNo, []);
+        }
+        spkBySoMap.get(s.soNo)!.push(s);
+      }
+    });
+    
     scheduleData.forEach((schedule: any) => {
-      // Find SPK berdasarkan spkNo atau soNo
-      let spk = schedule.spkNo ? spkData.find((s: any) => s.spkNo === schedule.spkNo) : null;
+      // Find SPK berdasarkan spkNo atau soNo (O(1) lookup)
+      let spk = schedule.spkNo ? spkMap.get(schedule.spkNo) : null;
       
       // Jika tidak ketemu dengan spkNo, cari berdasarkan soNo
       if (!spk && schedule.soNo) {
-        const matchingSPKs = spkData.filter((s: any) => s.soNo === schedule.soNo);
+        const matchingSPKs = spkBySoMap.get(schedule.soNo) || [];
         if (matchingSPKs.length > 0) {
-          spk = matchingSPKs[0]; // Ambil yang pertama sebagai referensi
+          spk = matchingSPKs[0];
         }
       }
       
@@ -1554,31 +1537,26 @@ const PPIC = () => {
       const hasBatches = schedule.batches && schedule.batches.length > 0;
       
       if (hasBatches) {
-        // Jika ada batches, buat row untuk setiap batch (dan SKIP schedule utama)
-        // Jika schedule punya spkNo, semua batch di-assign ke SPK tersebut
-        // Jika schedule tidak punya spkNo, assign batch ke SPK yang sesuai berdasarkan soNo
-        const matchingSPKs = schedule.soNo ? spkData.filter((s: any) => s.soNo === schedule.soNo) : [];
+        // Jika ada batches, buat row untuk setiap batch
+        const matchingSPKs = schedule.soNo ? (spkBySoMap.get(schedule.soNo) || []) : [];
         
         schedule.batches.forEach((batch: any, batchIdx: number) => {
-          // Jika schedule punya spkNo, semua batch di-assign ke SPK tersebut
+          // Assign SPK untuk batch ini
           let assignedSPK = spk;
           
           if (schedule.spkNo) {
-            // Schedule punya spkNo, semua batch untuk SPK ini
             assignedSPK = spk;
           } else if (matchingSPKs.length > 0) {
-            // Schedule tidak punya spkNo, assign batch secara round-robin
             if (matchingSPKs.length === 1) {
               assignedSPK = matchingSPKs[0];
             } else if (batchIdx < matchingSPKs.length) {
               assignedSPK = matchingSPKs[batchIdx];
             } else {
-              // Jika batch lebih banyak dari SPK, assign ke SPK terakhir
               assignedSPK = matchingSPKs[matchingSPKs.length - 1];
             }
           }
           
-          // Cari delivery batch yang sesuai (berdasarkan batchNo atau qty yang sama)
+          // Cari delivery batch yang sesuai
           const deliveryBatch = schedule.deliveryBatches?.find((db: any) => 
             db.batchNo === batch.batchNo || (db.qty === batch.qty && !schedule.deliveryBatches?.find((d: any) => d.batchNo === batch.batchNo))
           );
@@ -1597,7 +1575,7 @@ const PPIC = () => {
             scheduleStartDate: batch.startDate,
             scheduleEndDate: batch.endDate,
             scheduleDeliveryDate: deliveryBatch?.deliveryDate,
-            status: (assignedSPK?.status || 'OPEN') as 'OPEN' | 'OPEN' | 'CLOSE',
+            status: (assignedSPK?.status || 'OPEN') as 'OPEN' | 'CLOSE',
             target: batch.qty || 0,
             progress: 0,
             remaining: batch.qty || 0,
@@ -1606,11 +1584,9 @@ const PPIC = () => {
             batchNo: batch.batchNo,
           });
         });
-        // SKIP schedule utama jika ada batches - hanya tampilkan batch-batchnya
       } else {
         // Jika TIDAK ada batch di schedule ini, tampilkan schedule utama
         if (schedule.spkNo && spk) {
-          // Jika ada delivery batches tapi tidak ada production batches, ambil delivery date dari batch pertama
           const firstDeliveryBatch = schedule.deliveryBatches && schedule.deliveryBatches.length > 0 
             ? schedule.deliveryBatches[0] 
             : null;
@@ -1629,7 +1605,7 @@ const PPIC = () => {
             scheduleStartDate: schedule.scheduleStartDate,
             scheduleEndDate: schedule.scheduleEndDate,
             scheduleDeliveryDate: firstDeliveryBatch?.deliveryDate || schedule.scheduleDeliveryDate,
-            status: (spk?.status || 'OPEN') as 'OPEN' | 'OPEN' | 'CLOSE',
+            status: (spk?.status || 'OPEN') as 'OPEN' | 'CLOSE',
             target: spk?.qty || 0,
             progress: schedule.progress || 0,
             remaining: (spk?.qty || 0) - (schedule.progress || 0),
@@ -5086,6 +5062,21 @@ const PPIC = () => {
 
   const handleSendPRNotification = async (spk: any, materialCheckResults: any[]) => {
     try {
+      // Set creating state immediately (prevent double-click)
+      setCreatingPR(prev => ({ ...prev, [spk.spkNo]: true }));
+      
+      // CHECK: Prevent duplicate PR for same SPK
+      const existingPRForSPK = purchaseRequests.find((pr: any) => pr.spkNo === spk.spkNo);
+      if (existingPRForSPK) {
+        toast.warning(`⚠️ PR already exists for SPK ${spk.spkNo}`, { duration: 3000 });
+        setCreatingPR(prev => {
+          const updated = { ...prev };
+          delete updated[spk.spkNo];
+          return updated;
+        });
+        return;
+      }
+      
       // Buat Purchase Request langsung (bukan notifikasi)
       const prNo = `PR-${Date.now().toString().slice(-8)}`;
       
@@ -5115,34 +5106,74 @@ const PPIC = () => {
         createdBy: getCurrentUser()?.username || 'System',
       };
 
-      // Simpan ke purchaseRequests
+      // OPTIMISTIC UPDATE: Update state immediately (before saving to storage)
+      const updatedPRs = [...purchaseRequests, purchaseRequest];
+      setPurchaseRequests(updatedPRs);
+
+      // IMPORTANT: WAIT for server save to complete (don't use async/await without awaiting)
       const existingPRsRaw = await storageService.get<any[]>(StorageKeys.PACKAGING.PURCHASE_REQUESTS) || [];
       const existingPRs = Array.isArray(existingPRsRaw) ? existingPRsRaw : extractStorageValue(existingPRsRaw) || [];
+      
+      // Double-check: prevent duplicate on server too
+      const serverHasPR = existingPRs.some((pr: any) => pr.spkNo === spk.spkNo);
+      if (serverHasPR) {
+        // Revert optimistic update
+        setPurchaseRequests(prev => prev.filter(pr => pr.prNo !== prNo));
+        toast.warning(`⚠️ PR already exists on server for SPK ${spk.spkNo}`, { duration: 3000 });
+        setCreatingPR(prev => {
+          const updated = { ...prev };
+          delete updated[spk.spkNo];
+          return updated;
+        });
+        return;
+      }
+      
       existingPRs.push(purchaseRequest);
+      
+      // AWAIT the server save - this ensures data is persisted before continuing
       await storageService.set(StorageKeys.PACKAGING.PURCHASE_REQUESTS, existingPRs);
 
-      // Trigger event untuk notify Purchasing module
+      // Trigger event untuk notify Purchasing module (after server save confirmed)
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('app-storage-changed', {
           detail: { key: 'purchaseRequests' }
         }));
       }
 
-      showAlert(
-        `✅ Purchase Request berhasil dibuat\n\nPR No: ${prNo}\nSPK: ${spk.spkNo}\nMaterial yang kurang: ${materialCheckResults.filter((m: any) => m.shortage > 0).length} item\n\nSilahkan buka Purchasing module untuk approve PR ini.`,
-        'Success'
-      );
-
-      // Close dialog
+      // Close dialog IMMEDIATELY (before showing toast)
       setMaterialCheckDialog({
         show: false,
         spk: null,
         materialCheckResults: [],
         hasShortage: false,
       });
+
+      // Show success toast (non-blocking, auto-close)
+      // Now we can safely show success because server save is confirmed
+      toast.success(`✅ PR ${prNo} created for SPK ${spk.spkNo}`, { duration: 3000 });
+
+      // Reset creating state setelah 1 detik (untuk UI feedback)
+      setTimeout(() => {
+        setCreatingPR(prev => {
+          const updated = { ...prev };
+          delete updated[spk.spkNo];
+          return updated;
+        });
+      }, 1000);
     } catch (error) {
       console.error('Error creating purchase request:', error);
-      showAlert('Error saat membuat purchase request', 'Error');
+      
+      // Reset creating state on error
+      setCreatingPR(prev => {
+        const updated = { ...prev };
+        delete updated[spk.spkNo];
+        return updated;
+      });
+      
+      // Revert optimistic update on error
+      setPurchaseRequests(prev => prev.filter(pr => pr.spkNo !== spk.spkNo));
+      
+      toast.error('Error creating purchase request', { duration: 3000 });
     }
   };
 
@@ -5425,47 +5456,48 @@ const PPIC = () => {
     }
     
     showConfirm(
-      `SPK: ${spkNo}\nCustomer: ${customer}\nProduct: ${product}\nQty: ${qty} PCS\n\nKirim notifikasi ke WH?`,
+      `SPK: ${spkNo}\nCustomer: ${customer}\nProduct: ${product}\nQty: ${qty} PCS\n\nKirim ke Delivery Note List?`,
       async () => {
         try {
-          // Create delivery notification with complete data for SJ creation
-          const newNotification = {
-            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-            type: 'DELIVERY_SCHEDULE',
-            spkNo: spkNo,
-            spkNos: [spkNo],
+          // Generate SJ number
+          const now = new Date();
+          const year = String(now.getFullYear()).slice(-2);
+          const month = String(now.getMonth() + 1).padStart(2, '0');
+          const day = String(now.getDate()).padStart(2, '0');
+          const randomCode = Math.random().toString(36).substr(2, 5).toUpperCase();
+          const sjNo = `SJ-${year}${month}${day}-${randomCode}`;
+
+          // Create delivery note directly
+          const newDelivery = {
+            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            sjNo,
             soNo: soNo,
+            soNos: [soNo],
             customer: customer,
-            product: product,
-            products: [{
-              product: product,
+            items: [{
               spkNo: spkNo,
-              productId: spk.product_id || spk.kode || spk.productId || '',
+              product: product,
+              productCode: spk.product_id || spk.kode || spk.productId || '',
+              qty: qty,
+              unit: 'PCS',
+              soNo: soNo,
+              fromInventory: true,
             }],
-            qty: qty,
-            deliveryBatches: schedule.deliveryBatches || [],
+            status: 'OPEN' as const,
+            deliveryDate: schedule.deliveryBatches?.[0]?.deliveryDate || new Date().toISOString(),
             created: new Date().toISOString(),
-            reminderSent: true,
+            lastUpdate: new Date().toISOString(),
+            timestamp: Date.now(),
+            _timestamp: Date.now(),
           };
+
+          // Get existing deliveries
+          const existingDeliveriesRaw = await storageService.get<any[]>('delivery') || [];
+          const existingDeliveries = Array.isArray(existingDeliveriesRaw) ? existingDeliveriesRaw : extractStorageValue(existingDeliveriesRaw) || [];
           
-          // Get existing notifications
-          const existingNotificationsRaw = await storageService.get<any[]>('deliveryNotifications') || [];
-          const existingNotifications = Array.isArray(existingNotificationsRaw) ? existingNotificationsRaw : extractStorageValue(existingNotificationsRaw) || [];
-          
-          // Check if notification already exists
-          const isDuplicate = (Array.isArray(existingNotifications) && existingNotifications.some((n: any) => {
-            const notifSpkNo = (n.spkNo || '').toString().trim();
-            return notifSpkNo === spkNo;
-          })) || false;
-          
-          if (isDuplicate) {
-            showAlert('Notifikasi untuk SPK ini sudah ada', 'Information');
-            return;
-          }
-          
-          // Add new notification
-          const updatedNotifications = [...existingNotifications, newNotification];
-          await storageService.set(StorageKeys.PACKAGING.DELIVERY_NOTIFICATIONS, updatedNotifications);
+          // Add new delivery
+          const updatedDeliveries = [...existingDeliveries, newDelivery];
+          await storageService.set(StorageKeys.PACKAGING.DELIVERY, updatedDeliveries);
           
           // Mark SPK as reminder sent by updating the SPK data
           const allSPKsRaw = await storageService.get<any[]>('spk') || [];
@@ -5490,7 +5522,7 @@ const PPIC = () => {
           setSpkData(updatedSpkData);
           
           showAlert(
-            `✅ Notifikasi SJ berhasil dikirim ke WH!\n\nSPK: ${spkNo}`,
+            `✅ Delivery Note berhasil dibuat!\n\nSJ: ${sjNo}\nSPK: ${spkNo}`,
             'Success'
           );
         } catch (error: any) {

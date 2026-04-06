@@ -1,6 +1,6 @@
 {
   "name": "trima-laksana-erp",
-  "version": "1.0.6-build.164",
+  "version": "1.0.6-build.174",
   "description": "PT.Trima Laksana Jaya Pratama - Enterprise Resource Planning System",
   "main": "dist/main.js",
   "scripts": {
@@ -87,12 +87,16 @@
     "csv-parser": "^3.2.0",
     "electron-updater": "^6.6.2",
     "exceljs": "^4.4.0",
+    "form-data": "^4.0.5",
     "html2pdf.js": "^0.12.1",
+    "minio": "^8.0.7",
+    "node-fetch": "^2.7.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-is": "^19.2.3",
     "react-router-dom": "^6.21.1",
     "recharts": "^3.4.1",
+    "uuid": "^13.0.0",
     "ws": "^8.19.0",
     "xlsx": "^0.18.5",
     "zustand": "^4.4.7"

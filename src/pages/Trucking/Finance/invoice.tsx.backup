@@ -1,0 +1,772 @@
+import { useState, useEffect, useMemo } from 'react';
+import Card from '../../../components/Card';
+import Table from '../../../components/Table';
+import Button from '../../../components/Button';
+import Input from '../../../components/Input';
+import DateRangeFilter from '../../../components/DateRangeFilter';
+import NotificationBell from '../../../components/NotificationBell';
+import { storageService, StorageKeys } from '../../../services/storage';
+import { deleteTruckingItem, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { setupRealTimeSync, TRUCKING_SYNC_KEYS } from '../../../utils/real-time-sync-helper';
+import { useDialog } from '../../../hooks/useDialog';
+import { generateInvoiceHtml } from '../../../pdf/invoice-pdf-template';
+import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../../utils/actions';
+import { loadLogoAsBase64 } from '../../../utils/logo-loader';
+import '../../../styles/common.css';
+
+const TruckingInvoices = () => {
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [deliveryOrders, setDeliveryOrders] = useState<any[]>([]);
+  const [suratJalans, setSuratJalans] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  
+  const [searchQuery, setSearchQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [selectedDO, setSelectedDO] = useState<any | null>(null);
+  const [selectedSJ, setSelectedSJ] = useState<any | null>(null);
+  
+  const [viewingInvoice, setViewingInvoice] = useState<any | null>(null);
+  const [viewPdfData, setViewPdfData] = useState<{ html: string; invoiceNo: string } | null>(null);
+  
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [paymentInvoice, setPaymentInvoice] = useState<any | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('TRANSFER');
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [paymentReference, setPaymentReference] = useState('');
+  
+  const [toast, setToast] = useState<{ message: string; variant: 'success' | 'error' | 'info' } | null>(null);
+  
+  const { showAlert, showConfirm, DialogComponent } = useDialog();
+
+  // Load data
+  useEffect(() => {
+    loadData();
+    
+    const cleanup = setupRealTimeSync({
+      keys: [TRUCKING_SYNC_KEYS.INVOICES, TRUCKING_SYNC_KEYS.DELIVERY_ORDERS, TRUCKING_SYNC_KEYS.SURAT_JALAN],
+      onUpdate: loadData,
+    });
+    
+    return cleanup;
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const [inv, dos, sjs, cust, prod] = await Promise.all([
+        storageService.get<any[]>(StorageKeys.TRUCKING.INVOICES) || [],
+        storageService.get<any[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS) || [],
+        storageService.get<any[]>(StorageKeys.TRUCKING.SURAT_JALAN) || [],
+        storageService.get<any[]>(StorageKeys.TRUCKING.CUSTOMERS) || [],
+        storageService.get<any[]>(StorageKeys.TRUCKING.PRODUCTS) || [],
+      ]);
+
+      setInvoices(filterActiveItems(inv || []));
+      setDeliveryOrders(filterActiveItems(dos || []));
+      setSuratJalans(filterActiveItems(sjs || []));
+      setCustomers(cust || []);
+      setProducts(prod || []);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      showToast('Error loading data', 'error');
+    }
+  };
+
+  const showToast = (message: string, variant: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ message, variant });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // Filter invoices berdasarkan search dan date range
+  const filteredInvoices = useMemo(() => {
+    return invoices.filter(inv => {
+      const matchSearch = !searchQuery || 
+        inv.invoiceNo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        inv.customer?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        inv.doNo?.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const invDate = inv.created ? new Date(inv.created) : null;
+      const matchDate = !dateFrom && !dateTo || 
+        (invDate && (!dateFrom || invDate >= new Date(dateFrom)) && (!dateTo || invDate <= new Date(dateTo)));
+      
+      return matchSearch && matchDate;
+    });
+  }, [invoices, searchQuery, dateFrom, dateTo]);
+
+  // Get available DOs untuk create invoice
+  const availableDOs = useMemo(() => {
+    return deliveryOrders.filter(do_ => {
+      // DO harus sudah ada SJ (apapun statusnya)
+      const hasSJ = suratJalans.some(sj => sj.doNo === do_.doNo);
+      
+      // DO belum punya invoice
+      const hasInvoice = invoices.some(inv => inv.doNo === do_.doNo);
+      
+      return hasSJ && !hasInvoice;
+    });
+  }, [deliveryOrders, suratJalans, invoices]);
+
+  // Handle create invoice
+  const handleCreateInvoice = async () => {
+    if (!selectedDO) {
+      showAlert('Please select a Delivery Order', 'Validation Error');
+      return;
+    }
+
+    if (!selectedSJ) {
+      showAlert('Please select a Surat Jalan', 'Validation Error');
+      return;
+    }
+
+    try {
+      // Generate invoice number
+      const invoiceNo = `INV-${new Date().getFullYear()}${Math.random().toString().slice(2, 8)}`;
+
+      // Prepare invoice lines dari SJ items
+      const invoiceLines = (selectedSJ.items || []).map((item: any) => ({
+        itemSku: item.product || '',
+        qty: Number(item.qty || 0),
+        unit: item.unit || 'PCS',
+        price: 0, // Will be calculated from totalDeal
+        pot: 0,
+      }));
+
+      // Calculate price per unit dari totalDeal
+      const totalQty = invoiceLines.reduce((sum: number, line: any) => sum + line.qty, 0);
+      const totalDeal = selectedDO.totalDeal || 0;
+      const pricePerUnit = totalQty > 0 ? totalDeal / totalQty : 0;
+
+      // Update prices
+      invoiceLines.forEach((line: any) => {
+        line.price = pricePerUnit;
+      });
+
+      const subtotal = invoiceLines.reduce((sum: number, line: any) => 
+        sum + (line.qty * line.price), 0
+      );
+
+      // Create invoice
+      const newInvoice = {
+        id: Date.now().toString(),
+        invoiceNo,
+        doNo: selectedDO.doNo,
+        sjNo: selectedSJ.sjNo,
+        customer: selectedDO.customerName || selectedDO.customer || '',
+        customerAddress: selectedDO.customerAddress || '',
+        lines: invoiceLines,
+        bom: {
+          subtotal,
+          discount: 0,
+          discountPercent: 0,
+          tax: 0,
+          taxPercent: 0,
+          biayaLain: 0,
+          total: subtotal,
+          paymentTerms: 'TOP',
+          topDays: 30,
+        },
+        status: 'OPEN',
+        created: new Date().toISOString(),
+      };
+
+      // Save invoice
+      const updated = [...invoices, newInvoice];
+      await storageService.set(StorageKeys.TRUCKING.INVOICES, updated);
+      setInvoices(filterActiveItems(updated));
+
+      // Reset dialog
+      setShowCreateDialog(false);
+      setSelectedDO(null);
+      setSelectedSJ(null);
+
+      showToast(`Invoice ${invoiceNo} created successfully`, 'success');
+    } catch (error) {
+      console.error('Error creating invoice:', error);
+      showToast('Error creating invoice', 'error');
+    }
+  };
+
+  // Handle view invoice
+  const handleViewInvoice = async (invoice: any) => {
+    try {
+      setViewingInvoice(invoice);
+      
+      const logo = await loadLogoAsBase64();
+      const company = {
+        companyName: 'PT. TRIMA LAKSANA JAYA PRATAMA',
+        address: 'Jl. Raya Cikarang Cibarusah',
+        phone: '+62-XXX-XXXX-XXXX',
+      };
+
+      const html = generateInvoiceHtml({
+        logo,
+        company,
+        invoice,
+        products,
+      });
+
+      setViewPdfData({ html, invoiceNo: invoice.invoiceNo });
+    } catch (error) {
+      console.error('Error viewing invoice:', error);
+      showToast('Error loading invoice', 'error');
+    }
+  };
+
+  // Handle print invoice
+  const handlePrintInvoice = async (invoice: any) => {
+    try {
+      const logo = await loadLogoAsBase64();
+      const company = {
+        companyName: 'PT. TRIMA LAKSANA JAYA PRATAMA',
+        address: 'Jl. Raya Cikarang Cibarusah',
+        phone: '+62-XXX-XXXX-XXXX',
+      };
+
+      const html = generateInvoiceHtml({
+        logo,
+        company,
+        invoice,
+        products,
+      });
+
+      if (isCapacitor()) {
+        await savePdfForMobile(html, `Invoice-${invoice.invoiceNo}`);
+        showToast('Invoice saved', 'success');
+      } else {
+        openPrintWindow(html);
+      }
+    } catch (error) {
+      console.error('Error printing invoice:', error);
+      showToast('Error printing invoice', 'error');
+    }
+  };
+
+  // Handle delete invoice
+  const handleDeleteInvoice = async (invoice: any) => {
+    showConfirm(
+      `Delete Invoice ${invoice.invoiceNo}?`,
+      async () => {
+        try {
+          await deleteTruckingItem(StorageKeys.TRUCKING.INVOICES, invoice.id);
+          await loadData();
+          showToast('Invoice deleted', 'success');
+        } catch (error) {
+          console.error('Error deleting invoice:', error);
+          showToast('Error deleting invoice', 'error');
+        }
+      }
+    );
+  };
+
+  // Handle record payment
+  const handleRecordPayment = async () => {
+    if (!paymentInvoice) return;
+
+    if (!paymentAmount || Number(paymentAmount) <= 0) {
+      showAlert('Please enter valid payment amount', 'Validation Error');
+      return;
+    }
+
+    try {
+      const amount = Number(paymentAmount);
+      const invoiceTotal = paymentInvoice.bom?.total || 0;
+
+      if (amount > invoiceTotal) {
+        showAlert(`Payment amount cannot exceed invoice total (Rp ${invoiceTotal.toLocaleString('id-ID')})`, 'Validation Error');
+        return;
+      }
+
+      // Update invoice with payment
+      const updatedInvoice = {
+        ...paymentInvoice,
+        payments: [
+          ...(paymentInvoice.payments || []),
+          {
+            id: Date.now().toString(),
+            amount,
+            method: paymentMethod,
+            date: paymentDate,
+            reference: paymentReference,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+        status: amount >= invoiceTotal ? 'PAID' : 'PARTIAL',
+      };
+
+      // Calculate total paid
+      const totalPaid = (updatedInvoice.payments || []).reduce((sum: number, p: any) => sum + p.amount, 0);
+      updatedInvoice.totalPaid = totalPaid;
+
+      // Update in storage
+      const updated = invoices.map(inv => inv.id === paymentInvoice.id ? updatedInvoice : inv);
+      await storageService.set(StorageKeys.TRUCKING.INVOICES, updated);
+      setInvoices(filterActiveItems(updated));
+
+      // Reset dialog
+      setShowPaymentDialog(false);
+      setPaymentInvoice(null);
+      setPaymentAmount('');
+      setPaymentMethod('TRANSFER');
+      setPaymentDate(new Date().toISOString().split('T')[0]);
+      setPaymentReference('');
+
+      showToast('Payment recorded successfully', 'success');
+    } catch (error) {
+      console.error('Error recording payment:', error);
+      showToast('Error recording payment', 'error');
+    }
+  };
+
+  const invoiceColumns = [
+    { key: 'invoiceNo', header: 'Invoice No' },
+    { key: 'doNo', header: 'DO No' },
+    { key: 'customer', header: 'Customer' },
+    { 
+      key: 'bom.total', 
+      header: 'Total',
+      render: (inv: any) => `Rp ${(inv.bom?.total || 0).toLocaleString('id-ID')}`
+    },
+    { 
+      key: 'totalPaid', 
+      header: 'Paid',
+      render: (inv: any) => `Rp ${(inv.totalPaid || 0).toLocaleString('id-ID')}`
+    },
+    { 
+      key: 'status', 
+      header: 'Status',
+      render: (inv: any) => (
+        <span style={{ 
+          padding: '4px 8px', 
+          borderRadius: '4px',
+          backgroundColor: inv.status === 'PAID' ? '#d4edda' : inv.status === 'PARTIAL' ? '#fff3cd' : '#e2e3e5',
+          color: inv.status === 'PAID' ? '#155724' : inv.status === 'PARTIAL' ? '#856404' : '#383d41'
+        }}>
+          {inv.status}
+        </span>
+      )
+    },
+    { 
+      key: 'created', 
+      header: 'Created',
+      render: (inv: any) => new Date(inv.created).toLocaleDateString('id-ID')
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      render: (inv: any) => (
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          <Button 
+            variant="secondary" 
+            onClick={(e: any) => {
+              e.stopPropagation();
+              handleViewInvoice(inv);
+            }}
+            style={{ fontSize: '11px', padding: '4px 8px' }}
+          >
+            View
+          </Button>
+          <Button 
+            variant="secondary" 
+            onClick={(e: any) => {
+              e.stopPropagation();
+              handlePrintInvoice(inv);
+            }}
+            style={{ fontSize: '11px', padding: '4px 8px' }}
+          >
+            Print
+          </Button>
+          <Button 
+            variant="secondary" 
+            onClick={(e: any) => {
+              e.stopPropagation();
+              setPaymentInvoice(inv);
+              setShowPaymentDialog(true);
+            }}
+            disabled={inv.status === 'PAID'}
+            style={{ fontSize: '11px', padding: '4px 8px' }}
+          >
+            Payment
+          </Button>
+          <Button 
+            variant="danger" 
+            onClick={(e: any) => {
+              e.stopPropagation();
+              handleDeleteInvoice(inv);
+            }}
+            style={{ fontSize: '11px', padding: '4px 8px' }}
+          >
+            Delete
+          </Button>
+        </div>
+      )
+    },
+  ];
+
+  return (
+    <div style={{ padding: '20px' }}>
+      <DialogComponent />
+
+      {toast && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          padding: '12px 20px',
+          borderRadius: '4px',
+          backgroundColor: toast.variant === 'success' ? '#d4edda' : toast.variant === 'error' ? '#f8d7da' : '#d1ecf1',
+          color: toast.variant === 'success' ? '#155724' : toast.variant === 'error' ? '#721c24' : '#0c5460',
+          zIndex: 1000,
+        }}>
+          {toast.message}
+        </div>
+      )}
+
+      <Card title="📄 Invoices">
+        <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '200px' }}>
+            <Input
+              placeholder="Search invoice no, customer, DO..."
+              value={searchQuery}
+              onChange={(value) => setSearchQuery(value)}
+            />
+          </div>
+          <DateRangeFilter
+            onDateChange={(from, to) => {
+              setDateFrom(from);
+              setDateTo(to);
+            }}
+            defaultFrom={dateFrom}
+            defaultTo={dateTo}
+          />
+          <Button 
+            variant="primary" 
+            onClick={() => setShowCreateDialog(true)}
+            disabled={availableDOs.length === 0}
+          >
+            + Create Invoice
+          </Button>
+        </div>
+
+        <Table
+          columns={invoiceColumns}
+          data={filteredInvoices}
+          onRowClick={(inv) => handleViewInvoice(inv)}
+        />
+      </Card>
+
+      {/* Create Invoice Dialog */}
+      {showCreateDialog && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 999,
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            padding: '20px',
+            maxWidth: '600px',
+            width: '90%',
+            maxHeight: '80vh',
+            overflowY: 'auto',
+          }}>
+            <h2>Create Invoice</h2>
+
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                Select Delivery Order
+              </label>
+              <select
+                value={selectedDO?.id || ''}
+                onChange={(e) => {
+                  const do_ = availableDOs.find(d => d.id === e.target.value);
+                  setSelectedDO(do_ || null);
+                  setSelectedSJ(null); // Reset SJ when DO changes
+                }}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                }}
+              >
+                <option value="">-- Select DO --</option>
+                {availableDOs.map(do_ => (
+                  <option key={do_.id} value={do_.id}>
+                    {do_.doNo} - {do_.customerName} (Rp {(do_.totalDeal || 0).toLocaleString('id-ID')})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {selectedDO && (
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                  Select Surat Jalan
+                </label>
+                <select
+                  value={selectedSJ?.id || ''}
+                  onChange={(e) => {
+                    const sj = suratJalans.find(s => s.id === e.target.value);
+                    setSelectedSJ(sj || null);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '14px',
+                  }}
+                >
+                  <option value="">-- Select SJ --</option>
+                  {suratJalans
+                    .filter(sj => sj.doNo === selectedDO.doNo)
+                    .map(sj => (
+                      <option key={sj.id} value={sj.id}>
+                        {sj.sjNo} - {sj.customerName}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
+
+            {selectedSJ && (
+              <div style={{ 
+                backgroundColor: '#f5f5f5', 
+                padding: '15px', 
+                borderRadius: '4px',
+                marginBottom: '15px'
+              }}>
+                <h4>Invoice Preview</h4>
+                <p><strong>DO No:</strong> {selectedDO.doNo}</p>
+                <p><strong>SJ No:</strong> {selectedSJ.sjNo}</p>
+                <p><strong>Customer:</strong> {selectedDO.customerName}</p>
+                <p><strong>Total Deal:</strong> Rp {(selectedDO.totalDeal || 0).toLocaleString('id-ID')}</p>
+                <p><strong>Items:</strong> {selectedSJ.items?.length || 0}</p>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <Button 
+                variant="secondary" 
+                onClick={() => {
+                  setShowCreateDialog(false);
+                  setSelectedDO(null);
+                  setSelectedSJ(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="primary" 
+                onClick={handleCreateInvoice}
+                disabled={!selectedDO || !selectedSJ}
+              >
+                Create Invoice
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View PDF Dialog */}
+      {viewPdfData && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 999,
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            padding: '20px',
+            maxWidth: '900px',
+            width: '95%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+          }}>
+            <div style={{ marginBottom: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2>Invoice {viewPdfData.invoiceNo}</h2>
+              <Button 
+                variant="secondary" 
+                onClick={() => setViewPdfData(null)}
+              >
+                Close
+              </Button>
+            </div>
+            <iframe
+              srcDoc={viewPdfData.html}
+              style={{
+                width: '100%',
+                height: '600px',
+                border: 'none',
+                borderRadius: '4px',
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Payment Dialog */}
+      {showPaymentDialog && paymentInvoice && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 999,
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            padding: '20px',
+            maxWidth: '500px',
+            width: '90%',
+            maxHeight: '80vh',
+            overflowY: 'auto',
+          }}>
+            <h2>Record Payment</h2>
+
+            <div style={{ 
+              backgroundColor: '#f5f5f5', 
+              padding: '15px', 
+              borderRadius: '4px',
+              marginBottom: '20px'
+            }}>
+              <p><strong>Invoice No:</strong> {paymentInvoice.invoiceNo}</p>
+              <p><strong>Customer:</strong> {paymentInvoice.customer}</p>
+              <p><strong>Invoice Total:</strong> Rp {(paymentInvoice.bom?.total || 0).toLocaleString('id-ID')}</p>
+              <p><strong>Already Paid:</strong> Rp {(paymentInvoice.totalPaid || 0).toLocaleString('id-ID')}</p>
+              <p><strong>Remaining:</strong> Rp {((paymentInvoice.bom?.total || 0) - (paymentInvoice.totalPaid || 0)).toLocaleString('id-ID')}</p>
+            </div>
+
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                Payment Amount *
+              </label>
+              <Input
+                type="number"
+                placeholder="Enter payment amount"
+                value={paymentAmount}
+                onChange={(value) => setPaymentAmount(value)}
+              />
+            </div>
+
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                Payment Method *
+              </label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                }}
+              >
+                <option value="TRANSFER">Bank Transfer</option>
+                <option value="CASH">Cash</option>
+                <option value="CHECK">Check</option>
+                <option value="OTHER">Other</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                Payment Date *
+              </label>
+              <Input
+                type="date"
+                value={paymentDate}
+                onChange={(value) => setPaymentDate(value)}
+              />
+            </div>
+
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                Reference (Bank/Check No)
+              </label>
+              <Input
+                placeholder="Enter reference number"
+                value={paymentReference}
+                onChange={(value) => setPaymentReference(value)}
+              />
+            </div>
+
+            {paymentInvoice.payments && paymentInvoice.payments.length > 0 && (
+              <div style={{ 
+                backgroundColor: '#f9f9f9', 
+                padding: '15px', 
+                borderRadius: '4px',
+                marginBottom: '15px'
+              }}>
+                <h4>Payment History</h4>
+                {paymentInvoice.payments.map((payment: any, idx: number) => (
+                  <div key={idx} style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid #eee' }}>
+                    <p style={{ margin: '0 0 5px 0' }}>
+                      <strong>Rp {payment.amount.toLocaleString('id-ID')}</strong> - {payment.method}
+                    </p>
+                    <p style={{ margin: '0', fontSize: '12px', color: '#666' }}>
+                      {new Date(payment.date).toLocaleDateString('id-ID')} {payment.reference && `(${payment.reference})`}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <Button 
+                variant="secondary" 
+                onClick={() => {
+                  setShowPaymentDialog(false);
+                  setPaymentInvoice(null);
+                  setPaymentAmount('');
+                  setPaymentMethod('TRANSFER');
+                  setPaymentDate(new Date().toISOString().split('T')[0]);
+                  setPaymentReference('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="primary" 
+                onClick={handleRecordPayment}
+              >
+                Record Payment
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default TruckingInvoices;

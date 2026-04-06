@@ -61,7 +61,7 @@ import Workflow from './pages/Packaging/Workflow';
 import SalesOrders from './pages/Packaging/SalesOrders';
 import PPIC from './pages/Packaging/PPIC';
 import Purchasing from './pages/Packaging/Purchasing';
-import Production from './pages/Packaging/Production';
+import ProductionDaily from './pages/Packaging/ProductionDaily';
 import QAQC from './pages/Packaging/QAQC';
 import DeliveryNote from './pages/Packaging/DeliveryNote';
 import PackagingReturn from './pages/Packaging/Return';
@@ -94,7 +94,6 @@ import FullReports from './pages/Settings/FullReports';
 import FullReportsGT from './pages/GeneralTrading/FullReportsGT';
 import DBActivity from './pages/Settings/DBActivity';
 import ServerData from './pages/Settings/ServerData';
-import TestAutomation from './pages/Settings/TestAutomation';
 import UserControl from './pages/Settings/UserControl';
 
 // Trucking - Master
@@ -174,7 +173,7 @@ function App() {
                   <Route path="sales-orders" element={<SalesOrders />} />
                   <Route path="ppic" element={<PPIC />} />
                   <Route path="purchasing" element={<Purchasing />} />
-                  <Route path="production" element={<Production />} />
+                  <Route path="production-daily" element={<ProductionDaily />} />
                   <Route path="qa-qc" element={<QAQC />} />
                   <Route path="delivery-note" element={<DeliveryNote />} />
                   <Route path="return" element={<PackagingReturn />} />

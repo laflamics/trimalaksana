@@ -1081,13 +1081,16 @@ const DeliveryNote = () => {
                 ...dn,
                 signedDocumentId: uploadedDocuments[0].fileId, // Primary document (first upload)
                 signedDocumentName: uploadedDocuments[0].fileName,
-                // Store all uploaded documents as JSON string for backward compatibility
-                signedDocuments: uploadedDocuments.map(doc => ({
-                  document: doc.fileId, // Store fileId instead of base64
-                  name: doc.fileName,
-                  type: (doc.fileName.toLowerCase().endsWith('.pdf') ? 'pdf' : 'image') as 'pdf' | 'image',
-                  uploadedAt: doc.uploadedAt,
-                })),
+                // APPEND new documents ke existing signedDocuments (jangan replace)
+                signedDocuments: [
+                  ...(dn.signedDocuments || []), // Keep existing documents
+                  ...uploadedDocuments.map(doc => ({
+                    document: doc.fileId, // Store fileId instead of base64
+                    name: doc.fileName,
+                    type: (doc.fileName.toLowerCase().endsWith('.pdf') ? 'pdf' : 'image') as 'pdf' | 'image',
+                    uploadedAt: doc.uploadedAt,
+                  }))
+                ],
                 receivedDate: receiptDate,
                 status: 'Close' as const, // Otomatis close setelah upload signed document
               }
@@ -1134,14 +1137,29 @@ const DeliveryNote = () => {
           );
 
           if (!existingNotif) {
+            // Load SJ untuk mendapatkan data lengkap (sjNo, items, customer, dll)
+            const suratJalanList = await storageService.get<any[]>(StorageKeys.TRUCKING.SURAT_JALAN) || [];
+            const relatedSJ = suratJalanList.find((sj: any) => sj.dnNo === item.dnNo);
+            
+            // Load DO untuk mendapatkan totalDeal dan customer info
+            const doList = await storageService.get<any[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS) || [];
+            const relatedDO = doList.find((doItem: any) => doItem.doNo === item.doNo);
+            
             const newNotif = {
               id: Date.now().toString(),
               type: 'CUSTOMER_INVOICE',
               dnNo: item.dnNo,
               doNo: item.doNo,
+              sjNo: relatedSJ?.sjNo || '', // ✅ Add sjNo
+              customerName: relatedDO?.customerName || relatedSJ?.customerName || '', // ✅ Add customer name
+              customerAddress: relatedDO?.customerAddress || relatedSJ?.customerAddress || '', // ✅ Add customer address
+              items: relatedSJ?.items || [], // ✅ Add items dari SJ
+              totalDeal: relatedDO?.totalDeal || 0, // ✅ Add totalDeal dari DO
               status: 'PENDING',
               createdAt: new Date().toISOString(),
             };
+            
+            console.log(`✅ [DeliveryNote] Created invoice notification with full data:`, newNotif);
             await storageService.set(StorageKeys.TRUCKING.INVOICE_NOTIFICATIONS, [...invoiceNotifications, newNotif]);
           }
         } catch (notifError) {
@@ -1280,6 +1298,71 @@ const DeliveryNote = () => {
     }
   };
 
+  const handleDeleteSignedDocument = async (item: DeliveryNote, docIndex: number) => {
+    if (!item.signedDocuments || item.signedDocuments.length === 0) {
+      showAlert('Error', 'No documents to delete');
+      return;
+    }
+
+    const docToDelete = item.signedDocuments[docIndex];
+    if (!docToDelete) {
+      showAlert('Error', 'Document not found');
+      return;
+    }
+
+    showConfirm(
+      `Delete document "${docToDelete.name}"?\n\nThis will remove the file from storage.`,
+      async () => {
+        try {
+          // Delete from MinIO/Vercel using BlobService
+          if (docToDelete.document) {
+            try {
+              await BlobService.deleteFile(docToDelete.document, 'trucking');
+            } catch (deleteError: any) {
+              console.warn('Warning deleting from blob storage:', deleteError);
+              // Continue anyway - remove from database even if blob delete fails
+            }
+          }
+
+          // Remove from signedDocuments array
+          const updatedDocuments = item.signedDocuments!.filter((_, idx) => idx !== docIndex);
+          
+          // Update delivery note
+          const updated = deliveryNote.map(dn =>
+            dn.id === item.id
+              ? {
+                  ...dn,
+                  signedDocuments: updatedDocuments,
+                  // If this was the primary document, update primary reference
+                  signedDocumentId: updatedDocuments.length > 0 ? updatedDocuments[0].document : undefined,
+                  signedDocumentName: updatedDocuments.length > 0 ? updatedDocuments[0].name : undefined,
+                }
+              : dn
+          );
+
+          // Save to server
+          await storageService.set(StorageKeys.TRUCKING.SURAT_JALAN, updated, false);
+          setDeliveryNote(updated.map((dn, idx) => ({ ...dn, no: idx + 1 })));
+
+          // Update viewing documents
+          const newViewingDocs = viewingDocuments.filter((_, idx) => idx !== docIndex);
+          setViewingDocuments(newViewingDocs);
+          
+          // Adjust selected index if needed
+          if (selectedDocumentIndex >= newViewingDocs.length && newViewingDocs.length > 0) {
+            setSelectedDocumentIndex(newViewingDocs.length - 1);
+          }
+
+          showAlert(`✅ Document "${docToDelete.name}" deleted successfully`, 'Success');
+        } catch (error: any) {
+          showAlert(`❌ Error deleting document: ${error.message}`, 'Error');
+        }
+      },
+      () => {}, // onCancel
+      'Delete Document'
+    );
+  };
+
   const filteredDeliveryNote = useMemo(() => {
     let filtered = (deliveryNote || []).filter(sj => {
       if (!sj) return false;
@@ -1395,7 +1478,7 @@ const DeliveryNote = () => {
           onReopen={item.status === 'Close' ? () => handleStatusChange(item, 'Open') : undefined}
           onEdit={() => handleEdit(item)}
           onViewPDF={() => handleViewPDF(item)}
-          onUploadSigned={!item.signedDocumentId ? () => handleUploadSignedDocument(item) : undefined}
+          onUploadSigned={() => handleUploadSignedDocument(item)}
           onViewSigned={item.signedDocumentId ? () => handleViewSignedDocument(item) : undefined}
           onDelete={item.status === 'Open' ? () => handleDelete(item) : undefined}
         />
@@ -2079,6 +2162,7 @@ const DeliveryNote = () => {
                 onNext={() => setSelectedDocumentIndex(Math.min(viewingDocuments.length - 1, selectedDocumentIndex + 1))}
                 onDownload={() => handleDownloadSignedDocument(viewingDocumentsItem!)}
                 onDownloadAll={() => handleDownloadSignedDocument(viewingDocumentsItem!)}
+                onDelete={() => handleDeleteSignedDocument(viewingDocumentsItem!, selectedDocumentIndex)}
               />
             </Card>
           </div>
@@ -2089,7 +2173,7 @@ const DeliveryNote = () => {
 };
 
 // Document Viewer Component
-const DocumentViewer = ({ item, doc, index, total, onPrevious, onNext, onDownload, onDownloadAll }: {
+const DocumentViewer = ({ item, doc, index, total, onPrevious, onNext, onDownload, onDownloadAll, onDelete }: {
   item: DeliveryNote;
   doc: SignedDocument;
   index: number;
@@ -2098,6 +2182,7 @@ const DocumentViewer = ({ item, doc, index, total, onPrevious, onNext, onDownloa
   onNext: () => void;
   onDownload: () => void;
   onDownloadAll: () => void;
+  onDelete?: () => void;
 }) => {
   const [documentData, setDocumentData] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -2202,6 +2287,22 @@ const DocumentViewer = ({ item, doc, index, total, onPrevious, onNext, onDownloa
               📥 Download All
             </Button>
           )}
+          <Button 
+            variant="danger" 
+            onClick={onDelete} 
+            style={{ 
+              padding: '6px 12px', 
+              fontSize: '12px',
+              backgroundColor: '#EF4444',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: '500'
+            }}
+          >
+            🗑️ Delete This File
+          </Button>
         </div>
       </div>
 

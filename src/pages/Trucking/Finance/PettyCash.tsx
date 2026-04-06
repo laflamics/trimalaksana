@@ -5,7 +5,7 @@ import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import NotificationBell from '../../../components/NotificationBell';
 import { storageService, StorageKeys, extractStorageValue } from '../../../services/storage';
-import { deleteTruckingItem, reloadTruckingData, filterActiveItems } from '../../../utils/trucking-delete-helper';
+import { filterActiveItems } from '../../../utils/trucking-delete-helper';
 import { setupRealTimeSync, TRUCKING_SYNC_KEYS } from '../../../utils/real-time-sync-helper';
 import { useDialog } from '../../../hooks/useDialog';
 import { openPrintWindow, isMobile, isCapacitor, savePdfForMobile } from '../../../utils/actions';
@@ -1226,24 +1226,25 @@ const PettyCash = () => {
       warningMessage,
       async () => {
         try {
-          // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
-          const deleteResult = await deleteTruckingItem(StorageKeys.TRUCKING.PETTY_CASH_REQUESTS, item.id, 'id');
+          // 🚀 FIX: Langsung delete dari server tanpa helper
+          // 1. Get current data dari server
+          const currentRequests = await storageService.get<PettyCashRequest[]>(StorageKeys.TRUCKING.PETTY_CASH_REQUESTS) || [];
           
-          if (deleteResult.success) {
-            // Reload data dengan helper (handle race condition)
-            const activeRequests = await reloadTruckingData(StorageKeys.TRUCKING.PETTY_CASH_REQUESTS, setRequests);
-            // Sort by requestDate (newest first)
-            const sortedUpdated = [...activeRequests].sort((a, b) => {
-              const dateA = a.requestDate ? new Date(a.requestDate).getTime() : 0;
-              const dateB = b.requestDate ? new Date(b.requestDate).getTime() : 0;
-              return dateB - dateA; // Newest first
-            });
-            setRequests(sortedUpdated.map((r, idx) => ({ ...r, no: idx + 1 })));
-            showAlert(`✅ Request "${item.requestNo}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
-          } else {
-            console.error('[Trucking PettyCash] Delete failed:', deleteResult.error);
-            showAlert(`❌ Error deleting request "${item.requestNo}": ${deleteResult.error || 'Unknown error'}`, 'Error');
-          }
+          // 2. Filter out item yang mau didelete
+          const updatedRequests = currentRequests.filter((r: PettyCashRequest) => r.id !== item.id);
+          
+          // 3. POST ke server (skipServerSync: false = langsung ke server)
+          await storageService.set(StorageKeys.TRUCKING.PETTY_CASH_REQUESTS, updatedRequests, false);
+          
+          // 4. Update state lokal
+          const sortedUpdated = [...updatedRequests].sort((a, b) => {
+            const dateA = a.requestDate ? new Date(a.requestDate).getTime() : 0;
+            const dateB = b.requestDate ? new Date(b.requestDate).getTime() : 0;
+            return dateB - dateA; // Newest first
+          });
+          setRequests(sortedUpdated.map((r, idx) => ({ ...r, no: idx + 1 })));
+          
+          showAlert(`✅ Request "${item.requestNo}" berhasil dihapus.`, 'Success');
         } catch (error: any) {
           showAlert(`Error deleting request: ${error.message}`, 'Error');
         }
@@ -1546,27 +1547,28 @@ const PettyCash = () => {
       }
       
       showConfirm(
-        `Hapus Memo "${memo.memoNo}"?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        `Hapus Memo "${memo.memoNo}"?\n\n⚠️ Data akan dihapus dari server.\n\nTindakan ini tidak bisa dibatalkan.`,
         async () => {
           try {
-            // 🚀 FIX: Pakai Trucking delete helper untuk konsistensi dan sync yang benar
-            const deleteResult = await deleteTruckingItem(StorageKeys.TRUCKING.PETTY_CASH_MEMOS, memo.id, 'id');
+            // 🚀 FIX: Langsung delete dari server tanpa helper
+            // 1. Get current data dari server
+            const currentMemos = await storageService.get<PettyCashMemo[]>(StorageKeys.TRUCKING.PETTY_CASH_MEMOS) || [];
             
-            if (deleteResult.success) {
-              // Reload data dengan helper (handle race condition)
-              const activeMemos = await reloadTruckingData(StorageKeys.TRUCKING.PETTY_CASH_MEMOS, setMemos);
-              // Sort by memoDate (newest first)
-              const sortedUpdated = [...activeMemos].sort((a, b) => {
-                const dateA = a.memoDate ? new Date(a.memoDate).getTime() : 0;
-                const dateB = b.memoDate ? new Date(b.memoDate).getTime() : 0;
-                return dateB - dateA; // Newest first
-              });
-              setMemos(sortedUpdated.map((m, idx) => ({ ...m, no: idx + 1 })));
-              showAlert(`✅ Memo "${memo.memoNo}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
-            } else {
-              console.error('[Trucking PettyCash] Delete memo failed:', deleteResult.error);
-              showAlert(`❌ Error deleting memo "${memo.memoNo}": ${deleteResult.error || 'Unknown error'}`, 'Error');
-            }
+            // 2. Filter out item yang mau didelete
+            const updatedMemos = currentMemos.filter((m: PettyCashMemo) => m.id !== memo.id);
+            
+            // 3. POST ke server (skipServerSync: false = langsung ke server)
+            await storageService.set(StorageKeys.TRUCKING.PETTY_CASH_MEMOS, updatedMemos, false);
+            
+            // 4. Update state lokal
+            const sortedUpdated = [...updatedMemos].sort((a, b) => {
+              const dateA = a.memoDate ? new Date(a.memoDate).getTime() : 0;
+              const dateB = b.memoDate ? new Date(b.memoDate).getTime() : 0;
+              return dateB - dateA; // Newest first
+            });
+            setMemos(sortedUpdated.map((m, idx) => ({ ...m, no: idx + 1 })));
+            
+            showAlert(`✅ Memo "${memo.memoNo}" berhasil dihapus.`, 'Success');
           } catch (error: any) {
             console.error('[Trucking PettyCash] Error deleting memo:', error);
             showAlert(`❌ Error deleting memo: ${error.message}`, 'Error');
@@ -2549,7 +2551,7 @@ const PettyCash = () => {
                           onApprove={() => {}}
                           onReject={() => {}}
                           onEdit={() => {}}
-                          onDelete={() => {}}
+                          onDelete={() => handleDelete(item)}
                           onViewReceipt={item.receiptProof ? () => handleViewReceipt(item) : undefined}
                           onViewTransferProof={item.transferProof ? () => handleViewTransferProof(item) : undefined}
                           onGenerateMemo={async () => {
@@ -2703,7 +2705,7 @@ const PettyCash = () => {
                         onApprove={() => {}}
                         onReject={() => {}}
                         onEdit={() => {}}
-                        onDelete={() => {}}
+                        onDelete={() => handleDelete(item)}
                         onViewReceipt={item.receiptProof ? () => handleViewReceipt(item) : undefined}
                         onViewTransferProof={item.transferProof ? () => handleViewTransferProof(item) : undefined}
                         onGenerateMemo={async () => {

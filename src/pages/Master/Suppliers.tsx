@@ -7,8 +7,12 @@ import { storageService, StorageKeys } from '../../services/storage';
 import { filterActiveItems } from '../../utils/data-persistence-helper';
 import { deletePackagingItem, reloadPackagingData } from '../../utils/packaging-delete-helper';
 import { useLanguage } from '../../hooks/useLanguage';
+import { useDialog } from '../../hooks/useDialog';
+import { useToast } from '../../hooks/useToast';
+import BlobService from '../../services/blob-service';
 import * as XLSX from 'xlsx';
 import '../../styles/common.css';
+import '../../styles/toast.css';
 import './Master.css';
 
 interface Supplier {
@@ -22,14 +26,19 @@ interface Supplier {
   telepon: string;
   alamat: string;
   kategori: string;
+  documents?: string[]; // Array of document URLs/fileIds
 }
 
 const Suppliers = () => {
   const { t } = useLanguage();
+  const { showToast, ToastContainer } = useToast();
+  const { showAlert, showConfirm, closeDialog, DialogComponent } = useDialog();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<Supplier | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(15);
   const [formData, setFormData] = useState<Partial<Supplier>>({
     kode: '',
     nama: '',
@@ -40,73 +49,18 @@ const Suppliers = () => {
     alamat: '',
     kategori: '',
   });
-
-  // Custom Dialog state
-  const [dialogState, setDialogState] = useState<{
-    show: boolean;
-    type: 'alert' | 'confirm' | null;
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-    onCancel?: () => void;
-  }>({
-    show: false,
-    type: null,
-    title: '',
-    message: '',
-  });
-
-  // Helper functions untuk dialog
-  const showAlert = (message: string, title: string = 'Information') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'alert',
-      title,
-      message,
-    });
-  };
-
-  const showConfirm = (message: string, onConfirm: () => void, onCancel?: () => void, title: string = 'Confirmation') => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(true);
-    }
-    setDialogState({
-      show: true,
-      type: 'confirm',
-      title,
-      message,
-      onConfirm,
-      onCancel,
-    });
-  };
-
-  const closeDialog = () => {
-    if (typeof window !== 'undefined' && (window as any).setDialogOpen) {
-      (window as any).setDialogOpen(false);
-    }
-    setDialogState({
-      show: false,
-      type: null,
-      title: '',
-      message: '',
-    });
-  };
+  const [showDocumentViewer, setShowDocumentViewer] = useState(false);
+  const [viewingDocuments, setViewingDocuments] = useState<{ name: string; docs: string[] } | null>(null);
 
   useEffect(() => {
     loadSuppliers();
   }, []);
 
   const loadSuppliers = async () => {
-    console.log('[Suppliers] Loading suppliers...');
     const dataRaw = await storageService.get<Supplier[]>('suppliers') || [];
-    console.log('[Suppliers] Raw data length:', dataRaw.length);
     
     // Filter out deleted items menggunakan helper function
     const data = filterActiveItems(dataRaw);
-    console.log('[Suppliers] Filtered data length:', data.length);
     
     // CRITICAL: Remove duplicates by kode before setting state
     const seen = new Set<string>();
@@ -118,22 +72,16 @@ const Suppliers = () => {
         if (!seen.has(key)) {
           seen.add(key);
           uniqueData.push(supplier);
-        } else {
-          console.log('[Suppliers] Removed duplicate:', supplier.kode, '-', supplier.nama);
         }
       }
     });
     
-    console.log('[Suppliers] Unique data length:', uniqueData.length);
-    
     const numberedData = uniqueData.map((s, idx) => ({ ...s, no: idx + 1 }));
-    console.log('[Suppliers] Final data length:', numberedData.length);
     
     setSuppliers(numberedData);
     
     // Save cleaned data back to storage if duplicates were removed
     if (uniqueData.length < data.length) {
-      console.log('[Suppliers] Saving cleaned data to storage...');
       await storageService.set(StorageKeys.PACKAGING.SUPPLIERS, numberedData);
     }
   };
@@ -142,7 +90,7 @@ const Suppliers = () => {
     try {
       // Validasi: Kode wajib diisi
       if (!formData.kode || formData.kode.trim() === '') {
-        showAlert('Validation Error', 'Kode wajib diisi!');
+        showToast('Kode wajib diisi!', 'error');
         return;
       }
       
@@ -152,7 +100,7 @@ const Suppliers = () => {
         (!editingItem || s.id !== editingItem.id)
       );
       if (existingSupplier) {
-        showAlert('Validation Error', `Kode "${formData.kode}" sudah digunakan oleh supplier lain!`);
+        showToast(`Kode "${formData.kode}" sudah digunakan oleh supplier lain!`, 'error');
         return;
       }
       
@@ -164,6 +112,7 @@ const Suppliers = () => {
         );
         await storageService.set(StorageKeys.PACKAGING.SUPPLIERS, updated);
         setSuppliers(updated.map((s, idx) => ({ ...s, no: idx + 1 })));
+        showToast(`Supplier "${formData.nama}" berhasil diperbarui`, 'success');
       } else {
         const newSupplier: Supplier = {
           id: Date.now().toString(),
@@ -174,12 +123,42 @@ const Suppliers = () => {
         const updated = [...suppliers, newSupplier];
         await storageService.set(StorageKeys.PACKAGING.SUPPLIERS, updated);
         setSuppliers(updated.map((s, idx) => ({ ...s, no: idx + 1 })));
+        showToast(`Supplier "${formData.nama}" berhasil ditambahkan`, 'success');
       }
-      setShowForm(false);
-      setEditingItem(null);
-      setFormData({ kode: '', nama: '', kontak: '', npwp: '', email: '', telepon: '', alamat: '', kategori: '' });
+      resetFormState();
     } catch (error: any) {
-      showAlert(`Error saving supplier: ${error.message}`, 'Error');
+      showToast(`Error saving supplier: ${error.message}`, 'error');
+    }
+  };
+
+  const resetFormState = () => {
+    setShowForm(false);
+    setEditingItem(null);
+    setFormData({ kode: '', nama: '', kontak: '', npwp: '', email: '', telepon: '', alamat: '', kategori: '', documents: [] });
+  };
+
+  const handleDocumentUpload = async (file: File) => {
+    try {
+      // Validate file
+      const validation = BlobService.validateFile(file, 50, ['application/pdf', 'image/*', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']);
+      if (!validation.valid) {
+        showToast(validation.error || 'Invalid file', 'error');
+        return;
+      }
+
+      // Upload to MinIO/Vercel Blob
+      const result = await BlobService.uploadFile(file, 'packaging');
+      
+      // Store document URL in formData
+      const currentDocs = formData.documents || [];
+      setFormData({ 
+        ...formData, 
+        documents: [...currentDocs, result.fileId] 
+      });
+      
+      showToast(`Document "${file.name}" uploaded successfully`, 'success');
+    } catch (error: any) {
+      showToast(`Error uploading document: ${error.message}`, 'error');
     }
   };
 
@@ -191,29 +170,25 @@ const Suppliers = () => {
 
   const handleDelete = async (item: Supplier) => {
     try {
-      console.log('[Suppliers] handleDelete called for:', item.nama, item.id);
-      
       // Validate item.id exists
       if (!item.id) {
-        console.error('[Suppliers] Item missing ID:', item);
-        showAlert(`❌ Error: Supplier "${item.nama}" tidak memiliki ID. Tidak bisa dihapus.`, 'Error');
+        showToast(`Error: Supplier "${item.nama}" tidak memiliki ID`, 'error');
         return;
       }
       
       showConfirm(
-        `Hapus Supplier: ${item.nama}?\n\n⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.\n\nTindakan ini tidak bisa dibatalkan.`,
+        `Hapus Supplier: ${item.nama}?
+
+⚠️ Data akan dihapus dengan aman (tombstone pattern) untuk mencegah auto-sync mengembalikan data.
+
+Tindakan ini tidak bisa dibatalkan.`,
         async () => {
           try {
-            console.log('[Suppliers] Delete confirmed for:', item.nama, item.id);
-            
             // 🚀 FIX: Pakai packaging delete helper untuk konsistensi dan sync yang benar
-            console.log('[Suppliers] Calling deletePackagingItem...');
             const deleteResult = await deletePackagingItem('suppliers', item.id, 'id');
-            console.log('[Suppliers] Delete result:', deleteResult);
             
             if (deleteResult.success) {
               // Reload data dengan helper (handle race condition) - sama seperti SalesOrders
-              console.log('[Suppliers] Reloading data...');
               await reloadPackagingData('suppliers', setSuppliers);
               
               // Re-number suppliers setelah reload
@@ -221,24 +196,21 @@ const Suppliers = () => {
               const activeSuppliers = filterActiveItems(currentSuppliers);
               setSuppliers(activeSuppliers.map((s, idx) => ({ ...s, no: idx + 1 })));
               
-              showAlert(`✅ Supplier "${item.nama}" berhasil dihapus dengan aman.\n\n🛡️ Data dilindungi dari auto-sync restoration.`, 'Success');
+              showToast(`Supplier "${item.nama}" berhasil dihapus`, 'success');
             } else {
-              console.error('[Suppliers] Delete failed:', deleteResult.error);
-              showAlert(`❌ Error deleting supplier "${item.nama}": ${deleteResult.error || 'Unknown error'}`, 'Error');
+              showToast(`Error deleting supplier: ${deleteResult.error || 'Unknown error'}`, 'error');
             }
           } catch (error: any) {
-            console.error('[Suppliers] Error in delete:', error);
-            showAlert(`❌ Error deleting supplier: ${error.message}`, 'Error');
+            showToast(`Error deleting supplier: ${error.message}`, 'error');
           }
         },
         () => {
-          console.log('[Suppliers] Delete cancelled');
+          // Delete cancelled
         },
-        'Safe Delete Confirmation'
+        'Konfirmasi Hapus'
       );
     } catch (error: any) {
-      console.error('[Suppliers] Error in handleDelete:', error);
-      showAlert(`❌ Error: ${error.message}`, 'Error');
+      showToast(`Error: ${error.message}`, 'error');
     }
   };
 
@@ -256,9 +228,9 @@ const Suppliers = () => {
       
       const fileName = `Suppliers_Template.xlsx`;
       XLSX.writeFile(wb, fileName);
-      showAlert(`✅ Template downloaded! Silakan isi data sesuai format dan import kembali.`, 'Success');
+      showToast(`Template downloaded`, 'success');
     } catch (error: any) {
-      showAlert(`Error downloading template: ${error.message}`, 'Error');
+      showToast(`Error downloading template: ${error.message}`, 'error');
     }
   };
 
@@ -272,7 +244,7 @@ const Suppliers = () => {
     
     const showPreviewDialog = () => {
       showConfirm(
-        `📋 Format Excel untuk Import Suppliers\n\nPastikan file Excel Anda memiliki header berikut:\n\n${exampleHeaders.join(' | ')}\n\nContoh data:\n${exampleData.map((row, idx) => `${idx + 1}. ${exampleHeaders.map(h => String(row[h as keyof typeof row] || '')).join(' | ')}`).join('\n')}\n\n⚠️ Catatan:\n- Header harus ada di baris pertama\n- Kode dan Nama wajib diisi\n- Header bisa menggunakan variasi: Kode/Code, Nama/Name, Kontak/Contact, dll\n\nKlik "Download Template" untuk mendapatkan file Excel template, atau "Lanjutkan" untuk memilih file Excel yang sudah Anda siapkan.`,
+        `📋 Format Excel untuk Import Suppliers\n\nPastikan file Excel Anda memiliki header berikut:\n\n${exampleHeaders.join(' | ')}\n\nContoh data:\n${exampleData.map((row, idx) => `${idx + 1}. ${exampleHeaders.map(h => String(row[h as keyof typeof row] || '')).join(' | ')}`).join('\n')}\n\n⚠️ Catatan:\n- Header harus ada di baris pertama\n- Kode dan Nama wajib diisi\n- Header bisa menggunakan variasi: Kode/Code, Nama/Name, Kontak/Contact, dll`,
         () => {
           closeDialog();
           const input = document.createElement('input');
@@ -290,7 +262,7 @@ const Suppliers = () => {
         const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
         if (jsonData.length === 0) {
-          showAlert('Excel file is empty or has no data', 'Error');
+          showToast('Excel file is empty or has no data', 'error');
           return;
         }
 
@@ -359,7 +331,7 @@ const Suppliers = () => {
         });
 
         if (newSuppliers.length === 0) {
-          showAlert('No valid data found in Excel file', 'Error');
+          showToast('No valid data found in Excel file', 'error');
           return;
         }
 
@@ -379,9 +351,9 @@ const Suppliers = () => {
           setSuppliers(renumbered);
 
           if (errors.length > 0) {
-            showAlert(`Imported ${newSuppliers.length} suppliers, but ${errors.length} errors occurred.\n\nFirst few errors:\n${errors.slice(0, 5).join('\n')}`, 'Import Completed');
+            showToast(`Imported ${newSuppliers.length} suppliers with ${errors.length} errors`, 'warning');
           } else {
-            showAlert(`✅ Successfully imported ${newSuppliers.length} suppliers`, 'Success');
+            showToast(`Successfully imported ${newSuppliers.length} suppliers`, 'success');
           }
         };
 
@@ -392,7 +364,7 @@ const Suppliers = () => {
           'Confirm Import'
         );
       } catch (error: any) {
-        showAlert(`Error importing Excel: ${error.message}\n\nMake sure the file is a valid Excel file (.xlsx or .xls)`, 'Error');
+        showToast(`Error importing Excel: ${error.message}`, 'error');
       }
           };
           input.click();
@@ -423,9 +395,9 @@ const Suppliers = () => {
       
       const fileName = `Suppliers_${new Date().toISOString().split('T')[0]}.xlsx`;
       XLSX.writeFile(wb, fileName);
-      showAlert(`✅ Exported ${dataToExport.length} suppliers to ${fileName}`, 'Success');
+      showToast(`Exported ${dataToExport.length} suppliers`, 'success');
     } catch (error: any) {
-      showAlert(`Error exporting to Excel: ${error.message}`, 'Error');
+      showToast(`Error exporting to Excel: ${error.message}`, 'error');
     }
   };
 
@@ -483,6 +455,12 @@ const Suppliers = () => {
     }));
   }, [suppliers, searchQuery]);
 
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredSuppliers.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedSuppliers = filteredSuppliers.slice(startIndex, endIndex);
+
   // Dynamic columns based on filled data (memoized to recalculate when suppliers change)
   const columns = useMemo(() => {
     if (suppliers.length === 0) {
@@ -532,7 +510,7 @@ const Suppliers = () => {
 
     // Build final columns: base columns + sorted optional columns + remaining columns
     const baseColumns = [
-      { key: 'no', header: t('common.number') || 'No' },
+      { key: 'no', header: t('common.number') || 'No', width: '50px' },
       { key: 'kode', header: t('master.supplierCode') || 'Kode (ID)' },
       { key: 'nama', header: t('master.supplierName') || 'Nama (Company Name)' },
     ];
@@ -548,7 +526,19 @@ const Suppliers = () => {
         key: 'actions',
         header: t('common.actions') || 'Actions',
         render: (item: Supplier) => (
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {item.documents && item.documents.length > 0 && (
+              <Button 
+                variant="secondary" 
+                onClick={() => {
+                  setViewingDocuments({ name: item.nama, docs: item.documents! });
+                  setShowDocumentViewer(true);
+                }}
+                style={{ fontSize: '11px', padding: '4px 8px' }}
+              >
+                📄 ({item.documents.length})
+              </Button>
+            )}
             <Button variant="secondary" onClick={() => handleEdit(item)}>{t('common.edit') || 'Edit'}</Button>
             <Button variant="danger" onClick={() => handleDelete(item)}>{t('common.delete') || 'Delete'}</Button>
           </div>
@@ -561,6 +551,62 @@ const Suppliers = () => {
 
   return (
     <div className="master-compact">
+      <ToastContainer />
+      <DialogComponent />
+      
+      {/* Document Viewer Modal */}
+      {showDocumentViewer && viewingDocuments && (
+        <div className="dialog-overlay" onClick={() => setShowDocumentViewer(false)} style={{ zIndex: 10000 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px', width: '95%', maxHeight: '90vh', overflowY: 'auto', zIndex: 10001, borderRadius: '10px', background: 'var(--bg-primary)' }}>
+            <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '14px 18px', borderRadius: '10px 10px 0 0', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>📄 Documents - {viewingDocuments.name}</h2>
+              <button onClick={() => setShowDocumentViewer(false)} style={{ background: 'none', border: 'none', color: 'white', fontSize: '24px', cursor: 'pointer' }}>✕</button>
+            </div>
+            
+            <div style={{ padding: '16px' }}>
+              {viewingDocuments.docs.map((docId, idx) => {
+                const url = BlobService.getDownloadUrl(docId, 'packaging');
+                const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(url);
+                const isPdf = /\.pdf$/i.test(url);
+                
+                return (
+                  <div key={idx} style={{ marginBottom: '20px', border: '1px solid var(--border)', padding: '12px', borderRadius: '6px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                      <h3 style={{ margin: 0, fontSize: '14px', fontWeight: '600' }}>
+                        {isImage ? '📷' : isPdf ? '📄' : '📎'} Document {idx + 1}
+                      </h3>
+                      <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#667eea', textDecoration: 'none', fontSize: '12px', fontWeight: '500' }}>
+                        Open in new tab ↗
+                      </a>
+                    </div>
+                    
+                    {isImage && (
+                      <img src={url} alt={`Document ${idx + 1}`} style={{ maxWidth: '100%', maxHeight: '500px', borderRadius: '4px', border: '1px solid var(--border)' }} />
+                    )}
+                    
+                    {isPdf && (
+                      <iframe src={url} style={{ width: '100%', height: '500px', borderRadius: '4px', border: 'none' }} />
+                    )}
+                    
+                    {!isImage && !isPdf && (
+                      <div style={{ padding: '20px', textAlign: 'center', background: 'var(--bg-secondary)', borderRadius: '4px' }}>
+                        <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '12px' }}>
+                          File type not supported for preview. <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#667eea' }}>Download file</a>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            
+            <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', textAlign: 'right' }}>
+              <Button onClick={() => setShowDocumentViewer(false)} variant="secondary">Close</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="page-header">
         <h1>Master Pemasok</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -568,7 +614,7 @@ const Suppliers = () => {
           <Button variant="secondary" onClick={handleDownloadTemplate}>📋 Download Template</Button>
           <Button variant="primary" onClick={handleImportExcel}>📤 Import Excel</Button>
           <Button onClick={() => {
-            setFormData({ kode: '', nama: '', kontak: '', npwp: '', email: '', telepon: '', alamat: '', kategori: '' });
+            setFormData({ kode: '', nama: '', kontak: '', npwp: '', email: '', telepon: '', alamat: '', kategori: '', documents: [] });
             setEditingItem(null);
             setShowForm(true);
           }}>
@@ -578,63 +624,82 @@ const Suppliers = () => {
       </div>
 
       {showForm && (
-        <div className="dialog-overlay" onClick={() => { setShowForm(false); setEditingItem(null); setFormData({ kode: '', nama: '', kontak: '', npwp: '', email: '', telepon: '', alamat: '', kategori: '' }); }} style={{ zIndex: 10000 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', width: '90%', maxHeight: '90vh', overflowY: 'auto', zIndex: 10001 }}>
-            <Card title={editingItem ? "Edit Pemasok" : "Tambah Pemasok Baru"} className="dialog-card">
-          <Input
-            label="Kode *"
-            value={formData.kode || ''}
-            onChange={(v) => setFormData({ ...formData, kode: v })}
-            placeholder="Masukkan kode supplier (contoh: SUP-001)"
-          />
-          <Input
-            label="PIC Name"
-            value={formData.kontak || ''}
-            onChange={(v) => setFormData({ ...formData, kontak: v })}
-          />
-          <Input
-            label="Company Name"
-            value={formData.nama || ''}
-            onChange={(v) => setFormData({ ...formData, nama: v })}
-          />
-          <Input
-            label="PIC Title"
-            value={formData.kategori || ''}
-            onChange={(v) => setFormData({ ...formData, kategori: v })}
-          />
-          <Input
-            label="Phone"
-            value={formData.telepon || ''}
-            onChange={(v) => setFormData({ ...formData, telepon: v })}
-          />
-          <Input
-            label="Email"
-            type="email"
-            value={formData.email || ''}
-            onChange={(v) => setFormData({ ...formData, email: v })}
-          />
-          <Input
-            label="Address"
-            value={formData.alamat || ''}
-            onChange={(v) => setFormData({ ...formData, alamat: v })}
-          />
-          <Input
-            label="NPWP"
-            value={formData.npwp || ''}
-            onChange={(v) => setFormData({ ...formData, npwp: v })}
-          />
-          <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '8px' }}>
-            Documents: NIB, KTP, NPWP, Others (upload functionality)
-          </p>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
-            <Button onClick={() => { setShowForm(false); setEditingItem(null); setFormData({ kode: '', nama: '', kontak: '', npwp: '', email: '', telepon: '', alamat: '', kategori: '' }); }} variant="secondary">
-              Batal
-            </Button>
-            <Button onClick={handleSave} variant="primary">
-              {editingItem ? 'Update Pemasok' : 'Simpan Pemasok'}
-            </Button>
-          </div>
-        </Card>
+        <div className="dialog-overlay" onClick={() => resetFormState()} style={{ zIndex: 10000 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '550px', width: '90%', maxHeight: '90vh', overflowY: 'auto', zIndex: 10001, borderRadius: '10px' }}>
+            <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '14px 18px', borderRadius: '10px 10px 0 0', color: 'white' }}>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>
+                {editingItem ? '✏️ Edit Pemasok' : '➕ Tambah Pemasok'}
+              </h2>
+            </div>
+
+            <div style={{ background: 'var(--bg-primary)', padding: '16px', borderRadius: '0 0 10px 10px' }}>
+              {/* Contact Information Section */}
+              <div style={{ marginBottom: '14px' }}>
+                <h3 style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: '8px' }}>👤 Contact</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <Input label="Kode *" value={formData.kode || ''} onChange={(v) => setFormData({ ...formData, kode: v })} placeholder="SUP-001" />
+                  <Input label="PIC Name" value={formData.kontak || ''} onChange={(v) => setFormData({ ...formData, kontak: v })} placeholder="John Doe" />
+                  <Input label="Company Name" value={formData.nama || ''} onChange={(v) => setFormData({ ...formData, nama: v })} placeholder="PT Example" />
+                  <Input label="PIC Title" value={formData.kategori || ''} onChange={(v) => setFormData({ ...formData, kategori: v })} placeholder="Manager" />
+                </div>
+              </div>
+
+              {/* Communication Section */}
+              <div style={{ marginBottom: '14px' }}>
+                <h3 style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: '8px' }}>📞 Communication</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <Input label="Phone" value={formData.telepon || ''} onChange={(v) => setFormData({ ...formData, telepon: v })} placeholder="021-12345678" />
+                  <Input label="Email" type="email" value={formData.email || ''} onChange={(v) => setFormData({ ...formData, email: v })} placeholder="email@example.com" />
+                </div>
+              </div>
+
+              {/* Address & Tax Section */}
+              <div style={{ marginBottom: '14px' }}>
+                <h3 style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: '8px' }}>📍 Address & Tax</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
+                  <Input label="Address" value={formData.alamat || ''} onChange={(v) => setFormData({ ...formData, alamat: v })} placeholder="Jl. Example No. 123" />
+                  <Input label="NPWP" value={formData.npwp || ''} onChange={(v) => setFormData({ ...formData, npwp: v })} placeholder="01.234.567.8-901.000" />
+                </div>
+              </div>
+
+              {/* Documents Section */}
+              <div style={{ marginBottom: '14px' }}>
+                <h3 style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: '8px' }}>📄 Documents</h3>
+                <div style={{ padding: '12px', background: 'var(--bg-secondary)', borderRadius: '6px', textAlign: 'center' }}>
+                  <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: '0 0 8px 0' }}>
+                    NIB, KTP, NPWP, Others
+                  </p>
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    onChange={(e) => {
+                      const files = e.target.files;
+                      if (files) {
+                        for (let i = 0; i < files.length; i++) {
+                          handleDocumentUpload(files[i]);
+                        }
+                      }
+                    }}
+                    style={{ display: 'none' }}
+                    id="supplier-documents-input"
+                  />
+                  <label htmlFor="supplier-documents-input" style={{ display: 'inline-block', padding: '6px 12px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', borderRadius: '4px', cursor: 'pointer', fontWeight: '500', fontSize: '12px', transition: 'transform 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.03)'; }} onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}>
+                    📤 Upload Documents
+                  </label>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <Button onClick={resetFormState} variant="secondary">
+                  Batal
+                </Button>
+                <Button onClick={handleSave} variant="primary">
+                  {editingItem ? 'Update Pemasok' : 'Simpan Pemasok'}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -644,7 +709,10 @@ const Suppliers = () => {
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1); // Reset to first page when searching
+            }}
             placeholder="Search by Kode, Nama, Kontak, Email, Telepon, Alamat, Kategori..."
             style={{
               flex: 1,
@@ -658,45 +726,94 @@ const Suppliers = () => {
             }}
           />
         </div>
-        <Table columns={columns} data={filteredSuppliers} emptyMessage={searchQuery ? "Tidak ada pemasok yang cocok dengan pencarian" : "Tidak ada data pemasok"} />
-      </Card>
-
-      {/* Custom Dialog */}
-      {dialogState.show && (
-        <div className="dialog-overlay" onClick={closeDialog}>
-          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
-            <Card className="dialog-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h2>{dialogState.title}</h2>
-                <Button variant="secondary" onClick={closeDialog} style={{ padding: '6px 12px' }}>✕</Button>
-              </div>
-              <p style={{ marginBottom: '20px', whiteSpace: 'pre-wrap' }}>{dialogState.message}</p>
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                {dialogState.type === 'confirm' && dialogState.title && dialogState.title.includes('Format Excel') && (
-                  <Button variant="secondary" onClick={() => {
-                    handleDownloadTemplate();
-                    closeDialog();
-                  }} style={{ marginRight: 'auto' }}>
-                    📥 Download Template
+        <Table columns={columns} data={paginatedSuppliers} pageSize={10000} showPagination={false} emptyMessage={searchQuery ? "Tidak ada pemasok yang cocok dengan pencarian" : "Tidak ada data pemasok"} />
+        
+        {/* Pagination Controls */}
+        {(totalPages > 1 || filteredSuppliers.length > 0) && (
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            gap: '8px', 
+            marginTop: '20px',
+            padding: '16px',
+            borderTop: '1px solid var(--border)'
+          }}>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+              Showing {startIndex + 1}-{Math.min(endIndex, filteredSuppliers.length)} of {filteredSuppliers.length} suppliers
+              {searchQuery && ` (filtered from ${suppliers.length} total)`}
+            </div>
+            {totalPages > 1 && (
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center', 
+              gap: '8px'
+            }}>
+            <Button 
+              variant="secondary" 
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+            >
+              First
+            </Button>
+            <Button 
+              variant="secondary" 
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </Button>
+            <div style={{ 
+              display: 'flex', 
+              gap: '4px',
+              alignItems: 'center'
+            }}>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={currentPage === pageNum ? 'primary' : 'secondary'}
+                    onClick={() => setCurrentPage(pageNum)}
+                    style={{ minWidth: '40px', padding: '6px 12px' }}
+                  >
+                    {pageNum}
                   </Button>
-                )}
-                {dialogState.type === 'confirm' && (
-                  <Button variant="secondary" onClick={closeDialog}>Cancel</Button>
-                )}
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    if (dialogState.onConfirm) dialogState.onConfirm();
-                    closeDialog();
-                  }}
-                >
-                  {dialogState.type === 'confirm' ? 'Confirm' : 'OK'}
-                </Button>
-              </div>
-            </Card>
+                );
+              })}
+            </div>
+            <Button 
+              variant="secondary" 
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Next
+            </Button>
+            <Button 
+              variant="secondary" 
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+            >
+              Last
+            </Button>
+            <div style={{ marginLeft: '16px', color: 'var(--text-secondary)', fontSize: '14px' }}>
+              Page {currentPage} of {totalPages}
+            </div>
+            </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </Card>
     </div>
   );
 };

@@ -438,30 +438,8 @@ const PPIC = () => {
     const purchaseRequestsDataRaw = await loadFromStorage(StorageKeys.GENERAL_TRADING.PURCHASE_REQUESTS);
     
     // Force reload key data if very few items detected (sama seperti Packaging)
-    if (customersDataRaw.length <= 1) {
-      const fileData = await storageService.forceReloadFromFile<any[]>(StorageKeys.GENERAL_TRADING.CUSTOMERS);
-      if (fileData && Array.isArray(fileData) && fileData.length > customersDataRaw.length) {
-        // Update localStorage dengan data dari file
-        const storageKey = 'general-trading/gt_customers';
-        localStorage.setItem(storageKey, JSON.stringify({
-          value: fileData,
-          timestamp: Date.now(),
-          _timestamp: Date.now(),
-        }));
-      }
-    }
-    
-    if (productsDataRaw.length <= 1) {
-      const fileData = await storageService.forceReloadFromFile<any[]>(StorageKeys.GENERAL_TRADING.PRODUCTS);
-      if (fileData && Array.isArray(fileData) && fileData.length > productsDataRaw.length) {
-        const storageKey = 'general-trading/gt_products';
-        localStorage.setItem(storageKey, JSON.stringify({
-          value: fileData,
-          timestamp: Date.now(),
-          _timestamp: Date.now(),
-        }));
-      }
-    }
+    // Note: forceReloadFromFile is not implemented in server mode, so we skip this
+    // Data will be loaded from server via storageService.get() which already happened above
     
     // CRITICAL: Force reload dari server jika data sedikit atau tidak ada
     // Ini memastikan data terbaru dari server (termasuk flag ppicNotified) selalu di-load
@@ -483,17 +461,7 @@ const PPIC = () => {
           }
         }
       } catch (error) {
-        // Fallback ke force reload dari file jika server sync gagal
-        const fileData = await storageService.forceReloadFromFile<any[]>(StorageKeys.GENERAL_TRADING.SALES_ORDERS);
-        if (fileData && Array.isArray(fileData) && fileData.length > salesOrdersDataRaw.length) {
-          const storageKey = 'general-trading/gt_salesOrders';
-          localStorage.setItem(storageKey, JSON.stringify({
-            value: fileData,
-            timestamp: Date.now(),
-            _timestamp: Date.now(),
-          }));
-          salesOrdersDataRaw = fileData;
-        }
+        console.error('[GT PPIC] Error reloading sales orders from server:', error);
       }
     }
     
@@ -1139,9 +1107,9 @@ const PPIC = () => {
       // Update state langsung (confirmedSOsPending akan otomatis update)
       setSpkData(updatedSPKs);
       
-      // CRITICAL: Force immediate sync ke server untuk create SPK
+      // CRITICAL: POST ke server (skipServerSync: false) untuk create SPK
       // Ini memastikan data langsung tersedia di device lain
-      await storageService.set(StorageKeys.GENERAL_TRADING.SPK, updatedSPKs, true);
+      await storageService.set(StorageKeys.GENERAL_TRADING.SPK, updatedSPKs, false);
       
       // Reset dan close
       setSelectedItemsForSPK({});
@@ -1333,7 +1301,7 @@ const PPIC = () => {
       // CRITICAL: Force immediate sync ke server untuk create PR
       // Ini memastikan PR langsung muncul di Purchasing di device lain
       console.log(`[GT PPIC] 📤 Creating PR and POST to server: ${prNo}`);
-      await storageService.set(StorageKeys.GENERAL_TRADING.PURCHASE_REQUESTS, updatedPRs, true);
+      await storageService.set(StorageKeys.GENERAL_TRADING.PURCHASE_REQUESTS, updatedPRs, false);
       console.log(`[GT PPIC] ✅ PR created and synced to server: ${prNo}`);
       setPurchaseRequests(updatedPRs);
       
@@ -1388,8 +1356,8 @@ const PPIC = () => {
             totalNotifications: updatedNotifications.length
           });
           
-          // CRITICAL: immediateSync = true untuk POST ke server
-          await storageService.set(StorageKeys.GENERAL_TRADING.PURCHASING_NOTIFICATIONS, updatedNotifications, true);
+          // CRITICAL: skipServerSync = false untuk POST ke server
+          await storageService.set(StorageKeys.GENERAL_TRADING.PURCHASING_NOTIFICATIONS, updatedNotifications, false);
           
           console.log(`[GT PPIC] ✅ Purchasing notification POSTED to server: ${prNo} (${updatedNotifications.length} total notifications)`);
           
@@ -1642,9 +1610,9 @@ const PPIC = () => {
       }
     }
     
-    // CRITICAL: Force immediate sync ke server untuk save delivery schedule
+    // CRITICAL: POST ke server (skipServerSync: false) untuk save delivery schedule
     // Ini memastikan data langsung tersedia di device lain
-    await storageService.set(StorageKeys.GENERAL_TRADING.SCHEDULE, updated, true);
+    await storageService.set(StorageKeys.GENERAL_TRADING.SCHEDULE, updated, false);
     setScheduleData(updated);
     
     // CRITICAL: Skip event listener untuk 2 detik setelah save delivery schedule
@@ -1655,9 +1623,9 @@ const PPIC = () => {
     };
     
     if (newNotifications.length > 0) {
-      // CRITICAL: Force immediate sync ke server untuk delivery notifications
+      // CRITICAL: POST ke server (skipServerSync: false) untuk delivery notifications
       // Ini memastikan notifikasi langsung muncul di Delivery Note di device lain
-      await storageService.set(StorageKeys.GENERAL_TRADING.DELIVERY_NOTIFICATIONS, [...deliveryNotifications, ...newNotifications], true);
+      await storageService.set(StorageKeys.GENERAL_TRADING.DELIVERY_NOTIFICATIONS, [...deliveryNotifications, ...newNotifications], false);
       showAlert(`Delivery schedule saved successfully untuk ${data.spkDeliveries.length} SPK(s)\n\n📧 ${newNotifications.length} notification(s) sent to Delivery Note\n\n💡 Stock akan dicek saat create Delivery Note.`, 'Success');
     } else {
       showAlert(`Delivery schedule saved untuk ${data.spkDeliveries.length} SPK(s)`, 'Success');
@@ -2130,9 +2098,9 @@ const PPIC = () => {
                     // Jika SO belum ada di state, tambahkan langsung
                     const updatedSalesOrders = [...salesOrders, notification.so];
                     setSalesOrders(updatedSalesOrders);
-                    // CRITICAL: Force immediate sync ke server untuk confirm notifikasi
+                    // CRITICAL: POST ke server (skipServerSync: false) untuk confirm notifikasi
                     // Ini memastikan data langsung tersedia di device lain
-                    await storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updatedSalesOrders, true);
+                    await storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updatedSalesOrders, false);
                   } else {
                     // Pastikan flag ppicNotified tetap true
                     if (!existingSO.ppicNotified) {
@@ -2142,8 +2110,8 @@ const PPIC = () => {
                           : s
                       );
                       setSalesOrders(updatedSalesOrders);
-                      // CRITICAL: Force immediate sync ke server untuk confirm notifikasi
-                      await storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updatedSalesOrders, true);
+                      // CRITICAL: POST ke server (skipServerSync: false) untuk confirm notifikasi
+                      await storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updatedSalesOrders, false);
                     }
                   }
                   setViewingSO(notification.so);
@@ -2158,8 +2126,8 @@ const PPIC = () => {
                           : s
                       );
                       setSalesOrders(updatedSalesOrders);
-                      // CRITICAL: Force immediate sync ke server untuk confirm notifikasi
-                      await storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updatedSalesOrders, true);
+                      // CRITICAL: POST ke server (skipServerSync: false) untuk confirm notifikasi
+                      await storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updatedSalesOrders, false);
                     }
                     setViewingSO(so);
                   } else {

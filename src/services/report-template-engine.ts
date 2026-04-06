@@ -111,6 +111,7 @@ export const reportTemplateEngine = {
       const soDate = (so.created || so.date || '').toString().split('T')[0] || '-';
       const paymentTerms = (so.paymentTerms || 'COD').toString().trim();
       const topDays = so.topDays || 0;
+      const soStatus = (so.status || '').toString().toUpperCase() || '-';
 
       (so.items || []).forEach((item: any, itemIdx: number) => {
         flatItems.push({
@@ -118,6 +119,7 @@ export const reportTemplateEngine = {
           customer,
           customerKode,
           soDate,
+          soStatus,
           paymentTerms: paymentTerms === 'TOP' ? `TOP ${topDays}` : paymentTerms,
           itemNo: itemIdx + 1,
           productKode: (item.productKode || item.kode || '').toString().trim() || '-',
@@ -143,11 +145,12 @@ export const reportTemplateEngine = {
     return {
       title: 'LAPORAN PESANAN PENJUALAN PER ITEM - PACKAGING',
       subtitle: `Per: ${new Date().toLocaleDateString('id-ID')}${dateRange}`,
-      headers: ['NO', 'NO. SO', 'TANGGAL', 'KODE PELANGGAN', 'NAMA PELANGGAN', 'ITEM', 'KODE PRODUK', 'NAMA PRODUK', 'QTY', 'SATUAN', 'HARGA', 'DISKON %', 'TOTAL', 'TERMS', 'SPEC/NOTE'],
+      headers: ['NO', 'NO. SO', 'TANGGAL', 'STATUS', 'KODE PELANGGAN', 'NAMA PELANGGAN', 'ITEM', 'KODE PRODUK', 'NAMA PRODUK', 'QTY', 'SATUAN', 'HARGA', 'DISKON %', 'TOTAL', 'TERMS', 'SPEC/NOTE'],
       data: flatItems.map((item, idx) => ({
         'NO': idx + 1,
         'NO. SO': item.soNo,
         'TANGGAL': item.soDate,
+        'STATUS': item.soStatus,
         'KODE PELANGGAN': item.customerKode,
         'NAMA PELANGGAN': item.customer,
         'ITEM': item.itemNo,
@@ -4570,33 +4573,37 @@ export const reportTemplateEngine = {
    */
   packagingSalesOrderExportReport(data: any[], startDate?: string, endDate?: string): ReportTemplate {
     // Calculate totals
-    const totalJml = data.reduce((sum, row) => sum + (row['JML'] || 0), 0);
+    const totalQty = data.reduce((sum, row) => sum + (row['QTY'] || 0), 0);
+    const totalHarga = data.reduce((sum, row) => sum + (row['HARGA'] || 0), 0);
+    const totalAmount = data.reduce((sum, row) => sum + (row['TOTAL'] || 0), 0);
+    const totalInitialStock = data.reduce((sum, row) => sum + (row['INITIAL STOCK'] || 0), 0);
+    const totalProduction = data.reduce((sum, row) => sum + (row['PRODUCTION'] || 0), 0);
     const totalDelivery = data.reduce((sum, row) => sum + (row['DELIVERY'] || 0), 0);
     const totalRemainPO = data.reduce((sum, row) => sum + (row['REMAIN PO'] || 0), 0);
+    const totalNextStock = data.reduce((sum, row) => sum + (row['NEXT STOCK'] || 0), 0);
     const totalTagihan = data.reduce((sum, row) => sum + (row['TOTAL TAGIHAN'] || 0), 0);
-    const totalRpRemain = data.reduce((sum, row) => sum + (row['TOTAL RP. REMAIN'] || 0), 0);
 
     // Format date range for title
     const dateRangeText = startDate && endDate ? ` (${startDate} s/d ${endDate})` : '';
 
     const columns = [
       { key: 'NO', width: 6 },
-      { key: 'KODE PEL.', width: 12 },
-      { key: 'KD. ITEM', width: 12 },
       { key: 'DATE', width: 12 },
-      { key: 'NO TRANSAKSI', width: 18 },
+      { key: 'KODE PEL.', width: 12 },
       { key: 'CUSTOMER', width: 30 },
+      { key: 'KODE ITEM', width: 12 },
       { key: 'NAMA ITEM', width: 40 },
-      { key: 'JML', width: 10 },
+      { key: 'NO PO/SO', width: 18 },
+      { key: 'QTY', width: 10 },
       { key: 'HARGA', width: 14 },
       { key: 'TOTAL', width: 14 },
-      { key: 'STOCK AWAL', width: 12 },
-      { key: 'PRODUKSI', width: 12 },
+      { key: 'INITIAL STOCK', width: 12 },
+      { key: 'PRODUCTION', width: 12 },
       { key: 'DELIVERY', width: 12 },
       { key: 'REMAIN PO', width: 12 },
       { key: 'NEXT STOCK', width: 12 },
       { key: 'TOTAL TAGIHAN', width: 16 },
-      { key: 'TOTAL RP. REMAIN', width: 16 },
+      { key: 'TOTAL REMAIN PO', width: 16 },
     ];
 
     return {
@@ -4606,11 +4613,15 @@ export const reportTemplateEngine = {
       data: data,
       totals: {
         'NO': 'TOTAL',
-        'JML': totalJml,
+        'QTY': totalQty,
+        'HARGA': totalHarga,
+        'TOTAL': totalAmount,
+        'INITIAL STOCK': totalInitialStock,
+        'PRODUCTION': totalProduction,
         'DELIVERY': totalDelivery,
         'REMAIN PO': totalRemainPO,
+        'NEXT STOCK': totalNextStock,
         'TOTAL TAGIHAN': totalTagihan,
-        'TOTAL RP. REMAIN': totalRpRemain,
       },
       formatting: {
         headerBgColor: '4472C4',

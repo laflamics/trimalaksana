@@ -10,9 +10,11 @@ import { filterActiveItems } from '../../utils/data-persistence-helper';
 import { getCurrentUser } from '../../utils/access-control-helper';
 import { logCreate } from '../../utils/activity-logger';
 import { useDialog } from '../../hooks/useDialog';
+import { useToast } from '../../hooks/useToast';
 import { useLanguage } from '../../hooks/useLanguage';
 import BlobService from '../../services/blob-service';
 import '../../styles/common.css';
+import '../../styles/toast.css';
 import './Inventory.css';
 import './Master.css';
 
@@ -64,14 +66,13 @@ interface Supplier {
 
 const Inventory = () => {
   const { t } = useLanguage();
+  const { showToast, ToastContainer } = useToast();
   const navigate = useNavigate();
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'material' | 'product'>('material');
-  const [error, setError] = useState<string>('');
-  const [successMessage, setSuccessMessage] = useState<string>('');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [showReceiptDialog, setShowReceiptDialog] = useState(false);
   const [showAddInventoryDialog, setShowAddInventoryDialog] = useState(false);
@@ -101,9 +102,12 @@ const Inventory = () => {
     stockDocumentationId: '',
   });
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [stockDocFile, setStockDocFile] = useState<File | null>(null);
   const [previewDocumentationId, setPreviewDocumentationId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(15);
   const { showAlert } = useDialog();
   const [receiptData, setReceiptData] = useState<{
     stockOpname: Array<{ date: string; qty: number; source: string }>;
@@ -123,6 +127,7 @@ const Inventory = () => {
   useEffect(() => {
     loadInventory();
     loadMaterials();
+    loadProducts();
     loadSuppliers();
   }, []);
 
@@ -131,7 +136,16 @@ const Inventory = () => {
       const data = extractStorageValue(await storageService.get<Material[]>('materials')) || [];
       setMaterials(data);
     } catch (error) {
-      console.error('Error loading materials:', error);
+      // Silent fail
+    }
+  };
+
+  const loadProducts = async () => {
+    try {
+      const data = extractStorageValue(await storageService.get<any[]>(StorageKeys.PACKAGING.PRODUCTS)) || [];
+      setProducts(data);
+    } catch (error) {
+      // Silent fail
     }
   };
 
@@ -140,24 +154,39 @@ const Inventory = () => {
       const data = extractStorageValue(await storageService.get<Supplier[]>('suppliers')) || [];
       setSuppliers(data);
     } catch (error) {
-      console.error('Error loading suppliers:', error);
+      // Silent fail
     }
   };
 
-  const handleMaterialSelect = (materialId: string) => {
-    const selectedMaterial = materials.find(m => m.id === materialId);
-    if (selectedMaterial) {
-      // Auto-fill dari master material
-      setAddInventoryForm({
-        ...addInventoryForm,
-        selectedMaterialId: materialId,
-        codeItem: selectedMaterial.kode || '',
-        description: selectedMaterial.nama || '',
-        kategori: selectedMaterial.kategori || '',
-        satuan: selectedMaterial.satuan || 'PCS',
-        price: String(selectedMaterial.harga || selectedMaterial.priceMtr || 0),
-        supplierName: selectedMaterial.supplier || '',
-      });
+  const handleMaterialSelect = (itemId: string) => {
+    if (addInventoryForm.kategori === 'Material') {
+      const selectedMaterial = materials.find(m => m.id === itemId);
+      if (selectedMaterial) {
+        setAddInventoryForm({
+          ...addInventoryForm,
+          selectedMaterialId: itemId,
+          codeItem: selectedMaterial.kode || '',
+          description: selectedMaterial.nama || '',
+          kategori: selectedMaterial.kategori || 'Material',
+          satuan: selectedMaterial.satuan || 'PCS',
+          price: String(selectedMaterial.harga || selectedMaterial.priceMtr || 0),
+          supplierName: selectedMaterial.supplier || '',
+        });
+      }
+    } else if (addInventoryForm.kategori === 'Product') {
+      const selectedProduct = products.find(p => p.id === itemId);
+      if (selectedProduct) {
+        setAddInventoryForm({
+          ...addInventoryForm,
+          selectedMaterialId: itemId,
+          codeItem: selectedProduct.product_id || selectedProduct.kode || '',
+          description: selectedProduct.productName || selectedProduct.nama || '',
+          kategori: 'Product',
+          satuan: selectedProduct.satuan || selectedProduct.unit || 'PCS',
+          price: String(selectedProduct.price || selectedProduct.hargaSales || 0),
+          supplierName: selectedProduct.customer || '',
+        });
+      }
     }
   };
 
@@ -206,8 +235,6 @@ const Inventory = () => {
     }
 
     setLoading(true);
-    setError('');
-    setSuccessMessage('');
     try {
       const existingInventory = extractStorageValue(await storageService.get<InventoryItem[]>('inventory'));
       const currentUser = getCurrentUser();
@@ -255,7 +282,7 @@ const Inventory = () => {
         supplier: newInventoryItem.supplierName,
       });
 
-      setSuccessMessage('✅ Inventory item added successfully!');
+      showToast('Inventory item added successfully', 'success');
       setAddInventoryForm({
         selectedMaterialId: '',
         supplierName: '',
@@ -271,7 +298,7 @@ const Inventory = () => {
       setShowAddInventoryDialog(false);
       loadInventory(); // Reload to show new item
     } catch (err: any) {
-      setError(`Failed to add inventory: ${err.message}`);
+      showToast(`Failed to add inventory: ${err.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -301,8 +328,6 @@ const Inventory = () => {
     }
 
     setLoading(true);
-    setError('');
-    setSuccessMessage('');
     try {
       const existingInventory = extractStorageValue(await storageService.get<InventoryItem[]>('inventory'));
       
@@ -334,7 +359,7 @@ const Inventory = () => {
 
       await storageService.set(StorageKeys.PACKAGING.INVENTORY, updatedInventory);
       
-      setSuccessMessage('✅ Inventory item updated successfully!');
+      showToast('Inventory item updated successfully', 'success');
       setShowEditInventoryDialog(false);
       setEditingItem(null);
       setEditInventoryForm({
@@ -351,7 +376,7 @@ const Inventory = () => {
       });
       loadInventory(); // Reload to show updated item
     } catch (err: any) {
-      setError(`Failed to update inventory: ${err.message}`);
+      showToast(`Failed to update inventory: ${err.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -366,13 +391,19 @@ const Inventory = () => {
 
     const handleStorageChange = (e: CustomEvent) => {
       const key = e.detail?.key || '';
-      // Hanya refresh jika inventory data berubah
-      if (key === 'inventory' || key === 'packaging/inventory') {
+      // Refresh jika inventory, materials, atau products data berubah
+      if (key === 'inventory' || key === 'packaging/inventory' || key === 'materials' || key === StorageKeys.PACKAGING.PRODUCTS) {
         if (timeoutId) {
           clearTimeout(timeoutId);
         }
         timeoutId = setTimeout(() => {
-          loadInventory();
+          if (key === 'materials') {
+            loadMaterials();
+          } else if (key === StorageKeys.PACKAGING.PRODUCTS) {
+            loadProducts();
+          } else {
+            loadInventory();
+          }
         }, 500); // Debounce 500ms
       }
     };
@@ -390,7 +421,6 @@ const Inventory = () => {
   const loadInventory = async () => {
     try {
       setLoading(true);
-      setError('');
       const rawData = await storageService.get<InventoryItem[]>('inventory');
       
       // Extract and validate data using global helper
@@ -441,8 +471,7 @@ const Inventory = () => {
       });
       setInventory(calculatedData);
     } catch (error: any) {
-      console.error('Error loading inventory:', error);
-      setError(`Gagal memuat data inventory: ${error.message || 'Unknown error'}. Coba refresh halaman atau import data ulang.`);
+      showToast(`Failed to load inventory: ${error.message || 'Unknown error'}. Try refreshing the page or importing data again.`, 'error');
       setInventory([]);
     } finally {
       setLoading(false);
@@ -465,10 +494,6 @@ const Inventory = () => {
       const kategori = (item.kategori || '').toLowerCase().trim();
       return kategori !== 'material' && kategori !== 'product';
     });
-    if (uncategorized.length > 0) {
-      console.warn(`[Inventory] Found ${uncategorized.length} uncategorized items:`, uncategorized.map(i => ({ codeItem: i.codeItem, kategori: i.kategori })));
-    }
-    
     
     return { materialItems, productItems };
   }, [inventory]);
@@ -491,16 +516,21 @@ const Inventory = () => {
     return filtered.sort((a, b) => (b.nextStock || 0) - (a.nextStock || 0));
   }, [categorizeInventory, activeTab, searchQuery]);
 
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredInventory.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedInventory = filteredInventory.slice(startIndex, endIndex);
+
   // Handle Manual Reset
   const handleResetData = async () => {
     try {
       setLoading(true);
       await storageService.set(StorageKeys.PACKAGING.INVENTORY, []);
       setInventory([]);
-      setSuccessMessage('✅ Data inventory berhasil direset. Silakan import data baru dari Excel.');
-      setError('');
+      showToast('Inventory data reset successfully. Please import new data from Excel.', 'success');
     } catch (error: any) {
-      setError(`Gagal reset data: ${error.message}`);
+      showToast(`Failed to reset data: ${error.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -585,10 +615,9 @@ const Inventory = () => {
       
       const fileName = `Inventory_${activeTab === 'material' ? 'Material' : 'Product'}_Template.xlsx`;
       XLSX.writeFile(wb, fileName);
-      setSuccessMessage('✅ Template downloaded! Silakan isi data sesuai format dan import kembali.');
-      setError('');
+      showToast('Template downloaded! Please fill in the data according to the format and import again.', 'success');
     } catch (error: any) {
-      setError(`Error downloading template: ${error.message}`);
+      showToast(`Error downloading template: ${error.message}`, 'error');
     }
   };
 
@@ -618,7 +647,7 @@ const Inventory = () => {
         const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
         
         if (jsonData.length === 0) {
-          setError('File Excel kosong atau tidak ada data yang bisa diimport.');
+          showToast('File Excel kosong atau tidak ada data yang bisa diimport.');
           return;
         }
 
@@ -775,7 +804,7 @@ const Inventory = () => {
         });
 
         if (newItems.length === 0) {
-          setError('Tidak ada data valid yang ditemukan di file Excel. Pastikan format kolom sesuai.');
+          showToast('Tidak ada data valid yang ditemukan di file Excel. Pastikan format kolom sesuai.');
           return;
         }
 
@@ -812,21 +841,18 @@ const Inventory = () => {
           }
         });
         const deduplicated = Array.from(deduplicatedMap.values());
-        
-        console.log(`[Inventory] Imported ${newItems.length} items, total ${deduplicated.length} items (after deduplication)`);
 
         // Save to storage
         await storageService.set(StorageKeys.PACKAGING.INVENTORY, deduplicated);
         setInventory(deduplicated);
         
-        let successMsg = `✅ Berhasil import ${newItems.length} item`;
+        let successMsg = `Successfully imported ${newItems.length} items`;
         if (errors.length > 0) {
-          successMsg += `. Ada ${errors.length} baris yang error: ${errors.slice(0, 3).join('; ')}${errors.length > 3 ? '...' : ''}`;
+          successMsg += `. ${errors.length} rows had errors: ${errors.slice(0, 3).join('; ')}${errors.length > 3 ? '...' : ''}`;
         }
-        setSuccessMessage(successMsg);
-        setError('');
+        showToast(successMsg, 'success');
       } catch (error: any) {
-        setError(`Gagal import Excel: ${error.message}. Pastikan file adalah Excel yang valid (.xlsx atau .xls).`);
+        showToast(`Failed to import Excel: ${error.message}. Make sure the file is a valid Excel file (.xlsx or .xls).`, 'error');
       } finally {
         setImportLoading(false);
       }
@@ -904,10 +930,9 @@ const Inventory = () => {
       
       const fileName = `Inventory_${activeTab === 'product' ? 'Products' : 'Materials'}_${new Date().toISOString().split('T')[0]}.xlsx`;
       XLSX.writeFile(wb, fileName);
-      setSuccessMessage(`✅ Berhasil export ${dataToExport.length} ${activeTab === 'product' ? 'products' : 'materials'} ke ${fileName}`);
-      setError('');
+      showToast(`Successfully exported ${dataToExport.length} ${activeTab === 'product' ? 'products' : 'materials'} to ${fileName}`, 'success');
     } catch (error: any) {
-      setError(`Gagal export ke Excel: ${error.message}`);
+      showToast(`Failed to export to Excel: ${error.message}`, 'error');
     }
   };
 
@@ -1090,7 +1115,6 @@ const Inventory = () => {
           }
 
           if (!materialId) {
-            console.warn(`⚠️ [GRN Inventory] Material ID tidak ditemukan untuk GRN ${grnNo}. Skip.`);
             return;
           }
 
@@ -1105,7 +1129,6 @@ const Inventory = () => {
           if (!item) {
             const material = materialsMap.get(originalMaterialId);
             if (!material) {
-              console.warn(`⚠️ [GRN Inventory] Material tidak ditemukan di master: ${originalMaterialId}`);
               return;
             }
 
@@ -1181,7 +1204,6 @@ const Inventory = () => {
             }
             
             if (!materialData) {
-              console.warn(`⚠️ Material not found in master data: ${originalMaterialId}`);
               return;
             }
             
@@ -1419,14 +1441,13 @@ const Inventory = () => {
       await storageService.set(StorageKeys.PACKAGING.INVENTORY, deduplicated);
       setInventory(deduplicated);
       
-      let message = `✅ Inventory berhasil di-recalculate dari source data! Total items: ${recalculatedInventory.length}`;
+      let message = `Inventory recalculated successfully from source data! Total items: ${recalculatedInventory.length}`;
       if (outgoingFixCount > 0) {
-        message += `. ⚠️ ${outgoingFixCount} item memiliki outgoing > stok tersedia dan sudah otomatis dikoreksi.`;
+        message += `. ${outgoingFixCount} items had outgoing > available stock and were automatically corrected.`;
       }
-      setSuccessMessage(message);
-      setError('');
+      showToast(message, 'success');
     } catch (error: any) {
-      setError(`Gagal recalculate inventory: ${error.message}`);
+      showToast(`Failed to recalculate inventory: ${error.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -1496,7 +1517,6 @@ const Inventory = () => {
         purchasing: purchasingReceipts,
       });
     } catch (error: any) {
-      console.error('Error loading receipt data:', error);
       setReceiptData({ stockOpname: [], purchasing: [] });
     }
   };
@@ -1510,6 +1530,7 @@ const Inventory = () => {
     {
       key: 'kodeIpos',
       header: 'KODE IPOS',
+      hidden: true,
       render: (item: InventoryItem) => item.kodeIpos || '-',
     },
     { key: 'description', header: t('common.description') || 'DESCRIPTION/NAMA ITEM' },
@@ -1669,7 +1690,10 @@ const Inventory = () => {
           <div className="tab-container" style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
             <button
               className={`tab-button ${activeTab === 'material' ? 'active' : ''}`}
-              onClick={() => setActiveTab('material')}
+              onClick={() => {
+                setActiveTab('material');
+                setCurrentPage(1);
+              }}
               style={{
                 padding: '10px 20px',
                 fontSize: '14px',
@@ -1689,7 +1713,10 @@ const Inventory = () => {
             </button>
             <button
               className={`tab-button ${activeTab === 'product' ? 'active' : ''}`}
-              onClick={() => setActiveTab('product')}
+              onClick={() => {
+                setActiveTab('product');
+                setCurrentPage(1);
+              }}
               style={{
                 padding: '10px 20px',
                 fontSize: '14px',
@@ -1711,7 +1738,10 @@ const Inventory = () => {
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
             placeholder="Search by Kode Item, Nama Item, or Supplier Name..."
             style={{
               flex: 1,
@@ -1725,113 +1755,114 @@ const Inventory = () => {
             }}
           />
         </div>
-        {error && (
-          <div style={{ 
-            padding: '16px', 
-            marginBottom: '16px', 
-            backgroundColor: '#fee', 
-            border: '1px solid #fcc', 
-            borderRadius: '6px',
-            color: '#c33'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <strong>⚠️ Error:</strong> {error}
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                {error.includes('corrupt') || error.includes('invalid') ? (
-                  <button 
-                    onClick={handleResetData}
-                    disabled={loading}
-                    style={{ 
-                      padding: '6px 12px', 
-                      backgroundColor: '#c33', 
-                      border: 'none',
-                      borderRadius: '4px',
-                      color: 'white',
-                      cursor: loading ? 'not-allowed' : 'pointer',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      opacity: loading ? 0.6 : 1
-                    }}
-                  >
-                    🔄 Reset Data
-                  </button>
-                ) : null}
-                <button 
-                  onClick={() => setError('')}
-                  style={{ 
-                    padding: '6px 12px', 
-                    backgroundColor: 'transparent', 
-                    border: '1px solid #c33',
-                    borderRadius: '4px',
-                    color: '#c33',
-                    cursor: 'pointer',
-                    fontSize: '12px'
-                  }}
-                >
-                  Tutup
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-        {successMessage && (
-          <div style={{ 
-            padding: '16px', 
-            marginBottom: '16px', 
-            backgroundColor: '#efe', 
-            border: '1px solid #cfc', 
-            borderRadius: '6px',
-            color: '#363'
-          }}>
-            <strong>✅ Sukses:</strong> {successMessage}
-            <button 
-              onClick={() => setSuccessMessage('')}
-              style={{ 
-                marginLeft: '12px', 
-                padding: '4px 8px', 
-                backgroundColor: 'transparent', 
-                border: '1px solid #363',
-                borderRadius: '4px',
-                color: '#363',
-                cursor: 'pointer',
-                fontSize: '12px'
-              }}
-            >
-              Tutup
-            </button>
-          </div>
-        )}
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-            Memuat inventory...
+            Loading inventory...
           </div>
         ) : filteredInventory.length === 0 ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-            {error ? 'Tidak ada data yang bisa ditampilkan karena terjadi error.' : searchQuery ? 'Tidak ada item yang cocok dengan pencarian.' : 'Tidak ada data inventory. Klik "Import Stock Opname" untuk mengimpor dari Excel.'}
+            {searchQuery ? 'No items match your search.' : 'No inventory data. Click "Import Stock Opname" to import from Excel.'}
           </div>
         ) : (
-          <Table
-            columns={columns}
-            data={filteredInventory}
-            emptyMessage="Tidak ada data inventory"
-            onRowClick={handleRowClick}
-          />
-        )}
-        {filteredInventory.length > 0 && (
-          <div style={{ marginTop: '16px', padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '4px' }}>
-            <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary)' }}>
-              <strong>Total Item:</strong> {filteredInventory.length} item
-              {searchQuery
-                ? ` (disaring dari ${
+          <>
+            <Table
+              columns={columns}
+              data={paginatedInventory}
+              showPagination={false}
+              emptyMessage="No inventory data"
+              onRowClick={handleRowClick}
+            />
+            
+            {/* Pagination Controls */}
+            {(totalPages > 1 || filteredInventory.length > 0) && (
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                gap: '8px', 
+                marginTop: '20px',
+                padding: '16px',
+                borderTop: '1px solid var(--border)'
+              }}>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+                  Showing {startIndex + 1}-{Math.min(endIndex, filteredInventory.length)} of {filteredInventory.length} items
+                  {searchQuery && ` (filtered from ${
                     activeTab === 'product'
                       ? categorizeInventory.productItems.length
                       : categorizeInventory.materialItems.length
-                  } total ${activeTab === 'product' ? 'produk' : 'material'})`
-                : ''}
-            </p>
-          </div>
+                  } total)`}
+                </div>
+                {totalPages > 1 && (
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'center', 
+                  alignItems: 'center', 
+                  gap: '8px'
+                }}>
+                <Button 
+                  variant="secondary" 
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                >
+                  First
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <div style={{ 
+                  display: 'flex', 
+                  gap: '4px',
+                  alignItems: 'center'
+                }}>
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? 'primary' : 'secondary'}
+                        onClick={() => setCurrentPage(pageNum)}
+                        style={{ minWidth: '40px', padding: '6px 12px' }}
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <Button 
+                  variant="secondary" 
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                >
+                  Last
+                </Button>
+                <div style={{ marginLeft: '16px', color: 'var(--text-secondary)', fontSize: '14px' }}>
+                  Page {currentPage} of {totalPages}
+                </div>
+                </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </Card>
 
@@ -1981,14 +2012,14 @@ const Inventory = () => {
                   borderRadius: '6px',
                   backgroundColor: 'var(--bg-input)',
                 }}>
-                  {(addInventoryForm.kategori === 'Material' ? materials : []).filter(m => 
+                  {(addInventoryForm.kategori === 'Material' ? materials : products).filter(m => 
                     !addInventoryForm.selectedMaterialId || 
-                    m.kode.toLowerCase().includes(addInventoryForm.selectedMaterialId.toLowerCase()) ||
-                    m.nama.toLowerCase().includes(addInventoryForm.selectedMaterialId.toLowerCase())
-                  ).slice(0, 10).map((material) => (
+                    (m.kode || m.product_id || '').toLowerCase().includes(addInventoryForm.selectedMaterialId.toLowerCase()) ||
+                    (m.nama || m.productName || '').toLowerCase().includes(addInventoryForm.selectedMaterialId.toLowerCase())
+                  ).slice(0, 10).map((item) => (
                     <div
-                      key={material.id}
-                      onClick={() => handleMaterialSelect(material.id)}
+                      key={item.id}
+                      onClick={() => handleMaterialSelect(item.id)}
                       style={{
                         padding: '10px 12px',
                         borderBottom: '1px solid var(--border-color)',
@@ -2004,13 +2035,13 @@ const Inventory = () => {
                         (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
                       }}
                     >
-                      <strong>{material.kode}</strong> - {material.nama}
+                      <strong>{item.kode || item.product_id}</strong> - {item.nama || item.productName}
                     </div>
                   ))}
-                  {(addInventoryForm.kategori === 'Material' ? materials : []).filter(m => 
+                  {(addInventoryForm.kategori === 'Material' ? materials : products).filter(m => 
                     !addInventoryForm.selectedMaterialId || 
-                    m.kode.toLowerCase().includes(addInventoryForm.selectedMaterialId.toLowerCase()) ||
-                    m.nama.toLowerCase().includes(addInventoryForm.selectedMaterialId.toLowerCase())
+                    (m.kode || m.product_id || '').toLowerCase().includes(addInventoryForm.selectedMaterialId.toLowerCase()) ||
+                    (m.nama || m.productName || '').toLowerCase().includes(addInventoryForm.selectedMaterialId.toLowerCase())
                   ).length === 0 && (
                     <div style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontSize: '13px' }}>
                       Tidak ada {addInventoryForm.kategori} yang cocok
@@ -2191,13 +2222,6 @@ const Inventory = () => {
                 value={editInventoryForm.codeItem}
                 onChange={(v) => setEditInventoryForm({ ...editInventoryForm, codeItem: v })}
                 placeholder="Enter code item"
-              />
-
-              <Input
-                label="Kode Ipos"
-                value={editInventoryForm.kodeIpos}
-                onChange={(v) => setEditInventoryForm({ ...editInventoryForm, kodeIpos: v })}
-                placeholder="Enter kode ipos (optional)"
               />
 
               <Input

@@ -955,6 +955,7 @@ export default function FullReports() {
                 data={previewData} 
                 title={previewTitle}
                 reportId={previewReportId}
+                headers={previewReportId === 'custom-packaging-sales-export' ? ['NO', 'DATE', 'KODE PEL.', 'CUSTOMER', 'KODE ITEM', 'NAMA ITEM', 'NO PO/SO', 'QTY', 'HARGA', 'TOTAL', 'INITIAL STOCK', 'PRODUCTION', 'DELIVERY', 'REMAIN PO', 'NEXT STOCK', 'TOTAL TAGIHAN', 'TOTAL REMAIN PO'] : undefined}
               />
             </Card>
           ) : (

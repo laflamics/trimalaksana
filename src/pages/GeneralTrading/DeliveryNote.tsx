@@ -752,22 +752,8 @@ const DeliveryNote = () => {
     const activeData = filterActiveItems(data);
     setDeliveries((prev: DeliveryNote[]) => {
       // Optimize: hanya update jika data benar-benar berubah
-      // CRITICAL: Compare dengan signedDocumentId dan signedDocumentName untuk detect changes
-      const prevStr = JSON.stringify(prev.map(d => ({
-        id: d.id,
-        sjNo: d.sjNo,
-        status: d.status,
-        signedDocumentId: d.signedDocumentId ? 'hasSignedDoc' : null,
-        signedDocumentName: d.signedDocumentName
-      })));
-      const activeStr = JSON.stringify(activeData.map(d => ({
-        id: d.id,
-        sjNo: d.sjNo,
-        status: d.status,
-        signedDocumentId: d.signedDocumentId ? 'hasSignedDoc' : null,
-        signedDocumentName: d.signedDocumentName
-      })));
-      if (prevStr === activeStr && prev.length === activeData.length) {
+      // Compare full data to detect any field changes (driver, vehicleNo, customer, items, etc.)
+      if (JSON.stringify(prev) === JSON.stringify(activeData)) {
         return prev;
       }
       return activeData;
@@ -1551,7 +1537,7 @@ const DeliveryNote = () => {
         unit: 'PCS',
       }] : []),
     });
-    setShowForm(true);
+    // Don't show inline form - only use EditSJDialog
   };
 
   const handleSave = async () => {

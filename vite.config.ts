@@ -14,6 +14,13 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    proxy: {
+      '/api/blob/upload': {
+        target: 'https://trima-laksana-erp.vercel.app',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
   },
   build: {
     outDir: '../dist/renderer',

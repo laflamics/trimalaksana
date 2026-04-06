@@ -29,7 +29,7 @@ const PackagingLayout = ({ children }: LayoutProps) => {
   const { t } = useLanguage();
   // 🚀 OPTIMASI: Gunakan path relatif dari public folder sebagai default
   // Jangan gunakan path yang bisa menjadi file://
-  const [iconSrc, setIconSrc] = useState<string>('/noxtiz.ico');
+  const [iconSrc, setIconSrc] = useState<string>('/tljp.ico');
   const [iconError, setIconError] = useState(false);
 
   useEffect(() => {
@@ -60,7 +60,7 @@ const PackagingLayout = ({ children }: LayoutProps) => {
         // Ini lebih reliable daripada menggunakan file:// path
         if (electronAPI.getResourceBase64) {
           try {
-            const base64Icon = await electronAPI.getResourceBase64('noxtiz.ico');
+            const base64Icon = await electronAPI.getResourceBase64('tljp.ico');
             if (base64Icon && base64Icon.startsWith('data:')) {
               setIconSrc(base64Icon);
               return;
@@ -72,7 +72,7 @@ const PackagingLayout = ({ children }: LayoutProps) => {
         
         // Fallback: coba load sebagai base64 menggunakan loadIconAsBase64
         try {
-          const base64Icon = await loadIconAsBase64('noxtiz.ico');
+          const base64Icon = await loadIconAsBase64('tljp.ico');
           if (base64Icon && base64Icon.startsWith('data:')) {
             setIconSrc(base64Icon);
             return;
@@ -86,11 +86,11 @@ const PackagingLayout = ({ children }: LayoutProps) => {
       // Di Electron production, coba relative path dulu, lalu absolute path
       const isElectron = typeof window !== 'undefined' && (window as any).electronAPI;
       if (isElectron) {
-        // Di Electron, coba relative path dulu (./noxtiz.ico)
-        setIconSrc('./noxtiz.ico');
+        // Di Electron, coba relative path dulu (./tljp.ico)
+        setIconSrc('./tljp.ico');
       } else {
         // Di browser, gunakan absolute path dari public folder
-        setIconSrc('/noxtiz.ico');
+        setIconSrc('/tljp.ico');
       }
     };
     
@@ -167,7 +167,8 @@ const PackagingLayout = ({ children }: LayoutProps) => {
         { title: t('salesOrder.title'), path: '/packaging/sales-orders', icon: '📋' },
         { title: t('packaging.ppic'), path: '/packaging/ppic', icon: '📅' },
         { title: t('packaging.purchasing'), path: '/packaging/purchasing', icon: '🛒' },
-        { title: t('production.title'), path: '/packaging/production', icon: '⚙️' },
+        // { title: t('production.title'), path: '/packaging/production', icon: '⚙️' }, // HIDDEN
+        { title: 'Production Daily', path: '/packaging/production-daily', icon: '📊' },
         { title: t('qaqc.title'), path: '/packaging/qa-qc', icon: '✅' },
         { title: t('delivery.title'), path: '/packaging/delivery-note', icon: '🚚' },
         { title: 'Return', path: '/packaging/return', icon: '↩️' },
@@ -180,20 +181,11 @@ const PackagingLayout = ({ children }: LayoutProps) => {
       items: [
         { title: t('finance.invoices'), path: '/packaging/finance/invoices', icon: '🧾' },
         { title: t('finance.payments'), path: '/packaging/finance/payments', icon: '💳' },
+        { title: 'Accounts Receivable', path: '/packaging/finance/ar', icon: '📥' },
+        { title: 'Accounts Payable', path: '/packaging/finance/ap', icon: '📤' },
         { title: 'Operational Expenses', path: '/packaging/finance/operational-expenses', icon: '💰' },
-        { title: t('finance.reports'), path: '/packaging/finance/reports', icon: '📊' },
+        { title: t('User Guide'), path: '/packaging/finance/reports', icon: '📊' },
         { title: 'All Reports', path: '/packaging/finance/all-reports', icon: '📈' },
-        { title: t('finance.accountsReceivable'), path: '/packaging/finance/ar', icon: '�' },
-        { title: t('finance.accountsPayable'), path: '/packaging/finance/ap', icon: '�' },
-        { title: t('finance.taxManagement'), path: '/packaging/finance/tax-management', icon: '🧾' },
-        { title: 'COA', path: '/packaging/finance/coa', icon: '�' },
-      ],
-    },
-    {
-      title: 'HR',
-      type: 'section',
-      items: [
-        { title: 'HRD', path: '/packaging/hr', icon: '�' },
       ],
     },
     {
@@ -203,10 +195,8 @@ const PackagingLayout = ({ children }: LayoutProps) => {
         { title: t('settings.title'), path: '/packaging/settings', icon: '⚙️' },
         { title: 'Report', path: '/packaging/settings/report', icon: '📄' },
         { title: 'Full Reports', path: '/packaging/settings/full-reports', icon: '📊' },
-        { title: 'DB Activity', path: '/packaging/settings/db-activity', icon: '📝' },
         { title: 'Server Data', path: '/packaging/settings/server-data', icon: '🗄️' },
         { title: 'User Control', path: '/packaging/settings/user-control', icon: '👤' },
-        { title: 'Test Automation', path: '/packaging/settings/test-automation', icon: '🧪' },
       ],
     },
   ], [t]);
@@ -228,8 +218,14 @@ const PackagingLayout = ({ children }: LayoutProps) => {
       return menuItems;
     }
 
+    // If userMenuAccess is still loading or invalid, return empty menu
+    if (!userMenuAccess || typeof userMenuAccess !== 'object') {
+      return [];
+    }
+
     // User with menuAccess restrictions
-    const allowedMenus = new Set(userMenuAccess['packaging'] || []);
+    const packagingAccess = userMenuAccess['packaging'];
+    const allowedMenus = new Set(Array.isArray(packagingAccess) ? packagingAccess : []);
     
     // Settings menu items that are admin-only
     const adminOnlySettingsPaths = [
@@ -379,19 +375,19 @@ const PackagingLayout = ({ children }: LayoutProps) => {
                   height: '36px',
                   transition: 'all 0.2s ease',
                 }}
-                title="Kembali ke Business Selector"
+                title="Back to Business Selector"
               >
                 <img 
                   src={(() => {
                     // 🚀 OPTIMASI: Pastikan tidak pernah menggunakan file:// path untuk prevent error log
-                    if (!iconSrc) return '/noxtiz.ico';
+                    if (!iconSrc) return '/tljp.ico';
                     // Hanya gunakan jika valid (data:, /, atau ./)
                     if (iconSrc.startsWith('data:') || iconSrc.startsWith('/') || iconSrc.startsWith('./')) {
                       return iconSrc;
                     }
                     // Skip jika file:// atau absolute Windows path - langsung return path yang valid
                     const electronAPI = (window as any).electronAPI;
-                    return electronAPI ? './noxtiz.ico' : '/noxtiz.ico';
+                    return electronAPI ? './tljp.ico' : '/tljp.ico';
                   })()}
                   alt="TLJP" 
                   style={{
@@ -411,14 +407,14 @@ const PackagingLayout = ({ children }: LayoutProps) => {
                       if (currentSrc.startsWith('file://') || currentSrc.match(/^[A-Z]:\\/) || currentSrc.match(/^[A-Z]:\//)) {
                         // Langsung set ke path yang valid, jangan trigger error lagi
                         const electronAPI = (window as any).electronAPI;
-                        img.src = electronAPI ? './noxtiz.ico' : '/noxtiz.ico';
+                        img.src = electronAPI ? './tljp.ico' : '/tljp.ico';
                         return;
                       }
                       
                       // Coba PNG sebagai fallback jika belum
-                      if (!currentSrc.includes('noxtiz.png') && !currentSrc.startsWith('data:')) {
+                      if (!currentSrc.includes('tljp.png') && !currentSrc.startsWith('data:')) {
                         const electronAPI = (window as any).electronAPI;
-                        img.src = electronAPI ? './noxtiz.png' : '/noxtiz.png';
+                        img.src = electronAPI ? './tljp.png' : '/tljp.png';
                       } else {
                         // Jika semua gagal, hide image untuk prevent error berulang
                         img.style.display = 'none';

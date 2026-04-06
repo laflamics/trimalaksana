@@ -117,113 +117,168 @@ export const useDialog = () => {
           left: 0,
           right: 0,
           bottom: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '16px',
         }}
       >
         <div 
-          className="dialog-card" 
           onClick={(e) => e.stopPropagation()} 
           style={{ 
-            maxWidth: '500px', 
-            width: '90%',
-            position: 'relative',
+            maxWidth: '600px', 
+            width: '100%',
+            background: 'var(--bg-secondary)',
+            borderRadius: '12px',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
             overflow: 'hidden',
+            animation: 'slideUp 0.3s ease-out',
           }}
         >
-          {/* Modern gradient background effect */}
+          {/* Header dengan gradient bar */}
           <div 
             style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: '4px',
-              background: iconInfo.type === 'success' ? 'linear-gradient(90deg, #4caf50, #66bb6a)' :
-                          iconInfo.type === 'error' ? 'linear-gradient(90deg, #f44336, #e57373)' :
-                          iconInfo.type === 'warning' ? 'linear-gradient(90deg, #ff9800, #ffb74d)' :
-                          'linear-gradient(90deg, #2196f3, #64b5f6)',
-              zIndex: 1,
+              padding: '24px',
+              borderBottom: '1px solid var(--border-color)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '16px',
             }}
-          />
-          
-          <div style={{ position: 'relative', zIndex: 2 }}>
-            {/* Icon dengan modern design */}
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '16px', 
-              marginBottom: '20px' 
-            }}>
-              <div 
-                className={`dialog-icon ${iconInfo.type}`}
-                style={{
-                  position: 'relative',
-                  boxShadow: iconInfo.type === 'success' ? '0 4px 12px rgba(76, 175, 80, 0.3)' :
-                             iconInfo.type === 'error' ? '0 4px 12px rgba(244, 67, 54, 0.3)' :
-                             iconInfo.type === 'warning' ? '0 4px 12px rgba(255, 152, 0, 0.3)' :
-                             '0 4px 12px rgba(33, 150, 243, 0.3)',
-                }}
-              >
-                {iconInfo.icon}
-              </div>
-              <h3 className="dialog-title" style={{ margin: 0, flex: 1 }}>
-                {dialogState.title}
-              </h3>
+          >
+            {/* Icon */}
+            <div 
+              style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '24px',
+                fontWeight: 'bold',
+                background: iconInfo.type === 'success' ? 'rgba(76, 175, 80, 0.1)' :
+                            iconInfo.type === 'error' ? 'rgba(244, 67, 54, 0.1)' :
+                            iconInfo.type === 'warning' ? 'rgba(255, 152, 0, 0.1)' :
+                            'rgba(33, 150, 243, 0.1)',
+                color: iconInfo.type === 'success' ? '#4caf50' :
+                       iconInfo.type === 'error' ? '#f44336' :
+                       iconInfo.type === 'warning' ? '#ff9800' :
+                       '#2196f3',
+              }}
+            >
+              {iconInfo.icon}
             </div>
             
-            <div className="dialog-message" style={{ marginBottom: dialogState.type === 'prompt' ? '20px' : '24px' }}>
-              {dialogState.message}
-            </div>
+            {/* Title */}
+            <h2 style={{ 
+              margin: 0, 
+              fontSize: '18px',
+              fontWeight: '600',
+              color: 'var(--text-primary)',
+              flex: 1,
+            }}>
+              {dialogState.title}
+            </h2>
 
-          {dialogState.type === 'prompt' && (
-            <div style={{ marginBottom: '24px' }}>
-              <input
-                type="text"
-                value={dialogState.inputValue || ''}
-                onChange={(e) => setDialogState({ ...dialogState, inputValue: e.target.value })}
-                placeholder={dialogState.inputPlaceholder}
-                autoFocus
+            {/* Close button untuk alert */}
+            {dialogState.type === 'alert' && (
+              <button
+                onClick={closeDialog}
                 style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  border: '2px solid var(--border-color)',
-                  borderRadius: '8px',
-                  backgroundColor: 'var(--bg-secondary)',
-                  color: 'var(--text-primary)',
-                  fontSize: '14px',
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: 'var(--text-secondary)',
+                  padding: '0',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '6px',
                   transition: 'all 0.2s ease',
-                  outline: 'none',
                 }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = 'var(--primary-color)';
-                  e.target.style.boxShadow = '0 0 0 3px rgba(33, 150, 243, 0.1)';
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'var(--bg-tertiary)';
                 }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = 'var(--border-color)';
-                  e.target.style.boxShadow = 'none';
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'none';
                 }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && dialogState.onConfirm) {
-                    dialogState.onConfirm(dialogState.inputValue);
-                    closeDialog();
-                  } else if (e.key === 'Escape') {
-                    if (dialogState.onCancel) dialogState.onCancel();
-                    closeDialog();
-                  }
-                }}
-              />
-            </div>
-          )}
-          
-            <div className="dialog-actions" style={{ marginTop: '24px' }}>
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Content */}
+          <div style={{ padding: '24px' }}>
+            {/* Message */}
+            <p style={{ 
+              margin: '0 0 24px 0',
+              color: 'var(--text-secondary)',
+              fontSize: '14px',
+              lineHeight: '1.6',
+              whiteSpace: 'pre-wrap',
+            }}>
+              {dialogState.message}
+            </p>
+
+            {/* Prompt input */}
+            {dialogState.type === 'prompt' && (
+              <div style={{ marginBottom: '24px' }}>
+                <input
+                  type="text"
+                  value={dialogState.inputValue || ''}
+                  onChange={(e) => setDialogState({ ...dialogState, inputValue: e.target.value })}
+                  placeholder={dialogState.inputPlaceholder}
+                  autoFocus
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    border: '2px solid var(--border-color)',
+                    borderRadius: '8px',
+                    backgroundColor: 'var(--bg-tertiary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                    transition: 'all 0.2s ease',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--primary-color)';
+                    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(33, 150, 243, 0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--border-color)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && dialogState.onConfirm) {
+                      dialogState.onConfirm(dialogState.inputValue);
+                      closeDialog();
+                    } else if (e.key === 'Escape') {
+                      if (dialogState.onCancel) dialogState.onCancel();
+                      closeDialog();
+                    }
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Actions */}
+            <div style={{ 
+              display: 'flex', 
+              gap: '12px', 
+              justifyContent: 'flex-end',
+              flexWrap: 'wrap',
+            }}>
               {(dialogState.type === 'confirm' || dialogState.type === 'prompt') && (
                 <Button 
                   variant="secondary" 
                   onClick={() => {
                     if (dialogState.onCancel) dialogState.onCancel();
                     closeDialog();
-                  }}
-                  style={{
-                    minWidth: '100px',
                   }}
                 >
                   Cancel
@@ -243,13 +298,7 @@ export const useDialog = () => {
                       console.error('Error in onConfirm callback:', error);
                     }
                   }
-                  // IMPORTANT: Selalu tutup dialog setelah onConfirm dipanggil (untuk semua tipe dialog)
                   closeDialog();
-                }}
-                style={{
-                  minWidth: '100px',
-                  boxShadow: iconInfo.type === 'error' ? '0 4px 12px rgba(244, 67, 54, 0.3)' :
-                             '0 4px 12px rgba(33, 150, 243, 0.3)',
                 }}
               >
                 {dialogState.type === 'alert' ? 'OK' : dialogState.type === 'prompt' ? 'Submit' : 'Confirm'}

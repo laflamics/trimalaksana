@@ -813,7 +813,7 @@ const UnitScheduling = () => {
   }, [schedules, activeTab]);
 
   const confirmedDOColumns = [
-    { key: 'no', header: 'No' },
+    { key: 'no', header: 'No', width: '50px' },
     { key: 'doNo', header: 'DO No' },
     { key: 'customerName', header: 'Customer' },
     { key: 'customerAddress', header: 'Address' },
@@ -876,7 +876,7 @@ const UnitScheduling = () => {
   ];
 
   const columns = [
-    { key: 'no', header: 'No' },
+    { key: 'no', header: 'No', width: '50px' },
     { key: 'doNo', header: 'DO No' },
     { key: 'customerName', header: 'Customer' },
     { key: 'vehicleNo', header: 'Vehicle' },

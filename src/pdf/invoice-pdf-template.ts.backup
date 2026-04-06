@@ -1,3 +1,5 @@
+import { ensureLogoIsBase64 } from '../utils/hardcoded-logo';
+
 export function generateInvoiceHtml({
   logo,
   company,
@@ -11,6 +13,8 @@ export function generateInvoiceHtml({
   hideSO = false // Parameter untuk hide kolom SO (khusus trucking)
 }: any): string {
   try {
+    // Ensure logo is base64 string, fallback ke hardcoded logo
+    const logoSrc = ensureLogoIsBase64(logo);
     // Jika template2, template3, atau template4 dipilih, gunakan template yang sesuai
     if (templateType === 'template2') {
       return generateInvoiceHtmlTemplate2({
@@ -72,7 +76,16 @@ export function generateInvoiceHtml({
   const tax = bom.tax || 0;
   const discount = bom.discount || 0;
 
-  const tanggalJt = bom.tanggalJt || '';
+  // Hitung tanggal jatuh tempo dari createdAt + topDays
+  let tanggalJt = bom.tanggalJt || '';
+  if (!tanggalJt && inv.createdAt) {
+    const createdDate = new Date(inv.createdAt);
+    const topDays = bom.topDays || 30; // Default 30 hari jika tidak ada
+    const dueDate = new Date(createdDate);
+    dueDate.setDate(dueDate.getDate() + topDays);
+    tanggalJt = dueDate.toISOString();
+  }
+
   const dpPo = bom.dpPo || 0;
   const tunai = bom.tunai || 0;
   const kredit = bom.kredit || 0;
@@ -80,8 +93,14 @@ export function generateInvoiceHtml({
   // Hitung persentase potongan
   const discountPercent = subtotal > 0 ? (discount / subtotal) * 100 : 0;
 
-  // Format tanggal jatuh tempo
-  const formattedTanggalJt = tanggalJt ? new Date(tanggalJt).toLocaleDateString('id-ID') : '';
+  // Format tanggal jatuh tempo (dd/mm/yyyy)
+  const formattedTanggalJt = tanggalJt ? (() => {
+    const date = new Date(tanggalJt);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  })() : '';
 
   // Ambil nomor SO customer (bisa string atau array)
   const soNo = bom.soNo || inv.soNo || '';
@@ -306,20 +325,20 @@ export function generateInvoiceHtml({
 <style>
   @page { 
     size: 9.5in 11in; 
-    margin: -5mm 1px 10mm 5mm; 
+    margin: -28mm 2px 1mm 2px; 
   }
   
   body {
     font-family: sans-serif;
     font-size: 12px;
-    padding: 0 2px 10mm 4mm;
+    padding: 5mm 2px 10mm 2px;
   }
 
   .header {
     width: auto;
     padding-bottom: 10px;
     margin-bottom: 15px;
-    margin-top: -5mm;
+    margin-top: 0;
   }
 
   .header-top {
@@ -395,7 +414,7 @@ export function generateInvoiceHtml({
     font-weight: 900;
     text-align: center;
     text-decoration: underline;
-    margin-top: -3cm;
+    margin-top: -25mm;
     margin-left: 30px;
     position: relative;
     z-index: 20;
@@ -404,8 +423,8 @@ export function generateInvoiceHtml({
   .header-logo {
     height: 100px;
     width: auto;
-    margin-left: -0.5cm;
-    margin-top: -0.5cm;
+    margin-left: 0cm;
+    margin-top: 0;
     position: relative;
     z-index: 10;
     -webkit-print-color-adjust: exact;
@@ -450,6 +469,8 @@ export function generateInvoiceHtml({
   .bank-info {
     font-size: 11px;
     line-height: 1.4;
+    font-weight: bold; 
+
   }
 
   table {
@@ -581,14 +602,42 @@ export function generateInvoiceHtml({
     word-break: break-word;
   }
 
+  .keterangan-label {
+    display: inline-block;
+    font-weight: 700;
+    width: 120px;
+    vertical-align: top;
+    padding-right: 8px;
+    position: relative;
+  }
+
+  .keterangan-label-text {
+    text-align: left;
+    display: inline-block;
+  }
+
+  .keterangan-label-colon {
+    position: absolute;
+    right: calc(4px + 12mm);
+  }
+
+  .keterangan-value {
+    display: inline-block;
+    word-wrap: break-word;
+    word-break: break-word;
+    vertical-align: top;
+    margin-left: -12mm;
+  }
+
   .keterangan-item {
+    display: block;
     margin: 0;
     padding: 2px 0;
     word-wrap: break-word;
     word-break: break-word;
     white-space: pre-wrap;
-    display: block;
     min-height: 1.2em;
+    line-height: 1.6;
   }
 
 </style>
@@ -642,7 +691,7 @@ export function generateInvoiceHtml({
       </div>
       <div class="header-left-center">
         <div class="invoice-title">INVOICE</div>
-        <img src="${logo}" class="header-logo" alt="Logo" onerror="this.style.display='none'; this.onerror=null;" />
+        <img src="${logoSrc}" class="header-logo" alt="Logo" onerror="this.style.display='none'; this.onerror=null;" />
       </div>
       <div class="header-right">
         <div class="company-name">${company.companyName || ''}</div>
@@ -695,7 +744,7 @@ export function generateInvoiceHtml({
           </tr>
         `;
   }).join('')}
-      ${Array(Math.max(0, 25 - lines.length)).fill(0).map(() => `
+      ${Array(Math.max(0, 50 - lines.length)).fill(0).map(() => `
         <tr>
           <td></td>
           <td></td>
@@ -714,20 +763,43 @@ export function generateInvoiceHtml({
   <div class="summary-wrapper">
     <div class="summary-left">
       <div class="keterangan-block">
-        ${inv.notes ?
+        <div>
+          <span class="keterangan-label">
+            <span class="keterangan-label-text">Keterangan</span>
+            <span class="keterangan-label-colon"> :</span>
+          </span>
+          <span class="keterangan-value">
+            ${inv.notes ?
       (() => {
-        // Format notes: "DN: SJ-xxx DN: SJ-xxx" (satu string dengan spasi)
-        // Tampilkan langsung tanpa menghapus "DN:" karena format sudah benar
         const notesDisplay = inv.notes.trim();
         if (notesDisplay.length === 0) {
-          return '<div class="keterangan-item">Keterangan : -</div>';
+          return '<span class="keterangan-item">-</span>';
         }
-        return `<div class="keterangan-item">Keterangan : ${notesDisplay}</div>`;
+        
+        // Split by "PO :" dan "DO :" untuk extract individual items
+        const poMatches = notesDisplay.match(/PO\s*:\s*([^\s]+)/gi) || [];
+        const doMatches = notesDisplay.match(/DO\s*:\s*([^\s]+)/gi) || [];
+        
+        if (poMatches.length > 0 || doMatches.length > 0) {
+          // Render vertical list
+          let html = '';
+          poMatches.forEach((po: string, idx: number) => {
+            html += `<span class="keterangan-item">${po}</span>`;
+          });
+          doMatches.forEach((do_: string) => {
+            html += `<span class="keterangan-item">${do_}</span>`;
+          });
+          return html;
+        }
+        
+        return `<span class="keterangan-item">${notesDisplay}</span>`;
       })() :
       (soNoList.length > 0 ?
-        soNoList.map((so: string) => `<div class="keterangan-item">Keterangan : ${so}</div>`).join('')
-        : '<div class="keterangan-item">Keterangan : -</div>')
+        soNoList.map((so: string) => `<span class="keterangan-item">${so}</span>`).join('')
+        : '<span class="keterangan-item">-</span>')
     }
+          </span>
+        </div>
       </div>
 
       <!-- SIGNATURE -->
@@ -828,6 +900,9 @@ function generateInvoiceHtmlTemplate2({
   hideSO = false // Parameter untuk hide kolom SO (khusus trucking)
 }: any): string {
 
+  // Ensure logo is base64 string, fallback ke hardcoded logo
+  const logoSrc = ensureLogoIsBase64(logo);
+
   const bom = inv.bom || {};
   const lines = inv.lines || [];
 
@@ -898,7 +973,25 @@ function generateInvoiceHtmlTemplate2({
   const invoiceDate = invoiceDateObj.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const invoiceTime = invoiceDateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   const invoiceDateTime = `${invoiceDate} ${invoiceTime.replace(/:/g, '.')}`;
-  const tanggalJt = bom.tanggalJt ? new Date(bom.tanggalJt).toLocaleDateString('id-ID') : '';
+  
+  // Hitung tanggal jatuh tempo dari createdAt + topDays
+  let tanggalJtDate = bom.tanggalJt || '';
+  if (!tanggalJtDate && inv.createdAt) {
+    const createdDate = new Date(inv.createdAt);
+    const topDays = bom.topDays || 30; // Default 30 hari jika tidak ada
+    const dueDate = new Date(createdDate);
+    dueDate.setDate(dueDate.getDate() + topDays);
+    tanggalJtDate = dueDate.toISOString();
+  }
+  
+  // Format tanggal jatuh tempo (dd/mm/yyyy)
+  const tanggalJt = tanggalJtDate ? (() => {
+    const date = new Date(tanggalJtDate);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  })() : '';
 
   // Format customer address
   const customerName = inv.customer || '';
@@ -1002,7 +1095,7 @@ function generateInvoiceHtmlTemplate2({
 <style>
   @page { 
     size: 9.5in 11in; 
-    margin: -5mm 1px 10mm 5mm; 
+    margin: -30mm 2px 10mm 2px; 
   }
   
   * {
@@ -1014,7 +1107,7 @@ function generateInvoiceHtmlTemplate2({
   body {
     font-family: sans-serif;
     font-size: 13px;
-    padding: 0 2px 10mm 4mm;
+    padding: 0 2px 10mm 2px;
     color: #000;
   }
 
@@ -1022,7 +1115,7 @@ function generateInvoiceHtmlTemplate2({
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 10px;
+    margin-bottom: 5px;
   }
 
   .header-left {
@@ -1346,7 +1439,7 @@ function generateInvoiceHtmlTemplate2({
   <div class="header-container">
     <div class="header-left">
       <div class="logo-container">
-        ${logo ? `<img src="${logo}" alt="Logo" />` : ''}
+        ${logo ? `<img src="${logoSrc}" alt="Logo" />` : ''}
       </div>
       <div class="company-info">
         <div class="company-name">${company.companyName || 'PT TRIMA LAKSANA JAYA PRATAMA'}</div>
@@ -1444,7 +1537,7 @@ function generateInvoiceHtmlTemplate2({
           </tr>
         `;
       }).join('')}
-      ${Array(Math.max(0, 25 - lines.length)).fill(0).map(() => `
+      ${Array(Math.max(0, 50  - lines.length)).fill(0).map(() => `
         <tr>
           <td></td>
           <td></td>
@@ -1471,10 +1564,28 @@ function generateInvoiceHtmlTemplate2({
           <div class="notes-label">Pesan:</div>
           <div class="notes-content">${inv.notes ?
       (() => {
-        // Format notes: "DN: SJ-xxx DN: SJ-xxx" (satu string dengan spasi)
-        // Tampilkan langsung tanpa menghapus "DN:" karena format sudah benar
         const notesDisplay = inv.notes.trim();
-        return notesDisplay.length > 0 ? notesDisplay : '-';
+        if (notesDisplay.length === 0) {
+          return '-';
+        }
+        
+        // Split by "PO :" dan "DO :" untuk extract individual items
+        const poMatches = notesDisplay.match(/PO\s*:\s*([^\s]+)/gi) || [];
+        const doMatches = notesDisplay.match(/DO\s*:\s*([^\s]+)/gi) || [];
+        
+        if (poMatches.length > 0 || doMatches.length > 0) {
+          // Render vertical list
+          let html = '';
+          poMatches.forEach((po: string) => {
+            html += `<div style="margin: 2px 0;">${po}</div>`;
+          });
+          doMatches.forEach((do_: string) => {
+            html += `<div style="margin: 2px 0;">${do_}</div>`;
+          });
+          return html;
+        }
+        
+        return notesDisplay;
       })() :
       (soSpecNote || '-')
     }</div>
@@ -1535,6 +1646,9 @@ function generateInvoiceHtmlTemplate3({
   hideSO = false // Parameter untuk hide kolom SO (khusus trucking)
 }: any): string {
 
+  // Ensure logo is base64 string, fallback ke hardcoded logo
+  const logoSrc = ensureLogoIsBase64(logo);
+
   const bom = inv.bom || {};
   const lines = inv.lines || [];
 
@@ -1555,7 +1669,25 @@ function generateInvoiceHtmlTemplate3({
   const invoiceDate = invoiceDateObj.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const invoiceTime = invoiceDateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   const invoiceDateTime = `${invoiceDate} ${invoiceTime.replace(/:/g, '.')}`;
-  const tanggalJt = bom.tanggalJt ? new Date(bom.tanggalJt).toLocaleDateString('id-ID') : '';
+  
+  // Hitung tanggal jatuh tempo dari createdAt + topDays
+  let tanggalJtDate = bom.tanggalJt || '';
+  if (!tanggalJtDate && inv.createdAt) {
+    const createdDate = new Date(inv.createdAt);
+    const topDays = bom.topDays || 30; // Default 30 hari jika tidak ada
+    const dueDate = new Date(createdDate);
+    dueDate.setDate(dueDate.getDate() + topDays);
+    tanggalJtDate = dueDate.toISOString();
+  }
+  
+  // Format tanggal jatuh tempo (dd/mm/yyyy)
+  const tanggalJt = tanggalJtDate ? (() => {
+    const date = new Date(tanggalJtDate);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  })() : '';
 
   // Format customer address
   const customerName = inv.customer || '';
@@ -1659,7 +1791,7 @@ function generateInvoiceHtmlTemplate3({
 <style>
   @page { 
     size: 9.5in 11in; 
-    margin: -5mm 1px 10mm 5mm; 
+    margin: -30mm 2px 10mm 2px; 
   }
   
   * {
@@ -1671,7 +1803,7 @@ function generateInvoiceHtmlTemplate3({
   body {
     font-family: sans-serif;
     font-size: 13px;
-    padding: 0 2px 10mm 4mm;
+    padding: 0 2px 10mm 2px;
     color: #000;
   }
 
@@ -1679,7 +1811,7 @@ function generateInvoiceHtmlTemplate3({
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 10px;
+    margin-bottom: 5px;
   }
 
   .header-left {
@@ -1979,7 +2111,7 @@ function generateInvoiceHtmlTemplate3({
   <div class="header-container">
     <div class="header-left">
       <div class="logo-container">
-        ${logo ? `<img src="${logo}" alt="Logo" />` : ''}
+        ${logo ? `<img src="${logoSrc}" alt="Logo" />` : ''}
       </div>
       <div class="company-info">
         <div class="company-name">${company.companyName || 'PT TRIMA LAKSANA JAYA PRATAMA'}</div>
@@ -2077,7 +2209,7 @@ function generateInvoiceHtmlTemplate3({
           </tr>
         `;
       }).join('')}
-      ${Array(Math.max(0, 25 - lines.length)).fill(0).map(() => `
+      ${Array(Math.max(0, 50 - lines.length)).fill(0).map(() => `
         <tr>
           <td></td>
           <td></td>
@@ -2100,10 +2232,28 @@ function generateInvoiceHtmlTemplate3({
           <div class="notes-label">Pesan:</div>
           <div class="notes-content">${inv.notes ?
       (() => {
-        // Format notes: "DN: SJ-xxx DN: SJ-xxx" (satu string dengan spasi)
-        // Tampilkan langsung tanpa menghapus "DN:" karena format sudah benar
         const notesDisplay = inv.notes.trim();
-        return notesDisplay.length > 0 ? notesDisplay : '-';
+        if (notesDisplay.length === 0) {
+          return '-';
+        }
+        
+        // Split by "PO :" dan "DO :" untuk extract individual items
+        const poMatches = notesDisplay.match(/PO\s*:\s*([^\s]+)/gi) || [];
+        const doMatches = notesDisplay.match(/DO\s*:\s*([^\s]+)/gi) || [];
+        
+        if (poMatches.length > 0 || doMatches.length > 0) {
+          // Render vertical list
+          let html = '';
+          poMatches.forEach((po: string) => {
+            html += `<div style="margin: 2px 0;">${po}</div>`;
+          });
+          doMatches.forEach((do_: string) => {
+            html += `<div style="margin: 2px 0;">${do_}</div>`;
+          });
+          return html;
+        }
+        
+        return notesDisplay;
       })() :
       (soSpecNote || '-')
     }</div>
@@ -2164,6 +2314,9 @@ function generateInvoiceHtmlTemplate4({
   productCodeMap = {},
   hideSO = false
 }: any): string {
+
+  // Ensure logo is base64 string, fallback ke hardcoded logo
+  const logoSrc = ensureLogoIsBase64(logo);
 
   const bom = inv.bom || {};
   const lines = inv.lines || [];
@@ -2326,7 +2479,7 @@ function generateInvoiceHtmlTemplate4({
 <style>
   @page { 
     size: 9.5in 11in; 
-    margin: -5mm 1px 10mm 5mm; 
+    margin: -30mm 2px 10mm 2px; 
   }
   
   * {
@@ -2338,7 +2491,7 @@ function generateInvoiceHtmlTemplate4({
   body {
     font-family: sans-serif;
     font-size: 13px;
-    padding: 0 2px 10mm 4mm;
+    padding: 0 2px 10mm 2px;
     color: #000;
   }
 
@@ -2346,7 +2499,7 @@ function generateInvoiceHtmlTemplate4({
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 10px;
+    margin-bottom: 5px;
   }
 
   .header-left {
@@ -2659,7 +2812,7 @@ function generateInvoiceHtmlTemplate4({
   <div class="header-container">
     <div class="header-left">
       <div class="logo-container">
-        ${logo ? `<img src="${logo}" alt="Logo" />` : ''}
+        ${logo ? `<img src="${logoSrc}" alt="Logo" />` : ''}
       </div>
       <div class="company-info">
         <div class="company-name">${company.companyName || 'PT TRIMA LAKSANA JAYA PRATAMA'}</div>
@@ -2754,7 +2907,7 @@ function generateInvoiceHtmlTemplate4({
           </tr>
         `;
       }).join('')}
-      ${Array(Math.max(0, 25 - lines.length)).fill(0).map(() => `
+      ${Array(Math.max(0, 50 - lines.length)).fill(0).map(() => `
         <tr>
           <td></td>
           <td></td>
@@ -2787,7 +2940,27 @@ function generateInvoiceHtmlTemplate4({
           <div class="notes-content">${inv.notes ?
       (() => {
         const notesDisplay = inv.notes.trim();
-        return notesDisplay.length > 0 ? notesDisplay : '-';
+        if (notesDisplay.length === 0) {
+          return '-';
+        }
+        
+        // Split by "PO :" dan "DO :" untuk extract individual items
+        const poMatches = notesDisplay.match(/PO\s*:\s*([^\s]+)/gi) || [];
+        const doMatches = notesDisplay.match(/DO\s*:\s*([^\s]+)/gi) || [];
+        
+        if (poMatches.length > 0 || doMatches.length > 0) {
+          // Render vertical list
+          let html = '';
+          poMatches.forEach((po: string) => {
+            html += `<div style="margin: 2px 0;">${po}</div>`;
+          });
+          doMatches.forEach((do_: string) => {
+            html += `<div style="margin: 2px 0;">${do_}</div>`;
+          });
+          return html;
+        }
+        
+        return notesDisplay;
       })() :
       (soSpecNote || '-')
     }</div>

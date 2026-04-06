@@ -74,6 +74,8 @@ const Settings = () => {
   const [companyAddress, setCompanyAddress] = useState('Jl. Raya Bekasi Km. 28, Cikarang, Bekasi 17530');
   const [bankName, setBankName] = useState('');
   const [bankAccount, setBankAccount] = useState('');
+  const [bankBranch, setBankBranch] = useState('');
+  const [bankAccountName, setBankAccountName] = useState('');
   const [npwp, setNpwp] = useState('');
   const [buffer, setBuffer] = useState('5000000');
   const [workingCapital, setWorkingCapital] = useState('5000000');
@@ -196,6 +198,8 @@ const Settings = () => {
       setCompanyAddress(companySettings.address || 'Jl. Raya Bekasi Km. 28, Cikarang, Bekasi 17530');
       setBankName(companySettings.bankName || 'Bank MANDIRI, KCP JKT Cimanggis');
       setBankAccount(companySettings.bankAccount || '129-00-1116726-5');
+      setBankBranch((companySettings as any).bankBranch || '');
+      setBankAccountName((companySettings as any).bankAccountName || '');
       setNpwp(companySettings.npwp || '');
       setBuffer(companySettings.buffer || '5000000');
       setWorkingCapital(companySettings.workingCapital || '5000000');
@@ -238,18 +242,13 @@ const Settings = () => {
         
         console.log(`[Settings] 🔌 Setting WebSocket URL: ${wsUrl} (HTTPS: ${isHttps}, Tailscale: ${isTailscaleFunnel})`);
         
-        // Trigger custom event untuk notify WebSocket client di tab yang sama
+        // Trigger custom event untuk notify storage change
         window.dispatchEvent(new CustomEvent('local-storage-change', {
           detail: { key: 'websocket_url', newValue: wsUrl }
         }));
         window.dispatchEvent(new CustomEvent('local-storage-change', {
           detail: { key: 'websocket_enabled', newValue: 'true' }
         }));
-        
-        // Import dan trigger reconnect WebSocket client
-        import('../../services/websocket-client').then(({ websocketClient }) => {
-          websocketClient.reconnect();
-        });
       }
     }
   };
@@ -444,21 +443,11 @@ const Settings = () => {
           detail: { key: 'websocket_enabled', newValue: 'true' }
         }));
         
-        // Wait a bit untuk WebSocket connect
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Wait a bit untuk configuration update
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
       
-      // Import websocketClient dan wait sampai ready sebelum sync
-      const { websocketClient } = await import('../../services/websocket-client');
-      
-      // Wait sampai WebSocket ready (max 15 detik)
-      const ready = await websocketClient.waitUntilReady(15000);
-      
-      if (!ready) {
-        showAlert('WebSocket connection timeout. Please check your connection and try again.', 'Warning');
-        return;
-      }
-      
+      // Sync from server
       await storageService.syncFromServer();
     }
 
@@ -468,6 +457,8 @@ const Settings = () => {
       address: companyAddress,
       bankName: bankName,
       bankAccount: bankAccount,
+      bankBranch: bankBranch,
+      bankAccountName: bankAccountName,
       npwp: npwp,
       buffer: buffer,
       workingCapital: workingCapital,
@@ -760,13 +751,25 @@ const Settings = () => {
           label="Bank Name"
           value={bankName}
           onChange={setBankName}
-          placeholder="Bank MANDIRI, KCP JKT Cimanggis"
+          placeholder="Bank Mandiri"
         />
         <Input
           label="Bank Account Number"
           value={bankAccount}
           onChange={setBankAccount}
-          placeholder="129-00-1116726-5"
+          placeholder="156-0028092015"
+        />
+        <Input
+          label="Bank Branch (KCP)"
+          value={bankBranch}
+          onChange={setBankBranch}
+          placeholder="KCP Cikarang Central City"
+        />
+        <Input
+          label="Account Name (a/n)"
+          value={bankAccountName}
+          onChange={setBankAccountName}
+          placeholder="PT. Trima Laksana Jaya Pratama"
         />
         <Input
           label="NPWP"

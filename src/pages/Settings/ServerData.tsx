@@ -41,7 +41,7 @@ const ServerData = () => {
       // Get all known keys and check which ones have data
       const knownKeys = [
         'products', 'customers', 'suppliers', 'materials', 'bom', 'staff',
-        'spk', 'schedule', 'production', 'qc', 'productionResults', 'ptp',
+        'spk', 'schedule', 'production', 'productionDaily', 'qc', 'productionResults', 'ptp',
         'purchaseRequests', 'purchaseOrders', 'grn', 'grnPackaging', 'inventory',
         'salesOrders', 'delivery',
         'productionNotifications', 'deliveryNotifications', 'invoiceNotifications', 'financeNotifications',

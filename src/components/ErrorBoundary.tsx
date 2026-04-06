@@ -63,7 +63,7 @@ class ErrorBoundary extends Component<Props, State> {
                 cursor: 'pointer',
               }}
             >
-              Kembali ke Home
+              Back to home
             </button>
             <button
               onClick={() => window.location.reload()}

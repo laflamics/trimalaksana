@@ -54,6 +54,7 @@ interface SalesOrder {
   matchedSoNo?: string; // SO No yang di-match dengan quotation (jika sudah di-match)
   ppicNotified?: boolean; // Flag apakah sudah dikirim notifikasi ke PPIC
   ppicNotifiedAt?: string; // Timestamp kapan notifikasi dikirim ke PPIC
+  ppicNotifiedBy?: string; // User yang confirm SO (Sales)
 }
 
 interface Customer {
@@ -519,8 +520,8 @@ const SalesOrders = () => {
     return `${prefix}-${String(nextNum).padStart(3, '0')}`;
   };
 
-  // Handle Create Product dari Quotation
-  const handleCreateProductFromQuotation = async () => {
+  // Handle Create Product dari Quotation atau SO
+  const handleCreateProductFromDialog = async (isQuotation: boolean = false) => {
     if (!newProductForm.nama || newProductForm.nama.trim() === '') {
       showAlert('Product name is required', 'Validation Error');
       return;
@@ -550,14 +551,23 @@ const SalesOrders = () => {
       await storageService.set(StorageKeys.GENERAL_TRADING.PRODUCTS, updatedProducts);
       setProducts(updatedProducts);
 
-      // Langsung select product ini ke quotation item
-      if (showQuotationProductDialog !== null) {
+      // Langsung select product ini ke item (quotation atau SO)
+      if (isQuotation && showQuotationProductDialog !== null) {
         const itemIndex = showQuotationProductDialog;
         // Update quotation item dengan product baru
         handleQuotationUpdateItem(itemIndex, 'productId', autoKode);
         // Update product search display
         const label = `${autoKode} - ${newProductForm.nama.trim()}`;
         setQuotationProductSearch(prev => ({ ...prev, [itemIndex]: label }));
+        setShowQuotationProductDialog(null);
+      } else if (!isQuotation && showProductDialog !== null) {
+        const itemIndex = showProductDialog;
+        // Update SO item dengan product baru
+        handleUpdateItem(itemIndex, 'productId', autoKode);
+        // Update product search display
+        const label = `${autoKode} - ${newProductForm.nama.trim()}`;
+        setProductInputValue(prev => ({ ...prev, [itemIndex]: label }));
+        setShowProductDialog(null);
       }
 
       // Reset form dan tutup dialog
@@ -570,14 +580,19 @@ const SalesOrders = () => {
       });
       setNewProductPriceInput('');
       setShowCreateProductDialog(false);
-      setShowQuotationProductDialog(null);
+      setProductDialogSearch('');
       setQuotationProductDialogSearch('');
 
-      showAlert(`Product "${newProductForm.nama}" created successfully and added to quotation`, 'Success');
+      showAlert(`Product "${newProductForm.nama}" created successfully and added to ${isQuotation ? 'quotation' : 'sales order'}`, 'Success');
     } catch (error: any) {
       console.error('Error creating product:', error);
       showAlert(`Error creating product: ${error.message}`, 'Error');
     }
+  };
+
+  // Handle Create Product dari Quotation (backward compatibility)
+  const handleCreateProductFromQuotation = async () => {
+    return handleCreateProductFromDialog(true);
   };
   const [showQuotationFormDialog, setShowQuotationFormDialog] = useState(false);
   const [editingQuotation, setEditingQuotation] = useState<SalesOrder | null>(null);
@@ -924,7 +939,7 @@ const SalesOrders = () => {
     // If we have very few orders, try force reload from file
     if (data.length <= 1) {
       console.log('[GT SalesOrders] Few orders detected, trying force reload from file...');
-      const fileData = await storageService.forceReloadFromFile<SalesOrder[]>(StorageKeys.GENERAL_TRADING.SALES_ORDERS);
+      const fileData = await storageService.forceReloadFromFile<SalesOrder[]>();
       if (fileData && Array.isArray(fileData) && fileData.length > data.length) {
         console.log(`[GT SalesOrders] Force reload successful: ${fileData.length} orders from file`);
         data = fileData;
@@ -932,7 +947,32 @@ const SalesOrders = () => {
     }
     
     // Filter out deleted items menggunakan helper function
-    const activeOrders = filterActiveItems(data);
+    let activeOrders = filterActiveItems(data);
+    
+    // CRITICAL: Preserve ppicNotified flag dari state yang sudah ada saat reload
+    // Ini mencegah SO yang sudah di-confirm balik jadi unconfirm karena race condition
+    // Sama seperti fix di PPIC GT yang preserve ppicNotified flag
+    const currentOrders = Array.isArray(orders) ? orders : [];
+    
+    if (currentOrders.length > 0 && activeOrders.length > 0) {
+      // Merge ppicNotified flag dari state yang sudah ada ke data yang di-reload
+      activeOrders = activeOrders.map((so: SalesOrder) => {
+        const existingSO = currentOrders.find((existing: SalesOrder) => 
+          existing.id === so.id || existing.soNo === so.soNo
+        );
+        // CRITICAL: Preserve flag jika existing SO memiliki flag = true
+        // Ini handle baik race condition maupun refresh scenario
+        if (existingSO && existingSO.ppicNotified === true) {
+          return {
+            ...so,
+            ppicNotified: true,
+            ppicNotifiedAt: existingSO.ppicNotifiedAt || so.ppicNotifiedAt,
+            ppicNotifiedBy: existingSO.ppicNotifiedBy || so.ppicNotifiedBy,
+          };
+        }
+        return so;
+      });
+    }
     
     // Filter hanya SO (bukan quotation - quotation punya soNo yang link ke SO atau null)
     // Quotation disimpan terpisah di gt_quotations
@@ -1035,7 +1075,7 @@ const SalesOrders = () => {
     // If we have very few customers, try force reload from file
     if (data.length <= 1) {
       console.log('[GT SalesOrders] Few customers detected, trying force reload from file...');
-      const fileData = await storageService.forceReloadFromFile<Customer[]>(StorageKeys.GENERAL_TRADING.CUSTOMERS);
+      const fileData = await storageService.forceReloadFromFile<Customer[]>();
       if (fileData && Array.isArray(fileData) && fileData.length > data.length) {
         console.log(`[GT SalesOrders] Force reload successful: ${fileData.length} customers from file`);
         data = fileData;
@@ -1053,7 +1093,7 @@ const SalesOrders = () => {
     // If we have very few products, try force reload from file
     if (dataRaw.length <= 1) {
       console.log('[GT SalesOrders] Few products detected, trying force reload from file...');
-      const fileData = await storageService.forceReloadFromFile<Product[]>(StorageKeys.GENERAL_TRADING.PRODUCTS);
+      const fileData = await storageService.forceReloadFromFile<Product[]>();
       if (fileData && Array.isArray(fileData) && fileData.length > dataRaw.length) {
         console.log(`[GT SalesOrders] Force reload successful: ${fileData.length} products from file`);
         dataRaw = fileData;
@@ -2273,19 +2313,25 @@ const SalesOrders = () => {
               } as SalesOrder
             : o
         );
-        await storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updated);
+        
+        // ⚡ OPTIMISTIC UPDATE: Update UI immediately
         setOrders(updated);
-        // Log activity
-        try {
-          await logUpdate('SALES_ORDER', editingOrder.id, '/general-trading/sales-orders', {
-            soNo: formData.soNo || editingOrder.soNo,
-            customer: formData.customer,
-            itemCount: formData.items?.length || 0,
-          });
-        } catch (logError) {
-          // Silent fail
-        }
         showAlert(`SO ${formData.soNo} updated successfully`, 'Success');
+        
+        // 🔄 BACKGROUND: Save to storage (don't wait)
+        storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updated).catch(err => {
+          console.error('Failed to save SO:', err);
+          showAlert('Failed to save SO to storage', 'Error');
+        });
+        
+        // 📝 BACKGROUND: Log activity (don't wait)
+        logUpdate('SALES_ORDER', editingOrder.id, '/general-trading/sales-orders', {
+          soNo: formData.soNo || editingOrder.soNo,
+          customer: formData.customer,
+          itemCount: formData.items?.length || 0,
+        }).catch(() => {
+          // Silent fail
+        });
       } else {
         const newOrder: SalesOrder = {
           id: Date.now().toString(),
@@ -2305,23 +2351,29 @@ const SalesOrders = () => {
         };
         const ordersArray = Array.isArray(orders) ? orders : [];
         const updated = [...ordersArray, newOrder];
-        await storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updated);
+        
+        // ⚡ OPTIMISTIC UPDATE: Update UI immediately
         setOrders(updated);
-        
-        // Log activity
-        try {
-          await logCreate('SALES_ORDER', newOrder.id, '/general-trading/sales-orders', {
-            soNo: newOrder.soNo,
-            customer: newOrder.customer,
-            itemCount: newOrder.items?.length || 0,
-            status: newOrder.status,
-          });
-        } catch (logError) {
-          // Silent fail
-        }
-        
         showAlert(`SO ${formData.soNo} created successfully.\n\n⚠️ Silakan confirm SO untuk mengirim notifikasi ke PPIC.`, 'Success');
+        
+        // 🔄 BACKGROUND: Save to storage (don't wait)
+        storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updated).catch(err => {
+          console.error('Failed to save SO:', err);
+          showAlert('Failed to save SO to storage', 'Error');
+        });
+        
+        // 📝 BACKGROUND: Log activity (don't wait)
+        logCreate('SALES_ORDER', newOrder.id, '/general-trading/sales-orders', {
+          soNo: newOrder.soNo,
+          customer: newOrder.customer,
+          itemCount: newOrder.items?.length || 0,
+          status: newOrder.status,
+        }).catch(() => {
+          // Silent fail
+        });
       }
+      
+      // ⚡ OPTIMISTIC CLOSE: Close form immediately (don't wait for background tasks)
       setShowForm(false);
       setEditingOrder(null);
       setFormData({ soNo: '', customer: '', customerKode: '', paymentTerms: 'TOP', topDays: 30, items: [], globalSpecNote: '', discountPercent: 0 });
@@ -2518,7 +2570,8 @@ const SalesOrders = () => {
       `Confirm SO ${item.soNo}?\n\nSO akan dikirim ke PPIC untuk diproses (buat SPK).`,
       async () => {
         try {
-          // Update SO dengan flag ppicNotified (sama seperti Packaging dengan confirmed)
+          // CRITICAL: Optimistic update - update state dulu sebelum save ke server
+          // Ini mencegah race condition dimana loadOrders() dipanggil sebelum state update
           const ordersArray = Array.isArray(orders) ? orders : [];
           const updated = ordersArray.map(o => {
             if (o.id === item.id) {
@@ -2532,14 +2585,21 @@ const SalesOrders = () => {
             return o;
           });
           
-          // CRITICAL: Force immediate sync ke server untuk confirm SO
-          // Ini memastikan notifikasi langsung muncul di PPIC di device lain
-          await storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updated, true);
+          // Update state DULU sebelum save ke server
+          // Ini memastikan preserve logic di loadOrders() punya data yang benar
           setOrders(updated);
+          
+          // CRITICAL: POST ke server (skipServerSync: false) untuk confirm SO
+          // Ini memastikan notifikasi langsung muncul di PPIC di device lain
+          // skipServerSync: false = POST ke server, bukan hanya localStorage
+          await storageService.set(StorageKeys.GENERAL_TRADING.SALES_ORDERS, updated, false);
+          
           closeDialog();
           showAlert(`SO ${item.soNo} telah dikonfirmasi dan dikirim ke PPIC untuk diproses.`, 'Success');
         } catch (error: any) {
           showAlert(`Error confirming SO: ${error.message}`, 'Error');
+          // Rollback state jika save ke server gagal
+          loadOrders();
         }
       },
       () => closeDialog(),
@@ -4559,15 +4619,36 @@ const SalesOrders = () => {
                     </span>
                   )}
                 </div>
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setShowProductDialog(null);
-                    setProductDialogSearch('');
-                  }}
-                >
-                  Close
-                </Button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {productDialogSearch && filteredProductsForDialog.length === 0 && (
+                    <Button
+                      variant="primary"
+                      onClick={() => {
+                        setNewProductForm({
+                          kode: '',
+                          nama: productDialogSearch,
+                          satuan: 'PCS',
+                          kategori: '',
+                          hargaFg: 0,
+                        });
+                        setNewProductPriceInput('');
+                        setShowCreateProductDialog(true);
+                      }}
+                      style={{ fontSize: '12px', padding: '6px 12px' }}
+                    >
+                      + Create Product
+                    </Button>
+                  )}
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setShowProductDialog(null);
+                      setProductDialogSearch('');
+                    }}
+                  >
+                    Close
+                  </Button>
+                </div>
               </div>
             </Card>
           </div>
@@ -4837,9 +4918,12 @@ const SalesOrders = () => {
                   </Button>
                   <Button
                     variant="primary"
-                    onClick={handleCreateProductFromQuotation}
+                    onClick={() => {
+                      const isQuotation = showQuotationProductDialog !== null;
+                      handleCreateProductFromDialog(isQuotation);
+                    }}
                   >
-                    Create & Add to Quotation
+                    Create & Add to {showQuotationProductDialog !== null ? 'Quotation' : 'Sales Order'}
                   </Button>
                 </div>
               </div>

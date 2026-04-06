@@ -78,7 +78,7 @@ const Layout = ({ children }: LayoutProps) => {
         { title: 'Invoices', path: '/finance/invoices', icon: '📄' },
         { title: 'Payments', path: '/finance/payments', icon: '💳' },
         { title: 'Expenses', path: '/finance/expenses', icon: '💰' },
-        { title: 'Reports', path: '/finance/reports', icon: '📊' },
+        { title: 'User Guide', path: '/finance/reports', icon: '📊' },
         { title: 'Analytics', path: '/finance/analytics', icon: '📈' },
         { title: 'Receivable', path: '/finance/ar', icon: '💰' },
         { title: 'Payable', path: '/finance/ap', icon: '💸' },

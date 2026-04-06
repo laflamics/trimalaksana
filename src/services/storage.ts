@@ -48,6 +48,7 @@ export const StorageKeys = {
     GRN_PACKAGING: 'grnPackaging',
     SPK: 'spk',
     PRODUCTION: 'production',
+    PRODUCTION_DAILY: 'productionDaily',
     PRODUCTION_RESULTS: 'productionResults',
     SCHEDULE: 'schedule',
     QC: 'qc',
@@ -219,13 +220,7 @@ class StorageService {
     return 'packaging';
   }
 
-  private getStorageKey(key: string): string {
-    const business = this.getBusinessContext();
-    if (business === 'packaging') {
-      return key;
-    }
-    return `${business}/${key}`;
-  }
+
 
   async setConfig(config: StorageConfig) {
     this.config = config;
@@ -294,7 +289,7 @@ class StorageService {
    * SET - Write to PostgreSQL
    * Direct REST API call, immediate persistence
    */
-  async set<T>(key: string, value: T, immediateSync: boolean = false, skipServerSync: boolean = false): Promise<void> {
+  async set<T>(key: string, value: T, skipServerSync: boolean = false): Promise<void> {
     const config = this.getConfig();
 
     if (config.type === 'local') {
@@ -422,24 +417,15 @@ class StorageService {
     return this.syncStatus;
   }
 
-  private setSyncStatus(status: SyncStatus) {
-    if (this.syncStatus !== status) {
-      this.syncStatus = status;
-      this.syncStatusListeners.forEach(callback => {
-        try {
-          callback(status);
-        } catch (error) {
-          // Silent fail
-        }
-      });
-    }
+  private setSyncStatus(): void {
+    // Not needed in PostgreSQL mode
   }
 
   isAutoSyncEnabled(): boolean {
     return false; // Not needed in PostgreSQL mode
   }
 
-  setAutoSyncInterval(intervalMs: number): void {
+  setAutoSyncInterval(): void {
     // Not needed in PostgreSQL mode
   }
 
@@ -462,7 +448,7 @@ class StorageService {
   /**
    * Force reload from file - not needed in PostgreSQL mode
    */
-  async forceReloadFromFile<T>(key: string): Promise<T | null> {
+  async forceReloadFromFile<T>(): Promise<T | null> {
     return null;
   }
 }

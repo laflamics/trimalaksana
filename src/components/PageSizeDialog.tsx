@@ -26,7 +26,7 @@ export const PageSizeDialog = ({ defaultSize = 'A4', onConfirm, onCancel }: Page
     <div 
       className="dialog-overlay" 
       onClick={onCancel}
-      style={{ zIndex: 10000 }}
+      style={{ zIndex: 20000 }}
     >
       <div 
         className="dialog-card" 
@@ -36,6 +36,8 @@ export const PageSizeDialog = ({ defaultSize = 'A4', onConfirm, onCancel }: Page
           width: '90%',
           position: 'relative',
           overflow: 'hidden',
+          backgroundColor: 'var(--bg-primary, #ffffff)',
+          color: 'var(--text-primary, #111111)',
         }}
       >
         {/* Modern gradient background effect */}
@@ -90,10 +92,10 @@ export const PageSizeDialog = ({ defaultSize = 'A4', onConfirm, onCancel }: Page
                 onClick={() => setSelectedSize(option.value)}
                 style={{
                   padding: '16px',
-                  border: `2px solid ${selectedSize === option.value ? 'var(--primary-color)' : 'var(--border-color)'}`,
+                  border: `2px solid ${selectedSize === option.value ? 'var(--primary-color)' : 'var(--border-color, #cccccc)'}`,
                   borderRadius: '8px',
-                  backgroundColor: selectedSize === option.value ? 'var(--primary-color)' : 'var(--bg-secondary)',
-                  color: selectedSize === option.value ? '#fff' : 'var(--text-primary)',
+                  backgroundColor: selectedSize === option.value ? 'var(--primary-color)' : 'var(--bg-secondary, #f5f5f5)',
+                  color: selectedSize === option.value ? '#ffffff' : 'var(--text-primary, #111111)',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
                   textAlign: 'left',

@@ -4,9 +4,10 @@
  * Handles file uploads to Vercel Blob Storage
  * Used only in web app (dist)
  * 
- * Key fix: Use FormData instead of ArrayBuffer
- * Vercel endpoint properly parses FormData
+ * Uses @vercel/blob SDK for direct upload
  */
+
+import { put } from '@vercel/blob';
 
 export interface BlobUploadResult {
   success: boolean;
@@ -20,10 +21,9 @@ export interface BlobUploadResult {
 
 export class BlobServiceWeb {
   /**
-   * Upload to Vercel Blob (web only)
+   * Upload to Vercel Blob using @vercel/blob SDK
    * 
-   * FIX: Use FormData to properly send file to Vercel endpoint
-   * Vercel's req.body parser handles FormData correctly
+   * Uses hardcoded token for development/testing
    */
   static async uploadFile(
     file: File,
@@ -32,53 +32,35 @@ export class BlobServiceWeb {
     try {
       console.log(`[BlobServiceWeb] 📤 Uploading: ${file.name} (${file.size} bytes) to ${business}`);
       
-      // Create FormData with file
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('business', business);
-      formData.append('fileName', file.name);
-      formData.append('mimeType', file.type || 'application/octet-stream');
+      // Hardcoded Vercel Blob token
+      const BLOB_TOKEN = 'vercel_blob_rw_tvngl6lSfMMyKptz_4dryhC8rwGgl3nllfUsNwGPKmtfKHT';
       
-      // Build upload URL
-      const uploadUrl = `${window.location.origin}/api/blob/upload-vercel`;
-      console.log(`[BlobServiceWeb] 🔗 Upload URL: ${uploadUrl}`);
+      // Generate unique filename
+      const timestamp = Date.now();
+      const randomId = Math.random().toString(36).substring(2, 9);
+      const blobFileName = `${business}/${timestamp}-${randomId}-${file.name}`;
       
-      // Upload with FormData
-      const response = await fetch(uploadUrl, {
-        method: 'POST',
-        body: formData, // ← FormData, not ArrayBuffer
-        // Don't set Content-Type header - browser will set it with boundary
+      console.log(`[BlobServiceWeb] 🔗 Uploading to Vercel Blob: ${blobFileName}`);
+      
+      // Convert file to ArrayBuffer
+      const arrayBuffer = await file.arrayBuffer();
+      
+      // Upload using @vercel/blob SDK - pass ArrayBuffer directly
+      const blob = await put(blobFileName, arrayBuffer, {
+        access: 'public',
+        token: BLOB_TOKEN,
+        contentType: file.type || 'application/octet-stream',
       });
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[BlobServiceWeb] ❌ Upload failed: ${response.status}`, errorText);
-        throw new Error(`Upload failed: ${response.status} ${response.statusText} - ${errorText}`);
-      }
-      
-      const result = await response.json();
-      console.log(`[BlobServiceWeb] 📋 Response:`, result);
-      
-      // Handle both response formats:
-      // Format 1 (new): { fileId, fileName, fileSize, mimeType, url }
-      // Format 2 (legacy/noxtiz): { id, path, url, size, type }
-      
-      // Use full URL as fileId for consistency
-      const fileUrl = result.url;
-      
-      if (!fileUrl) {
-        throw new Error(`Invalid response from Vercel Blob: ${JSON.stringify(result)}`);
-      }
-      
-      console.log(`[BlobServiceWeb] ✅ Upload successful: ${fileUrl}`);
+      console.log(`[BlobServiceWeb] ✅ Upload successful: ${blob.url}`);
       
       return {
         success: true,
-        fileId: fileUrl, // Store full URL as fileId
-        fileName: result.fileName || file.name,
-        fileSize: result.fileSize || result.size || file.size,
-        mimeType: result.mimeType || result.type || file.type || 'application/octet-stream',
-        url: fileUrl,
+        fileId: blob.url,
+        fileName: file.name,
+        fileSize: file.size,
+        mimeType: file.type || 'application/octet-stream',
+        url: blob.url,
         storage: 'vercel',
       };
     } catch (error) {

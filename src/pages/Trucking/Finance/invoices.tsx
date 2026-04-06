@@ -230,23 +230,35 @@ const Accounting = () => {
     // Handle dari notification atau dari item langsung
     // Ensure invoiceNotifications is always an array
     const invoiceNotificationsArray = Array.isArray(invoiceNotifications) ? invoiceNotifications : [];
-    const notif = invoiceNotificationsArray.find((n: any) => n.sjNo === item.sjNo);
+    // Cari notification berdasarkan sjNo, dnNo, atau doNo
+    const notif = invoiceNotificationsArray.find((n: any) => 
+      n.sjNo === item.sjNo || n.dnNo === item.dnNo || n.doNo === item.doNo
+    );
     
     // Cek apakah invoice sudah ada
     // Ensure invoices is always an array
     const invoicesArray = Array.isArray(invoices) ? invoices : [];
-    const existingInvoice = invoicesArray.find((inv: any) => inv.sjNo === item.sjNo);
+    const existingInvoice = invoicesArray.find((inv: any) => 
+      inv.sjNo === item.sjNo || inv.dnNo === item.dnNo || inv.doNo === item.doNo
+    );
     if (existingInvoice) {
-      showAlert(`Invoice already exists for SJ: ${item.sjNo}\n\nInvoice No: ${existingInvoice.invoiceNo}`, 'Information');
+      showAlert(`Invoice already exists\n\nInvoice No: ${existingInvoice.invoiceNo}`, 'Information');
       return;
     }
     
     // Load Surat Jalan untuk validasi
     const suratJalanList = await storageService.get<any[]>(StorageKeys.TRUCKING.SURAT_JALAN) || [];
-    const sj = suratJalanList.find((s: any) => s.sjNo === item.sjNo);
+    
+    // Cari SJ berdasarkan sjNo dari item atau notification
+    let sj = suratJalanList.find((s: any) => s.sjNo === item.sjNo);
+    
+    // Jika tidak ketemu, coba cari berdasarkan dnNo
+    if (!sj && (item.dnNo || notif?.dnNo)) {
+      sj = suratJalanList.find((s: any) => s.dnNo === (item.dnNo || notif?.dnNo));
+    }
     
     if (!sj) {
-      showAlert(`Surat Jalan ${item.sjNo} not found`, 'Error');
+      showAlert(`Surat Jalan not found for item: ${item.sjNo || item.dnNo || 'unknown'}`, 'Error');
       return;
     }
     
@@ -270,11 +282,18 @@ const Accounting = () => {
     const doList = await storageService.get<any[]>(StorageKeys.TRUCKING.DELIVERY_ORDERS) || [];
     const relatedDO = doList.find((doItem: any) => doItem.doNo === sj.doNo);
     
-    // Ambil totalDeal dari DO sebagai total harga
-    const totalDeal = relatedDO?.totalDeal || 0;
+    // Ambil totalDeal dari notification (sudah di-load saat DN upload) atau dari DO
+    // Prioritas: notification.totalDeal > DO.totalDeal > 0
+    const totalDeal = notif?.totalDeal || relatedDO?.totalDeal || 0;
+    
+    console.log(`[Invoice] Creating invoice for SJ: ${sj.sjNo}, DO: ${sj.doNo}`);
+    console.log(`[Invoice] Related DO found:`, relatedDO);
+    console.log(`[Invoice] totalDeal from notification or DO:`, totalDeal);
+    console.log(`[Invoice] Notification data:`, notif);
     
     // Hitung total qty untuk proporsi harga per item
     const totalQty = (sj.items || []).reduce((sum: number, itm: any) => sum + (Number(itm.qty) || 0), 0);
+    console.log(`[Invoice] Total Qty from SJ items:`, totalQty);
     
     // Load inventory sekali di luar loop
     const inventory = await storageService.get<any[]>(StorageKeys.TRUCKING.EXPENSES) || [];
@@ -318,7 +337,15 @@ const Accounting = () => {
         } else if (totalDeal > 0 && qty > 0) {
           // Fallback: jika tidak ada totalQty, gunakan qty item ini
           pricePerUnit = totalDeal / qty;
+        } else {
+          // Fallback ke harga dari product master jika totalDeal kosong
+          pricePerUnit = product?.hargaJual || product?.hargaFg || product?.hargaSales || 0;
+          if (pricePerUnit > 0) {
+            console.log(`[Invoice] Using fallback price from product master: ${pricePerUnit}`);
+          }
         }
+        
+        console.log(`[Invoice] Item: ${sjItem.product}, Qty: ${qty}, Price per unit: ${pricePerUnit}`);
         
         invoiceLines.push({
           itemSku: itemSku,
@@ -2468,16 +2495,30 @@ const CreateInvoiceDialog = ({
           // Gabungkan semua items dari semua DO yang dipilih
           const allItems: Array<{ sku: string; product: string; qty: number; price: number; unit?: string; pot?: number }> = [];
           let totalDeal = 0;
+          let totalQtyAllDOs = 0;
           
+          // First pass: hitung total deal dan total qty dari semua DO
           selectedDOItems.forEach((doItem: any) => {
             totalDeal += doItem.totalDeal || 0;
             const items = doItem.items || [];
-            const totalQty = items.reduce((sum: number, itm: any) => sum + (Number(itm.qty) || 0), 0);
+            totalQtyAllDOs += items.reduce((sum: number, itm: any) => sum + (Number(itm.qty) || 0), 0);
+          });
+          
+          console.log(`[Invoice] Creating from ${selectedDOItems.length} DO(s)`);
+          console.log(`[Invoice] Total Deal (all DOs): ${totalDeal}`);
+          console.log(`[Invoice] Total Qty (all DOs): ${totalQtyAllDOs}`);
+          
+          // Second pass: populate items dengan harga yang benar
+          selectedDOItems.forEach((doItem: any) => {
+            const items = doItem.items || [];
             
             items.forEach((item: any) => {
               const qty = Number(item.qty || 0);
-              // Hitung harga per unit dari totalDeal
-              const pricePerUnit = totalQty > 0 && totalDeal > 0 ? (doItem.totalDeal || 0) / totalQty : 0;
+              // Hitung harga per unit dari TOTAL DEAL semua DO / TOTAL QTY semua DO
+              // Ini memastikan harga per unit sama untuk semua item dari semua DO
+              const pricePerUnit = totalQtyAllDOs > 0 && totalDeal > 0 ? totalDeal / totalQtyAllDOs : 0;
+              
+              console.log(`[Invoice] Item: ${item.product}, Qty: ${qty}, Price per unit: ${pricePerUnit}`);
               
               allItems.push({
                 sku: item.product || '', // Use product as SKU for now
@@ -4083,7 +4124,9 @@ const EditInvoiceDialog = ({
               </thead>
               <tbody>
                 {lines.map((line, idx) => {
-                  const product = products.find((p: any) => 
+                  // Ensure products is always an array
+                  const productsArray = Array.isArray(products) ? products : [];
+                  const product = productsArray.find((p: any) => 
                     p.sku === line.itemSku || p.kode === line.itemSku || p.id === line.itemSku
                   );
                   return (

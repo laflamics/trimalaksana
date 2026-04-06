@@ -1529,7 +1529,7 @@ const Purchasing = () => {
       // Tidak auto-close PO setelah GRN dibuat
 
       // Create notification untuk Finance - Supplier Payment
-      const notifications = extractStorageValue(await storageService.get<any[]>('financeNotifications')) || [];
+      const notifications = extractStorageValue(await storageService.get<any[]>(StorageKeys.GENERAL_TRADING.FINANCE_NOTIFICATIONS)) || [];
       const notificationsArray = Array.isArray(notifications) ? notifications : [];
       
       // IMPORTANT: Cek duplikasi notification sebelum create (cek berdasarkan PO dan GRN)

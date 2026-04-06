@@ -59,6 +59,8 @@ interface WO {
   soNo?: string;
   customer?: string;
   product?: string;
+  kode?: string;
+  unit?: string;
   qty?: string | number;
   status?: string;
   createdAt?: string;
@@ -67,6 +69,7 @@ interface WO {
     scheduleDate?: string;
     scheduleEndDate?: string;
   };
+  productionDaily?: any;
 }
 
 interface SO {
@@ -151,99 +154,163 @@ export function generateWOHtml({
   const startDate = scheduleDate ? formatDate(scheduleDate) : woDate;
   const endDate = scheduleEndDate ? formatDate(scheduleEndDate) : ''; // Use scheduleEndDate directly from PPIC data
 
-  // Cari product info untuk setiap line
-  const soLines = so?.lines || [];
-  const productLines: ProductLine[] = soLines.map((line, idx) => {
-    const itemSku = String(line.itemSku || '').trim();
-    const foundProduct = products.find((p) => {
-      const pId = String(p.id || '').trim();
-      const pSku = String(p.sku || '').trim();
-      if (pId && itemSku && pId === itemSku) return true;
-      if (pSku && itemSku && pSku.toUpperCase() === itemSku.toUpperCase()) return true;
-      return false;
-    });
+  // Cari product info - prioritas: productionDaily > SO lines > SPK direct > fallback
+  let productLines: ProductLine[] = [];
+  
+  // Jika ada productionDaily, ambil dari situ
+  if (wo.productionDaily && (wo.productionDaily.productCode || wo.productionDaily.productName)) {
+    // Parse dimensions dari product name: "EURO SHIPPING BOX 1180X780X780 (PM9044)"
+    // Extract: 1180X780X780
+    const productName = wo.productionDaily.productName || '';
+    const dimensionMatch = productName.match(/(\d+)X(\d+)X(\d+)/i);
+    const panjang = dimensionMatch ? dimensionMatch[1] : '0.00';
+    const lebar = dimensionMatch ? dimensionMatch[2] : '0.00';
+    const tinggi = dimensionMatch ? dimensionMatch[3] : '0.00';
     
-    const productName = foundProduct ? (foundProduct.name || '-') : '-';
-    const productSku = foundProduct ? (foundProduct.sku || itemSku) : itemSku;
-    const bom = foundProduct?.bom || {};
-    const bomObj = bom && typeof bom === 'object' && !Array.isArray(bom) ? bom : null;
-    const bomMaterials = bomObj?.materials || (Array.isArray(bom) ? bom : []);
-    const firstMaterial = bomMaterials[0] || {};
-    
-    return {
-      no: idx + 1,
-      kodeProduk: productSku,
+    productLines = [{
+      no: 1,
+      kodeProduk: wo.productionDaily.productCode || '',
       namaProduk: productName,
-      tipeBox: productSku,
-      panjang: String(firstMaterial.panjang || '0.00'),
-      lebar: String(firstMaterial.lebar || '0.00'),
-      tinggi: String(firstMaterial.tinggi || '0.00'),
-      satuan: firstMaterial.unit || 'PCS',
-      qtyReq: String(line.qty || '0'),
+      tipeBox: '', // Kosong sesuai requirement
+      panjang: panjang,
+      lebar: lebar,
+      tinggi: tinggi,
+      satuan: wo.productionDaily.unit || 'PCS',
+      qtyReq: String(wo.productionDaily.targetQty || 0),
+      finishing: String(wo.productionDaily.resultFinishGood || 0), // Finish Good value
+      ket: ''
+    }];
+  } else if (so?.lines && so.lines.length > 0) {
+    // Fallback ke SO lines
+    const soLines = so.lines || [];
+    productLines = soLines.map((line, idx) => {
+      const itemSku = String(line.itemSku || '').trim();
+      const foundProduct = products.find((p) => {
+        const pId = String(p.id || '').trim();
+        const pSku = String(p.sku || '').trim();
+        if (pId && itemSku && pId === itemSku) return true;
+        if (pSku && itemSku && pSku.toUpperCase() === itemSku.toUpperCase()) return true;
+        return false;
+      });
+      
+      const productName = foundProduct ? (foundProduct.name || '-') : '-';
+      const productSku = foundProduct ? (foundProduct.sku || itemSku) : itemSku;
+      const bom = foundProduct?.bom || {};
+      const bomObj = bom && typeof bom === 'object' && !Array.isArray(bom) ? bom : null;
+      const bomMaterials = bomObj?.materials || (Array.isArray(bom) ? bom : []);
+      const firstMaterial = bomMaterials[0] || {};
+      
+      return {
+        no: idx + 1,
+        kodeProduk: productSku,
+        namaProduk: productName,
+        tipeBox: '',
+        panjang: String(firstMaterial.panjang || '0.00'),
+        lebar: String(firstMaterial.lebar || '0.00'),
+        tinggi: String(firstMaterial.tinggi || '0.00'),
+        satuan: firstMaterial.unit || 'PCS',
+        qtyReq: String(line.qty || '0'),
+        finishing: '',
+        ket: ''
+      };
+    });
+  } else if (wo.kode || wo.product) {
+    // Fallback ke WO direct data (dari SPK)
+    const productName = wo.product || '';
+    const dimensionMatch = productName.match(/(\d+)X(\d+)X(\d+)/i);
+    const panjang = dimensionMatch ? dimensionMatch[1] : '0.00';
+    const lebar = dimensionMatch ? dimensionMatch[2] : '0.00';
+    const tinggi = dimensionMatch ? dimensionMatch[3] : '0.00';
+    
+    productLines = [{
+      no: 1,
+      kodeProduk: wo.kode || '',
+      namaProduk: productName,
+      tipeBox: '',
+      panjang: panjang,
+      lebar: lebar,
+      tinggi: tinggi,
+      satuan: wo.unit || 'PCS',
+      qtyReq: String(wo.qty || 0),
       finishing: '',
       ket: ''
-    };
-  });
+    }];
+  }
 
-  // Format material requirement - cari material ID dari master materials
-  const woMaterials = Array.isArray(wo.materials) ? wo.materials : [];
+  // Format material requirement - tarik dari productionDaily.materialSelected
+  let materialLines: MaterialLine[] = [];
   
-  console.log('[WO Template] Material rendering debug:', {
-    woMaterialsLength: woMaterials.length,
-    woMaterialsSample: woMaterials.slice(0, 3),
-    woObject: {
-      id: wo.id,
-      soNo: wo.soNo,
-      customer: wo.customer,
-      materialsCount: woMaterials.length,
-    }
-  });
-  
-  const materialLines: MaterialLine[] = woMaterials.map((m, idx) => {
-    const materialName = m.materialName || m.name || '';
-    // IMPORTANT: Try multiple ways to find material (seperti di PPIC line 3080)
-    const bomMaterialId = (m.materialId || m.material_id || '').toString().trim().toLowerCase();
+  // Prioritas: productionDaily materialSelected
+  if (wo.productionDaily && wo.productionDaily.materialSelected) {
+    materialLines = [{
+      no: 1,
+      kodeMaterial: wo.productionDaily.materialSelected.split(' - ')[0] || wo.productionDaily.materialSelected || '',
+      namaMaterial: wo.productionDaily.materialSelected.split(' - ')[1] || wo.productionDaily.materialSelected || '',
+      panjang: '0.00',
+      lebar: '0.00',
+      tinggi: '0.00',
+      satuan: 'PCS',
+      qtyUsage: String(wo.productionDaily.qtyTerpakai || 0),
+      totalUsage: String(wo.productionDaily.qtyTerpakai || 0),
+      qtyOut: ''
+    }];
+  } else {
+    // Fallback ke SPK materials jika tidak ada productionDaily
+    const woMaterials = Array.isArray(wo.materials) ? wo.materials : [];
     
-    let materialId = m.materialId || m.materialCode || m.id || '';
-    
-    // Jika tidak ada materialId, cari dari master materials dengan multiple field lookup
-    if (!materialId && bomMaterialId) {
-      // Cari dari materials (kategori material)
-      const foundMaterial = materials.find((mat) => {
-        const mId = (mat.material_id || mat.materialId || mat.kode || '').toString().trim().toLowerCase();
-        const mNama = (mat.nama || mat.name || '').toString().trim().toLowerCase();
-        return mId === bomMaterialId || (bomMaterialId && mNama === bomMaterialId);
-      });
-      if (foundMaterial) {
-        materialId = foundMaterial.id || foundMaterial.sku || foundMaterial.material_id || foundMaterial.kode || '';
+    console.log('[WO Template] Material rendering debug:', {
+      woMaterialsLength: woMaterials.length,
+      woMaterialsSample: woMaterials.slice(0, 3),
+      woObject: {
+        id: wo.id,
+        soNo: wo.soNo,
+        customer: wo.customer,
+        materialsCount: woMaterials.length,
       }
+    });
+    
+    materialLines = woMaterials.map((m, idx) => {
+      const materialName = m.materialName || m.name || '';
+      const bomMaterialId = (m.materialId || m.material_id || '').toString().trim().toLowerCase();
       
-      // Jika masih tidak ketemu, cari dari rawMaterials
-      if (!materialId) {
-        const foundRawMaterial = rawMaterials.find((rm) => {
-          const rmId = (rm.material_id || rm.materialId || rm.kode || '').toString().trim().toLowerCase();
-          const rmName = (rm.materialName || rm.name || rm.nama || '').toString().trim().toLowerCase();
-          return rmId === bomMaterialId || (bomMaterialId && rmName === bomMaterialId);
+      let materialId = m.materialId || m.materialCode || m.id || '';
+      
+      if (!materialId && bomMaterialId) {
+        const foundMaterial = materials.find((mat) => {
+          const mId = (mat.material_id || mat.materialId || mat.kode || '').toString().trim().toLowerCase();
+          const mNama = (mat.nama || mat.name || '').toString().trim().toLowerCase();
+          return mId === bomMaterialId || (bomMaterialId && mNama === bomMaterialId);
         });
-        if (foundRawMaterial) {
-          materialId = foundRawMaterial.materialId || foundRawMaterial.materialCode || foundRawMaterial.id || foundRawMaterial.kode || '';
+        if (foundMaterial) {
+          materialId = foundMaterial.id || foundMaterial.sku || foundMaterial.material_id || foundMaterial.kode || '';
+        }
+        
+        if (!materialId) {
+          const foundRawMaterial = rawMaterials.find((rm) => {
+            const rmId = (rm.material_id || rm.materialId || rm.kode || '').toString().trim().toLowerCase();
+            const rmName = (rm.materialName || rm.name || rm.nama || '').toString().trim().toLowerCase();
+            return rmId === bomMaterialId || (bomMaterialId && rmName === bomMaterialId);
+          });
+          if (foundRawMaterial) {
+            materialId = foundRawMaterial.materialId || foundRawMaterial.materialCode || foundRawMaterial.id || foundRawMaterial.kode || '';
+          }
         }
       }
-    }
-    
-    return {
-      no: idx + 1,
-      kodeMaterial: materialId || '-',
-      namaMaterial: materialName || '-',
-      panjang: String(m.panjang || '0.00'),
-      lebar: String(m.lebar || '0.00'),
-      tinggi: String(m.tinggi || '0.00'),
-      satuan: m.unit || 'PCS',
-      qtyUsage: String(Math.round(Number(m.qtyPerUnit || 1))),
-      totalUsage: String(Math.round(Number(m.qty || 0))),
-      qtyOut: ''
-    };
-  });
+      
+      return {
+        no: idx + 1,
+        kodeMaterial: materialId || '-',
+        namaMaterial: materialName || '-',
+        panjang: String(m.panjang || '0.00'),
+        lebar: String(m.lebar || '0.00'),
+        tinggi: String(m.tinggi || '0.00'),
+        satuan: m.unit || 'PCS',
+        qtyUsage: String(Math.round(Number(m.qtyPerUnit || 1))),
+        totalUsage: String(Math.round(Number(m.qty || 0))),
+        qtyOut: ''
+      };
+    });
+  }
 
   console.log('[WO Template] Final materialLines:', {
     count: materialLines.length,
@@ -610,10 +677,19 @@ export function generateWOHtml({
           <td>${m.totalUsage}</td>
           <td>${m.qtyOut}</td>
         </tr>
-      `).join('') : '<tr><td colspan="10" style="text-align:center;">No materials</td></tr>'}
-      ${materialLines.length > 0 && materialLines.length < 5 ? Array(5 - materialLines.length).fill(0).map(() => `
+      `).join('') : ''}
+      ${materialLines.length < 5 ? Array(5 - materialLines.length).fill(0).map((_, idx) => `
         <tr>
-          <td style="width: 4%; height: 50px;"></td><td style="width: 12%; height: 50px;"></td><td style="width: 20%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 8%; height: 50px;"></td><td style="width: 10%; height: 50px;"></td><td style="width: 10%; height: 50px;"></td><td style="width: 12%; height: 50px;"></td>
+          <td style="width: 4%; height: 50px;">${materialLines.length + idx + 1}</td>
+          <td style="width: 12%; height: 50px;"></td>
+          <td style="width: 20%; height: 50px;"></td>
+          <td style="width: 8%; height: 50px;"></td>
+          <td style="width: 8%; height: 50px;"></td>
+          <td style="width: 8%; height: 50px;"></td>
+          <td style="width: 8%; height: 50px;"></td>
+          <td style="width: 10%; height: 50px;"></td>
+          <td style="width: 10%; height: 50px;"></td>
+          <td style="width: 12%; height: 50px;"></td>
         </tr>
       `).join('') : ''}
     </tbody>
@@ -638,11 +714,27 @@ export function generateWOHtml({
       </tr>
     </thead>
     <tbody>
-      ${Array(2).fill(0).map(() => `
+      ${wo.productionDaily ? `
         <tr>
-          <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+          <td>${wo.productionDaily.wipCutting || wo.productionDaily.wipSlitter || ''}</td>
+          <td>${wo.productionDaily.wipDieCut || ''}</td>
+          <td>${wo.productionDaily.wipCentralRotary || ''}</td>
+          <td>${wo.productionDaily.wipLongWay || ''}</td>
+          <td>${wo.productionDaily.wipSablon || ''}</td>
+          <td>${wo.productionDaily.wipStitching || ''}</td>
+          <td>${wo.productionDaily.approvedBy || ''}</td>
+          <td>${wo.productionDaily.checkedBy || ''}</td>
         </tr>
-      `).join('')}
+        <tr>
+          <td colspan="8" style="text-align: center; font-size: 9px;">Finish Good: ${wo.productionDaily.resultFinishGood || 0} | Material: ${wo.productionDaily.materialSelected || '-'} | Qty Terpakai: ${wo.productionDaily.qtyTerpakai || 0}</td>
+        </tr>
+      ` : `
+        ${Array(2).fill(0).map(() => `
+          <tr>
+            <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+          </tr>
+        `).join('')}
+      `}
     </tbody>
   </table>
 </body>

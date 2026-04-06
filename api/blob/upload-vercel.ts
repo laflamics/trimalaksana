@@ -3,9 +3,9 @@
  * Handles file uploads to Vercel Blob Storage
  * 
  * Receives FormData with file
- * Filename and business passed in FormData or query params
+ * Filename and business passed in query params
  * 
- * FIX: Now properly handles FormData from fetch() calls
+ * FIX: Use simple approach without busboy - Vercel handles multipart parsing
  */
 
 import { put } from '@vercel/blob';
@@ -21,30 +21,42 @@ export default async function handler(
   }
 
   try {
-    // Get params from query string or FormData
-    let business = (req.query.business as string) || 'packaging';
-    let fileName = (req.query.fileName as string) || `upload-${Date.now()}`;
-    let mimeType = (req.query.mimeType as string) || 'application/octet-stream';
+    // Get params from query string
+    const business = (req.query.business as string) || 'packaging';
+    
+    console.log(`[Vercel Blob] 📥 Received upload request for business: ${business}`);
+    console.log(`[Vercel Blob] Content-Type: ${req.headers['content-type']}`);
+    console.log(`[Vercel Blob] Body type:`, typeof req.body, Array.isArray(req.body) ? 'array' : 'not array');
 
-    // Get file data from body
+    // req.body should be the file buffer when sent as FormData
+    // Vercel automatically parses multipart/form-data
     let fileData = req.body;
+    let fileName = `upload-${Date.now()}`;
+    let mimeType = 'application/octet-stream';
 
-    // If body is FormData (multipart), parse it
-    if (req.headers['content-type']?.includes('multipart/form-data')) {
-      console.log('[Vercel Blob] 📋 Parsing FormData...');
-      
-      // req.body should be the raw buffer for FormData
-      // We need to extract the file from the multipart data
-      // For now, treat the entire body as the file
-      fileData = req.body;
+    // If body is a string, convert to buffer
+    if (typeof fileData === 'string') {
+      fileData = Buffer.from(fileData, 'utf-8');
     }
 
-    if (!fileData) {
+    // If body is not a buffer, try to convert
+    if (!Buffer.isBuffer(fileData)) {
+      console.log(`[Vercel Blob] Converting body to buffer:`, typeof fileData);
+      if (fileData && typeof fileData === 'object') {
+        // Try to extract file from parsed FormData object
+        // Vercel might parse it as an object with file properties
+        fileData = Buffer.from(JSON.stringify(fileData));
+      } else {
+        fileData = Buffer.from(String(fileData || ''));
+      }
+    }
+
+    if (!fileData || fileData.length === 0) {
       console.error('[Vercel Blob] ❌ No file data provided');
       return res.status(400).json({ error: 'No file provided' });
     }
 
-    const fileSize = Buffer.isBuffer(fileData) ? fileData.length : Buffer.byteLength(fileData);
+    const fileSize = fileData.length;
     console.log(`[Vercel Blob] 📤 Uploading: ${fileName} (${fileSize} bytes) to ${business}`);
 
     // Check for token
@@ -77,7 +89,7 @@ export default async function handler(
       url: blob.url,
     });
   } catch (error) {
-    console.error(`[Vercel Blob] ❌ Upload error:`, error);
+    console.error(`[Vercel Blob] ❌ Handler error:`, error);
     res.status(500).json({
       error: error instanceof Error ? error.message : 'Upload failed',
       details: error instanceof Error ? error.stack : 'No details',

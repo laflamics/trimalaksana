@@ -7,9 +7,10 @@ interface DynamicTableProps {
   pageSize?: number;
   hideRowNumber?: boolean;
   reportId?: string;
+  headers?: string[];
 }
 
-export default function DynamicTable({ data, title, pageSize = 20, hideRowNumber = false, reportId }: DynamicTableProps) {
+export default function DynamicTable({ data, title, pageSize = 20, hideRowNumber = false, reportId, headers: providedHeaders }: DynamicTableProps) {
   const [currentPage, setCurrentPage] = React.useState(1);
 
   if (!data || data.length === 0) {
@@ -20,8 +21,8 @@ export default function DynamicTable({ data, title, pageSize = 20, hideRowNumber
     );
   }
 
-  // Get headers dari object keys
-  const headers = Object.keys(data[0]);
+  // Get headers dari provided headers atau dari object keys
+  const headers = providedHeaders || Object.keys(data[0]);
   
   // Check if data already has NO column
   const hasNoColumn = headers.some(h => h.toLowerCase() === 'no' || h === '#');

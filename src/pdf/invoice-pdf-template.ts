@@ -325,13 +325,14 @@ export function generateInvoiceHtml({
 <style>
   @page { 
     size: 9.5in 11in; 
-    margin: -30mm 2px 1mm 2px; 
+    margin: -28mm 2px -28mm 2px; 
   }
   
   body {
     font-family: sans-serif;
+    font-weight: 900;
     font-size: 12px;
-    padding: 5mm 2px 10mm 2px;
+    padding: 5mm 2px 2mm 2px;
   }
 
   .header {
@@ -339,6 +340,7 @@ export function generateInvoiceHtml({
     padding-bottom: 10px;
     margin-bottom: 15px;
     margin-top: 0;
+    border-bottom: none;
   }
 
   .header-top {
@@ -347,6 +349,7 @@ export function generateInvoiceHtml({
     align-items: flex-start;
     position: relative;
     margin-bottom: 10px;
+    border-bottom: none;
   }
 
   .header-left {
@@ -354,6 +357,44 @@ export function generateInvoiceHtml({
     font-size: 12px;
     flex-shrink: 0;
     min-width: 200px;
+  }
+
+  .header-left > div {
+    margin-bottom: 1px;
+  }
+
+  .info-table {
+    border-collapse: collapse;
+    border: none;
+    width: auto;
+  }
+
+  .info-table tr {
+    vertical-align: top;
+  }
+
+  .info-table td {
+    border: none;
+  }
+
+  .info-td-label {
+    font-weight: 900;
+    white-space: nowrap;
+    padding: 2px 0;
+    padding-right: 8px;
+    min-width: 90px;
+  }
+
+  .info-td-colon {
+    padding: 2px 6px;
+    white-space: nowrap;
+    vertical-align: top;
+  }
+
+  .info-td-value {
+    padding: 2px 0;
+    word-break: break-word;
+    max-width: 220px;
   }
 
   .header-left-center {
@@ -368,11 +409,10 @@ export function generateInvoiceHtml({
 
   .info-label {
     display: inline-block;
-    font-weight: 700;
-    width: 120px;
+    font-weight: 900;
+    width: 110px;
     vertical-align: top;
-    padding-right: 8px;
-    position: relative;
+    padding-right: 4px;
   }
 
   .info-label-text {
@@ -381,8 +421,8 @@ export function generateInvoiceHtml({
   }
 
   .info-label-colon {
-    position: absolute;
-    right: calc(4px + 12mm);
+    display: inline-block;
+    margin-left: 4px;
   }
 
   .info-value {
@@ -390,7 +430,7 @@ export function generateInvoiceHtml({
     word-wrap: break-word;
     word-break: break-word;
     vertical-align: top;
-    margin-left: -12mm;
+    margin-left: 4px;
   }
 
   .info-value-line {
@@ -441,24 +481,24 @@ export function generateInvoiceHtml({
     font-size: 12px;
     flex-shrink: 0;
     margin-left: auto;
-    padding-right: 0;
+    padding-right: 8px;
     max-width: 35%;
-    margin-right: 0;
+    margin-right: 8px;
   }
 
   .company-name {
-    font-weight: bold;
-    font-size: 16px;
+    font-weight: 900;
+    font-size: 15px;
     margin-bottom: 4px;
   }
 
   .info-label-text.kepada-label,
   .info-label-text.bank-label {
-    font-weight: bold;
+    font-weight: 900;
   }
 
   .company-address {
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.4;
     margin-bottom: 4px;
   }
@@ -467,8 +507,10 @@ export function generateInvoiceHtml({
   }
 
   .bank-info {
-    font-size: 11px;
+    font-size: 14px;
     line-height: 1.4;
+    font-weight: 900; 
+
   }
 
   table {
@@ -487,10 +529,11 @@ export function generateInvoiceHtml({
   th {
     background: #f2f2f2;
     border-top: 1px solid #000;
+
     border-bottom: 3px double #000;
   }
 
-  tbody tr:last-child td {
+  .item-table tbody tr:last-child td {
     border-bottom: 1px solid #000;
   }
 
@@ -499,7 +542,7 @@ export function generateInvoiceHtml({
   }
 
   .summary-wrapper {
-    margin-top: 20px;
+    margin-top: 1mm;
     display: flex;
     justify-content: space-between;
   }
@@ -523,7 +566,7 @@ export function generateInvoiceHtml({
   }
 
   .strong {
-    font-weight: bold;
+    font-weight: 900;
   }
 
   .summary-table {
@@ -565,7 +608,7 @@ export function generateInvoiceHtml({
   }
 
   .summary-table tr.strong td {
-    font-weight: bold;
+    font-weight: 900;
   }
 
   .summary-table tr:last-child td {
@@ -575,11 +618,13 @@ export function generateInvoiceHtml({
   .summary-right .summary-table td:first-child {
     width: auto;
     padding-right: 2px;
+    white-space: nowrap;
   }
 
   .summary-right .summary-table td:nth-child(2) {
     padding-left: 2px;
-    padding-right: 0;
+    padding-right: 8px;
+    text-align: right;
   }
 
   .signature-block {
@@ -589,7 +634,7 @@ export function generateInvoiceHtml({
 
   .signature-name {
     margin-top: 50px;
-    font-weight: bold;
+    font-weight: 900;
   }
 
   .keterangan-block {
@@ -602,11 +647,10 @@ export function generateInvoiceHtml({
 
   .keterangan-label {
     display: inline-block;
-    font-weight: 700;
-    width: 120px;
+    font-weight: 900;
+    width: 90px;
     vertical-align: top;
-    padding-right: 8px;
-    position: relative;
+    padding-right: 4px;
   }
 
   .keterangan-label-text {
@@ -615,8 +659,8 @@ export function generateInvoiceHtml({
   }
 
   .keterangan-label-colon {
-    position: absolute;
-    right: calc(4px + 12mm);
+    display: inline-block;
+    margin-left: 4px;
   }
 
   .keterangan-value {
@@ -647,45 +691,35 @@ export function generateInvoiceHtml({
   <div class="header">
     <div class="header-top">
       <div class="header-left">
-        <div>
-          <span class="info-label">
-            <span class="info-label-text">No Transaksi</span>
-            <span class="info-label-colon"> :</span>
-          </span>
-          <span class="info-value">${inv.invNo || '-'}</span>
-        </div>
-        <div>
-          <span class="info-label">
-            <span class="info-label-text">Tanggal</span>
-            <span class="info-label-colon"> :</span>
-          </span>
-          <span class="info-value">${inv.createdAt ? new Date(inv.createdAt).toLocaleDateString('id-ID') : '-'}</span>
-        </div>
-        <div>
-          <span class="info-label">
-            <span class="info-label-text kepada-label">Kepada</span>
-            <span class="info-label-colon"> :</span>
-          </span>
-          <span class="info-value" style="font-weight: bold;">${inv.customer || '-'}</span>
-        </div>
-        <div>
-          <span class="info-label">
-            <span class="info-label-text">Alamat</span>
-            <span class="info-label-colon"> :</span>
-          </span>
-          <span class="info-value">
-            ${customerAddressLine1 ? `<span class="info-value-line">${customerAddressLine1}</span>` : ''}
-            ${customerAddressLine2 ? `<span class="info-value-line">${customerAddressLine2}</span>` : ''}
-            ${customerAddressLine3 ? `<span class="info-value-line">${customerAddressLine3}</span>` : ''}
-          </span>
-        </div>
-        <div>
-          <span class="info-label">
-            <span class="info-label-text">NPWP</span>
-            <span class="info-label-colon"> :</span>
-          </span>
-          <span class="info-value">${customerNpwp || '-'}</span>
-        </div>
+        <table class="info-table">
+          <tr>
+            <td class="info-td-label">No Transaksi</td>
+            <td class="info-td-colon">:</td>
+            <td class="info-td-value">${inv.invNo || '-'}</td>
+          </tr>
+          <tr>
+            <td class="info-td-label">Tanggal</td>
+            <td class="info-td-colon">:</td>
+            <td class="info-td-value">${inv.createdAt ? new Date(inv.createdAt).toLocaleDateString('id-ID') : '-'}</td>
+          </tr>
+          <tr>
+            <td class="info-td-label">Pelanggan</td>
+            <td class="info-td-colon">:</td>
+            <td class="info-td-value" style="font-weight: 900;">${inv.customer || '-'}</td>
+          </tr>
+          <tr>
+            <td class="info-td-label">Alamat</td>
+            <td class="info-td-colon">:</td>
+            <td class="info-td-value">
+              ${customerAddressLine1 || ''}${customerAddressLine2 ? `<br/>${customerAddressLine2}` : ''}${customerAddressLine3 ? `<br/>${customerAddressLine3}` : ''}
+            </td>
+          </tr>
+          <tr>
+            <td class="info-td-label">NPWP</td>
+            <td class="info-td-colon">:</td>
+            <td class="info-td-value">${customerNpwp || ''}</td>
+          </tr>
+        </table>
       </div>
       <div class="header-left-center">
         <div class="invoice-title">INVOICE</div>
@@ -699,14 +733,14 @@ export function generateInvoiceHtml({
           ${companyAddressLine3 ? `<span class="company-address-line">${companyAddressLine3}</span>` : ''}
         </div>
         <div class="bank-info">
-          <span class="bank-label" style="font-weight: bold;"></span>${company.bankName ? `${company.bankName}` : 'Bank MANDIRI, KCP JKT Cimanggis'}${(company.bankName || 'Bank MANDIRI, KCP JKT Cimanggis') && (company.bankAccount || '129-00-1116726-5') ? '<br/>' : ''}${company.bankAccount ? `AC: ${company.bankAccount}` : 'AC: 129-00-1116726-5'}
+          ${company.bankName ? `${company.bankName}, a/c : ${company.bankAccount || ''}` : `Bank MANDIRI, a/c : 129-00-1116726-5`}${company.bankBranch ? `<br/>${company.bankBranch}` : ''}${company.bankAccountName ? `<br/>a/n : ${company.bankAccountName}` : ''}
         </div>
       </div>
     </div>
   </div>
 
   <!-- TABLE ITEM -->
-  <table>
+  <table class="item-table">
     <thead>
       <tr>
         <th>No</th>
@@ -742,7 +776,7 @@ export function generateInvoiceHtml({
           </tr>
         `;
   }).join('')}
-      ${Array(Math.max(0, 25 - lines.length)).fill(0).map(() => `
+      ${Array(Math.max(0, 56 - lines.length)).fill(0).map(() => `
         <tr>
           <td></td>
           <td></td>
@@ -761,43 +795,27 @@ export function generateInvoiceHtml({
   <div class="summary-wrapper">
     <div class="summary-left">
       <div class="keterangan-block">
-        <div>
-          <span class="keterangan-label">
-            <span class="keterangan-label-text">Keterangan</span>
-            <span class="keterangan-label-colon"> :</span>
-          </span>
-          <span class="keterangan-value">
+        <table style="border-collapse:collapse; border:none; width:auto;">
+          <tr>
+            <td style="font-weight:900; white-space:nowrap; vertical-align:top; padding-right:4px;">Keterangan</td>
+            <td style= padding: 0 6px;">:</td>
+            <td style="vertical-align:top; word-break:break-word;">
             ${inv.notes ?
       (() => {
         const notesDisplay = inv.notes.trim();
-        if (notesDisplay.length === 0) {
-          return '<span class="keterangan-item">-</span>';
-        }
-        
-        // Split by "PO :" dan "DO :" untuk extract individual items
+        if (notesDisplay.length === 0) return '-';
         const poMatches = notesDisplay.match(/PO\s*:\s*([^\s]+)/gi) || [];
         const doMatches = notesDisplay.match(/DO\s*:\s*([^\s]+)/gi) || [];
-        
         if (poMatches.length > 0 || doMatches.length > 0) {
-          // Render vertical list
-          let html = '';
-          poMatches.forEach((po: string, idx: number) => {
-            html += `<span class="keterangan-item">${po}</span>`;
-          });
-          doMatches.forEach((do_: string) => {
-            html += `<span class="keterangan-item">${do_}</span>`;
-          });
-          return html;
+          return [...poMatches, ...doMatches].join('<br/>');
         }
-        
-        return `<span class="keterangan-item">${notesDisplay}</span>`;
+        return notesDisplay;
       })() :
-      (soNoList.length > 0 ?
-        soNoList.map((so: string) => `<span class="keterangan-item">${so}</span>`).join('')
-        : '<span class="keterangan-item">-</span>')
+      (soNoList.length > 0 ? soNoList.join('<br/>') : '-')
     }
-          </span>
-        </div>
+            </td>
+          </tr>
+        </table>
       </div>
 
       <!-- SIGNATURE -->
@@ -822,7 +840,7 @@ export function generateInvoiceHtml({
           <td>${discount.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
         </tr>
         <tr>
-          <td>Pajak (11%):</td>
+          <td>Pajak :</td>
           <td></td>
           <td>${tax.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
         </tr>
@@ -1093,7 +1111,7 @@ function generateInvoiceHtmlTemplate2({
 <style>
   @page { 
     size: 9.5in 11in; 
-    margin: -30mm 2px 10mm 2px; 
+    margin: -30mm 2px -30mm 2px; 
   }
   
   * {
@@ -1104,8 +1122,9 @@ function generateInvoiceHtmlTemplate2({
 
   body {
     font-family: sans-serif;
-    font-size: 13px;
-    padding: 0 2px 10mm 2px;
+    font-weight: 900;
+    font-size: 12px;
+    padding: 0 2px 2mm 2px;
     color: #000;
   }
 
@@ -1138,20 +1157,20 @@ function generateInvoiceHtmlTemplate2({
   }
 
   .company-name {
-    font-weight: bold;
+    font-weight: 900;
     font-size: 15px;
     margin-bottom: 4px;
     text-transform: uppercase;
   }
 
   .company-address {
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.3;
     margin-bottom: 4px;
   }
 
   .company-bank {
-    font-size: 11px;
+    font-size: 14px;
     line-height: 1.3;
   }
 
@@ -1188,7 +1207,7 @@ function generateInvoiceHtmlTemplate2({
   }
 
   .divider {
-    border-top: 1px solid #000;
+
     margin: 8px 0;
   }
 
@@ -1208,7 +1227,7 @@ function generateInvoiceHtmlTemplate2({
 
   .invoice-title-text {
     font-size: 26px;
-    font-weight: bold;
+    font-weight: 900;
     text-decoration: underline;
     text-transform: uppercase;
     padding: 0 10px;
@@ -1225,7 +1244,7 @@ function generateInvoiceHtmlTemplate2({
   }
 
   .customer-label {
-    font-weight: bold;
+    font-weight: 900;
     min-width: 60px;
   }
 
@@ -1235,8 +1254,9 @@ function generateInvoiceHtmlTemplate2({
 
   .customer-value {
     flex: 1;
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1.5;
+    margin: 1px;
   }
 
   table {
@@ -1254,7 +1274,7 @@ function generateInvoiceHtmlTemplate2({
 
   th {
     background: #f2f2f2;
-    border-top: 1px solid #000;
+
     border-bottom: 3px double #000;
   }
 
@@ -1267,7 +1287,7 @@ function generateInvoiceHtmlTemplate2({
   }
 
   .footer-container {
-    margin-top: 20px;
+    margin-top: 0px;
   }
 
   .footer-top {
@@ -1296,7 +1316,7 @@ function generateInvoiceHtmlTemplate2({
   }
 
   .terbilang-label {
-    font-weight: bold;
+    font-weight: 900;
     flex-shrink: 0;
   }
 
@@ -1321,7 +1341,7 @@ function generateInvoiceHtmlTemplate2({
   }
 
   .notes-label {
-    font-weight: bold;
+    font-weight: 900;
     margin-bottom: 5px;
     padding: 0;
     margin-left: 0;
@@ -1363,13 +1383,13 @@ function generateInvoiceHtmlTemplate2({
   }
 
   .signature-label {
-    font-weight: bold;
+    font-weight: 900;
     margin-bottom: 80px;
   }
 
   .signature-name {
     margin-top: 30px;
-    font-weight: bold;
+    font-weight: 900;
   }
 
   .footer-right {
@@ -1397,17 +1417,17 @@ function generateInvoiceHtmlTemplate2({
 
   .summary-table td:last-child {
     text-align: right;
-    font-weight: bold;
+    font-weight: 900;
   }
 
   .summary-row-total {
-    border-top: 1px solid #000;
+
     padding-top: 5px;
     margin-top: 5px;
   }
 
   .summary-row-bold {
-    font-weight: bold;
+    font-weight: 900;
   }
 
   /* Force notes alignment - override semua */
@@ -1446,9 +1466,7 @@ function generateInvoiceHtmlTemplate2({
           ${company.npwp ? `NPWP: ${company.npwp}` : ''}
         </div>
         <div class="company-bank">
-          ${company.bankName || company.bankAccount ?
-      `${company.bankName ? `${company.bankName}${company.bankBranch ? `, ${company.bankBranch}` : ''}` : ''}${company.bankName && company.bankAccount ? '<br/>' : ''}${company.bankAccount ? `AC : ${company.bankAccount}${company.bankAccountName ? ` a.n. ${company.bankAccountName}` : ''}` : ''}`
-      : ''}
+          ${company.bankName ? `${company.bankName}, a/c : ${company.bankAccount || ''}` : ''}${company.bankBranch ? `<br/>${company.bankBranch}` : ''}${company.bankAccountName ? `<br/>a/n : ${company.bankAccountName}` : ''}
         </div>
       </div>
     </div>
@@ -1477,7 +1495,7 @@ function generateInvoiceHtmlTemplate2({
     <div class="customer-row">
       <span class="customer-label">Nama</span>
       <span class="customer-label-colon">:</span>
-      <span class="customer-value" style="font-weight: bold;">${customerName}</span>
+      <span class="customer-value" style="font-weight: 900;">${customerName}</span>
     </div>
     <div class="customer-row">
       <span class="customer-label">Alamat</span>
@@ -1487,7 +1505,6 @@ function generateInvoiceHtmlTemplate2({
         ${customerAddressLine2 ? `<br/>${customerAddressLine2}` : ''}
         ${customerAddressLine3 ? `<br/>${customerAddressLine3}` : ''}
         ${customerNpwp ? `<br/>NPWP: ${customerNpwp}` : ''}
-      </span>
     </div>
   </div>
 
@@ -1535,7 +1552,7 @@ function generateInvoiceHtmlTemplate2({
           </tr>
         `;
       }).join('')}
-      ${Array(Math.max(0, 25 - lines.length)).fill(0).map(() => `
+      ${Array(Math.max(0, 56 - lines.length)).fill(0).map(() => `
         <tr>
           <td></td>
           <td></td>
@@ -1789,7 +1806,7 @@ function generateInvoiceHtmlTemplate3({
 <style>
   @page { 
     size: 9.5in 11in; 
-    margin: -30mm 2px 10mm 2px; 
+    margin: -30mm 2px -30mm 2px; 
   }
   
   * {
@@ -1800,8 +1817,9 @@ function generateInvoiceHtmlTemplate3({
 
   body {
     font-family: sans-serif;
-    font-size: 13px;
-    padding: 0 2px 10mm 2px;
+    font-weight: 900;
+    font-size: 12px;
+    padding: 0 2px 2mm 2px;
     color: #000;
   }
 
@@ -1834,20 +1852,20 @@ function generateInvoiceHtmlTemplate3({
   }
 
   .company-name {
-    font-weight: bold;
+    font-weight: 900;
     font-size: 15px;
     margin-bottom: 4px;
     text-transform: uppercase;
   }
 
   .company-address {
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.3;
     margin-bottom: 4px;
   }
 
   .company-bank {
-    font-size: 11px;
+    font-size: 14px;
     line-height: 1.3;
   }
 
@@ -1884,7 +1902,7 @@ function generateInvoiceHtmlTemplate3({
   }
 
   .divider {
-    border-top: 1px solid #000;
+
     margin: 8px 0;
   }
 
@@ -1904,7 +1922,7 @@ function generateInvoiceHtmlTemplate3({
 
   .invoice-title-text {
     font-size: 26px;
-    font-weight: bold;
+    font-weight: 900;
     text-decoration: underline;
     text-transform: uppercase;
     padding: 0 10px;
@@ -1921,7 +1939,7 @@ function generateInvoiceHtmlTemplate3({
   }
 
   .customer-label {
-    font-weight: bold;
+    font-weight: 900;
     min-width: 60px;
   }
 
@@ -1931,8 +1949,9 @@ function generateInvoiceHtmlTemplate3({
 
   .customer-value {
     flex: 1;
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1.5;
+    margin: 1px;
   }
 
   table {
@@ -1950,7 +1969,7 @@ function generateInvoiceHtmlTemplate3({
 
   th {
     background: #f2f2f2;
-    border-top: 1px solid #000;
+
     border-bottom: 3px double #000;
   }
 
@@ -1963,7 +1982,7 @@ function generateInvoiceHtmlTemplate3({
   }
 
   .footer-container {
-    margin-top: 20px;
+    margin-top: 0px;
   }
 
   .footer-top {
@@ -1993,7 +2012,7 @@ function generateInvoiceHtmlTemplate3({
   }
 
   .notes-label {
-    font-weight: bold;
+    font-weight: 900;
     margin-bottom: 5px;
     padding: 0;
     margin-left: 0;
@@ -2035,13 +2054,13 @@ function generateInvoiceHtmlTemplate3({
   }
 
   .signature-label {
-    font-weight: bold;
+    font-weight: 900;
     margin-bottom: 80px;
   }
 
   .signature-name {
     margin-top: 30px;
-    font-weight: bold;
+    font-weight: 900;
   }
 
   .footer-right {
@@ -2069,17 +2088,17 @@ function generateInvoiceHtmlTemplate3({
 
   .summary-table td:last-child {
     text-align: right;
-    font-weight: bold;
+    font-weight: 900;
   }
 
   .summary-row-total {
-    border-top: 1px solid #000;
+
     padding-top: 5px;
     margin-top: 5px;
   }
 
   .summary-row-bold {
-    font-weight: bold;
+    font-weight: 900;
   }
 
   /* Force notes alignment - override semua */
@@ -2118,9 +2137,7 @@ function generateInvoiceHtmlTemplate3({
           ${company.npwp ? `NPWP: ${company.npwp}` : ''}
         </div>
         <div class="company-bank">
-          ${company.bankName || company.bankAccount ?
-      `${company.bankName ? `${company.bankName}${company.bankBranch ? `, ${company.bankBranch}` : ''}` : ''}${company.bankName && company.bankAccount ? '<br/>' : ''}${company.bankAccount ? `AC : ${company.bankAccount}${company.bankAccountName ? ` a.n. ${company.bankAccountName}` : ''}` : ''}`
-      : ''}
+          ${company.bankName ? `${company.bankName}, a/c : ${company.bankAccount || ''}` : ''}${company.bankBranch ? `<br/>${company.bankBranch}` : ''}${company.bankAccountName ? `<br/>a/n : ${company.bankAccountName}` : ''}
         </div>
       </div>
     </div>
@@ -2149,7 +2166,7 @@ function generateInvoiceHtmlTemplate3({
     <div class="customer-row">
       <span class="customer-label">Nama</span>
       <span class="customer-label-colon">:</span>
-      <span class="customer-value" style="font-weight: bold;">${customerName}</span>
+      <span class="customer-value" style="font-weight: 900;">${customerName}</span>
     </div>
     <div class="customer-row">
       <span class="customer-label">Alamat</span>
@@ -2207,7 +2224,7 @@ function generateInvoiceHtmlTemplate3({
           </tr>
         `;
       }).join('')}
-      ${Array(Math.max(0, 25 - lines.length)).fill(0).map(() => `
+      ${Array(Math.max(0, 56 - lines.length)).fill(0).map(() => `
         <tr>
           <td></td>
           <td></td>
@@ -2477,7 +2494,7 @@ function generateInvoiceHtmlTemplate4({
 <style>
   @page { 
     size: 9.5in 11in; 
-    margin: -30mm 2px 10mm 2px; 
+    margin: -30mm 2px -30mm 2px; 
   }
   
   * {
@@ -2488,8 +2505,9 @@ function generateInvoiceHtmlTemplate4({
 
   body {
     font-family: sans-serif;
-    font-size: 13px;
-    padding: 0 2px 10mm 2px;
+    font-weight: 900;
+    font-size: 12px;
+    padding: 0 2px 2mm 2px;
     color: #000;
   }
 
@@ -2522,20 +2540,20 @@ function generateInvoiceHtmlTemplate4({
   }
 
   .company-name {
-    font-weight: bold;
+    font-weight: 900;
     font-size: 15px;
     margin-bottom: 4px;
     text-transform: uppercase;
   }
 
   .company-address {
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.3;
     margin-bottom: 4px;
   }
 
   .company-bank {
-    font-size: 11px;
+    font-size: 14px;
     line-height: 1.3;
   }
 
@@ -2587,7 +2605,7 @@ function generateInvoiceHtmlTemplate4({
 
   .invoice-title-text {
     font-size: 26px;
-    font-weight: bold;
+    font-weight: 900;
     text-decoration: underline;
     text-transform: uppercase;
     padding: 0 10px;
@@ -2604,7 +2622,7 @@ function generateInvoiceHtmlTemplate4({
   }
 
   .customer-label {
-    font-weight: bold;
+    font-weight: 900;
     min-width: 60px;
   }
 
@@ -2614,8 +2632,9 @@ function generateInvoiceHtmlTemplate4({
 
   .customer-value {
     flex: 1;
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1.5;
+    margin: 1px;
   }
 
   table {
@@ -2633,7 +2652,7 @@ function generateInvoiceHtmlTemplate4({
 
   th {
     background: #f2f2f2;
-    border-top: 1px solid #000;
+
     border-bottom: 3px double #000;
   }
 
@@ -2642,7 +2661,7 @@ function generateInvoiceHtmlTemplate4({
   }
 
   .footer-container {
-    margin-top: 20px;
+    margin-top: 0px;
   }
 
   .footer-top {
@@ -2672,7 +2691,7 @@ function generateInvoiceHtmlTemplate4({
   }
 
   .notes-label {
-    font-weight: bold;
+    font-weight: 900;
     margin-bottom: 5px;
     padding: 0;
     margin-left: 0;
@@ -2714,13 +2733,13 @@ function generateInvoiceHtmlTemplate4({
   }
 
   .signature-label {
-    font-weight: bold;
+    font-weight: 900;
     margin-bottom: 80px;
   }
 
   .signature-name {
     margin-top: 30px;
-    font-weight: bold;
+    font-weight: 900;
   }
 
   .footer-right {
@@ -2748,17 +2767,17 @@ function generateInvoiceHtmlTemplate4({
 
   .summary-table td:last-child {
     text-align: right;
-    font-weight: bold;
+    font-weight: 900;
   }
 
   .summary-row-total {
-    border-top: 1px solid #000;
+
     padding-top: 5px;
     margin-top: 5px;
   }
 
   .summary-row-bold {
-    font-weight: bold;
+    font-weight: 900;
   }
 
   .footer-left .notes-section {
@@ -2788,7 +2807,7 @@ function generateInvoiceHtmlTemplate4({
   }
 
   .terbilang-label {
-    font-weight: bold;
+    font-weight: 900;
     flex-shrink: 0;
   }
 
@@ -2819,9 +2838,7 @@ function generateInvoiceHtmlTemplate4({
           ${company.npwp ? `NPWP: ${company.npwp}` : ''}
         </div>
         <div class="company-bank">
-          ${company.bankName || company.bankAccount ?
-      `${company.bankName ? `${company.bankName}${company.bankBranch ? `, ${company.bankBranch}` : ''}` : ''}${company.bankName && company.bankAccount ? '<br/>' : ''}${company.bankAccount ? `AC : ${company.bankAccount}${company.bankAccountName ? ` a.n. ${company.bankAccountName}` : ''}` : ''}`
-      : ''}
+          ${company.bankName ? `${company.bankName}, a/c : ${company.bankAccount || ''}` : ''}${company.bankBranch ? `<br/>${company.bankBranch}` : ''}${company.bankAccountName ? `<br/>a/n : ${company.bankAccountName}` : ''}
         </div>
       </div>
     </div>
@@ -2850,7 +2867,7 @@ function generateInvoiceHtmlTemplate4({
     <div class="customer-row">
       <span class="customer-label">Nama</span>
       <span class="customer-label-colon">:</span>
-      <span class="customer-value" style="font-weight: bold;">${customerName}</span>
+      <span class="customer-value" style="font-weight: 900;">${customerName}</span>
     </div>
     <div class="customer-row">
       <span class="customer-label">Alamat</span>
@@ -2905,7 +2922,7 @@ function generateInvoiceHtmlTemplate4({
           </tr>
         `;
       }).join('')}
-      ${Array(Math.max(0, 25 - lines.length)).fill(0).map(() => `
+      ${Array(Math.max(0, 56 - lines.length)).fill(0).map(() => `
         <tr>
           <td></td>
           <td></td>
@@ -2921,7 +2938,7 @@ function generateInvoiceHtmlTemplate4({
       <tr>
         <td colspan="${hideSO ? '7' : '8'}" style="text-align: left; padding: 8px;">
           <div style="display: flex; align-items: flex-start; gap: 5px;">
-            <div style="font-weight: bold; flex-shrink: 0;">Terbilang:</div>
+            <div style="font-weight: 900; flex-shrink: 0;">Terbilang:</div>
             <div style="font-size: 12px; line-height: 1.5; font-style: italic; flex: 1; word-spacing: 2px; overflow-wrap: break-word; word-wrap: break-word;">${totalTerbilang}</div>
           </div>
         </td>

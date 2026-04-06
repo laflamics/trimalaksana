@@ -1,9 +1,12 @@
 import React from 'react';
+import Button from './Button';
 import './Table.css';
 
 export interface Column<T> {
   key: keyof T | string;
   header: string | React.ReactNode;
+  width?: string;
+  hidden?: boolean;
   render?: (item: T) => React.ReactNode;
 }
 
@@ -35,7 +38,7 @@ function Table<T extends { id?: string | number }>({
   renderRowHeader,
   rowHeaderColSpan,
   groupByKey,
-  pageSize = 10,
+  pageSize = 15,
   showPagination = true,
 }: TableProps<T>) {
   // Ensure columns and data are always arrays
@@ -60,7 +63,7 @@ function Table<T extends { id?: string | number }>({
         <thead>
           <tr>
             {columnsArray.map((col) => (
-              <th key={String(col.key)}>{col.header}</th>
+              !col.hidden && <th key={String(col.key)} style={{ width: col.width }}>{col.header}</th>
             ))}
           </tr>
         </thead>
@@ -102,8 +105,9 @@ function Table<T extends { id?: string | number }>({
                     style={rowStyle}
                   >
                     {columnsArray.map((col) => (
-                      <td
+                      !col.hidden && <td
                         key={String(col.key)}
+                        style={{ width: col.width }}
                       >
                         {col.render
                           ? col.render(item)
@@ -150,28 +154,88 @@ function Table<T extends { id?: string | number }>({
         </tbody>
       </table>
       
-      {/* Pagination Controls */}
+      {/* Pagination Controls - Advanced Design */}
       {showPagination && dataArray.length > pageSize && (
-        <div className="table-pagination">
-          <button 
-            onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-            disabled={currentPage === 1}
-            className="pagination-btn"
-          >
-            ← Previous
-          </button>
-          
-          <div className="pagination-info">
-            Page {currentPage} of {totalPages} ({dataArray.length} items)
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          gap: '8px', 
+          marginTop: '20px',
+          padding: '16px',
+          borderTop: '1px solid var(--border)'
+        }}>
+          <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+            Showing {startIndex + 1}-{Math.min(endIndex, dataArray.length)} of {dataArray.length} items
           </div>
-          
-          <button 
-            onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-            disabled={currentPage === totalPages}
-            className="pagination-btn"
+          {totalPages > 1 && (
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            gap: '8px'
+          }}>
+          <Button 
+            variant="secondary" 
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1}
           >
-            Next →
-          </button>
+            First
+          </Button>
+          <Button 
+            variant="secondary" 
+            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+          >
+            Previous
+          </Button>
+          <div style={{ 
+            display: 'flex', 
+            gap: '4px',
+            alignItems: 'center'
+          }}>
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum;
+              if (totalPages <= 5) {
+                pageNum = i + 1;
+              } else if (currentPage <= 3) {
+                pageNum = i + 1;
+              } else if (currentPage >= totalPages - 2) {
+                pageNum = totalPages - 4 + i;
+              } else {
+                pageNum = currentPage - 2 + i;
+              }
+              return (
+                <Button
+                  key={pageNum}
+                  variant={currentPage === pageNum ? 'primary' : 'secondary'}
+                  onClick={() => setCurrentPage(pageNum)}
+                  style={{ minWidth: '40px', padding: '6px 12px' }}
+                >
+                  {pageNum}
+                </Button>
+              );
+            })}
+          </div>
+          <Button 
+            variant="secondary" 
+            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+            disabled={currentPage === totalPages}
+          >
+            Next
+          </Button>
+          <Button 
+            variant="secondary" 
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage === totalPages}
+          >
+            Last
+          </Button>
+          <div style={{ marginLeft: '16px', color: 'var(--text-secondary)', fontSize: '14px' }}>
+            Page {currentPage} of {totalPages}
+          </div>
+          </div>
+          )}
         </div>
       )}
     </div>

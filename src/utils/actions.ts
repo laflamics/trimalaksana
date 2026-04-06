@@ -198,7 +198,7 @@ export const openPrintWindow = (
   iframe.style.height = '0';
   iframe.style.border = '0';
   iframe.style.opacity = '0';
-  iframe.setAttribute('sandbox', 'allow-modals allow-same-origin');
+  iframe.setAttribute('sandbox', 'allow-modals allow-same-origin allow-scripts');
   document.body.appendChild(iframe);
 
   let fallbackTimer: number | null = null;

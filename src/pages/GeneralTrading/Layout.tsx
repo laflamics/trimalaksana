@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { gtSync, type SyncStatus } from '../../services/gt-sync';
 import { getTheme, applyTheme, type Theme } from '../../utils/theme';
+
+type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
 import { loadIconAsBase64 } from '../../utils/icon-loader';
 import { 
   hasRouteAccess, 
@@ -25,7 +26,7 @@ const GeneralTradingLayout = ({ children }: LayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [userMenuAccess, setUserMenuAccess] = useState<Record<string, string[]> | null>(null);
-  const [iconSrc, setIconSrc] = useState<string>('/noxtiz.ico');
+  const [iconSrc, setIconSrc] = useState<string>('/tljp.ico');
   const [iconError, setIconError] = useState(false);
   const { t } = useLanguage();
 
@@ -34,17 +35,8 @@ const GeneralTradingLayout = ({ children }: LayoutProps) => {
     const currentTheme = getTheme();
     setTheme(currentTheme);
     
-    // Subscribe to sync status changes dari gtSync
-    const unsubscribe = gtSync.onSyncStatusChange((status) => {
-      setSyncStatus(status);
-    });
-    
-    // Set initial sync status
-    setSyncStatus(gtSync.getSyncStatus());
-    
-    return () => {
-      unsubscribe();
-    };
+    // Set initial sync status to synced (no WebSocket)
+    setSyncStatus('synced');
   }, []);
 
   // Load icon path untuk kompatibilitas Electron
@@ -56,7 +48,7 @@ const GeneralTradingLayout = ({ children }: LayoutProps) => {
         // 🚀 OPTIMASI: Di Electron, gunakan getResourceBase64 untuk mendapatkan base64 langsung
         if (electronAPI.getResourceBase64) {
           try {
-            const base64Icon = await electronAPI.getResourceBase64('noxtiz.ico');
+            const base64Icon = await electronAPI.getResourceBase64('tljp.ico');
             if (base64Icon && base64Icon.startsWith('data:')) {
               setIconSrc(base64Icon);
               return;
@@ -68,7 +60,7 @@ const GeneralTradingLayout = ({ children }: LayoutProps) => {
         
         // Fallback: coba load sebagai base64 menggunakan loadIconAsBase64
         try {
-          const base64Icon = await loadIconAsBase64('noxtiz.ico');
+          const base64Icon = await loadIconAsBase64('tljp.ico');
           if (base64Icon && base64Icon.startsWith('data:')) {
             setIconSrc(base64Icon);
             return;
@@ -82,9 +74,9 @@ const GeneralTradingLayout = ({ children }: LayoutProps) => {
       // JANGAN PERNAH gunakan file:// atau absolute path
       const isElectron = typeof window !== 'undefined' && (window as any).electronAPI;
       if (isElectron) {
-        setIconSrc('./noxtiz.ico');
+        setIconSrc('./tljp.ico');
       } else {
-        setIconSrc('/noxtiz.ico');
+        setIconSrc('/tljp.ico');
       }
     };
     
@@ -206,7 +198,6 @@ const GeneralTradingLayout = ({ children }: LayoutProps) => {
         { title: t('settings.title') || 'Settings', path: '/general-trading/settings', icon: '⚙️' },
         { title: 'Report', path: '/general-trading/settings/report', icon: '📄' },
         { title: 'Full Reports', path: '/general-trading/settings/full-reports', icon: '📊' },
-        { title: 'DB Activity', path: '/general-trading/settings/db-activity', icon: '📝' },
         { title: 'User Control', path: '/general-trading/settings/user-control', icon: '👤' },
         { title: 'Server Data', path: '/general-trading/settings/server-data', icon: '💾' },
       ],
@@ -230,8 +221,14 @@ const GeneralTradingLayout = ({ children }: LayoutProps) => {
       return menuItems;
     }
 
+    // If userMenuAccess is still loading or invalid, return empty menu
+    if (!userMenuAccess || typeof userMenuAccess !== 'object') {
+      return [];
+    }
+
     // User with menuAccess restrictions
-    const allowedMenus = new Set(userMenuAccess['general-trading'] || []);
+    const generalTradingAccess = userMenuAccess['general-trading'];
+    const allowedMenus = new Set(Array.isArray(generalTradingAccess) ? generalTradingAccess : []);
     
     // Settings menu items that are admin-only
     const adminOnlySettingsPaths = [
@@ -383,18 +380,18 @@ const GeneralTradingLayout = ({ children }: LayoutProps) => {
                     // 🚀 OPTIMASI: Pastikan tidak pernah menggunakan file:// path untuk prevent error log
                     if (!iconSrc) {
                       const electronAPI = (window as any).electronAPI;
-                      return electronAPI ? './noxtiz.ico' : '/noxtiz.ico';
+                      return electronAPI ? './tljp.ico' : '/tljp.ico';
                     }
                     // JANGAN PERNAH gunakan file:// atau absolute path
                     if (iconSrc.startsWith('file://') || iconSrc.match(/^[A-Z]:\\/) || iconSrc.match(/^[A-Z]:\//)) {
                       const electronAPI = (window as any).electronAPI;
-                      return electronAPI ? './noxtiz.ico' : '/noxtiz.ico';
+                      return electronAPI ? './tljp.ico' : '/tljp.ico';
                     }
                     if (iconSrc.startsWith('data:') || iconSrc.startsWith('/') || iconSrc.startsWith('./')) {
                       return iconSrc;
                     }
                     const electronAPI = (window as any).electronAPI;
-                    return electronAPI ? './noxtiz.ico' : '/noxtiz.ico';
+                    return electronAPI ? './tljp.ico' : '/tljp.ico';
                   })()}
                   alt="TLJP" 
                   style={{
@@ -414,14 +411,14 @@ const GeneralTradingLayout = ({ children }: LayoutProps) => {
                       // Skip jika src adalah file:// atau absolute path yang tidak valid
                       if (currentSrc.startsWith('file://') || currentSrc.match(/^[A-Z]:\\/) || currentSrc.match(/^[A-Z]:\//)) {
                         const electronAPI = (window as any).electronAPI;
-                        img.src = electronAPI ? './noxtiz.ico' : '/noxtiz.ico';
+                        img.src = electronAPI ? './tljp.ico' : '/tljp.ico';
                         return;
                       }
                       
                       // Coba PNG sebagai fallback jika belum
-                      if (!currentSrc.includes('noxtiz.png') && !currentSrc.startsWith('data:')) {
+                      if (!currentSrc.includes('tljp.png') && !currentSrc.startsWith('data:')) {
                         const electronAPI = (window as any).electronAPI;
-                        img.src = electronAPI ? './noxtiz.png' : '/noxtiz.png';
+                        img.src = electronAPI ? './tljp.png' : '/tljp.png';
                       } else {
                         img.style.display = 'none';
                       }

@@ -3352,7 +3352,7 @@ export const reportDataFetcher = {
               jml: item.qty,
               harga: item.price,
               total: totalTagihan,
-              stockAwal: stockAwal,
+              initialstock: stockAwal,
               produksi: produksi,
               delivery: delivery,
               remainPO: remainPO,
@@ -3363,26 +3363,28 @@ export const reportDataFetcher = {
           });
         });
 
-      // Return dengan format yang sama seperti template engine
-      return reportData.map((item: any) => ({
-        'NO': item.no,
-        'KODE PEL.': item.kodePel,
-        'KD. ITEM': item.kdItem,
-        'DATE': item.date,
-        'NO TRANSAKSI': item.noTransaksi,
-        'CUSTOMER': item.customer,
-        'NAMA ITEM': item.namaItem,
-        'JML': item.jml,
-        'HARGA': item.harga,
-        'TOTAL': item.total,
-        'STOCK AWAL': item.stockAwal,
-        'PRODUKSI': item.produksi,
-        'DELIVERY': item.delivery,
-        'REMAIN PO': item.remainPO,
-        'NEXT STOCK': item.nextStock,
-        'TOTAL TAGIHAN': item.totalTagihan,
-        'TOTAL RP. REMAIN': item.totalRpRemain,
-      }));
+      // Return dengan format yang sama seperti template engine - URUTAN PENTING!
+      return reportData.map((item: any) => {
+        const row: any = {};
+        row['NO'] = item.no;
+        row['DATE'] = item.date;
+        row['KODE PEL.'] = item.kodePel;
+        row['CUSTOMER'] = item.customer;
+        row['KODE ITEM'] = item.kdItem;
+        row['NAMA ITEM'] = item.namaItem;
+        row['NO PO/SO'] = item.noTransaksi;
+        row['QTY'] = item.jml;
+        row['HARGA'] = item.harga;
+        row['TOTAL'] = item.total;
+        row['INITIAL STOCK'] = item.initialstock;
+        row['PRODUCTION'] = item.produksi;
+        row['DELIVERY'] = item.delivery;
+        row['REMAIN PO'] = item.remainPO;
+        row['NEXT STOCK'] = item.nextStock;
+        row['TOTAL TAGIHAN'] = item.totalTagihan;
+        row['TOTAL REMAIN PO'] = item.totalRpRemain;
+        return row;
+      });
     } catch (error) {
       console.error('[ReportDataFetcher] Error in getPackagingSalesOrderExportData:', error);
       return [];

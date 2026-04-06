@@ -1199,10 +1199,10 @@ ipcMain.handle('save-pdf', async (event, htmlContent: string, defaultFileName: s
     const pdfData = await pdfWindow.webContents.printToPDF({
       pageSize: selectedPageSize as any,
       margins: {
-        top: 0.4,
-        bottom: 0.4,
-        left: 0.2,
-        right: 0.2,
+        top: 0,
+        bottom: 0,
+        left: 0,
+        right: 0,
       },
       printBackground: true,
       displayHeaderFooter: false,
