@@ -68,15 +68,20 @@ const fileSize = stats.size;
 
 console.log(`Executable size: ${(fileSize / 1024 / 1024).toFixed(2)} MB`);
 
+// Generate sha512 hash
+const crypto = require('crypto');
+const fileBuffer = fs.readFileSync(exePath);
+const sha512Hash = crypto.createHash('sha512').update(fileBuffer).digest('base64');
+console.log(`SHA512: ${sha512Hash.substring(0, 20)}...`);
+
 // Generate YAML content
 const latestYmlContent = `version: ${version}
 files:
   - url: ${exeName}
-    sha512: ''
+    sha512: ${sha512Hash}
     size: ${fileSize}
-    blockMapSize: 0
 path: ${exeName}
-sha512: ''
+sha512: ${sha512Hash}
 releaseDate: '${new Date().toISOString()}'
 `;
 

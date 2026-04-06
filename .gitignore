@@ -52,6 +52,7 @@ ios/App/*.xcodeproj/xcuserdata/
 *.ipa
 *.xcarchive
 DerivedData/
+public/import-output
 
 srcbackup/
 scripts/
