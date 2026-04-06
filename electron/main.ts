@@ -29,18 +29,18 @@ function createWindow() {
   let iconPath: string | undefined;
   if (app.isPackaged) {
     // Production: icon is in resources (electron-builder puts it there)
-    iconPath = path.join(process.resourcesPath || app.getAppPath(), 'public', 'noxtiz.ico');
+    iconPath = path.join(process.resourcesPath || app.getAppPath(), 'public', 'tljp.ico');
     // Fallback: try app path if resourcesPath doesn't work
     if (!fs.existsSync(iconPath)) {
-      iconPath = path.join(app.getAppPath(), 'public', 'noxtiz.ico');
+      iconPath = path.join(app.getAppPath(), 'public', 'tljp.ico');
     }
     // If still not found, try dist/public
     if (!fs.existsSync(iconPath)) {
-      iconPath = path.join(__dirname, '..', 'public', 'noxtiz.ico');
+      iconPath = path.join(__dirname, '..', 'public', 'tljp.ico');
     }
   } else {
     // Development: icon is in project root
-    iconPath = path.join(__dirname, '..', 'public', 'noxtiz.ico');
+    iconPath = path.join(__dirname, '..', 'public', 'tljp.ico');
   }
   
   // Only set icon if file exists
@@ -1803,9 +1803,9 @@ async function createDesktopShortcut() {
     const exePath = process.execPath;
     
     // Get icon path (try multiple locations)
-    let iconPath = path.join(process.resourcesPath || app.getAppPath(), 'public', 'noxtiz.ico');
+    let iconPath = path.join(process.resourcesPath || app.getAppPath(), 'public', 'tljp.ico');
     if (!fs.existsSync(iconPath)) {
-      iconPath = path.join(app.getAppPath(), 'public', 'noxtiz.ico');
+      iconPath = path.join(app.getAppPath(), 'public', 'tljp.ico');
     }
     if (!fs.existsSync(iconPath)) {
       iconPath = exePath; // Fallback to executable icon (should be embedded)
