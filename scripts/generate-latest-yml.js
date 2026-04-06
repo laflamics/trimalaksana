@@ -91,6 +91,15 @@ fs.writeFileSync(latestYmlPath, latestYmlContent, 'utf8');
 
 console.log(`✅ Created: ${latestYmlPath}\n`);
 
+// Also copy to release-build/ for GitHub Actions upload
+const releaseBuildDir = path.join(__dirname, '../release-build');
+if (!fs.existsSync(releaseBuildDir)) {
+  fs.mkdirSync(releaseBuildDir, { recursive: true });
+}
+const releaseBuildLatestYmlPath = path.join(releaseBuildDir, 'latest.yml');
+fs.writeFileSync(releaseBuildLatestYmlPath, latestYmlContent, 'utf8');
+console.log(`✅ Created: ${releaseBuildLatestYmlPath}\n`);
+
 // Also copy to release folder for reference (create folder if not exists)
 const releaseLatestYmlPath = path.join(releasePath, 'latest.yml');
 try {
