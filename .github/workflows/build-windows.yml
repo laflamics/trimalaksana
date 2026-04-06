@@ -37,6 +37,9 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npx electron-builder --win --x64 --publish never
 
+      - name: Generate latest.yml
+        run: node scripts/generate-latest-yml.js
+
       - name: Upload EXE to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
